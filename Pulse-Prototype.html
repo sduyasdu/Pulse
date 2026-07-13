@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pulse — Visual Project Planning</title>
+
+<script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  /* Yasdu brand tokens */
+  :root {
+    --y-bg: #FDFCF8;
+    --y-fg: #1F2330;
+    --y-card: #FFFFFF;
+    --y-primary: #D85A28;
+    --y-primary-fg: #FDFDFD;
+    --y-secondary: #F4F2EC;
+    --y-muted: #6E7180;
+    --y-accent: #F7E8DA;
+    --y-border: #E2DFD9;
+    --y-orange-soft: #F0A875;
+    --y-blue: #123359;
+    --y-ink: #000B1B;
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+  }
+  html, body, #root { height: 100%; margin: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; font-feature-settings: 'ss01','cv11'; background: var(--y-bg); color: var(--y-fg); }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+  #boot-error { display:none; padding:24px; color:#b91c1c; font-family:monospace; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="boot-error"></div>
+
+<script type="text/babel" data-type="module" data-presets="react,env">
+const { useState, useRef, useEffect, useMemo, useCallback } = React;
+
+function Icon({ children, size = 14, color = "#000", className = "" }) {
+  return <span className={className} style={{ fontSize: size, color, lineHeight: 1, display: "inline-block" }}>{children}</span>;
+}
+
+// Reusable attachments block (feature or subtask). Links open in a new tab.
+function Attachments({ items, onAdd, onDelete, compact }) {
+  const [title, setTitle] = React.useState("");
+  const [url, setUrl] = React.useState("");
+  const fileRef = React.useRef(null);
+  const submit = () => { if (url.trim()) { onAdd(title, url); setTitle(""); setUrl(""); } };
+  const onFiles = (e) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach((f) => { const reader = new FileReader(); reader.onload = () => onAdd(f.name, reader.result, true); reader.readAsDataURL(f); });
+    e.target.value = "";
+  };
+  return (
+    <div>
+      {!compact && <span className="mono text-xs" style={{ color: "#64748B" }}>ATTACHMENTS {(items || []).length > 0 && `(${items.length})`}</span>}
+      <div className={`flex flex-col gap-1 ${compact ? "" : "mt-1.5"}`}>
+        {(items || []).map((a) => (
+          <div key={a.id} className="flex items-center gap-1.5 rounded px-2 py-1" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
+            <Icon size={12} color="#D85A28">{a.isData ? "📄" : "🔗"}</Icon>
+            <a href={a.url} target="_blank" rel="noopener noreferrer" download={a.isData ? a.title : undefined} className="text-xs flex-1 truncate" style={{ color: "#123359", textDecoration: "none" }} title={a.title}>{a.title}</a>
+            <button onClick={() => onDelete(a.id)} title="Remove attachment"><Icon size={11} color="#64748B">✕</Icon></button>
+          </div>
+        ))}
+        {(items || []).length === 0 && !compact && <span className="mono text-xs" style={{ color: "#78859A" }}>No attachments — upload a file or paste a link.</span>}
+      </div>
+      <div className="flex gap-1 mt-1.5">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="text-xs border rounded px-1.5 py-1" style={{ borderColor: "#E2DFD9", width: compact ? 56 : 80, minWidth: 0 }} />
+        <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="Paste URL…" className="text-xs border rounded px-1.5 py-1 flex-1" style={{ borderColor: "#E2DFD9", minWidth: 0 }} />
+        <button onClick={submit} title="Add link" className="mono text-xs px-2 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>+</button>
+        <button onClick={() => fileRef.current && fileRef.current.click()} title="Upload file" className="mono text-xs px-2 rounded" style={{ background: "#EFF6FF", color: "#2563EB" }}>⤴</button>
+        <input ref={fileRef} type="file" multiple onChange={onFiles} style={{ display: "none" }} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+const BASE_DAY_WIDTH = 26;      // px per day at 100% in DAY view
+const RULER_HEIGHT = 46;
+const CONTENT_MIN_HEIGHT = 1300;
+const RES_LABEL_W = 320;        // width of the resource-label column (matches the left form width so calendars align)
+
+// px-per-day multipliers per density so each view reads at a sensible scale
+const DENSITY_DAY_PX = { day: 1, week: 0.42, month: 0.14 };
+
+const STATUS_META = {
+  planned: { border: "#64748B", bg: "#EEF2F7", text: "#475569", label: "Planned" },
+  "in-progress": { border: "#F5A524", bg: "#FFF6E2", text: "#92400E", label: "In progress" },
+  blocked: { border: "#E5484D", bg: "#FDEBEC", text: "#9F1D23", label: "Blocked" },
+  done: { border: "#12A594", bg: "#E6F7F4", text: "#0F6B5C", label: "Done" },
+};
+
+const AVATAR_COLORS = ["#6366F1", "#EC4899", "#14B8A6", "#F59E0B", "#8B5CF6", "#0EA5E9"];
+
+// Optional task labels — pick a color to group related tasks visually.
+const LABEL_COLORS = [
+  { id: "none", color: null, name: "None" },
+  { id: "violet", color: "#8B5CF6", name: "Violet" },
+  { id: "blue", color: "#3B82F6", name: "Blue" },
+  { id: "teal", color: "#14B8A6", name: "Teal" },
+  { id: "green", color: "#22C55E", name: "Green" },
+  { id: "amber", color: "#F59E0B", name: "Amber" },
+  { id: "rose", color: "#F43F5E", name: "Rose" },
+  { id: "slate", color: "#64748B", name: "Slate" },
+];
+const colorForName = (name) => {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h += name.charCodeAt(i);
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+};
+
+const INITIAL_RESOURCE_TYPES = ["Consulting", "CSuccess", "Dev", "Devops", "QA", "Líder Datos", "Preventivo", "Producto"];
+
+const INITIAL_RESOURCES = [
+  { id: "FC", name: "Federico Ciccarone", capacity: 100, type: "Consulting" },
+  { id: "FA", name: "Fernanda Acevedo", capacity: 100, type: "Consulting" },
+  { id: "SS", name: "Santiago Suarez", capacity: 100, type: "Consulting" },
+  { id: "SM", name: "Silvana Mascitelli", capacity: 100, type: "Consulting" },
+  { id: "TG", name: "Tomas Gaona", capacity: 100, type: "Consulting" },
+  { id: "AM", name: "Antonella Mollo", capacity: 100, type: "CSuccess" },
+  { id: "PL", name: "Pilar Lozada", capacity: 100, type: "Consulting" },
+  { id: "AQ", name: "Adrian Ignacio Quintana", capacity: 100, type: "Dev" },
+  { id: "AR", name: "Agustín Reynaud", capacity: 100, type: "Dev" },
+  { id: "AMO", name: "Andrés Rodríguez Molina", capacity: 100, type: "Dev" },
+  { id: "BW", name: "Brian Walker", capacity: 100, type: "Dev" },
+  { id: "FCO", name: "Facundo Cozzani", capacity: 100, type: "Dev" },
+  { id: "FI", name: "Federico Irrarazabal", capacity: 100, type: "Dev" },
+  { id: "GS", name: "Guido Sanchez", capacity: 100, type: "Dev" },
+  { id: "IA", name: "Ivan Armolla", capacity: 100, type: "Dev" },
+  { id: "LB", name: "Luciano Berni", capacity: 100, type: "Dev" },
+  { id: "MN", name: "Marcelo Nieto", capacity: 100, type: "Dev" },
+  { id: "NG", name: "Nicolás García", capacity: 100, type: "Dev" },
+  { id: "SR", name: "Santiago Rivarola", capacity: 100, type: "Dev" },
+  { id: "SSA", name: "Santiago Sacristán", capacity: 100, type: "Dev" },
+  { id: "JV", name: "Javier Vivanco", capacity: 100, type: "Devops" },
+  { id: "AI", name: "Aileen", capacity: 100, type: "Dev" },
+  { id: "CM", name: "Carlos Muiños", capacity: 100, type: "QA" },
+  { id: "AA", name: "Ariel Alonso", capacity: 100, type: "Líder Datos" },
+  { id: "JM", name: "Joaquin Mitjans", capacity: 100, type: "Preventivo" },
+  { id: "MNO", name: "Mateo Nowenstein", capacity: 100, type: "Preventivo" },
+  { id: "ML", name: "Mora Lema", capacity: 100, type: "Preventivo" },
+  { id: "AL", name: "Agustina Landó", capacity: 100, type: "Producto" },
+  { id: "AH", name: "Alejandro Hernández", capacity: 100, type: "Producto" },
+  { id: "DR", name: "Debora Raposo", capacity: 100, type: "QA" },
+  { id: "DG", name: "Delfina Gaglliardi", capacity: 100, type: "QA" },
+  { id: "ES", name: "Ezequiel de la Serna", capacity: 100, type: "QA" },
+  { id: "LBR", name: "Lucía Briones", capacity: 100, type: "QA" },
+  { id: "NC", name: "Nahomi Carmona", capacity: 100, type: "QA" },
+  { id: "NCO", name: "Nicolás Perez Costa", capacity: 100, type: "QA" },
+];
+
+// Epics are user-defined swimlanes (vertical bands). A feature belongs to an
+// epic via epicId; the epic's on-canvas width auto-fits the features it holds.
+const INITIAL_EPICS = [
+  { id: "e1", name: "Metodología", color: "#8B5CF6", y0: 16, y1: 390 },
+  { id: "e2", name: "Conciliaciones", color: "#3B82F6", y0: 414, y1: 652 },
+  { id: "e3", name: "Drakaris", color: "#F59E0B", y0: 676, y1: 1186 },
+  { id: "e4", name: "3.0", color: "#14B8A6", y0: 1210, y1: 1516 },
+  { id: "e5", name: "Plan Futuro", color: "#F43F5E", y0: 1540, y1: 1846 },
+];
+
+const INITIAL_BOXES = [
+  { id: "b1", title: "Proceso Spec Funcional", x: 2, y: 46, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e1" },
+  { id: "b2", title: "Spec Kit Genérico aterrizado a Nubceo", x: 8, y: 114, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e1" },
+  { id: "b3", title: "QA - AI", x: 14, y: 182, duration: 14, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e1" },
+  { id: "b4", title: "Proceso Crud + Apis", x: 20, y: 250, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e1" },
+  { id: "b5", title: "Continuos Publication - Ramas - AI", x: 26, y: 318, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e1" },
+  { id: "b6", title: "Conciliación Manual, Ajustes y AI", x: 2, y: 444, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e2", collapsed: true,
+    children: [
+      { id: "c1", title: "AI Conciliación Manual", status: "planned", resources: [], effort: 1 },
+      { id: "c2", title: "Ajustes e Interco", status: "planned", resources: [], effort: 1 },
+      { id: "c3", title: "n:m", status: "planned", resources: [], effort: 1 },
+      { id: "c4", title: "Ajustes en conciliación automática", status: "planned", resources: [], effort: 1 },
+      { id: "c5", title: "Contabilidad Ajustes", status: "planned", resources: [], effort: 1 },
+    ] },
+  { id: "b7", title: "MCP Carga de Contratos", x: 8, y: 512, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e2" },
+  { id: "b8", title: "Contratos de Promociones", x: 14, y: 580, duration: 14, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e2" },
+  { id: "b9", title: "Cuota a Cuota", x: 2, y: 706, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3", collapsed: true,
+    children: [
+      { id: "c6", title: "Prisma cuota a cuota. CR cuotas virtuales y reales", status: "planned", resources: [], effort: 1 },
+      { id: "c7", title: "conciliación automática n:1", status: "planned", resources: [], effort: 1 },
+      { id: "c8", title: "Pantalla control cobro en cuotas", status: "planned", resources: [], effort: 1 },
+      { id: "c9", title: "Contabilidad de Cuota a Cuota", status: "planned", resources: [], effort: 1 },
+    ] },
+  { id: "b10", title: "CR 3.0", x: 8, y: 774, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3" },
+  { id: "b11", title: "Conector en 3 Días", x: 14, y: 842, duration: 14, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3" },
+  { id: "b12", title: "Tarjeta Tuya", x: 20, y: 910, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3" },
+  { id: "b13", title: "Macro", x: 26, y: 978, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3" },
+  { id: "b14", title: "Bancard", x: 32, y: 1046, duration: 14, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3" },
+  { id: "b15", title: "Fiserv Clover", x: 38, y: 1114, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e3" },
+  { id: "b16", title: "Roles", x: 2, y: 1240, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e4" },
+  { id: "b17", title: "Mobile Tesorero - Owner - Apis", x: 8, y: 1308, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e4" },
+  { id: "b18", title: "Analíticos Arcos", x: 14, y: 1376, duration: 14, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e4" },
+  { id: "b19", title: "MCP Nubceo 1.0", x: 20, y: 1444, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e4" },
+  { id: "b20", title: "UI revamping - Calendar", x: 2, y: 1570, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e5" },
+  { id: "b21", title: "Conciliaciones Bancarias", x: 8, y: 1638, duration: 11, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e5" },
+  { id: "b22", title: "Cash Reconciliation", x: 14, y: 1706, duration: 14, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e5" },
+  { id: "b23", title: "Ifood Workflow", x: 20, y: 1774, duration: 8, effort: 2, status: "planned", resources: [], ai: false, labelColor: null, epicId: "e5" },
+];
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const DAY_MS = 86400000;
+
+// hex (#rrggbb) + alpha -> rgba() string
+function hexA(hex, a) {
+  if (!hex) return `rgba(100,116,139,${a})`;
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+// Graph Effort config (global): each vertical step of GRAPH.stepPx pixels represents
+// GRAPH.workPerStep units of "work" (parallel work hours). Height encodes work discretely.
+const GRAPH = { stepPx: 16, workPerStep: 1 };
+// Work units implied by a box's height field (box.work), snapped to whole steps.
+const workOf = (box) => {
+  const w = box.work != null ? box.work : (box.effort != null ? box.effort : 1);
+  return Math.max(GRAPH.workPerStep, Math.round(w / GRAPH.workPerStep) * GRAPH.workPerStep);
+};
+const boxHeight = (box) => {
+  const hasChildren = Array.isArray(box.children) && box.children.length > 0;
+  const expanded = hasChildren && !box.collapsed;
+  const steps = clamp(workOf(box) / GRAPH.workPerStep, 1, 24);
+  const bodyHeight = 18 + steps * GRAPH.stepPx;
+  return expanded ? 30 + box.children.length * 27 + 10 : 30 + bodyHeight;
+};
+
+// Assign overlapping assignment bars to stacked vertical lanes so they don't collide.
+function stackRows(rows) {
+  const sorted = [...rows].sort((a, b) => a.start - b.start);
+  const laneEnds = []; // last end-day occupied per lane
+  return sorted.map((row) => {
+    let lane = laneEnds.findIndex((end) => row.start >= end);
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(0); }
+    laneEnds[lane] = row.start + row.duration;
+    return { ...row, lane };
+  });
+}
+
+// ---------------------------------------------------------------------------
+function InfiniteCanvasPrototype() {
+  const baseDate = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const dateForDay = useCallback((day) => new Date(baseDate.getTime() + day * DAY_MS), [baseDate]);
+  const dayIndex = useCallback((date) => Math.round((date.getTime() - baseDate.getTime()) / DAY_MS), [baseDate]);
+  const fmtDate = useCallback((day) => dateForDay(day).toLocaleDateString("en-US", { month: "short", day: "numeric" }), [dateForDay]);
+  // Weekend awareness: day-of-week for an absolute day index (0=Sun..6=Sat).
+  const dowOf = useCallback((day) => dateForDay(day).getDay(), [dateForDay]);
+  const isWeekend = useCallback((day) => { const w = dowOf(day); return w === 0 || w === 6; }, [dowOf]);
+  // Count business days within a calendar span [startDay, startDay+span).
+  const businessInSpan = useCallback((startDay, span) => {
+    let c = 0; for (let d = 0; d < span; d++) if (!isWeekend(startDay + d)) c++; return c;
+  }, [isWeekend]);
+  // Calendar span needed to fit `businessDays` working days from startDay.
+  // If useWeekends is true, weekends count as working days (span === businessDays).
+  const businessToSpan = useCallback((startDay, businessDays, useWeekends) => {
+    const need = Math.max(1, Math.ceil(businessDays));
+    if (useWeekends) return need;
+    let counted = 0, span = 0;
+    while (counted < need && span < 4000) { if (!isWeekend(startDay + span)) counted++; span++; }
+    return Math.max(1, span);
+  }, [isWeekend]);
+  // Working days represented by a box (its calendar span, minus weekends unless the flag is on).
+  const workingDaysOf = useCallback((box) => box.useWeekends ? box.duration : businessInSpan(box.x, box.duration), [businessInSpan]);
+
+  const [boxes, setBoxes] = useState(INITIAL_BOXES);
+  const [resources, setResources] = useState(INITIAL_RESOURCES);
+  const [resourceTypes, setResourceTypes] = useState(INITIAL_RESOURCE_TYPES);
+  const [epics, setEpics] = useState(INITIAL_EPICS);
+  const [selectedId, setSelectedId] = useState(null);
+  const [rightTab, setRightTab] = useState("resources");
+  const [resourceQuery, setResourceQuery] = useState(""); // filter resources in the Team tab
+  useEffect(() => { if (!selectedId) setRightTab((t) => (t === "details" ? "resources" : t)); }, [selectedId]);
+  const [offsetX, setOffsetX] = useState(BASE_DAY_WIDTH * 6);
+  const [scale, setScale] = useState(1);
+  const [viewZoom, setViewZoom] = useState(1); // visual zoom of the whole canvas image (does not change day width)
+  const [density, setDensity] = useState("week");
+  const [containerWidth, setContainerWidth] = useState(1000);
+  const [dimHint, setDimHint] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panArmed, setPanArmed] = useState(false); // long-press armed
+  const [dragOverBoxId, setDragOverBoxId] = useState(null);
+  const [addingResource, setAddingResource] = useState(false);
+  const [filterResource, setFilterResource] = useState(null); // resource id to filter the canvas + summary by
+  const [assignFilterRes, setAssignFilterRes] = useState("all"); // lower chart: filter rows by resource
+  const [assignFilterStatus, setAssignFilterStatus] = useState("all"); // lower chart: filter bars by status
+  const [assignHideIdle, setAssignHideIdle] = useState(false); // lower chart: hide people with no assignments
+  const [assignCompact, setAssignCompact] = useState(false); // lower chart: show only % per resource
+  const [expandedSubs, setExpandedSubs] = useState({}); // which subtasks are expanded in the form
+  const [featureQuery, setFeatureQuery] = useState(""); // search features by text
+  const [featureStatusFilter, setFeatureStatusFilter] = useState("all"); // filter features by status
+  const [epicsShrunk, setEpicsShrunk] = useState(false); // shrink epics to title-only feature boxes
+  const [assignAllocFilter, setAssignAllocFilter] = useState("all"); // resource view: all | under | over
+  const [assignPanelH, setAssignPanelH] = useState(280); // px height of the resource assignment panel
+  const [showDelays, setShowDelays] = useState(false); // draw planned→actual delay lines
+  const [graphStepPx, setGraphStepPx] = useState(GRAPH.stepPx);       // px per height step
+  const [graphWorkPerStep, setGraphWorkPerStep] = useState(GRAPH.workPerStep); // work units per step
+  const [showGraphSettings, setShowGraphSettings] = useState(false);
+  useEffect(() => { GRAPH.stepPx = graphStepPx; GRAPH.workPerStep = graphWorkPerStep; setBoxes((bs) => bs.slice()); }, [graphStepPx, graphWorkPerStep]);
+  const [boardName, setBoardName] = useState(""); // user label for this board, e.g. "de conciliaciones"
+  const [editingName, setEditingName] = useState(false);
+  useEffect(() => { document.title = boardName.trim() ? `${boardName.trim()} — Pulse` : "Pulse — Visual Project Planning"; }, [boardName]);
+
+  const containerRef = useRef(null);
+  const dragRef = useRef(null);
+  const panRef = useRef(null);
+  const longPressTimer = useRef(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => { for (const e of entries) setContainerWidth(e.contentRect.width); });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const dayWidth = BASE_DAY_WIDTH * scale * DENSITY_DAY_PX[density];
+  const xForDay = useCallback((day) => offsetX + day * dayWidth, [offsetX, dayWidth]);
+
+  const startDay = Math.floor(-offsetX / dayWidth) - 2;
+  const endDay = Math.ceil((containerWidth / viewZoom - offsetX) / dayWidth) + 2;
+
+  // Weekend day indices in view (only shaded in day view, where a day is wide enough to matter).
+  const weekends = useMemo(() => {
+    if (density !== "day") return [];
+    const out = [];
+    for (let d = startDay; d <= endDay; d++) if (isWeekend(d)) out.push(d);
+    return out;
+  }, [density, startDay, endDay, isWeekend]);
+
+  // ---- Timeline ticks: genuinely different per density ---------------------
+  // primary = the labelled band along the top; secondary = fine gridlines
+  const timeline = useMemo(() => {
+    const primary = [];   // { left(day), right(day), label }
+    const secondary = []; // day indices for gridlines
+    let guard = 0;
+
+    if (density === "day") {
+      // primary band = months; secondary gridlines = each day
+      let d = dateForDay(startDay);
+      d = new Date(d.getFullYear(), d.getMonth(), 1);
+      while (dayIndex(d) < endDay && guard < 80) {
+        const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        primary.push({ left: dayIndex(d), right: dayIndex(next), label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }) });
+        d = next; guard++;
+      }
+      for (let day = startDay; day <= endDay; day++) {
+        secondary.push({ day, label: dateForDay(day).toLocaleDateString("en-US", { day: "numeric" }) });
+      }
+    } else if (density === "week") {
+      // primary band = months; secondary gridlines = each week (Mon)
+      let d = dateForDay(startDay);
+      d = new Date(d.getFullYear(), d.getMonth(), 1);
+      while (dayIndex(d) < endDay && guard < 80) {
+        const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        primary.push({ left: dayIndex(d), right: dayIndex(next), label: d.toLocaleDateString("en-US", { month: "long", year: d.getMonth() === 0 ? "numeric" : undefined }) });
+        d = next; guard++;
+      }
+      const kStart = Math.floor(startDay / 7) - 1;
+      const kEnd = Math.ceil(endDay / 7) + 1;
+      // find the Monday on/just before startDay, then step by 7 days
+      let mon = dateForDay(startDay);
+      const shift = (mon.getDay() + 6) % 7; // days since Monday (Mon=0 … Sun=6)
+      mon = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() - shift);
+      let g2 = 0;
+      while (dayIndex(mon) <= endDay && g2 < 90) {
+        const dm = `${mon.getDate()}/${mon.getMonth() + 1}`; // day/month
+        secondary.push({ day: dayIndex(mon), label: dm });
+        mon = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 7); g2++;
+      }
+    } else {
+      // month view: primary band = quarters/years; secondary gridlines = each month
+      let d = dateForDay(startDay);
+      d = new Date(d.getFullYear(), 0, 1);
+      while (dayIndex(d) < endDay && guard < 40) {
+        const next = new Date(d.getFullYear() + 1, 0, 1);
+        primary.push({ left: dayIndex(d), right: dayIndex(next), label: String(d.getFullYear()) });
+        d = next; guard++;
+      }
+      let m = dateForDay(startDay);
+      m = new Date(m.getFullYear(), m.getMonth(), 1);
+      let g2 = 0;
+      while (dayIndex(m) < endDay && g2 < 80) {
+        secondary.push({ day: dayIndex(m), label: m.toLocaleDateString("en-US", { month: "short" }) });
+        m = new Date(m.getFullYear(), m.getMonth() + 1, 1); g2++;
+      }
+    }
+    return { primary, secondary };
+  }, [density, startDay, endDay, dateForDay, dayIndex]);
+
+  // Period buckets for the per-day/week/month allocation strip, each covering
+  // [start, end) in day-indices, aligned to the same timeline as the canvas.
+  const periods = useMemo(() => {
+    const out = [];
+    if (density === "day") {
+      for (let day = startDay; day <= endDay; day++) out.push({ start: day, end: day + 1, label: dateForDay(day).toLocaleDateString("en-US", { day: "numeric" }) });
+    } else if (density === "week") {
+      let mon = dateForDay(startDay);
+      const shift = (mon.getDay() + 6) % 7;
+      mon = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() - shift);
+      let g = 0;
+      while (dayIndex(mon) <= endDay && g < 90) {
+        const s = dayIndex(mon);
+        out.push({ start: s, end: s + 7, label: `${mon.getDate()}/${mon.getMonth() + 1}` });
+        mon = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 7); g++;
+      }
+    } else {
+      let m = dateForDay(startDay);
+      m = new Date(m.getFullYear(), m.getMonth(), 1);
+      let g = 0;
+      while (dayIndex(m) < endDay && g < 80) {
+        const next = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+        out.push({ start: dayIndex(m), end: dayIndex(next), label: m.toLocaleDateString("en-US", { month: "short" }) });
+        m = next; g++;
+      }
+    }
+    return out;
+  }, [density, startDay, endDay, dateForDay, dayIndex]);
+
+  const contentHeight = useMemo(() => Math.max(CONTENT_MIN_HEIGHT, Math.max(...boxes.map((b) => b.y + boxHeight(b))) + 260, Math.max(0, ...epics.map((e) => e.y1)) + 120), [boxes, epics]);
+
+  // For each epic, fit its extent (both axes) to the features it contains.
+  const epicBandsRef = useRef([]);
+  const EPIC_MIN_H = 90;
+  const epicBands = useMemo(() => epics.map((ep) => {
+    const feats = boxes.filter((b) => b.epicId === ep.id);
+    const bh = (b) => epicsShrunk ? 26 : boxHeight(b); // shrunk boxes are title-only
+    let minX, maxX, y0 = ep.y0, y1 = ep.y0 + (epicsShrunk ? 54 : EPIC_MIN_H);
+    if (feats.length) {
+      minX = Math.min(...feats.map((b) => b.x));
+      maxX = Math.max(...feats.map((b) => b.x + b.duration));
+      y0 = Math.min(ep.y0, ...feats.map((b) => b.y - 30));
+      y1 = Math.max(y0 + (epicsShrunk ? 54 : EPIC_MIN_H), ...feats.map((b) => b.y + bh(b) + 12));
+    }
+    // manual overrides extend (but never clip) the auto-fit extent — ignored while shrunk
+    if (!epicsShrunk) {
+      if (ep.manualY0 != null) y0 = Math.min(y0, ep.manualY0);
+      if (ep.manualY1 != null) y1 = Math.max(y1, ep.manualY1);
+    }
+    if (ep.manualMinX != null) minX = minX != null ? Math.min(minX, ep.manualMinX) : ep.manualMinX;
+    if (ep.manualMaxX != null) maxX = maxX != null ? Math.max(maxX, ep.manualMaxX) : ep.manualMaxX;
+    return { ...ep, minX, maxX, y0, y1, count: feats.length };
+  }), [epics, boxes, epicsShrunk]);
+  useEffect(() => { epicBandsRef.current = epicBands; }, [epicBands]);
+
+  // ---- Panning: grab the background and drag back/forth through time ------
+  // Horizontal drag scrubs the timeline across months (offsetX is unbounded);
+  // vertical drag scrolls the canvas rows. Works immediately on press-drag,
+  // and a long-press also arms an explicit "pan mode" for clarity.
+  const handlePanMove = useCallback((e) => {
+    const p = panRef.current; if (!p) return;
+    if (!p.active) {
+      // start panning as soon as the pointer moves past a small threshold
+      if (Math.abs(e.clientX - p.startX) + Math.abs(e.clientY - p.startY) < 4) return;
+      p.active = true;
+      setIsPanning(true);
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    }
+    setOffsetX(p.origOffset + (e.clientX - p.startX) / (p.viewZoom || 1)); // horizontal → time (screen px ÷ zoom)
+    if (p.scroller) p.scroller.scrollTop = p.origScroll - (e.clientY - p.startY); // vertical → rows
+  }, []);
+
+  const endPan = useCallback(() => {
+    panRef.current = null;
+    setIsPanning(false); setPanArmed(false);
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    window.removeEventListener("pointermove", handlePanMove);
+    window.removeEventListener("pointerup", endPan);
+  }, [handlePanMove]);
+
+  const handlePanPointerDown = (e) => {
+    // Boxes and their handles call stopPropagation, so any event that reaches
+    // here is on empty canvas background — begin a pan immediately.
+    setSelectedId(null);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    panRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
+      origOffset: offsetX, active: false,
+      scroller: containerRef.current,
+      origScroll: containerRef.current ? containerRef.current.scrollTop : 0,
+      viewZoom,
+    };
+    longPressTimer.current = setTimeout(() => { setPanArmed(true); }, 250);
+    window.addEventListener("pointermove", handlePanMove);
+    window.addEventListener("pointerup", endPan);
+  };
+
+  const handleWheel = useCallback((e) => {
+    if (!(e.ctrlKey || e.metaKey)) return; // only zoom on pinch / ctrl+scroll; plain scroll passes through
+    e.preventDefault();
+    e.stopPropagation();
+    const cont = containerRef.current; if (!cont) return;
+    const rect = cont.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left + cont.scrollLeft;
+    setViewZoom((zPrev) => {
+      const worldX = mouseX / zPrev - offsetXRef.current;
+      // trackpad pinch sends small deltas; scale factor proportional to delta
+      const factor = Math.exp(-e.deltaY * 0.01);
+      const next = clamp(Math.round(zPrev * factor * 100) / 100, 0.3, 2);
+      setOffsetX(mouseX / next - worldX);
+      return next;
+    });
+  }, []);
+
+  // Register wheel + Safari gesture handlers non-passively so the browser's own
+  // page-zoom never kicks in (which was making it hard to return to normal zoom).
+  const offsetXRef = useRef(offsetX);
+  useEffect(() => { offsetXRef.current = offsetX; }, [offsetX]);
+  useEffect(() => {
+    const cont = containerRef.current; if (!cont) return;
+    const wheelOpt = { passive: false };
+    cont.addEventListener("wheel", handleWheel, wheelOpt);
+    const prevent = (ev) => ev.preventDefault();
+    cont.addEventListener("gesturestart", prevent, wheelOpt);
+    cont.addEventListener("gesturechange", prevent, wheelOpt);
+    cont.addEventListener("gestureend", prevent, wheelOpt);
+    return () => {
+      cont.removeEventListener("wheel", handleWheel, wheelOpt);
+      cont.removeEventListener("gesturestart", prevent, wheelOpt);
+      cont.removeEventListener("gesturechange", prevent, wheelOpt);
+      cont.removeEventListener("gestureend", prevent, wheelOpt);
+    };
+  }, [handleWheel]);
+
+  // ---- Box drag / resize --------------------------------------------------
+  const updateBox = (id, patch) => setBoxes((bs) => bs.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+
+  // ---- Subtask (child) helpers -------------------------------------------
+  const addSubtask = (boxId) => {
+    const cid = `c${Date.now()}`;
+    setBoxes((bs) => bs.map((b) => b.id === boxId ? { ...b, collapsed: false, children: [...(b.children || []), { id: cid, title: "New subtask", status: "planned", resources: [], effort: 1 }] } : b));
+    setExpandedSubs((s) => ({ ...s, [cid]: true }));
+    return cid;
+  };
+  const updateSubtask = (boxId, cid, patch) => setBoxes((bs) => bs.map((b) => b.id === boxId ? { ...b, children: (b.children || []).map((c) => c.id === cid ? { ...c, ...patch } : c) } : b));
+  const deleteSubtask = (boxId, cid) => setBoxes((bs) => bs.map((b) => b.id === boxId ? { ...b, children: (b.children || []).filter((c) => c.id !== cid) } : b));
+  const toggleSubtaskResource = (boxId, cid, rid) => setBoxes((bs) => bs.map((b) => {
+    if (b.id !== boxId) return b;
+    return { ...b, children: (b.children || []).map((c) => {
+      if (c.id !== cid) return c;
+      const has = (c.resources || []).includes(rid);
+      return { ...c, resources: has ? c.resources.filter((x) => x !== rid) : [...(c.resources || []), rid] };
+    }) };
+  }));
+
+  // ---- Attachment helpers (link-based: title + URL, opens in a new tab) ----
+  const normalizeUrl = (u) => { const t = (u || "").trim(); if (!t) return ""; return /^https?:\/\//i.test(t) ? t : `https://${t}`; };
+  const addAttachment = (boxId, title, url, cid) => {
+    const raw = (url || "").trim();
+    const isData = /^data:/i.test(raw);
+    const finalUrl = isData ? raw : normalizeUrl(raw);
+    const att = { id: `at${Date.now()}${Math.floor(Math.random() * 1000)}`, title: (title || raw).trim().slice(0, 120), url: finalUrl, isData };
+    if (!att.url) return;
+    setBoxes((bs) => bs.map((b) => {
+      if (b.id !== boxId) return b;
+      if (!cid) return { ...b, attachments: [...(b.attachments || []), att] };
+      return { ...b, children: (b.children || []).map((c) => c.id === cid ? { ...c, attachments: [...(c.attachments || []), att] } : c) };
+    }));
+  };
+  const deleteAttachment = (boxId, attId, cid) => setBoxes((bs) => bs.map((b) => {
+    if (b.id !== boxId) return b;
+    if (!cid) return { ...b, attachments: (b.attachments || []).filter((a) => a.id !== attId) };
+    return { ...b, children: (b.children || []).map((c) => c.id === cid ? { ...c, attachments: (c.attachments || []).filter((a) => a.id !== attId) } : c) };
+  }));
+
+  // Which epic band a box belongs to: test against the CURRENT (expanded) bands
+  // so dropping onto the band as drawn works; any vertical overlap counts, and
+  // the most-overlapping band wins when straddling two.
+  const epicAtY = useCallback((yTop, h) => {
+    const top = yTop, bot = yTop + h;
+    let best = null, bestOverlap = 0;
+    (epicBandsRef.current.length ? epicBandsRef.current : epics).forEach((ep) => {
+      const overlap = Math.min(bot, ep.y1) - Math.max(top, ep.y0);
+      if (overlap > 0 && overlap > bestOverlap) { bestOverlap = overlap; best = ep.id; } // must actually touch
+    });
+    return best;
+  }, [epics]);
+
+  const handleDragMove = useCallback((e) => {
+    const d = dragRef.current; if (!d) return;
+    const vz = d.viewZoom || 1;
+    const dx = (e.clientX - d.startX) / vz;
+    const dy = (e.clientY - d.startY) / vz;
+    const deltaDays = Math.round(dx / d.dayWidth);
+
+    if (d.kind === "move") {
+      const ny = Math.max(6, d.orig.y + dy);
+      const epicId = epicAtY(ny, boxHeight(d.orig));
+      updateBox(d.id, { x: d.orig.x + deltaDays, y: ny, epicId });
+      const epName = epicId ? (epics.find((ep) => ep.id === epicId) || {}).name : "no epic";
+      setDimHint({ x: e.clientX, y: e.clientY, text: `${fmtDate(d.orig.x + deltaDays)} → ${fmtDate(d.orig.x + deltaDays + d.orig.duration)} · ${epName}` });
+    } else if (d.kind === "resize-right") {
+      const nd = Math.max(1, d.orig.duration + deltaDays);       // width = elapsed
+      const wdNew = d.orig.useWeekends ? nd : businessInSpan(d.orig.x, nd);
+      updateBox(d.id, { duration: nd });
+      setDimHint({ x: e.clientX, y: e.clientY, text: `⟷ elapsed ${wdNew}wd` });
+    } else if (d.kind === "resize-left") {
+      let nx = d.orig.x + deltaDays, nd = d.orig.duration - deltaDays;
+      if (nd < 1) { nd = 1; nx = d.orig.x + d.orig.duration - 1; }
+      const wdNew = d.orig.useWeekends ? nd : businessInSpan(nx, nd);
+      updateBox(d.id, { x: nx, duration: nd });
+      setDimHint({ x: e.clientX, y: e.clientY, text: `⟷ elapsed ${wdNew}wd` });
+    } else if (d.kind === "resize-effort") {
+      // Dragging height changes WORK in discrete steps (Graph Effort config).
+      const workOld = d.orig.work != null ? d.orig.work : 1;
+      const stepsDelta = Math.round(dy / GRAPH.stepPx);
+      const nw = Math.max(GRAPH.workPerStep, workOld + stepsDelta * GRAPH.workPerStep);
+      updateBox(d.id, { work: nw });
+      setDimHint({ x: e.clientX, y: e.clientY, text: `↕ work ${nw}` });
+    }
+  }, [fmtDate, epicAtY, epics]);
+
+  const handleDragUp = useCallback(() => {
+    dragRef.current = null; setDragId(null); setDimHint(null);
+    window.removeEventListener("pointermove", handleDragMove);
+    window.removeEventListener("pointerup", handleDragUp);
+  }, [handleDragMove]);
+
+  const startDrag = (kind, box, e) => {
+    e.stopPropagation();
+    setSelectedId(box.id); setRightTab("details"); setDragId(box.id);
+    dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: { ...box, altKey: e.altKey }, dayWidth, viewZoom, locked: !!box.effortLocked };
+    window.addEventListener("pointermove", handleDragMove);
+    window.addEventListener("pointerup", handleDragUp);
+  };
+
+  const toggleCollapsed = (id, e) => { e.stopPropagation(); updateBox(id, { collapsed: !boxes.find((b) => b.id === id).collapsed }); };
+
+  // Manual epic band resizing via edge handles.
+  const epicResizeRef = useRef(null);
+  const startEpicResize = (edge, band, e) => {
+    e.stopPropagation();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    epicResizeRef.current = { edge, id: band.id, startX: e.clientX, startY: e.clientY, band: { ...band }, dayWidth, viewZoom };
+    window.addEventListener("pointermove", onEpicResizeMove);
+    window.addEventListener("pointerup", onEpicResizeUp);
+  };
+  const onEpicResizeMove = useCallback((e) => {
+    const r = epicResizeRef.current; if (!r) return;
+    const vz = r.viewZoom || 1;
+    const dy = (e.clientY - r.startY) / vz;
+    const dDays = Math.round(((e.clientX - r.startX) / vz) / r.dayWidth);
+    const patch = {};
+    if (r.edge.includes("top")) patch.manualY0 = Math.round(r.band.y0 + dy);
+    if (r.edge.includes("bottom")) patch.manualY1 = Math.round(r.band.y1 + dy);
+    if (r.edge.includes("left")) patch.manualMinX = (r.band.minX != null ? r.band.minX : 0) + dDays;
+    if (r.edge.includes("right")) patch.manualMaxX = (r.band.maxX != null ? r.band.maxX : 0) + dDays;
+    setEpics((es) => es.map((x) => x.id === r.id ? { ...x, ...patch } : x));
+  }, []);
+  const onEpicResizeUp = useCallback(() => {
+    epicResizeRef.current = null;
+    window.removeEventListener("pointermove", onEpicResizeMove);
+    window.removeEventListener("pointerup", onEpicResizeUp);
+  }, [onEpicResizeMove]);
+
+
+  const addTask = () => {
+    const cont = containerRef.current;
+    const scrollTop = cont ? cont.scrollTop : 0;
+    const visH = cont ? cont.clientHeight : 400;
+    // horizontal center of the visible time window (world coords), vertical center of the scroll viewport
+    const centerDay = Math.round((-offsetX + (containerWidth / viewZoom) / 2) / dayWidth);
+    const y = Math.max(10, Math.round((scrollTop + visH / 2) / viewZoom) - 40);
+    const id = `n${Date.now()}`;
+    setBoxes((bs) => [...bs, { id, title: "New task", x: centerDay, y, duration: 8, effort: 2, status: "planned", resources: [], ai: false }]);
+    setSelectedId(id); setRightTab("details");
+  };
+
+  const EPIC_PALETTE = ["#8B5CF6", "#3B82F6", "#14B8A6", "#22C55E", "#F59E0B", "#F43F5E", "#0EA5E9"];
+  const addEpic = () => {
+    const cont = containerRef.current;
+    const scrollTop = cont ? cont.scrollTop : 0;
+    const visH = cont ? cont.clientHeight : 400;
+    const y0 = Math.max(10, Math.round((scrollTop + visH / 2) / viewZoom) - 60);
+    const id = `ep${Date.now()}`;
+    setEpics((es) => [...es, { id, name: "New epic", color: EPIC_PALETTE[es.length % EPIC_PALETTE.length], y0, y1: y0 + EPIC_MIN_H + 40 }]);
+  };
+  const updateEpic = (id, patch) => setEpics((es) => es.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+
+  // Assign a box to an epic AND move it into that epic's band vertically,
+  // placing it below any features already there so it lands inside the lane.
+  const moveToEpic = (boxId, epicId) => {
+    setBoxes((bs) => {
+      const box = bs.find((b) => b.id === boxId);
+      if (!box) return bs;
+      if (!epicId) return bs.map((b) => (b.id === boxId ? { ...b, epicId: null } : b));
+      const ep = epics.find((e) => e.id === epicId);
+      if (!ep) return bs.map((b) => (b.id === boxId ? { ...b, epicId } : b));
+      // find a free y just under existing features of this epic, within the band
+      const others = bs.filter((b) => b.id !== boxId && b.epicId === epicId);
+      let ny = ep.y0 + 34; // leave room for the epic label
+      if (others.length) ny = Math.max(ny, Math.max(...others.map((b) => b.y + boxHeight(b))) + 12);
+      // keep it inside the base band if it fits; otherwise the band will grow to wrap it
+      return bs.map((b) => (b.id === boxId ? { ...b, epicId, y: ny } : b));
+    });
+  };
+  const deleteEpic = (id) => {
+    setEpics((es) => es.filter((e) => e.id !== id));
+    setBoxes((bs) => bs.map((b) => (b.epicId === id ? { ...b, epicId: null } : b)));
+  };
+
+  // Compact everything vertically to the minimum height with tidy margins:
+  // stack each epic's features in a single column, pack the epic bands one after
+  // another, then place any loose (no-epic) features below. Horizontal positions
+  // (dates) are untouched — only y changes.
+  const compactVertically = (bhFn) => {
+    const boxH = bhFn || boxHeight;
+    const LABEL_H = 30;   // headroom for the epic label inside the band
+    const GAP = 12;       // vertical gap between lanes
+    const EPIC_GAP = 24;  // gap between epic bands
+    const TOP = 16;
+    let cursor = TOP;
+    const yById = {};
+
+    // Pack features into lanes: two features share a lane (row) only if their
+    // time spans don't overlap. Non-overlapping tasks rise to the top lanes.
+    const packLanes = (feats) => {
+      const sorted = [...feats].sort((a, b) => a.x - b.x || b.duration - a.duration);
+      const laneEnds = []; // last occupied day per lane
+      const laneOf = {};
+      sorted.forEach((b) => {
+        let lane = laneEnds.findIndex((end) => b.x >= end);
+        if (lane === -1) { lane = laneEnds.length; laneEnds.push(0); }
+        laneEnds[lane] = b.x + b.duration;
+        laneOf[b.id] = lane;
+      });
+      // row height = tallest box in that lane
+      const laneH = laneEnds.map((_, i) => Math.max(...sorted.filter((b) => laneOf[b.id] === i).map((b) => boxH(b)), 30));
+      const laneTop = []; let acc = 0;
+      laneH.forEach((h, i) => { laneTop[i] = acc; acc += h + GAP; });
+      const totalH = acc > 0 ? acc - GAP : 0;
+      return { laneOf, laneTop, totalH };
+    };
+
+    const ordered = [...epics].sort((a, b) => a.y0 - b.y0);
+    const minH = boxH === boxHeight ? EPIC_MIN_H : 54;
+    const newEpics = ordered.map((ep) => {
+      const feats = boxes.filter((b) => b.epicId === ep.id);
+      const y0 = cursor;
+      const inner = y0 + LABEL_H;
+      if (feats.length) {
+        const { laneOf, laneTop } = packLanes(feats);
+        feats.forEach((b) => { yById[b.id] = inner + laneTop[laneOf[b.id]]; });
+      }
+      const { totalH } = feats.length ? packLanes(feats) : { totalH: 0 };
+      const y1 = Math.max(y0 + minH, inner + totalH + 10);
+      cursor = y1 + EPIC_GAP;
+      return { ...ep, y0, y1, manualY0: undefined, manualY1: undefined };
+    });
+
+    // loose features (no epic) packed into lanes below all bands
+    const loose = boxes.filter((b) => !b.epicId);
+    if (loose.length) {
+      const { laneOf, laneTop } = packLanes(loose);
+      loose.forEach((b) => { yById[b.id] = cursor + laneTop[laneOf[b.id]]; });
+    }
+
+    setEpics(newEpics);
+    setBoxes((bs) => bs.map((b) => (yById[b.id] != null ? { ...b, y: yById[b.id] } : b)));
+  };
+
+  // Shrink/unshrink epics: title-only boxes AND a tightly compacted layout,
+  // restoring the previous layout when unshrinking.
+  const preShrinkRef = useRef(null);
+  const toggleShrinkEpics = () => {
+    if (!epicsShrunk) {
+      preShrinkRef.current = { boxes: boxes.map((b) => ({ id: b.id, y: b.y })), epics: epics.map((e) => ({ id: e.id, y0: e.y0, y1: e.y1, manualY0: e.manualY0, manualY1: e.manualY1 })) };
+      setEpicsShrunk(true);
+      compactVertically(() => 26); // pack using the title-only height
+    } else {
+      const snap = preShrinkRef.current;
+      if (snap) {
+        const byBox = Object.fromEntries(snap.boxes.map((b) => [b.id, b.y]));
+        const byEp = Object.fromEntries(snap.epics.map((e) => [e.id, e]));
+        setBoxes((bs) => bs.map((b) => (byBox[b.id] != null ? { ...b, y: byBox[b.id] } : b)));
+        setEpics((es) => es.map((e) => (byEp[e.id] ? { ...e, ...byEp[e.id] } : e)));
+      }
+      setEpicsShrunk(false);
+    }
+  };
+
+  const deleteTask = (id) => {
+    setBoxes((bs) => bs.filter((b) => b.id !== id));
+    setSelectedId((cur) => (cur === id ? null : cur));
+    setRightTab("usage");
+  };
+
+  // Zoom out (and scroll to start) so the whole roadmap — earliest task start to
+  // latest task end — fits within the visible canvas width.
+  const fitRoadmap = () => {
+    if (boxes.length === 0) { setViewZoom(1); return; }
+    const minDay = Math.min(...boxes.map((b) => b.x));
+    const maxDay = Math.max(...boxes.map((b) => b.x + b.duration));
+    const spanPx = (maxDay - minDay) * dayWidth + 80; // world px the roadmap occupies
+    const avail = Math.max(200, containerWidth - 24);
+    const z = clamp(Math.round((avail / spanPx) * 100) / 100, 0.2, 1);
+    setViewZoom(z);
+    setOffsetX(-minDay * dayWidth + 24); // bring the earliest task to the left edge
+    if (containerRef.current) containerRef.current.scrollTop = 0;
+  };
+
+  const assignResource = (boxId, rid) => setBoxes((bs) => bs.map((b) => {
+    if (b.id !== boxId || (b.resources || []).includes(rid)) return b;
+    return { ...b, resources: [...(b.resources || []), rid], alloc: { ...(b.alloc || {}), [rid]: 100 } };
+  }));
+
+  // % time allocation helpers (default 100% when a resource is assigned)
+  const allocOf = (box, rid) => (box.alloc && box.alloc[rid] != null) ? box.alloc[rid] : 100;
+  const setAlloc = (boxId, rid, pct) => setBoxes((bs) => bs.map((b) => b.id === boxId ? { ...b, alloc: { ...(b.alloc || {}), [rid]: pct } } : b));
+  const omit = (obj, key) => { const o = { ...(obj || {}) }; delete o[key]; return o; };
+
+  const makeInitials = (name) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    let init = (parts.length >= 2 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
+    let candidate = init, n = 1;
+    while (resources.some((r) => r.id === candidate)) { candidate = init + n; n++; }
+    return candidate;
+  };
+  const addResource = (name) => { if (!name.trim()) return; setResources((rs) => [...rs, { id: makeInitials(name), name: name.trim(), capacity: 100, type: resourceTypes[0] || null }]); };
+
+  // Remove a resource everywhere: from the roster, from every box/subtask it's
+  // assigned to, and from any alloc maps; clear the filter if it pointed here.
+  const deleteResource = (rid) => {
+    setResources((rs) => rs.filter((r) => r.id !== rid));
+    setBoxes((bs) => bs.map((b) => {
+      const nb = { ...b, resources: (b.resources || []).filter((x) => x !== rid), alloc: omit(b.alloc, rid) };
+      if (Array.isArray(b.children)) nb.children = b.children.map((c) => ({ ...c, resources: (c.resources || []).filter((x) => x !== rid), alloc: omit(c.alloc, rid) }));
+      return nb;
+    }));
+    setFilterResource((cur) => (cur === rid ? null : cur));
+    setAssignFilterRes((cur) => (cur === rid ? "all" : cur));
+  };
+
+  // rows: every assignment of a resource to a box/subtask (for the view below the canvas)
+  const assignmentsFor = (rid) => {
+    const rows = [];
+    boxes.forEach((b) => {
+      if ((b.resources || []).includes(rid)) rows.push({ title: b.title, effort: b.effort, start: b.x, duration: b.duration, status: b.status, pct: allocOf(b, rid) });
+      if (Array.isArray(b.children)) b.children.forEach((c) => { if ((c.resources || []).includes(rid)) rows.push({ title: c.title, effort: c.effort, parent: b.title, status: c.status, start: b.x, duration: b.duration, pct: (c.alloc && c.alloc[rid] != null) ? c.alloc[rid] : 100 }); });
+    });
+    return rows;
+  };
+  const resourceUsage = (rid) => assignmentsFor(rid).reduce((s, r) => s + r.effort, 0);
+
+  // --- Effort model (man-days, 1 decimal) ----------------------------------
+  const round1 = (v) => Math.round(v * 10) / 10;
+  // Elapsed Time = the box length in working days (weekends excluded unless the flag is on).
+  const elapsedOf = (box) => workingDaysOf(box);
+  // Sum of allocation % across assigned resources (fraction, 1.5 = 150%), incl. subtasks.
+  const allocSum = (box) => {
+    let s = (box.resources || []).reduce((a, rid) => a + (allocOf(box, rid) / 100), 0);
+    if (Array.isArray(box.children)) box.children.forEach((c) => {
+      (c.resources || []).forEach((rid) => { s += ((c.alloc && c.alloc[rid] != null) ? c.alloc[rid] : 100) / 100; });
+    });
+    return s;
+  };
+  // Graph Effort = elapsed (working days) × work (box height units). In man-days.
+  const graphEffort = (box) => round1(elapsedOf(box) * workOf(box));
+  // Estimate Effort = manual value if fixed, else equals Graph Effort.
+  const estimateEffort = (box) => round1(box.estEffort != null ? box.estEffort : graphEffort(box));
+  // Assigned Effort = elapsed × Σ resource %.
+  const assignedEffort = (box) => round1(elapsedOf(box) * allocSum(box));
+  // Theoretical Elapsed = Estimate Effort ÷ assigned work (Σ %). Null if nobody assigned.
+  const theoreticalElapsed = (box) => { const a = allocSum(box); return a > 0 ? round1(estimateEffort(box) / a) : null; };
+  // Kept for existing callers (staffing dot, box footer).
+  const plannedManDays = (box) => estimateEffort(box);
+  const assignedManDays = (box) => assignedEffort(box);
+
+  // Adjust the box LENGTH so that the assigned resources deliver the Estimate Effort:
+  //   elapsed = estimateEffort ÷ Σ% ; then convert working days → calendar span (weekends flag).
+  const adjustLengthToResources = (box) => {
+    const a = allocSum(box);
+    if (a <= 0) return;
+    const wd = Math.max(1, Math.round(estimateEffort(box) / a));
+    const span = businessToSpan(box.x, wd, box.useWeekends);
+    updateBox(box.id, { duration: span });
+  };
+
+
+  // Staffing health: compare assigned vs planned man-days.
+  //  red   = under-staffed (assigned clearly below plan)
+  //  green = right-staffed (assigned matches plan)
+  //  yellow= over-staffed  (assigned clearly above plan)
+  const staffingDot = (box) => {
+    const planned = plannedManDays(box);
+    const assigned = assignedManDays(box);
+    const gap = assigned - planned;
+    const tol = Math.max(0.5, planned * 0.05); // 5% tolerance
+    if (gap < -tol) return "#E5484D";  // under -> red
+    if (gap > tol) return "#EAB308";   // over  -> yellow
+    return "#12A594";                  // right -> green
+  };
+
+  // Per-period allocation %: for a resource, average daily allocation across the
+  // days in a given period (a day the person isn't working = 0%). Values can
+  // exceed 100% when tasks overlap — that's an over-allocation signal.
+  const allocInRange = (rid, dStart, dEnd) => {
+    const rows = assignmentsFor(rid);
+    let sum = 0, days = Math.max(1, dEnd - dStart);
+    for (let day = dStart; day < dEnd; day++) {
+      rows.forEach((row) => { if (day >= row.start && day < row.start + row.duration) sum += row.pct; });
+    }
+    return Math.round(sum / days);
+  };
+
+  // Peak daily allocation % across all of a resource's assignments (their busiest day).
+  const resourcePeakPct = (rid) => {
+    const rows = assignmentsFor(rid);
+    if (!rows.length) return 0;
+    const lo = Math.min(...rows.map((r) => r.start));
+    const hi = Math.max(...rows.map((r) => r.start + r.duration));
+    let peak = 0;
+    for (let day = lo; day < hi; day++) {
+      let d = 0;
+      rows.forEach((row) => { if (day >= row.start && day < row.start + row.duration) d += row.pct; });
+      if (d > peak) peak = d;
+    }
+    return peak;
+  };
+  // Utilization = peak load vs the resource's occupation limit (capacity %).
+  const utilizationPct = (r) => clamp(Math.round((resourcePeakPct(r.id) / (r.capacity || 100)) * 100), 0, 999);
+
+  const boxInvolves = (box, rid) => {
+    if (!rid) return true;
+    if ((box.resources || []).includes(rid)) return true;
+    if (Array.isArray(box.children)) return box.children.some((c) => (c.resources || []).includes(rid));
+    return false;
+  };
+
+  const selectedBox = boxes.find((b) => b.id === selectedId);
+  const totalCapacity = resources.reduce((s, r) => s + r.capacity, 0);
+  const totalUsage = resources.reduce((s, r) => s + resourceUsage(r.id), 0);
+
+  const densityHint = { day: "days shown; months banded above", week: "ISO weeks shown; months banded above", month: "months shown; years banded above" }[density];
+
+
+  return (
+    <div className="h-screen w-full flex flex-col" style={{ background: "#0A1428" }}>
+      {/* Toolbar — two thin rows: brand/name on top, controls below */}
+      <div className="flex flex-col flex-shrink-0 border-b" style={{ background: "#123359", borderColor: "#24406B" }}>
+        {/* Row 1: logo · Pulse · board name */}
+        <div className="flex items-center gap-3 px-4" style={{ height: 34, borderBottom: "1px solid #24406B" }}>
+          <div className="flex items-center gap-2">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAG4AAABiCAYAAACxmeaAAAAACXBIWXMAAAsSAAALEgHS3X78AAAF9klEQVR4nO1dS47bRhAtB14aMG9g3WB0A8sniHKCYU5gDZADyCew5gTWbLwJgsgnsAbI3hLgA0ibIEsKySKLAB00UARoghT7U1Xd5ekHcDEDsX+vv69fN58ZY6BAH34onOlEIU4pCnFKkYK4OQDsAGAPAAf8WyNqTL/NxxYAKsk8SE9OZpjZl53/XQBghZnXApvW215aHwFgIZV+yRZXYUt72fu//fsDAGwE0xKKtuL1SbN4DQBrqYRItrihWtrHEWttI5UoDyxGKl4fP+HvWCHV4moH0ixuAOCU4bhnu/LPDqQBVlD29Eu0OJuJLwHv3WXQfVZIxI+e77H3HNwtrsJZVwjep5itdTDHtPuSBthzsFY6buJmjt3LGG6x8KS7zhrjvYkIgzXN3MQdCMK4wUJcEoTlgg3OcmMqHHBPsCQmJ0eCMGwh/s7c/VRY0d4ShRc6RDhBgjg7SH8iCustFgj1uDfH2WxM19jFHfeaToK4Bru5d0Th2YUupVS2wllvbNcIqAK9EZkN2+WA4LM0xjSGDnVE2itjzJYwLQdjzEyqLKWJs88cM0mFLZKgLQ3qiGtr+46w4HxqO3WrX6Uow1TEtc+GsAAtGYuJ+NbC8X23xAGOU5QtYD0Qh23he8I4DtjlJyu3XMxC7ebqK6LwPqH60TCHnQw5ubza/brXROGdAeBXAPiFKDzAJY3Ynts15GjP2xCqF1S4YCtj32dzRa6+yhr1whxw7PhLskHOhth2W4VC0QjFI6o+2e3I52zPO+C2EIVIHYL7jG0U2fsq21nhg2Ccdjz7GTXMbOFKXNtt7bEwxWxoiBoLkxtnzJu0VXCNuxN7nABN7344LPaqkQVyCqlnQbxY7y+qRfXGK9Lfbupdl8CvibG7BJm1miSlQGxQJJauhFZ5OV1J09WGMRW4i5aYQv6h3JKJ2RoKfVxlvlEt9FrEtUfmG1TdpQsgdochBWk+wnoztusxFvg8cCzZJGh5oWPe5DjCkNaQLv4wFN7QrLI1gYYsfLk8IWNoImwCktP9GE/LsEczsimP4SQ47s0C0veXYEtbEZSn6Q9FYy0uFq/QgFMThDUFW5P/C3iHG23P9Z4jniHitqgeUOCD0GL2H8/f/8uUjhYzHDJcDrq44Nj3aQ4Rt0f1gEojvO3ojlx47hkuJ3FLzC+VR/NhSDMdk7wOxEbWm06YHHjhGabv712xRsc11Y7G3ehuu8PgSmnoMQxS2TIgDReGqT6la21yXeyaMGpDD6VUFqqgUC2+p6QrXzgpUb4JpCSPQipbRMR/Iqg8ySp0SJdAKfA2ETW/IqjpMeIypX3d+KpOKhNNXIF8yaPenQiqvLHdBCUOjs5g+5s/ieP+w9HCviLuGoMVphjigGljcztAYIWzrK/EcfXxcaAgK6yklBMQE7txS+HymuF2O9WCs4sjSkdULuRc4n6IlQOp7HkVKthUEs/3CrLrr6h9lTkZWXPDuSOHRYPDEJuDkTU3kBtrOXyVraD8yBC2RrzjMNZyGWJb7+U9U/gacMEL2VhO90icHVhGWCG04oj5ZtuwlbCg73DcS3UGQBr3HY8JG6RP60icfTvj5KhbcHPsujlbvewZukjlJFRtoVYhDMpW1ySzCiWrvxniFnd0pyCufdaEcpmPSEspUJ9S3byQ+mBjhYN4HXH2+03AhWdVxLWG1pj0G064WC9au4acTqQ2AWNQzC2yQzeyc8dJhlwONlYBBXiOLMBT4Pupbqz9BrkQF3ITHsXsTdO3Dr6B5k+0UIwvpwDzb2lxkaBa4Pqq9Vkc5s9pjPNFVveOSEPzGPekUT5DphSFOKUoxClFIU4pCnFKUYhTikKcUhTilKIQpxSFOKUoxClFIU4pCnFKUYhTikKcUhTilKIQpxSFuEw/CDGFQpxS70ohTim0EvfkjymXFqcUuRCncoKQErkQ96TNrSEoXaU/sqhkhTh/lLMDEaA8HuXTgi5C3yyYRE4nUjd4hmA2cWOd/QAg9bk2lzvILnhzQxZdZc4fty24gjLGKUUhTikKcRoBAP8DBlQ9rY0ise8AAAAASUVORK5CYII=" alt="Yasdu" style={{ height: 18, width: 18, objectFit: "contain" }} />
+            <span className="font-display text-white" style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.02em" }}>Pulse</span>
+            <span className="mono" style={{ fontSize: 8, color: "#F0A875", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>by Yasdu</span>
+          </div>
+          <div className="flex items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
+            <span className="font-display" style={{ color: "#EE7240", fontSize: 14, fontWeight: 500 }}>›</span>
+            <input value={boardName} onChange={(e) => setBoardName(e.target.value)} placeholder="Nombrá este Pulse…"
+              title="Name this board (e.g. Pulse de conciliaciones)"
+              className="font-display bg-transparent" style={{ color: "#F7F6F2", fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em", outline: "none", border: "none", width: Math.max(140, (boardName.length || 14) * 8.5), minWidth: 140 }} />
+          </div>
+          <div className="flex-1" />
+          <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#F0A875" }}>{densityHint}</span>
+          <span className="mono px-2 py-0.5 rounded hidden lg:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#5B6B8C" }}>drag canvas ↔ to move · ctrl/⌘+scroll or 🔍 to zoom</span>
+          <div className="relative" style={{ flexShrink: 0 }}>
+            <button onClick={() => setShowGraphSettings((v) => !v)} title="Graph Effort scale settings" className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#F0A875", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}><span style={{ fontSize: 13, lineHeight: 1 }}>⚙️</span> Effort scale</button>
+            {showGraphSettings && (
+              <div className="absolute z-50 mt-1 rounded-lg p-3" style={{ top: "100%", right: 0, width: 230, background: "#FFFFFF", border: "1px solid #E2DFD9", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
+                <div className="mono text-xs font-semibold mb-2" style={{ color: "#1F2330" }}>GRAPH EFFORT SCALE</div>
+                <label className="block mb-2">
+                  <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>pixels per step</span>
+                  <input type="number" min="6" max="60" step="1" value={graphStepPx}
+                    onChange={(e) => setGraphStepPx(clamp(parseInt(e.target.value || "16", 10), 6, 60))}
+                    className="w-full text-sm border rounded px-2 py-1 mt-0.5" style={{ borderColor: "#E2DFD9", color: "#1F2330" }} />
+                </label>
+                <label className="block">
+                  <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>work units per step</span>
+                  <input type="number" min="1" max="40" step="1" value={graphWorkPerStep}
+                    onChange={(e) => setGraphWorkPerStep(clamp(parseInt(e.target.value || "1", 10), 1, 40))}
+                    className="w-full text-sm border rounded px-2 py-1 mt-0.5" style={{ borderColor: "#E2DFD9", color: "#1F2330" }} />
+                </label>
+                <div className="mono mt-2" style={{ fontSize: 9, color: "#94A3B8" }}>Each {graphStepPx}px of box height = {graphWorkPerStep} work unit{graphWorkPerStep > 1 ? "s" : ""}. Height is discrete (whole steps).</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: controls (single line) */}
+        <div className="flex items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5, overflowX: "auto" }}>
+          {/* Visual zoom — scales the whole canvas image without changing day width */}
+          <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
+            <button onClick={() => setViewZoom((z) => clamp(Math.round((z - 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><Icon color="#F0A875" size={14}>🔍−</Icon></button>
+            <span className="mono text-xs w-9 text-center" style={{ color: "#F0A875" }}>{Math.round(viewZoom * 100)}%</span>
+            <button onClick={() => setViewZoom((z) => clamp(Math.round((z + 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><Icon color="#F0A875" size={14}>🔍+</Icon></button>
+            <button onClick={() => fitRoadmap()} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#F0A875" }} title="Fit the whole roadmap on screen">fit</button>
+          </div>
+
+          {/* Day width — how many px each day occupies */}
+          <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Stretch or compress the day scale">
+            <button onClick={() => setScale((s) => clamp(s / 1.2, 0.4, 2.5))} className="p-1.5 rounded"><Icon color="#CBD5E1" size={14}>−</Icon></button>
+            <span className="mono text-xs w-9 text-center" style={{ color: "#64748B" }}>{Math.round(scale * 100)}%</span>
+            <button onClick={() => setScale((s) => clamp(s * 1.2, 0.4, 2.5))} className="p-1.5 rounded"><Icon color="#CBD5E1" size={14}>+</Icon></button>
+          </div>
+
+          <div className="flex rounded overflow-hidden ml-1" style={{ background: "#1B3A63" }}>
+            {["day", "week", "month"].map((d) => (
+              <button key={d} onClick={() => setDensity(d)} className="px-2.5 py-1.5 text-xs capitalize" style={{ background: density === d ? "#EE7240" : "transparent", color: density === d ? "#0A1428" : "#64748B", fontWeight: 600 }}>{d}</button>
+            ))}
+          </div>
+          <button onClick={() => { setOffsetX(BASE_DAY_WIDTH * 6); setScale(1); setViewZoom(1); }} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><Icon color="#CBD5E1" size={14}>⟲</Icon></button>
+
+          <div className="flex items-center gap-1 rounded px-1.5 ml-1" style={{ background: "#1B3A63", border: "1px solid #24406B" }}>
+            <Icon size={12} color="#64748B">🔍</Icon>
+            <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…"
+              className="bg-transparent text-xs py-1.5" style={{ color: "#E2E8F0", outline: "none", width: 90 }} />
+            <select value={featureStatusFilter} onChange={(e) => setFeatureStatusFilter(e.target.value)} className="bg-transparent text-xs py-1.5" style={{ color: "#F0A875", outline: "none" }}>
+              <option value="all" style={{ color: "#000" }}>all</option>
+              {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k} style={{ color: "#000" }}>{m.label}</option>)}
+            </select>
+            {(featureQuery || featureStatusFilter !== "all") && <button onClick={() => { setFeatureQuery(""); setFeatureStatusFilter("all"); }} title="Clear feature filter"><Icon size={11} color="#64748B">✕</Icon></button>}
+          </div>
+          <button onClick={() => setShowDelays((v) => !v)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#F0A875", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}><Icon size={13}>⟞</Icon> {showDelays ? "Delays on" : "Delays"}</button>
+          <button onClick={toggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#F0A875", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}><Icon size={13}>{epicsShrunk ? "▣" : "▢"}</Icon> {epicsShrunk ? "Unshrink" : "Shrink epics"}</button>
+          <button onClick={() => compactVertically()} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#F0A875", border: "1px solid #24406B" }}><Icon size={13}>⇕</Icon> Compact</button>
+          <div className="flex-1" />
+          <button onClick={addEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#F0A875", border: "1px solid #24406B" }}><Icon size={13}>▤</Icon> Add epic</button>
+          <button onClick={addTask} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold" style={{ background: "#EE7240", color: "#FDFDFD" }}><Icon size={13}>+</Icon> Add task</button>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Upper section: form (left) + canvas (center) */}
+        <div className="flex overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
+          {/* Left: task / team / capacity form */}
+          <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, background: "#FFFFFF", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div className="flex border-b" style={{ borderColor: "#E2DFD9" }}>
+            {["details", "resources", "usage"].map((t) => (
+              <button key={t} onClick={() => setRightTab(t)} className="flex-1 text-xs font-semibold py-2.5 capitalize" style={{ color: rightTab === t ? "#123359" : "#64748B", borderBottom: rightTab === t ? "2px solid #EE7240" : "2px solid transparent" }}>
+                {t === "usage" ? "Capacity" : t === "resources" ? "Team" : "Details"}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {rightTab === "resources" ? (
+              <div className="p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9", background: "#FDFCF8" }}>
+                  <Icon size={12} color="#64748B">🔍</Icon>
+                  <input value={resourceQuery} onChange={(e) => setResourceQuery(e.target.value)} placeholder="Filter by name or type…"
+                    className="bg-transparent text-xs flex-1" style={{ color: "#1F2330", outline: "none", minWidth: 0 }} />
+                  {resourceQuery && <button onClick={() => setResourceQuery("")}><Icon size={11} color="#64748B">✕</Icon></button>}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="mono text-xs" style={{ color: "#64748B" }}>{resources.filter((r) => { const q = resourceQuery.trim().toLowerCase(); return !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q); }).length} people</span>
+                  <button onClick={() => setAddingResource(true)} className="mono text-xs flex items-center gap-1 px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}><Icon size={11}>+</Icon> add</button>
+                </div>
+                {addingResource && (
+                  <input autoFocus placeholder="Name, then Enter" className="w-full text-xs rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9" }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && e.target.value.trim()) { addResource(e.target.value); e.target.value = ""; setAddingResource(false); } if (e.key === "Escape") setAddingResource(false); }}
+                    onBlur={() => setAddingResource(false)} />
+                )}
+                {filterResource && (
+                  <button onClick={() => setFilterResource(null)} className="w-full flex items-center justify-between px-2 py-1.5 rounded" style={{ background: "#F7E8DA", border: "1px solid #F0A875" }}>
+                    <span className="mono text-xs" style={{ color: "#D85A28" }}>filtering canvas by: {filterResource}</span>
+                    <span className="mono text-xs" style={{ color: "#D85A28" }}>clear ✕</span>
+                  </button>
+                )}
+                {resources.filter((r) => { const q = resourceQuery.trim().toLowerCase(); return !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q); }).map((r) => {
+                  const pct = utilizationPct(r);
+                  const barColor = pct >= 100 ? "#E5484D" : pct >= 70 ? "#F5A524" : "#12A594";
+                  const active = filterResource === r.id;
+                  return (
+                    <div key={r.id} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", r.id)}
+                      onClick={() => setFilterResource(active ? null : r.id)}
+                      className="rounded px-2.5 py-2 cursor-pointer" title="Drag onto a box to assign · click to filter the canvas"
+                      style={{ background: active ? "#FFF7F1" : "#FFFFFF", border: active ? "1px solid #EE7240" : "1px solid #E2DFD9" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.id}</span>
+                        <div className="overflow-hidden flex-1">
+                          <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                          <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · limit {r.capacity}%</div>
+                        </div>
+                        {active && <span className="mono text-xs" style={{ color: "#EE7240" }}>●</span>}
+                        <button title="Remove this resource" onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.stopPropagation(); if (window.confirm(`Remove ${r.name}? They'll be unassigned from all tasks.`)) deleteResource(r.id); }}
+                          className="flex-shrink-0 rounded" style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}>
+                          <Icon size={10} color="#64748B">✕</Icon>
+                        </button>
+                      </div>
+                      <div className="mt-1.5" style={{ height: 4, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${clamp(pct, 0, 100)}%`, background: barColor }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : rightTab === "usage" ? (
+              <div className="p-4 flex flex-col gap-4">
+                <div className="rounded px-3 py-2.5" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
+                  <div className="flex justify-between mb-1">
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>TEAM — PEAK vs LIMIT</span>
+                    <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{resources.filter((r) => utilizationPct(r) > 100).length} over limit</span>
+                  </div>
+                  <div className="mono text-xs" style={{ color: "#78859A" }}>each bar = busiest-day load ÷ occupation limit</div>
+                </div>
+
+                {/* Manage resource types */}
+                <div className="rounded px-3 py-2.5" style={{ border: "1px solid #E2DFD9" }}>
+                  <div className="flex items-center justify-between">
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>RESOURCE TYPES</span>
+                    <button onClick={() => { const n = window.prompt("New resource type:"); if (n && n.trim() && !resourceTypes.includes(n.trim())) setResourceTypes((ts) => [...ts, n.trim()]); }} className="mono text-xs px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>+ add</button>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {resourceTypes.map((t) => (
+                      <span key={t} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style={{ background: "#F1F5F9", color: "#475569" }}>
+                        {t}
+                        <button onClick={() => { const nn = window.prompt("Rename type:", t); if (nn && nn.trim() && nn.trim() !== t) { setResourceTypes((ts) => ts.map((x) => x === t ? nn.trim() : x)); setResources((rs) => rs.map((r) => r.type === t ? { ...r, type: nn.trim() } : r)); } }} title="Rename"><Icon size={9} color="#64748B">✎</Icon></button>
+                        <button onClick={() => { if (window.confirm(`Delete type "${t}"? Resources keep the label but it leaves the list.`)) setResourceTypes((ts) => ts.filter((x) => x !== t)); }} title="Delete"><Icon size={9} color="#64748B">✕</Icon></button>
+                      </span>
+                    ))}
+                    {resourceTypes.length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>no types yet</span>}
+                  </div>
+                </div>
+
+                {resources.map((r) => {
+                  const pct = utilizationPct(r);
+                  const peak = resourcePeakPct(r.id);
+                  const barColor = pct >= 100 ? "#E5484D" : pct >= 70 ? "#F5A524" : "#12A594";
+                  const rows = assignmentsFor(r.id);
+                  return (
+                    <div key={r.id} className="rounded px-3 py-3" style={{ border: "1px solid #E2DFD9" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.id}</span>
+                        <div className="flex-1 overflow-hidden">
+                          <div className="text-sm font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                          <div className="mono text-xs" style={{ color: "#64748B" }}>peak {peak}% · limit {r.capacity}% · {pct}% used</div>
+                        </div>
+                        {rows.length === 0 && <span className="mono text-xs px-1.5 py-0.5 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>idle</span>}
+                      </div>
+                      <div className="mt-2" style={{ height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${clamp(pct, 0, 100)}%`, background: barColor }} />
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="flex-1">
+                          <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>TYPE</span>
+                          <select value={r.type || ""} onChange={(e) => setResources((rs) => rs.map((x) => x.id === r.id ? { ...x, type: e.target.value || null } : x))}
+                            className="mono text-xs border rounded px-1 py-0.5 w-full" style={{ borderColor: "#E2DFD9" }}>
+                            <option value="">— none —</option>
+                            {resourceTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                            {r.type && !resourceTypes.includes(r.type) && <option value={r.type}>{r.type}</option>}
+                          </select>
+                        </div>
+                        <div style={{ width: 96 }}>
+                          <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>LIMIT %</span>
+                          <div className="flex items-center gap-1">
+                            <input type="range" min="0" max="100" step="5" value={r.capacity}
+                              onChange={(e) => setResources((rs) => rs.map((x) => x.id === r.id ? { ...x, capacity: parseInt(e.target.value, 10) } : x))}
+                              className="flex-1" style={{ accentColor: "#EE7240", minWidth: 0 }} />
+                            <input type="number" min="0" max="100" value={r.capacity}
+                              onChange={(e) => setResources((rs) => rs.map((x) => x.id === r.id ? { ...x, capacity: clamp(parseInt(e.target.value || "0", 10), 0, 100) } : x))}
+                              className="mono text-xs border rounded px-1 py-0.5 text-right" style={{ borderColor: "#E2DFD9", width: 40 }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-xs leading-relaxed" style={{ color: "#64748B" }}>Limit is the max % a person may be assigned. Bars show their busiest-day load against that limit; red means over-allocated.</p>
+              </div>
+            ) : !selectedBox ? (
+              <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>Select a box on the canvas to see and edit its details here.</div>
+            ) : (
+              <div className="p-4 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>TASK DETAILS</span>
+                  <button onClick={() => setSelectedId(null)}><Icon color="#64748B" size={15}>✕</Icon></button>
+                </div>
+                <input value={selectedBox.title} onChange={(e) => updateBox(selectedBox.id, { title: e.target.value })} className="text-sm font-semibold border rounded px-2 py-1.5" style={{ borderColor: "#E2DFD9" }} />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>EPIC</span>
+                    <select value={selectedBox.epicId || ""} onChange={(e) => moveToEpic(selectedBox.id, e.target.value || null)}
+                      className="mt-1 w-full text-sm border rounded px-2 py-1.5" style={{ borderColor: "#E2DFD9" }}>
+                      <option value="">— none —</option>
+                      {epics.map((ep) => <option key={ep.id} value={ep.id}>{ep.name}</option>)}
+                    </select>
+                    {selectedBox.epicId && (() => { const ep = epics.find((x) => x.id === selectedBox.epicId); return ep ? <div className="flex items-center gap-1 mt-1"><span style={{ width: 8, height: 8, borderRadius: 2, background: ep.color }} /><span className="mono text-xs" style={{ color: ep.color }}>{ep.name}</span></div> : null; })()}
+                  </div>
+                  <div className="flex-1">
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>TEAM LEADER</span>
+                    <select value={selectedBox.lead || ""} onChange={(e) => updateBox(selectedBox.id, { lead: e.target.value || null })}
+                      className="mt-1 w-full text-sm border rounded px-2 py-1.5" style={{ borderColor: selectedBox.lead ? "#F5A524" : "#E2DFD9" }}>
+                      <option value="">— none —</option>
+                      {(selectedBox.resources || []).map((r) => <option key={r} value={r}>★ {(resources.find((x) => x.id === r) || {}).name || r}</option>)}
+                    </select>
+                    {(selectedBox.resources || []).length === 0 && <div className="mono text-xs mt-1" style={{ color: "#78859A" }}>assign someone first</div>}
+                  </div>
+                </div>
+                <div>
+                  <span className="mono text-xs" style={{ color: "#64748B" }}>SUBTASKS {(selectedBox.children || []).length > 0 && `(${selectedBox.children.length})`}</span>
+                  <div className="flex flex-col gap-1.5 mt-2">
+                    {(selectedBox.children || []).length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>No subtasks yet — break this feature into steps.</span>}
+                    {(selectedBox.children || []).map((c) => {
+                      const cm = STATUS_META[c.status];
+                      const open = !!expandedSubs[c.id];
+                      return (
+                        <div key={c.id} className="rounded" style={{ border: "1px solid #E2DFD9" }}>
+                          {/* collapsed header: chevron + status dot + title */}
+                          <div className="flex items-center gap-1.5 px-2 py-1.5">
+                            <button onClick={() => setExpandedSubs((s) => ({ ...s, [c.id]: !s[c.id] }))} title={open ? "Collapse" : "Expand"} style={{ flexShrink: 0, width: 16 }}><Icon size={12} color="#64748B">{open ? "▾" : "▸"}</Icon></button>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
+                            <input value={c.title} onChange={(e) => updateSubtask(selectedBox.id, c.id, { title: e.target.value })}
+                              className="text-xs font-medium flex-1 bg-transparent" style={{ border: "none", outline: "none", color: "#334155", minWidth: 0 }} />
+                            {(c.resources || []).length > 0 && <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{c.resources.length}👤</span>}
+                            <button onClick={() => { if (window.confirm(`Delete subtask "${c.title}"?`)) deleteSubtask(selectedBox.id, c.id); }} title="Delete subtask"><Icon size={12} color="#64748B">✕</Icon></button>
+                          </div>
+                          {open && (
+                          <div className="px-2 pb-2 border-t" style={{ borderColor: "#F1F5F9" }}>
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <select value={c.status} onChange={(e) => updateSubtask(selectedBox.id, c.id, { status: e.target.value })}
+                              className="mono text-xs border rounded px-1 py-0.5 flex-1" style={{ borderColor: "#E2DFD9" }}>
+                              {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => updateSubtask(selectedBox.id, c.id, { effort: Math.max(1, (c.effort || 1) - 1) })} className="px-1 rounded border" style={{ borderColor: "#E2DFD9", fontSize: 11 }}>−</button>
+                              <span className="mono text-xs w-8 text-center" style={{ color: "#334155" }}>{c.effort || 1}e</span>
+                              <button onClick={() => updateSubtask(selectedBox.id, c.id, { effort: (c.effort || 1) + 1 })} className="px-1 rounded border" style={{ borderColor: "#E2DFD9", fontSize: 11 }}>+</button>
+                            </div>
+                          </div>
+                          <div className="mt-1.5">
+                            <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>assigned:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {resources.map((res) => {
+                                const on = (c.resources || []).includes(res.id);
+                                return (
+                                  <button key={res.id} onClick={() => toggleSubtaskResource(selectedBox.id, c.id, res.id)}
+                                    title={res.name}
+                                    className="mono" style={{ fontSize: 9, fontWeight: 700, width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: on ? "#fff" : "#64748B", background: on ? colorForName(res.id) : "#F1F5F9", border: on ? "none" : "1px solid #E2DFD9", opacity: on ? 1 : 0.7 }}>
+                                    {res.id}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="mt-1.5">
+                            <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>attachments:</span>
+                            <div className="mt-1">
+                              <Attachments compact items={c.attachments} onAdd={(t, u) => addAttachment(selectedBox.id, t, u, c.id)} onDelete={(aid) => deleteAttachment(selectedBox.id, aid, c.id)} />
+                            </div>
+                          </div>
+                          </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button onClick={() => { const cid = addSubtask(selectedBox.id); }} className="mono text-xs flex items-center justify-center gap-1 w-full mt-2 py-1.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28", border: "1px dashed #F0A875" }}><Icon size={11}>+</Icon> add subtask</button>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>RESOURCES & % TIME</span>
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>★ = team leader</span>
+                  </div>
+                  <div className="flex flex-col gap-2 mt-2">
+                    {(selectedBox.resources || []).length === 0 && <span className="text-xs" style={{ color: "#9F1D23" }}>No one assigned — drag someone from the left panel onto this box</span>}
+                    {(selectedBox.resources || []).map((r) => {
+                      const pctVal = allocOf(selectedBox, r);
+                      const isLead = selectedBox.lead === r;
+                      return (
+                        <div key={r} className="rounded px-2 py-2" style={{ border: isLead ? "1px solid #F5A524" : "1px solid #E2DFD9", background: isLead ? "#FFFBEB" : "#fff" }}>
+                          <div className="flex items-center gap-2">
+                            <button title={isLead ? "Team leader — click to unset" : "Make team leader"}
+                              onClick={() => updateBox(selectedBox.id, { lead: isLead ? null : r })}
+                              style={{ fontSize: 13, lineHeight: 1, color: isLead ? "#F5A524" : "#CBD5E1", flexShrink: 0 }}>★</button>
+                            <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r), width: 18, height: 18, borderRadius: isLead ? 4 : "50%", border: isLead ? "2px solid #F5A524" : "none", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r}</span>
+                            <span className="text-xs flex-1" style={{ color: "#334155" }}>{(resources.find((x) => x.id === r) || {}).name || r}{isLead && <span className="mono ml-1" style={{ fontSize: 9, color: "#B45309" }}>lead</span>}</span>
+                            <input type="number" min="0" max="100" step="5" value={pctVal}
+                              onChange={(e) => setAlloc(selectedBox.id, r, clamp(parseInt(e.target.value || "0", 10), 0, 100))}
+                              className="mono text-xs text-right border rounded px-1 py-0.5" style={{ width: 48, borderColor: "#E2DFD9" }} />
+                            <span className="mono text-xs" style={{ color: "#64748B" }}>%</span>
+                            <button onClick={() => updateBox(selectedBox.id, { resources: selectedBox.resources.filter((x) => x !== r), alloc: omit(selectedBox.alloc, r), lead: selectedBox.lead === r ? null : selectedBox.lead })}><Icon size={12} color="#64748B">✕</Icon></button>
+                          </div>
+                          <input type="range" min="0" max="100" step="5" value={pctVal}
+                            onChange={(e) => setAlloc(selectedBox.id, r, parseInt(e.target.value, 10))}
+                            className="w-full mt-1.5" style={{ accentColor: colorForName(r) }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="rounded px-3 py-2.5" style={{ border: "1px solid #E2DFD9" }}>
+                  <div className="flex items-center justify-between">
+                    <span className="mono text-xs" style={{ color: "#64748B" }}>SCHEDULE &amp; EFFORT</span>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1 mono text-xs cursor-pointer" style={{ color: selectedBox.useWeekends ? "#D85A28" : "#94A3B8" }} title="Count weekends as working days (urgent)">
+                        <input type="checkbox" checked={!!selectedBox.useWeekends} onChange={(e) => updateBox(selectedBox.id, { useWeekends: e.target.checked })} /> weekends
+                      </label>
+                      <button onClick={() => updateBox(selectedBox.id, { plannedX: selectedBox.x, plannedDuration: selectedBox.duration })}
+                        title="Freeze the current dates as the plan (won't move when you drag)"
+                        className="mono text-xs px-2 py-0.5 rounded" style={{ background: "#EEF2FF", color: "#4338CA" }}>📌 set plan</button>
+                    </div>
+                  </div>
+                  <div className="text-sm mt-1.5" style={{ color: "#334155" }}>{fmtDate(selectedBox.x)} → {fmtDate(selectedBox.x + selectedBox.duration)}
+                    <span className="mono text-xs ml-2" style={{ color: "#94A3B8" }}>{selectedBox.duration} cal · {workingDaysOf(selectedBox)} wd{selectedBox.useWeekends ? " · wknd on" : ""}</span>
+                  </div>
+                  {(() => {
+                    const elapsed = elapsedOf(selectedBox);
+                    const theo = theoreticalElapsed(selectedBox);
+                    const graph = graphEffort(selectedBox);
+                    const est = estimateEffort(selectedBox);
+                    const estFixed = selectedBox.estEffort != null;
+                    const assigned = assignedEffort(selectedBox);
+                    const hasRes = allocSum(selectedBox) > 0;
+                    const gap = round1(assigned - est);
+                    const over = gap > 0.05, under = gap < -0.05;
+                    const stateColor = !hasRes ? "#94A3B8" : over ? "#92400E" : under ? "#9F1D23" : "#0F6B5C";
+                    const stateBg = !hasRes ? "#F1F5F9" : over ? "#FFF6E2" : under ? "#FDEBEC" : "#E6F7F4";
+                    return (
+                      <>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {/* Elapsed Time = box length */}
+                        <div className="rounded px-2 py-1.5" style={{ background: "#F8FAFC" }}>
+                          <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>ELAPSED TIME</div>
+                          <div className="text-sm font-semibold mt-0.5" style={{ color: "#1F2330" }}>{elapsed} <span className="text-xs font-normal" style={{ color: "#64748B" }}>wd</span></div>
+                          <div className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>box length</div>
+                        </div>
+                        {/* Theoretical Elapsed = estimate ÷ assigned work */}
+                        <div className="rounded px-2 py-1.5" style={{ background: "#F8FAFC" }}>
+                          <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>THEOR. ELAPSED</div>
+                          <div className="text-sm font-semibold mt-0.5" style={{ color: theo != null ? "#1F2330" : "#B4BECC" }}>{theo != null ? `${theo} wd` : "—"}</div>
+                          <div className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>estimate ÷ resources</div>
+                        </div>
+                        {/* Graph Effort = elapsed × work */}
+                        <div className="rounded px-2 py-1.5" style={{ background: "#F8FAFC" }}>
+                          <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>GRAPH EFFORT</div>
+                          <div className="text-sm font-semibold mt-0.5" style={{ color: "#1F2330" }}>{graph} <span className="text-xs font-normal" style={{ color: "#64748B" }}>md</span></div>
+                          <div className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>{elapsed}wd × {workOf(selectedBox)} work</div>
+                        </div>
+                        {/* Estimate Effort = manual (fixed) else Graph Effort */}
+                        <div className="rounded px-2 py-1.5" style={{ background: estFixed ? "#FFF7F1" : "#F8FAFC", border: estFixed ? "1px solid #F0A875" : "1px solid transparent" }}>
+                          <div className="mono flex items-center justify-between" style={{ fontSize: 9, color: "#64748B" }}>
+                            <span>ESTIMATE EFFORT</span>
+                            {estFixed
+                              ? <button title="Reset to Graph Effort" onClick={() => updateBox(selectedBox.id, { estEffort: null })}><Icon size={10} color="#D85A28">↺</Icon></button>
+                              : <button title="Fix this value" onClick={() => updateBox(selectedBox.id, { estEffort: graph })}><Icon size={10} color="#94A3B8">🔒</Icon></button>}
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <input type="number" min="0" step="0.5" value={est}
+                              onChange={(e) => updateBox(selectedBox.id, { estEffort: Math.max(0, parseFloat(e.target.value || "0")) })}
+                              className="text-sm font-semibold border rounded px-1 py-0.5 w-full mt-0.5" style={{ borderColor: "#E2DFD9", color: "#1F2330", background: estFixed ? "#fff" : "#F1F5F9" }} />
+                            <span className="text-xs" style={{ color: "#64748B" }}>md</span>
+                          </div>
+                          <div className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>{estFixed ? "fixed manually" : "= graph effort"}</div>
+                        </div>
+                        {/* Assigned effort */}
+                        <div className="rounded px-2 py-1.5 col-span-2" style={{ background: stateBg }}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>ASSIGNED EFFORT</div>
+                              <div className="text-sm font-semibold" style={{ color: stateColor }}>{hasRes ? `${assigned} md` : "—"}</div>
+                              <div className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>{elapsed}wd × Σ resources %</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="mono" style={{ fontSize: 10, fontWeight: 700, color: stateColor }}>{!hasRes ? "no resources" : over ? "over-assigned" : under ? "under-assigned" : "✓ balanced"}</div>
+                              {hasRes && <div className="mono" style={{ fontSize: 10, color: stateColor, fontWeight: 600 }}>{gap > 0 ? "+" : ""}{gap} md vs est.</div>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={() => adjustLengthToResources(selectedBox)} disabled={!hasRes}
+                        title="Set the box length so the assigned resources deliver the Estimate Effort"
+                        className="mono text-xs w-full mt-2 py-1.5 rounded flex items-center justify-center gap-1"
+                        style={{ background: hasRes ? "#F7E8DA" : "#F1F5F9", color: hasRes ? "#D85A28" : "#B4BECC", border: "1px solid " + (hasRes ? "#F0A875" : "#E2DFD9") }}>
+                        ⇥ adjust length to resources
+                      </button>
+                      <div className="mono mt-2" style={{ fontSize: 9, color: "#94A3B8" }}>
+                        {elapsed}wd over {selectedBox.duration} calendar days · {selectedBox.useWeekends ? "weekends count as working days" : "weekdays only"}.
+                      </div>
+                      </>
+                    );
+                  })()}
+                  {selectedBox.plannedX != null && (() => {
+                    const dStart = selectedBox.x - selectedBox.plannedX;
+                    const late = dStart > 0;
+                    return (
+                      <div className="mt-2 rounded px-2 py-1.5" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
+                        <div className="flex items-center justify-between">
+                          <span className="mono text-xs" style={{ color: "#64748B" }}>PLAN (frozen)</span>
+                          <button onClick={() => updateBox(selectedBox.id, { plannedX: undefined, plannedDuration: undefined })} title="Clear the frozen plan"><Icon size={11} color="#94A3B8">✕</Icon></button>
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: "#334155" }}>{fmtDate(selectedBox.plannedX)} → {fmtDate(selectedBox.plannedX + selectedBox.plannedDuration)}</div>
+                        <div className="mono text-xs mt-1" style={{ color: dStart === 0 ? "#0F6B5C" : late ? "#9F1D23" : "#0F6B5C", fontWeight: 600 }}>
+                          {dStart === 0 ? "✓ started on plan" : late ? `▶ start delayed ${dStart}d` : `◀ started ${-dStart}d early`}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div>
+                  <span className="mono text-xs" style={{ color: "#64748B" }}>STATUS</span>
+                  <select value={selectedBox.status} onChange={(e) => updateBox(selectedBox.id, { status: e.target.value })} className="mt-1 w-full text-sm border rounded px-2 py-1.5" style={{ borderColor: "#E2DFD9" }}>
+                    {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <span className="mono text-xs" style={{ color: "#64748B" }}>LABEL COLOR <span style={{ opacity: 0.7 }}>(group related tasks)</span></span>
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    {LABEL_COLORS.map((lc) => {
+                      const active = (selectedBox.labelColor || null) === lc.color;
+                      return (
+                        <button key={lc.id} title={lc.name}
+                          onClick={() => updateBox(selectedBox.id, { labelColor: lc.color })}
+                          style={{
+                            width: 24, height: 24, borderRadius: "50%",
+                            background: lc.color || "#fff",
+                            border: lc.color ? (active ? "2px solid #123359" : "2px solid #fff") : "1px dashed #CBD5E1",
+                            boxShadow: active ? "0 0 0 2px #EE7240" : "0 0 0 1px rgba(15,23,42,0.08)",
+                            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                          }}>
+                          {!lc.color && <Icon size={11} color="#64748B">∅</Icon>}
+                          {lc.color && active && <Icon size={12} color="#fff">✓</Icon>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm" style={{ color: "#334155" }}>
+                  <input type="checkbox" checked={!!selectedBox.ai} onChange={(e) => updateBox(selectedBox.id, { ai: e.target.checked })} /> AI-assisted estimate <Icon size={13} color="#8B5CF6">✨</Icon>
+                </label>
+
+                <Attachments items={selectedBox.attachments} onAdd={(t, u) => addAttachment(selectedBox.id, t, u)} onDelete={(aid) => deleteAttachment(selectedBox.id, aid)} />
+
+                <button onClick={() => { if (window.confirm(`Delete task "${selectedBox.title}"? This can't be undone.`)) deleteTask(selectedBox.id); }}
+                  className="mt-1 flex items-center justify-center gap-1.5 w-full py-2 rounded text-xs font-semibold"
+                  style={{ background: "#FDEBEC", color: "#9F1D23", border: "1px solid #F5C2C5" }}>
+                  <Icon size={13} color="#9F1D23">🗑</Icon> Delete task
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+          </div>
+          {/* Center: canvas */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#FDFCF8" }}>
+          {/* Ruler */}
+          <div className="flex flex-shrink-0" style={{ height: RULER_HEIGHT, background: "#FFFFFF", borderBottom: "1px solid #E2DFD9" }}>
+            <div style={{ position: "relative", flex: 1, overflow: "hidden", scrollbarGutter: "stable" }}>
+            <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+            {weekends.map((d) => (
+              <div key={`wr${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, bottom: 0, width: dayWidth, background: "rgba(100,116,139,0.10)" }} />
+            ))}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 20, borderBottom: "1px solid #F1F5F9" }}>
+              {timeline.primary.map((seg) => (
+                <div key={seg.label + seg.left} style={{ position: "absolute", left: xForDay(seg.left), width: (seg.right - seg.left) * dayWidth, top: 0, height: 20, borderRight: "1px solid #F1F5F9", paddingLeft: 6, display: "flex", alignItems: "center", overflow: "hidden" }}>
+                  <span className="mono text-xs font-medium truncate" style={{ color: "#64748B", transform: `scaleX(${1 / viewZoom})`, transformOrigin: "left" }}>{seg.label}</span>
+                </div>
+              ))}
+            </div>
+            {timeline.secondary.map((t) => (
+              <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 20, bottom: 0, borderLeft: "1px solid #D9DEE6", paddingLeft: 4, display: "flex", alignItems: "center" }}>
+                <span className="mono text-xs" style={{ color: "#64748B", transform: `scaleX(${1 / viewZoom})`, transformOrigin: "left" }}>{t.label}</span>
+              </div>
+            ))}
+            </div>
+            </div>
+          </div>
+
+          {/* Canvas */}
+          <div ref={containerRef} className="relative" style={{ flex: "1 1 60%", overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", cursor: isPanning ? "grabbing" : "grab", touchAction: "none" }} onPointerDown={handlePanPointerDown} onDoubleClick={(e) => { if (e.target === e.currentTarget || e.target.getAttribute("data-bg")) setViewZoom(1); }}>
+            {/* Graph Effort scale legend */}
+            <div className="absolute z-30 mono flex items-center gap-1.5 px-2 py-1 rounded" style={{ left: 8, bottom: 8, background: "rgba(255,255,255,0.92)", border: "1px solid #E2DFD9", fontSize: 9, color: "#64748B", pointerEvents: "none" }}>
+              <span style={{ display: "inline-block", width: 10, height: GRAPH.stepPx, borderTop: "1px solid #94A3B8", borderBottom: "1px solid #94A3B8" }} />
+              <span>{GRAPH.stepPx}px = {GRAPH.workPerStep} work/day · each box shows its work/day (n/d)</span>
+            </div>
+            <div style={{ position: "relative", height: contentHeight * viewZoom, width: "100%" }}>
+            <div style={{ position: "absolute", left: 0, top: 0, minHeight: contentHeight, right: 0, transform: `scale(${viewZoom})`, transformOrigin: "left top" }}>
+              <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, #E2E5E4 1px, transparent 1px)", backgroundSize: "24px 24px", backgroundPosition: `${offsetX % 24}px 0px`, pointerEvents: "none" }} />
+              {weekends.map((d) => (
+                <div key={`we${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, height: contentHeight, width: dayWidth, background: "rgba(100,116,139,0.10)", pointerEvents: "none" }} />
+              ))}
+              {timeline.secondary.map((t) => (
+                <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 0, height: contentHeight, width: 1, background: "#F1F3F5", pointerEvents: "none" }} />
+              ))}
+              <div style={{ position: "absolute", left: xForDay(0), top: 0, height: contentHeight, width: 2, background: "#EE7240", opacity: 0.7, pointerEvents: "none" }}>
+                <span className="mono" style={{ position: "absolute", top: 4, left: 6, fontSize: 10, color: "#D85A28", background: "#F7E8DA", padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap" }}>today</span>
+              </div>
+
+              {panArmed && <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none" }} className="mono text-xs px-2 py-1 rounded" ><span style={{ background: "#123359", color: "#F0A875", padding: "3px 8px", borderRadius: 4 }}>✋ panning the timeline</span></div>}
+
+              {/* Epic bands (swimlanes) — width auto-fits the contained features */}
+              {epicBands.map((ep) => {
+                const hasFeats = ep.count > 0;
+                const bandLeft = hasFeats ? xForDay(ep.minX) - 8 : 8;
+                const bandWidth = hasFeats ? (ep.maxX - ep.minX) * dayWidth + 16 : 220;
+                return (
+                  <div key={ep.id} style={{ position: "absolute", left: bandLeft, top: ep.y0, width: bandWidth, height: ep.y1 - ep.y0, background: hexA(ep.color, 0.05), border: `1px dashed ${hexA(ep.color, 0.5)}`, borderRadius: 10, pointerEvents: "none", zIndex: 1 }}>
+                    <div style={{ position: "absolute", top: 6, left: 8, display: "flex", alignItems: "center", gap: 6, pointerEvents: "auto" }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 3, background: ep.color, flexShrink: 0 }} />
+                      <input value={ep.name} onChange={(e) => updateEpic(ep.id, { name: e.target.value })}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="mono bg-transparent" style={{ fontSize: 11, fontWeight: 700, color: ep.color, letterSpacing: "0.02em", border: "none", outline: "none", width: Math.max(80, ep.name.length * 7) }} />
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{ep.count} feat{ep.count === 1 ? "" : "s"}</span>
+                      <button onPointerDown={(e) => e.stopPropagation()} onClick={() => { if (window.confirm(`Delete epic "${ep.name}"? Its features stay but become unassigned.`)) deleteEpic(ep.id); }} title="Delete epic" style={{ fontSize: 11, color: hexA(ep.color, 0.7) }}>✕</button>
+                    </div>
+                    {/* resize handles */}
+                    <div onPointerDown={(e) => startEpicResize("top", ep, e)} title="Resize top" style={{ position: "absolute", top: -4, left: 12, right: 12, height: 8, cursor: "ns-resize", pointerEvents: "auto" }} />
+                    <div onPointerDown={(e) => startEpicResize("bottom", ep, e)} title="Resize bottom" style={{ position: "absolute", bottom: -4, left: 12, right: 12, height: 8, cursor: "ns-resize", pointerEvents: "auto" }} />
+                    <div onPointerDown={(e) => startEpicResize("left", ep, e)} title="Resize left" style={{ position: "absolute", left: -4, top: 12, bottom: 12, width: 8, cursor: "ew-resize", pointerEvents: "auto" }} />
+                    <div onPointerDown={(e) => startEpicResize("right", ep, e)} title="Resize right" style={{ position: "absolute", right: -4, top: 12, bottom: 12, width: 8, cursor: "ew-resize", pointerEvents: "auto" }} />
+                    <div onPointerDown={(e) => startEpicResize("bottom right", ep, e)} title="Resize" style={{ position: "absolute", right: -5, bottom: -5, width: 12, height: 12, cursor: "nwse-resize", pointerEvents: "auto", background: hexA(ep.color, 0.5), borderRadius: 3 }} />
+                  </div>
+                );
+              })}
+
+              {/* Delay lines: full planned span drawn below the box, with start & end deltas */}
+              {showDelays && boxes.filter((b) => b.plannedX != null && b.plannedDuration != null).map((b) => {
+                const pStart = b.plannedX, pEnd = b.plannedX + b.plannedDuration;
+                const aStart = b.x, aEnd = b.x + b.duration;
+                const planLeft = xForDay(pStart);
+                const planW = Math.max(2, (pEnd - pStart) * dayWidth);
+                const boxBottom = b.y + (epicsShrunk ? 26 : boxHeight(b));
+                const lineY = boxBottom + 10; // planned bar sits just below the box
+                const dStart = aStart - pStart;               // + = started late
+                const dEnd = aEnd - pEnd;                      // + = finishing late
+                const startColor = dStart > 0 ? "#E5484D" : dStart < 0 ? "#0F6B5C" : "#64748B";
+                const endColor = dEnd > 0 ? "#E5484D" : dEnd < 0 ? "#0F6B5C" : "#0F6B5C";
+                const aStartX = xForDay(aStart), aEndX = xForDay(aEnd);
+                return (
+                  <div key={`dl${b.id}`} style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 4 }}>
+                    {/* the planned span bar */}
+                    <div style={{ position: "absolute", left: planLeft, top: lineY - 1.5, width: planW, height: 3, background: "repeating-linear-gradient(90deg,#94A3B8 0,#94A3B8 5px,transparent 5px,transparent 9px)" }} />
+                    <span className="mono" style={{ position: "absolute", left: planLeft + 3, top: lineY + 4, fontSize: 8, color: "#64748B", whiteSpace: "nowrap" }}>plan</span>
+                    {/* planned start & end ticks */}
+                    <div style={{ position: "absolute", left: planLeft - 1, top: lineY - 6, width: 2, height: 12, background: "#94A3B8" }} />
+                    <div style={{ position: "absolute", left: planLeft + planW - 1, top: lineY - 6, width: 2, height: 12, background: "#94A3B8" }} />
+                    {/* connectors from planned start/end up to actual start/end */}
+                    <div style={{ position: "absolute", left: Math.min(planLeft, aStartX), top: lineY - 6, width: Math.abs(aStartX - planLeft), height: 0, borderTop: `2px dotted ${startColor}` }} />
+                    <div style={{ position: "absolute", left: Math.min(planLeft + planW, aEndX), top: lineY - 6, width: Math.abs(aEndX - (planLeft + planW)), height: 0, borderTop: `2px dotted ${endColor}` }} />
+                    {/* delta labels */}
+                    {dStart !== 0 && <span className="mono" style={{ position: "absolute", left: Math.min(planLeft, aStartX) + 2, top: lineY - 20, fontSize: 9, fontWeight: 700, color: startColor, whiteSpace: "nowrap", background: "rgba(255,255,255,0.85)", padding: "0 3px", borderRadius: 2 }}>start {dStart > 0 ? `+${dStart}d` : `${dStart}d`}</span>}
+                    {dEnd !== 0 && <span className="mono" style={{ position: "absolute", left: Math.min(planLeft + planW, aEndX) + 2, top: lineY - 20, fontSize: 9, fontWeight: 700, color: endColor, whiteSpace: "nowrap", background: "rgba(255,255,255,0.85)", padding: "0 3px", borderRadius: 2 }}>end {dEnd > 0 ? `+${dEnd}d` : `${dEnd}d`}</span>}
+                    {dStart > 0 && dEnd < dStart && <span className="mono" style={{ position: "absolute", left: aEndX + 4, top: lineY - 6, fontSize: 8, fontWeight: 700, color: "#0F6B5C", whiteSpace: "nowrap" }}>▲ {dStart - dEnd}d recovered</span>}
+                  </div>
+                );
+              })}
+
+              {boxes.map((box) => {
+                const meta = STATUS_META[box.status];
+                const left = xForDay(box.x);
+                const width = Math.max(box.duration * dayWidth, 34);
+                const top = box.y;
+                const hasChildren = Array.isArray(box.children) && box.children.length > 0;
+                const expanded = hasChildren && !box.collapsed && !epicsShrunk;
+                const bodyHeight = 18 + clamp(workOf(box) / GRAPH.workPerStep, 1, 24) * GRAPH.stepPx;
+                const height = epicsShrunk ? 26 : boxHeight(box);
+                const unassigned = !box.resources || box.resources.length === 0;
+                const selected = selectedId === box.id;
+                const dragOver = dragOverBoxId === box.id;
+                const matchesRes = boxInvolves(box, filterResource);
+                const q = featureQuery.trim().toLowerCase();
+                const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
+                const matchesStatus = featureStatusFilter === "all" || box.status === featureStatusFilter;
+                const matches = matchesRes && matchesQuery && matchesStatus;
+
+                return (
+                  <div key={box.id}
+                    onPointerDown={(e) => startDrag("move", box, e)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverBoxId(box.id); }}
+                    onDragLeave={() => setDragOverBoxId((id) => (id === box.id ? null : id))}
+                    onDrop={(e) => { e.preventDefault(); const rid = e.dataTransfer.getData("text/plain"); if (rid) assignResource(box.id, rid); setDragOverBoxId(null); setSelectedId(box.id); setRightTab("details"); }}
+                    style={{
+                      position: "absolute", left, top, width, height,
+                      background: meta.bg,
+                      border: `2px ${unassigned ? "dashed" : "solid"} ${dragOver ? "#EE7240" : meta.border}`,
+                      borderRadius: 8,
+                      boxShadow: dragOver ? "0 0 0 3px rgba(34,211,238,0.35)" : selected ? "0 0 0 2px #EE7240, 0 6px 14px rgba(15,23,42,.15)" : "0 1px 3px rgba(15,23,42,.08)",
+                      cursor: dragId === box.id ? "grabbing" : "grab",
+                      zIndex: dragId === box.id ? 30 : selected ? 20 : 10,
+                      userSelect: "none", overflow: "hidden", touchAction: "none",
+                      opacity: matches ? 1 : 0.22,
+                      filter: matches ? "none" : "grayscale(0.4)",
+                      transition: "opacity .15s",
+                    }}>
+                    {filterResource && matches && !unassigned && <div style={{ position: "absolute", top: 0, right: 0, background: colorForName(filterResource), color: "#fff", fontSize: 8, fontWeight: 700, padding: "1px 4px", borderBottomLeftRadius: 5 }} className="mono">{filterResource}</div>}
+                    {unassigned && <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.18) 0 6px, transparent 6px 12px)", pointerEvents: "none" }} />}
+                    {box.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: box.labelColor, pointerEvents: "none" }} />}
+                    <div className="flex items-center justify-between px-2" style={{ height: 28, borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
+                      <div className="flex items-center gap-1 overflow-hidden">
+                        {hasChildren && (
+                          <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => toggleCollapsed(box.id, e)} className="flex-shrink-0 flex items-center justify-center" title={expanded ? "Collapse subtasks" : "Expand subtasks"} style={{ width: 22, height: 22, borderRadius: 5, background: hexA(meta.border, 0.15), marginRight: 2 }}><Icon size={17} color={meta.border}>{expanded ? "▾" : "▸"}</Icon></button>
+                        )}
+                        <span title={(() => { const d = staffingDot(box); return d === "#E5484D" ? "Under-staffed" : d === "#EAB308" ? "Over-staffed" : "Right-staffed"; })()} style={{ width: 9, height: 9, borderRadius: "50%", background: staffingDot(box), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
+                        {box.labelColor && <span style={{ width: 7, height: 7, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
+                        <span className="text-xs font-semibold truncate" style={{ color: "#1F2330" }}>{box.title}</span>
+                      </div>
+                      {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }} title={`${box.attachments.length} attachment(s)`}>📎{box.attachments.length}</span>}
+                      {box.effortLocked && <Icon size={11} color="#D85A28" className="flex-shrink-0">🔒</Icon>}
+                      {box.ai && <Icon size={12} color="#8B5CF6" className="flex-shrink-0">✨</Icon>}
+                    </div>
+                    {epicsShrunk ? null : !expanded ? (
+                      <div className="px-2 py-1.5 flex flex-col justify-between" style={{ height: bodyHeight, position: "relative" }}>
+                        {/* work units per day implied by the box height */}
+                        <div className="mono" title="Work units per day (box height)" style={{ position: "absolute", top: 2, right: 4, fontSize: 9, fontWeight: 700, color: meta.text, opacity: 0.6, pointerEvents: "none" }}>{round1(workOf(box))}/d</div>
+                        <div className="flex items-center gap-1 flex-wrap" style={{ overflow: "hidden", position: "relative" }}>
+                          {(box.resources || []).map((r) => {
+                            const lead = box.lead === r;
+                            return (
+                              <span key={r} title={`${(resources.find((x) => x.id === r) || {}).name || r}${lead ? " · team leader" : ""}`} className="mono" style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: colorForName(r), width: 17, height: 17, borderRadius: lead ? 4 : "50%", border: lead ? "2px solid #F5A524" : "none", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r}</span>
+                            );
+                          })}
+                        </div>
+                        <div>
+                          <div style={{ height: 4, background: "rgba(15,23,42,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${clamp((assignedManDays(box) / Math.max(0.1, plannedManDays(box))) * 100, 0, 100)}%`, background: meta.border }} />
+                          </div>
+                          <span className="mono" style={{ fontSize: 9, color: meta.text, opacity: 0.75 }}>{plannedManDays(box)}md est · {assignedManDays(box)}md assigned</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-2 py-1" style={{ overflow: "hidden" }}>
+                        {box.children.map((c) => {
+                          const cm = STATUS_META[c.status];
+                          return (
+                            <div key={c.id} className="flex items-center gap-1.5" style={{ height: 27, borderBottom: "1px solid rgba(15,23,42,0.05)" }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
+                              <span className="text-xs truncate flex-1" style={{ color: "#334155" }}>{c.title}</span>
+                              {(!c.resources || c.resources.length === 0) ? <span className="mono" style={{ fontSize: 9, color: "#9F1D23" }}>—</span> : <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{c.resources.join(", ")}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div onPointerDown={(e) => startDrag("resize-left", box, e)} style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
+                    <div onPointerDown={(e) => startDrag("resize-right", box, e)} style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
+                    {!expanded && (
+                      <div onPointerDown={(e) => startDrag("resize-effort", box, e)}
+                        title="Drag to change length (headcount)"
+                        style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 12, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}>
+                        <div style={{ width: 26, height: 3, borderRadius: 2, background: meta.border, opacity: 0.5 }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        {/* Lower section: resource assignment (full width) */}
+          {/* Divider handle to resize the resource panel by shrinking the canvas */}
+          <div onPointerDown={(e) => {
+              try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+              const startY = e.clientY, startH = assignPanelH;
+              const mv = (ev) => setAssignPanelH(clamp(startH - (ev.clientY - startY), 90, 620));
+              const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+              window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+            }}
+            title="Drag to resize the resource panel"
+            style={{ height: 10, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <div style={{ width: 44, height: 3, borderRadius: 2, background: "#B4BECC" }} />
+          </div>
+
+          {/* Resource assignment view (below canvas) — TIME-ALIGNED with the canvas */}
+          <div style={{ height: assignPanelH, flexShrink: 0, background: "#FFFFFF", display: "flex", flexDirection: "column" }}>
+            <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0 flex-wrap gap-2" style={{ borderColor: "#EEF1F4" }}>
+              <span className="text-xs font-semibold" style={{ color: "#123359" }}>Assignment by resource{filterResource ? ` — ${(resources.find((x) => x.id === filterResource) || {}).name || filterResource}` : ""}</span>
+              <div className="flex items-center gap-2">
+                <span className="mono text-xs" style={{ color: "#78859A" }}>filter:</span>
+                <select value={assignFilterRes} onChange={(e) => setAssignFilterRes(e.target.value)} className="mono text-xs border rounded px-1.5 py-1" style={{ borderColor: "#E2DFD9", color: "#334155" }}>
+                  <option value="all">all people</option>
+                  {resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+                <select value={assignFilterStatus} onChange={(e) => setAssignFilterStatus(e.target.value)} className="mono text-xs border rounded px-1.5 py-1" style={{ borderColor: "#E2DFD9", color: "#334155" }}>
+                  <option value="all">all statuses</option>
+                  {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                </select>
+                <button onClick={() => setAssignAllocFilter((v) => v === "under" ? "all" : "under")} title="Show only under-allocated (<70%)" className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignAllocFilter === "under" ? "#12A594" : "#E2DFD9", background: assignAllocFilter === "under" ? "#E6F7F4" : "#fff", color: assignAllocFilter === "under" ? "#0F6B5C" : "#64748B" }}>under</button>
+                <button onClick={() => setAssignAllocFilter((v) => v === "over" ? "all" : "over")} title="Show only over-allocated (>100%)" className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignAllocFilter === "over" ? "#E5484D" : "#E2DFD9", background: assignAllocFilter === "over" ? "#FDEBEC" : "#fff", color: assignAllocFilter === "over" ? "#9F1D23" : "#64748B" }}>over</button>
+                <button onClick={() => setAssignHideIdle((v) => !v)} className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignHideIdle ? "#EE7240" : "#E2DFD9", background: assignHideIdle ? "#F7E8DA" : "#fff", color: assignHideIdle ? "#D85A28" : "#64748B" }}>hide idle</button>
+                <button onClick={() => setAssignCompact((v) => !v)} title="Show only % per resource (hide task bars)" className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignCompact ? "#EE7240" : "#E2DFD9", background: assignCompact ? "#F7E8DA" : "#fff", color: assignCompact ? "#D85A28" : "#64748B" }}>{assignCompact ? "▣ compact" : "▤ compact"}</button>
+                {(assignFilterRes !== "all" || assignFilterStatus !== "all" || assignHideIdle) && (
+                  <button onClick={() => { setAssignFilterRes("all"); setAssignFilterStatus("all"); setAssignHideIdle(false); }} className="mono text-xs px-2 py-1 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>clear ✕</button>
+                )}
+              </div>
+            </div>
+
+            {/* mini ruler — same offsetX / dayWidth / viewZoom as the canvas */}
+            <div className="flex flex-shrink-0" style={{ borderBottom: "1px solid #F1F5F9" }}>
+              <div style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9" }} />
+              <div style={{ position: "relative", height: 22, flex: 1, overflow: "hidden", scrollbarGutter: "stable" }}>
+                <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+                  {weekends.map((d) => (
+                    <div key={`wm${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, bottom: 0, width: dayWidth, background: "rgba(100,116,139,0.10)" }} />
+                  ))}
+                  {timeline.secondary.map((t) => (
+                    <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 0, bottom: 0, borderLeft: "1px solid #DDE2EA", paddingLeft: 3, display: "flex", alignItems: "center" }}>
+                      <span className="mono" style={{ fontSize: 9, color: "#78859A", transform: `scaleX(${1 / viewZoom})`, transformOrigin: "left" }}>{t.label}</span>
+                    </div>
+                  ))}
+                  <div style={{ position: "absolute", left: xForDay(0), top: 0, bottom: 0, width: 2, background: "#EE7240", opacity: 0.6 }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarGutter: "stable" }}>
+              {resources
+                .filter((r) => !filterResource || r.id === filterResource)      // sidebar filter
+                .filter((r) => assignFilterRes === "all" || r.id === assignFilterRes) // lower-chart resource filter
+                .map((r) => {
+                  let rows = assignmentsFor(r.id);
+                  if (assignFilterStatus !== "all") rows = rows.filter((row) => row.status === assignFilterStatus);
+                  return { r, rows };
+                })
+                .filter(({ rows }) => !assignHideIdle || rows.length > 0)         // hide-idle toggle
+                .filter(({ r }) => {                                              // under / over allocation filter
+                  if (assignAllocFilter === "all") return true;
+                  const u = utilizationPct(r);
+                  if (assignAllocFilter === "under") return u < 70;
+                  if (assignAllocFilter === "over") return u > 100;
+                  return true;
+                })
+                .map(({ r, rows }) => {
+                  const pct = utilizationPct(r);
+                  const totalPct = resourcePeakPct(r.id); // total assigned at the busiest day (sum of tasks)
+                  const showPct = assignCompact ? totalPct : pct;
+                  const barColor = showPct >= 100 ? "#E5484D" : showPct >= 70 ? "#F5A524" : "#12A594";
+                  const stacked = stackRows(rows);
+                  const laneCount = stacked.reduce((mx, row) => Math.max(mx, row.lane + 1), 0);
+                  const barsHeight = Math.max(30, laneCount * 17 + 8); // grow with number of parallel assignments
+                  return (
+                    <div key={r.id} className="flex items-stretch border-b" style={{ borderColor: "#F5F6F8" }}>
+                      {/* left: identity + load (fixed column, aligned with ruler spacer) */}
+                      <div className="flex items-start gap-2 px-3 py-2" style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9" }}>
+                        <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.id}</span>
+                        <div className="flex-1 overflow-hidden">
+                          <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                          <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>{assignCompact ? "total assigned" : `${rows.length} task${rows.length === 1 ? "" : "s"}`}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <div style={{ height: 4, background: "#F1F5F9", borderRadius: 3, overflow: "hidden", flex: 1 }}>
+                              <div style={{ height: "100%", width: `${clamp(showPct, 0, 100)}%`, background: barColor }} />
+                            </div>
+                            <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: barColor }}>{showPct}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* right: timeline track — bars (hidden in compact) + calendar-aligned % strip */}
+                      <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        {!assignCompact && (
+                        <div style={{ position: "relative", height: barsHeight, overflow: "hidden" }}>
+                          <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+                          {weekends.map((d) => (
+                            <div key={`wb${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, bottom: 0, width: dayWidth, background: "rgba(100,116,139,0.08)" }} />
+                          ))}
+                          {timeline.secondary.map((t) => (
+                            <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 0, bottom: 0, width: 1, background: "#EDEFF2" }} />
+                          ))}
+                          <div style={{ position: "absolute", left: xForDay(0), top: 0, bottom: 0, width: 1, background: "rgba(34,211,238,0.35)" }} />
+                          {stacked.map((row, i) => {
+                            const m = STATUS_META[row.status];
+                            const bLeft = xForDay(row.start);
+                            const bWidth = Math.max(row.duration * dayWidth, 26);
+                            return (
+                              <div key={i} title={`${row.title} · ${fmtDate(row.start)}→${fmtDate(row.start + row.duration)} · ${row.pct}% time`}
+                                style={{ position: "absolute", left: bLeft, top: 4 + row.lane * 17, height: 15, width: bWidth, background: m.bg, border: `1px solid ${m.border}`, borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 4, overflow: "hidden", whiteSpace: "nowrap", transformOrigin: "left" }}>
+                                <span style={{ display: "flex", alignItems: "center", transform: `scaleX(${1 / viewZoom})`, transformOrigin: "left", whiteSpace: "nowrap" }}>
+                                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: m.border, flexShrink: 0, marginRight: 4 }} />
+                                  <span style={{ fontSize: 10, color: m.text, fontWeight: 500 }}>{row.parent ? `${row.parent} › ` : ""}{row.title}</span>
+                                  {bWidth * viewZoom > 60 && <span className="mono" style={{ fontSize: 9, color: m.text, opacity: 0.7, marginLeft: 4 }}>{row.pct}%</span>}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          </div>
+                          {rows.length === 0 && (
+                            <span className="mono text-xs" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }}>— idle —</span>
+                          )}
+                        </div>
+                        )}
+                        {/* per-period allocation % strip (day / week / month per current scale) */}
+                        <div style={{ position: "relative", height: 20, borderTop: "1px dashed #EEF1F4", flexShrink: 0, overflow: "hidden" }}>
+                          <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+                          {periods.map((p, i) => {
+                            const a = allocInRange(r.id, p.start, p.end);
+                            if (a <= 0) return null;
+                            const cellLeft = xForDay(p.start);
+                            const cellW = Math.max((p.end - p.start) * dayWidth - 2, 12);
+                            const bg = a > 100 ? "#FDEBEC" : a >= 70 ? "#FFF6E2" : "#E6F7F4";
+                            const fg = a > 100 ? "#9F1D23" : a >= 70 ? "#92400E" : "#0F6B5C";
+                            return (
+                              <div key={i} title={`${a}% allocated in this ${density}`} style={{ position: "absolute", left: cellLeft + 1, top: 2, width: cellW, height: 16, background: bg, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                                <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: fg, transform: `scaleX(${1 / viewZoom})` }}>{a}%</span>
+                              </div>
+                            );
+                          })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+      </div>
+
+      {dimHint && (
+        <div className="mono fixed pointer-events-none px-2 py-1 rounded text-xs font-semibold" style={{ left: dimHint.x + 14, top: dimHint.y + 14, background: "#123359", color: "#F0A875", border: "1px solid #EE7240", zIndex: 100 }}>{dimHint.text}</div>
+      )}
+    </div>
+  );
+}
+
+// ISO week number helper
+function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - yearStart) / DAY_MS + 1) / 7);
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<InfiniteCanvasPrototype />);
+</script>
+
+<script>
+  // Surface any load/transpile errors visibly instead of a blank page
+  window.addEventListener("error", function (e) {
+    var box = document.getElementById("boot-error");
+    if (box) { box.style.display = "block"; box.textContent = "Error: " + (e.message || e.error) + "\n\nIf this mentions a network/CDN failure, check your internet connection — this file loads React, Babel and Tailwind from a CDN on first open."; }
+  });
+</script>
+</body>
+</html>
