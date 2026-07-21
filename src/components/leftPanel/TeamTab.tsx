@@ -155,7 +155,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
             <div className="mt-2 flex gap-1.5">
               {LOAD_WINDOWS.map((w) => {
                 const load = loadPct(w.lo, w.hi);
-                const color = load >= 100 ? "#E5484D" : load >= 70 ? "#F5A524" : "#12A594";
+                const color = load > 100 ? "#E5484D" : load >= 50 ? "#12A594" : "#F5A524";
                 return (
                   <div key={w.label} className="flex-1" title={`${w.label}: ${load}% load`}>
                     <div className="flex items-center justify-between">

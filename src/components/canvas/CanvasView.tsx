@@ -734,7 +734,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     </div>
                   )}
                   {unassigned && <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.18) 0 6px, transparent 6px 12px)", pointerEvents: "none" }} />}
-                  {box.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: box.labelColor, pointerEvents: "none" }} />}
+                  {box.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, background: box.labelColor, pointerEvents: "none" }} />}
                   <div className="flex items-center justify-between px-2" style={{ height: 28, borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
                     <div className="flex items-center gap-1 overflow-hidden">
                       {hasChildren && (
@@ -742,8 +742,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                           <span style={{ fontSize: 17, color: meta.border, lineHeight: 1 }}>{expanded ? "▾" : "▸"}</span>
                         </button>
                       )}
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(box, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
-                      {box.labelColor && <span style={{ width: 7, height: 7, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: staffingColor(box, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
+                      {box.labelColor && <span style={{ width: 10, height: 10, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
                       <span className="text-xs font-semibold truncate" title={box.title} style={{ color: "#1F2330" }}>{box.title}</span>
                     </div>
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}>📎{box.attachments!.length}</span>}

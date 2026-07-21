@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { usePulseStore } from "@/stores/pulseStore";
-import { allocInRange, assignmentsFor, resourcePeakPct, utilizationPct } from "@/domain/assignments";
+import { allocInRange, assignmentsFor, utilizationPct } from "@/domain/assignments";
 import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { STATUS_META, RES_LABEL_W, clamp, colorForName, type Density } from "@/domain/constants";
-import { fmtDate } from "@/domain/dateUtils";
+import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import type { Feature, FeatureStatus } from "@/types";
 
 interface AssignmentPanelProps {
@@ -154,32 +154,52 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           </div>
         )}
         {rows.map(({ r, assignRows }) => {
-          const pct = utilizationPct(features, r);
-          const totalPct = resourcePeakPct(features, r.id);
-          const showPct = assignCompact ? totalPct : pct;
-          const barColor = showPct >= 100 ? "#E5484D" : showPct >= 70 ? "#F5A524" : "#12A594";
+          const today = todayIndex();
+          const loadWindows = [
+            { label: "1–4w", lo: today, hi: today + 28 },
+            { label: "5–8w", lo: today + 28, hi: today + 56 },
+            { label: "9–12w", lo: today + 56, hi: today + 84 },
+          ];
+          const loadPct = (lo: number, hi: number) => clamp(Math.round((allocInRange(features, r.id, lo, hi) / (r.capacity || 100)) * 100), 0, 999);
           const stacked = stackRows(assignRows);
           const laneCount = stacked.reduce((mx, row) => Math.max(mx, row.lane + 1), 0);
           const barsHeight = Math.max(30, laneCount * 17 + 8);
           return (
             <div key={r.id} className="flex items-stretch border-b" style={{ borderColor: "#F5F6F8" }}>
-              <div className="flex items-start gap-2 px-3 py-2" style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9" }}>
+              <div className={`flex gap-2 px-3 py-2 ${assignCompact ? "items-center" : "items-start"}`} style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9" }}>
                 <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {r.initials}
                 </span>
                 <div className="flex-1 overflow-hidden">
                   <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
-                  <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>{assignCompact ? "total assigned" : `${assignRows.length} task${assignRows.length === 1 ? "" : "s"}`}</div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <div style={{ height: 4, background: "#F1F5F9", borderRadius: 3, overflow: "hidden", flex: 1 }}>
-                      <div style={{ height: "100%", width: `${clamp(showPct, 0, 100)}%`, background: barColor }} />
-                    </div>
-                    <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: barColor }}>{showPct}%</span>
-                  </div>
+                  {/* Compact hides everything but the name + badge; the per-period
+                      allocation cells on the right stay. */}
+                  {!assignCompact && (
+                    <>
+                      <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>{`${assignRows.length} task${assignRows.length === 1 ? "" : "s"}`}</div>
+                      <div className="flex gap-1.5 mt-1">
+                        {loadWindows.map((w) => {
+                          const load = loadPct(w.lo, w.hi);
+                          const color = load > 100 ? "#E5484D" : load >= 50 ? "#12A594" : "#F5A524";
+                          return (
+                            <div key={w.label} className="flex-1" title={`${w.label}: ${load}% load`}>
+                              <div className="flex items-center justify-between">
+                                <span className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>{w.label}</span>
+                                <span className="mono" style={{ fontSize: 8, fontWeight: 700, color }}>{load}%</span>
+                              </div>
+                              <div style={{ height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden", marginTop: 2 }}>
+                                <div style={{ height: "100%", width: `${clamp(load, 0, 100)}%`, background: color }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ position: "relative", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: assignCompact ? "center" : "flex-start" }}>
                 {!assignCompact && (
                   <div style={{ position: "relative", height: barsHeight, overflow: "hidden" }}>
                     <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
@@ -212,7 +232,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
                     {assignRows.length === 0 && <span className="mono text-xs" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }}>— idle —</span>}
                   </div>
                 )}
-                <div style={{ position: "relative", height: 20, borderTop: "1px dashed #EEF1F4", flexShrink: 0, overflow: "hidden" }}>
+                <div style={{ position: "relative", height: 20, borderTop: assignCompact ? "none" : "1px dashed #EEF1F4", flexShrink: 0, overflow: "hidden" }}>
                   <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
                     {periods.map((p, i) => {
                       const a = allocInRange(features, r.id, p.start, p.end);
