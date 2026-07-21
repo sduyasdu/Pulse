@@ -75,3 +75,26 @@ body {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
 }
+
+/* App-wide button affordance: the UI is almost all <button>s, which browsers
+   render with the default arrow cursor and no hover feedback. Give every
+   enabled button a pointer cursor plus an explicit enlarge-on-hover and
+   press-down cue so it's obvious it's interactive. */
+button {
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
+}
+button:not(:disabled) {
+  cursor: pointer;
+}
+button:not(:disabled):hover {
+  transform: scale(1.12);
+  filter: brightness(1.08);
+}
+button:not(:disabled):active {
+  transform: scale(0.9);
+}
+button:disabled {
+  cursor: default;
+}

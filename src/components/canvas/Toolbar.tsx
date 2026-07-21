@@ -12,8 +12,6 @@ interface ToolbarProps {
   onInvite: () => void;
   viewZoom: number;
   setViewZoom: React.Dispatch<React.SetStateAction<number>>;
-  scale: number;
-  setScale: React.Dispatch<React.SetStateAction<number>>;
   density: Density;
   setDensity: (d: Density) => void;
   onResetView: () => void;
@@ -53,8 +51,6 @@ export function Toolbar({
   onInvite,
   viewZoom,
   setViewZoom,
-  scale,
-  setScale,
   density,
   setDensity,
   onResetView,
@@ -88,7 +84,7 @@ export function Toolbar({
       <div className="flex items-center gap-3 px-4" style={{ height: 34, borderBottom: "1px solid #24406B" }}>
         <Link to="/" className="flex items-center gap-2" title="Back to dashboard">
           <span className="font-display text-white" style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.02em" }}>Pulse</span>
-          <span className="mono" style={{ fontSize: 8, color: "#F0A875", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>by Yasdu</span>
+          <span className="mono" style={{ fontSize: 8, color: "#EE7240", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>by Yasdu</span>
         </Link>
         <div className="flex items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
           <span className="font-display" style={{ color: "#EE7240", fontSize: 14, fontWeight: 500 }}>›</span>
@@ -107,7 +103,7 @@ export function Toolbar({
           <button
             onClick={onInvite}
             className="flex items-center gap-1 px-2 py-0.5 rounded transition-colors hover:brightness-125"
-            style={{ fontSize: 10, fontWeight: 600, background: "#1B3A63", color: "#F0A875", border: "1px solid #24406B" }}
+            style={{ fontSize: 10, fontWeight: 600, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}
             title="Invite a collaborator to this Pulse"
           >
             <span style={{ fontSize: 11, lineHeight: 1 }}>＋</span> Invite
@@ -116,16 +112,16 @@ export function Toolbar({
         <button
           onClick={onJumpToToday}
           className="mono px-2 py-0.5 rounded transition-colors hover:brightness-125"
-          style={{ fontSize: 9, background: "#1B3A63", color: "#F0A875" }}
+          style={{ fontSize: 9, background: "#1B3A63", color: "#EE7240" }}
           title="Jump the canvas back to today"
         >
           Today · {dateForDay(todayIndex()).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
         </button>
         <div className="flex-1" />
-        <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#F0A875" }}>{DENSITY_HINT[density]}</span>
+        <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{DENSITY_HINT[density]}</span>
         {canEdit && (
           <div className="relative" style={{ flexShrink: 0 }}>
-            <button onClick={() => setShowGraphSettings((v) => !v)} title="Graph Effort scale settings" className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#F0A875", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>
+            <button onClick={() => setShowGraphSettings((v) => !v)} title="Graph Effort scale settings" className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>
               <span style={{ fontSize: 13, lineHeight: 1 }}>⚙️</span> Effort scale
             </button>
             {showGraphSettings && (
@@ -166,10 +162,10 @@ export function Toolbar({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5, overflowX: "auto" }}>
+      <div className="flex flex-wrap items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>
         {canEdit && (
           <div className="flex items-center gap-1.5" style={{ borderRight: "1px solid #24406B", paddingRight: 6, marginRight: 2 }}>
-            <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#F0A875", border: "1px solid #24406B" }}>
+            <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
               ▤ Add epic
             </button>
             <button onClick={onAddTask} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold" style={{ background: "#EE7240", color: "#FDFDFD" }}>
@@ -178,21 +174,15 @@ export function Toolbar({
           </div>
         )}
         <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
-          <button onClick={() => setViewZoom((z) => clamp(Math.round((z - 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><span style={{ color: "#F0A875", fontSize: 14 }}>🔍−</span></button>
-          <span className="mono text-xs w-9 text-center" style={{ color: "#F0A875" }}>{Math.round(viewZoom * 100)}%</span>
-          <button onClick={() => setViewZoom((z) => clamp(Math.round((z + 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><span style={{ color: "#F0A875", fontSize: 14 }}>🔍+</span></button>
-          <button onClick={onFitRoadmap} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#F0A875" }} title="Fit the whole roadmap on screen">fit</button>
-        </div>
-
-        <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Stretch or compress the day scale">
-          <button onClick={() => setScale((s) => clamp(s / 1.2, 0.4, 2.5))} className="p-1.5 rounded"><span style={{ color: "#CBD5E1", fontSize: 14 }}>−</span></button>
-          <span className="mono text-xs w-9 text-center" style={{ color: "#64748B" }}>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale((s) => clamp(s * 1.2, 0.4, 2.5))} className="p-1.5 rounded"><span style={{ color: "#CBD5E1", fontSize: 14 }}>+</span></button>
+          <button onClick={() => setViewZoom((z) => clamp(Math.round((z - 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍−</span></button>
+          <span className="mono text-xs w-9 text-center" style={{ color: "#EE7240" }}>{Math.round(viewZoom * 100)}%</span>
+          <button onClick={() => setViewZoom((z) => clamp(Math.round((z + 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍+</span></button>
+          <button onClick={onFitRoadmap} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#EE7240" }} title="Fit the whole roadmap on screen">fit</button>
         </div>
 
         <div className="flex rounded overflow-hidden ml-1" style={{ background: "#1B3A63" }}>
           {(["day", "week", "month"] as Density[]).map((d) => (
-            <button key={d} onClick={() => setDensity(d)} className="px-2.5 py-1.5 text-xs capitalize" style={{ background: density === d ? "#EE7240" : "transparent", color: density === d ? "#0A1428" : "#64748B", fontWeight: 600 }}>
+            <button key={d} onClick={() => setDensity(d)} className="px-2.5 py-1.5 text-xs capitalize" style={{ background: density === d ? "#EE7240" : "transparent", color: density === d ? "#0A1428" : "#EE7240", fontWeight: 600 }}>
               {d}
             </button>
           ))}
@@ -201,15 +191,15 @@ export function Toolbar({
 
         {canEdit && (
           <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Undo / redo (⌘Z · ⇧⌘Z)">
-            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.35, cursor: canUndo ? "pointer" : "default" }}><span style={{ color: "#F0A875", fontSize: 14 }}>↶</span></button>
-            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.35, cursor: canRedo ? "pointer" : "default" }}><span style={{ color: "#F0A875", fontSize: 14 }}>↷</span></button>
+            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.35, cursor: canUndo ? "pointer" : "default" }}><span style={{ color: "#EE7240", fontSize: 14 }}>↶</span></button>
+            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.35, cursor: canRedo ? "pointer" : "default" }}><span style={{ color: "#EE7240", fontSize: 14 }}>↷</span></button>
           </div>
         )}
 
         <div className="flex items-center gap-1 rounded px-1.5 ml-1" style={{ background: "#1B3A63", border: "1px solid #24406B" }}>
           <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
           <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#E2E8F0", outline: "none", width: 90 }} />
-          <select value={featureStatusFilter} onChange={(e) => setFeatureStatusFilter(e.target.value)} className="bg-transparent text-xs py-1.5" style={{ color: "#F0A875", outline: "none" }}>
+          <select value={featureStatusFilter} onChange={(e) => setFeatureStatusFilter(e.target.value)} className="bg-transparent text-xs py-1.5" style={{ color: "#EE7240", outline: "none" }}>
             <option value="all" style={{ color: "#000" }}>all</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value} style={{ color: "#000" }}>{s.label}</option>
@@ -227,14 +217,14 @@ export function Toolbar({
             </button>
           )}
         </div>
-        <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#F0A875", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
+        <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
           ⟞ {showDelays ? "Delays on" : "Delays"}
         </button>
-        <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#F0A875", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
+        <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
           {epicsShrunk ? "▣" : "▢"} {epicsShrunk ? "Unshrink" : "Shrink epics"}
         </button>
         {canEdit && (
-          <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#F0A875", border: "1px solid #24406B" }}>
+          <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
             ⇕ Compact
           </button>
         )}

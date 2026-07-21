@@ -112,7 +112,9 @@ export function PulsePage() {
   // canvas mounts and centerOnToday() refines it with the real container
   // width/viewZoom.
   const [offsetX, setOffsetX] = useState(() => TODAY_LEFT_MARGIN_PX - BASE_DAY_WIDTH * DENSITY_DAY_PX.week * todayIndex());
-  const [scale, setScale] = useState(1);
+  // Day-scale is fixed now that the toolbar's separate scale control is gone;
+  // zoom is handled by viewZoom. Kept as a value so the canvas keeps working.
+  const scale = 1;
   const [viewZoom, setViewZoom] = useState(1);
   const [density, setDensity] = useState<Density>("week");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -225,8 +227,6 @@ export function PulsePage() {
         onInvite={() => setShowInvite(true)}
         viewZoom={viewZoom}
         setViewZoom={setViewZoom}
-        scale={scale}
-        setScale={setScale}
         density={density}
         setDensity={setDensity}
         onResetView={() => canvasRef.current?.resetView()}
