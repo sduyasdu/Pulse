@@ -16,6 +16,7 @@ interface AssignmentPanelProps {
   endDay: number;
   weekends: number[];
   filterResource: string | null;
+  setFilterResource: (id: string | null) => void;
   selectedFeature: Feature | null;
 }
 
@@ -30,7 +31,7 @@ function resourceIdsOn(feature: Feature): Set<string> {
   return ids;
 }
 
-export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, selectedFeature }: AssignmentPanelProps) {
+export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, setFilterResource, selectedFeature }: AssignmentPanelProps) {
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
 
@@ -166,7 +167,12 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           const barsHeight = Math.max(30, laneCount * 17 + 8);
           return (
             <div key={r.id} className="flex items-stretch border-b" style={{ borderColor: "#F5F6F8" }}>
-              <div className={`flex gap-2 px-3 py-2 ${assignCompact ? "items-center" : "items-start"}`} style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9" }}>
+              <div
+                onClick={() => setFilterResource(filterResource === r.id ? null : r.id)}
+                title="Click to filter the canvas by this resource"
+                className={`flex gap-2 px-3 py-2 cursor-pointer ${assignCompact ? "items-center" : "items-start"}`}
+                style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9", background: filterResource === r.id ? "#FFF7F1" : undefined }}
+              >
                 <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {r.initials}
                 </span>

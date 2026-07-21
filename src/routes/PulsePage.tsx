@@ -355,6 +355,7 @@ export function PulsePage() {
             endDay={timelineBounds.endDay}
             weekends={weekends}
             filterResource={filterResource}
+            setFilterResource={setFilterResource}
             selectedFeature={selectedFeature}
           />
         </div>
