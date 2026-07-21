@@ -5,6 +5,7 @@ import { LoginPage } from "@/routes/LoginPage";
 import { DashboardPage } from "@/routes/DashboardPage";
 import { PulsePage } from "@/routes/PulsePage";
 import { RequireAuth } from "@/routes/RequireAuth";
+import { ConfirmPopover } from "@/components/shared/ConfirmPopover";
 
 function App() {
   const init = useAuthStore((s) => s.init);
@@ -33,6 +34,7 @@ function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ConfirmPopover />
     </BrowserRouter>
   );
 }

@@ -5,6 +5,8 @@ import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { removeMyPulseEntry } from "@/services/firestore/pulses";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -38,6 +40,7 @@ export function PulsePage() {
   const patchEpic = usePulseStore((s) => s.patchEpic);
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
+  const isMobile = useIsMobile();
 
   const undo = useUndoStore((s) => s.undo);
   const redo = useUndoStore((s) => s.redo);
@@ -207,6 +210,11 @@ export function PulsePage() {
         <span className="font-display text-sm text-yasdu-muted">Loading Pulse…</span>
       </div>
     );
+  }
+
+  // Phones get the dedicated touch UI; the canvas layout below is desktop/tablet.
+  if (isMobile) {
+    return <MobilePulseView pulse={pulse} canEdit={canEdit} myRole={myRole} uid={uid!} />;
   }
 
   return (

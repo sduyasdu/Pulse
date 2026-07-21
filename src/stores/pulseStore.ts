@@ -63,8 +63,8 @@ interface PulseStoreState {
   removeSubtask: (featureId: string, subtaskId: string) => Promise<void>;
   toggleSubtaskResource: (featureId: string, subtaskId: string, resourceId: string) => Promise<void>;
 
-  addAttachment: (featureId: string, title: string, url: string, subtaskId?: string) => Promise<void>;
-  removeAttachment: (featureId: string, attachmentId: string, subtaskId?: string) => Promise<void>;
+  addAttachment: (featureId: string, title: string, url: string) => Promise<void>;
+  removeAttachment: (featureId: string, attachmentId: string) => Promise<void>;
 }
 
 function omit<K extends string>(obj: Record<K, number> | undefined, key: K): Record<K, number> {
@@ -363,7 +363,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) throw new Error("feature not found");
     const id = `st-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const subtask: Subtask = { id, title: "New subtask", status: "planned", resources: [], effort: 1 };
+    const subtask: Subtask = { id, title: "New subtask", status: "planned", resources: [] };
     const patch: Partial<Feature> = { collapsed: false, children: [...(feature.children || []), subtask] };
     await updateFeature(pulseId, featureId, patch);
     recordSingle("Add subtask", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
@@ -404,7 +404,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     recordSingle("Edit subtask assignees", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
-  addAttachment: async (featureId, title, url, subtaskId) => {
+  addAttachment: async (featureId, title, url) => {
     const { pulseId, features } = get();
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) return;
@@ -418,20 +418,16 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       url: finalUrl,
       isData,
     };
-    const patch: Partial<Feature> = !subtaskId
-      ? { attachments: [...(feature.attachments || []), attachment] }
-      : { children: (feature.children || []).map((c) => (c.id === subtaskId ? { ...c, attachments: [...(c.attachments || []), attachment] } : c)) };
+    const patch: Partial<Feature> = { attachments: [...(feature.attachments || []), attachment] };
     await updateFeature(pulseId, featureId, patch);
     recordSingle("Add attachment", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
-  removeAttachment: async (featureId, attachmentId, subtaskId) => {
+  removeAttachment: async (featureId, attachmentId) => {
     const { pulseId, features } = get();
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) return;
-    const patch: Partial<Feature> = !subtaskId
-      ? { attachments: (feature.attachments || []).filter((a) => a.id !== attachmentId) }
-      : { children: (feature.children || []).map((c) => (c.id === subtaskId ? { ...c, attachments: (c.attachments || []).filter((a) => a.id !== attachmentId) } : c)) };
+    const patch: Partial<Feature> = { attachments: (feature.attachments || []).filter((a) => a.id !== attachmentId) };
     await updateFeature(pulseId, featureId, patch);
     recordSingle("Remove attachment", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },

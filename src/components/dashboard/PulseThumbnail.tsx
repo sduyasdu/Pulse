@@ -6,6 +6,7 @@ import { fetchEpics } from "@/services/firestore/epics";
 import { boxHeight } from "@/domain/graphEffort";
 import { epicBandsFor } from "@/domain/layout";
 import { STATUS_META, hexA } from "@/domain/constants";
+import { todayIndex } from "@/domain/dateUtils";
 
 // SVG user-space canvas the roadmap is squashed into. The x-axis is in days
 // and the y-axis in px, so the fit is deliberately non-uniform — this is a
@@ -61,10 +62,29 @@ export function PulseThumbnail({ pulseId }: PulseThumbnailProps) {
   const graph = DEFAULT_GRAPH_CONFIG;
   const bands = epicBandsFor(epics, features, graph).filter((b) => b.count > 0);
 
-  const minX = Math.min(...features.map((f) => f.x));
-  const maxX = Math.max(...features.map((f) => f.x + f.duration));
-  const minY = Math.min(...features.map((f) => f.y), ...bands.map((b) => b.y0));
-  const maxY = Math.max(...features.map((f) => f.y + boxHeight(f, graph)), ...bands.map((b) => b.y1));
+  // Show a fixed window centered on today rather than the whole roadmap, so
+  // boxes stay a readable size as the timeline grows. Anything outside the
+  // window is clipped by the viewBox.
+  const SPAN = 45; // days on each side of today
+  const today = todayIndex();
+  let winStart = today - SPAN;
+  let winEnd = today + SPAN;
+  let visible = features.filter((f) => f.x + f.duration > winStart && f.x < winEnd);
+
+  // Nothing near today (e.g. a purely historical or future roadmap)? Fall back
+  // to fitting everything so the card isn't blank.
+  if (visible.length === 0) {
+    visible = features;
+    winStart = Math.min(...features.map((f) => f.x));
+    winEnd = Math.max(...features.map((f) => f.x + f.duration));
+  }
+
+  const visibleBands = bands.filter((b) => (b.maxX ?? 0) > winStart && (b.minX ?? 0) < winEnd);
+
+  const minX = winStart;
+  const maxX = winEnd;
+  const minY = Math.min(...visible.map((f) => f.y), ...visibleBands.map((b) => b.y0));
+  const maxY = Math.max(...visible.map((f) => f.y + boxHeight(f, graph)), ...visibleBands.map((b) => b.y1));
 
   const spanX = Math.max(1, maxX - minX);
   const spanY = Math.max(1, maxY - minY);
@@ -75,7 +95,7 @@ export function PulseThumbnail({ pulseId }: PulseThumbnailProps) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ ...frame, height: 56, width: "100%", display: "block" }} role="img" aria-label="Roadmap preview">
-      {bands.map((b) => (
+      {visibleBands.map((b) => (
         <rect
           key={b.id}
           x={px(b.minX ?? minX)}
@@ -88,7 +108,7 @@ export function PulseThumbnail({ pulseId }: PulseThumbnailProps) {
           rx={1}
         />
       ))}
-      {features.map((f) => {
+      {visible.map((f) => {
         const meta = STATUS_META[f.status] ?? STATUS_META.planned;
         return (
           <rect
@@ -97,13 +117,16 @@ export function PulseThumbnail({ pulseId }: PulseThumbnailProps) {
             y={py(f.y)}
             width={Math.max(MIN_BOX, f.duration * sx)}
             height={Math.max(MIN_BOX, boxHeight(f, graph) * sy)}
-            fill={meta.bg}
-            stroke={meta.border}
-            strokeWidth={0.5}
+            fill={meta.border}
+            stroke="#FFFFFF"
+            strokeWidth={0.3}
             rx={0.8}
           />
         );
       })}
+      {today >= minX && today <= maxX && (
+        <line x1={px(today)} y1={0} x2={px(today)} y2={H} stroke="#EE7240" strokeWidth={0.5} opacity={0.7} />
+      )}
     </svg>
   );
 }

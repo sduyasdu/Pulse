@@ -3,6 +3,7 @@ import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
 import { clamp, colorForName } from "@/domain/constants";
+import { confirmAt } from "@/stores/confirmStore";
 
 interface TeamTabProps {
   canEdit: boolean;
@@ -141,9 +142,9 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                 <button
                   title="Remove this resource"
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (window.confirm(`Remove ${r.name}? They'll be unassigned from all tasks.`)) void removeResource(r.id);
+                    if (await confirmAt(e, { message: `Remove ${r.name}?`, detail: "They'll be unassigned from all tasks.", confirmLabel: "Remove" })) void removeResource(r.id);
                   }}
                   className="flex-shrink-0 rounded"
                   style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}

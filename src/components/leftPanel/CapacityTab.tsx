@@ -4,6 +4,7 @@ import { allocInRange, resourcePeakPct, utilizationPct } from "@/domain/assignme
 import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { confirmAt } from "@/stores/confirmStore";
 
 interface CapacityTabProps {
   canEdit: boolean;
@@ -83,8 +84,8 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
     void setResourceTypes(resourceTypes.map((x) => (x === t ? nn.trim() : x)));
     resources.filter((r) => r.type === t).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
   };
-  const deleteType = (t: string) => {
-    if (window.confirm(`Delete type "${t}"? Resources keep the label but it leaves the list.`)) {
+  const deleteType = async (t: string, e: { clientX: number; clientY: number }) => {
+    if (await confirmAt(e, { message: `Delete type "${t}"?`, detail: "Resources keep the label but it leaves the list." })) {
       void setResourceTypes(resourceTypes.filter((x) => x !== t));
     }
   };
@@ -128,7 +129,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
               {canEdit && (
                 <>
                   <button onClick={() => renameType(t)} title="Rename"><span style={{ fontSize: 9, color: "#64748B" }}>✎</span></button>
-                  <button onClick={() => deleteType(t)} title="Delete"><span style={{ fontSize: 9, color: "#64748B" }}>✕</span></button>
+                  <button onClick={(e) => void deleteType(t, e)} title="Delete"><span style={{ fontSize: 9, color: "#64748B" }}>✕</span></button>
                 </>
               )}
             </span>

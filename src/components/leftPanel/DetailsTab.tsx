@@ -1,6 +1,7 @@
 import { useState } from "react";
-import type { Feature, Subtask } from "@/types";
+import type { Feature, Resource, Subtask } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
+import { confirmAt } from "@/stores/confirmStore";
 import {
   allocSum,
   assignedEffort,
@@ -25,7 +26,13 @@ interface DetailsTabProps {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTabProps) {
+export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate }: DetailsTabProps) {
+  // A "done" task is locked: every content field is read-only. Only the status
+  // (so it can be reopened) and the duplicate/delete actions stay on the real
+  // permission. Reusing the name `canEdit` means all field bindings below pick
+  // up the lock automatically.
+  const locked = feature.status === "done";
+  const canEdit = canEditProp && !locked;
   const epics = usePulseStore((s) => s.epics);
   const resources = usePulseStore((s) => s.resources);
   const pulse = usePulseStore((s) => s.pulse);
@@ -37,7 +44,6 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
   const addSubtask = usePulseStore((s) => s.addSubtask);
   const patchSubtask = usePulseStore((s) => s.patchSubtask);
   const removeSubtask = usePulseStore((s) => s.removeSubtask);
-  const toggleSubtaskResource = usePulseStore((s) => s.toggleSubtaskResource);
   const addAttachment = usePulseStore((s) => s.addAttachment);
   const removeAttachment = usePulseStore((s) => s.removeAttachment);
 
@@ -63,11 +69,28 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
     if (duration != null) void patchFeature(feature.id, { duration });
   };
 
+  const todayISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  // Changing a subtask's status also maintains its finished date: stamp today
+  // when it first becomes done, clear it when reopened. (Manual edits to the
+  // date field go straight through patchSubtask and aren't touched here.)
+  const setSubtaskStatus = (c: Subtask, status: Subtask["status"]) => {
+    const patch: Partial<Subtask> = { status };
+    const wasDone = c.status === "done";
+    const nowDone = status === "done";
+    if (nowDone && !wasDone) patch.finishedAt = todayISO();
+    else if (!nowDone && wasDone) patch.finishedAt = null;
+    void patchSubtask(feature.id, c.id, patch);
+  };
+
   return (
     <div className="p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>TASK DETAILS</span>
-        {canEdit && (
+        {canEditProp && (
           <div className="flex items-center gap-1.5">
             <button
               title="Duplicate task"
@@ -79,8 +102,8 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
             </button>
             <button
               title="Delete task"
-              onClick={() => {
-                if (window.confirm(`Delete task "${feature.title}"? You can undo this (⌘Z).`)) {
+              onClick={async (e) => {
+                if (await confirmAt(e, { message: `Delete "${feature.title || "this task"}"?`, detail: "You can undo this (⌘Z).", confirmLabel: "Delete" })) {
                   void removeFeature(feature.id);
                   onClose();
                 }
@@ -93,6 +116,13 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
           </div>
         )}
       </div>
+
+      {locked && (
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#E6F7F4", border: "1px solid #A7E3D8", color: "#0F6B5C" }}>
+          <span style={{ fontSize: 13 }}>🔒</span>
+          <span>Done — locked. Change its status below to edit this task.</span>
+        </div>
+      )}
 
       <input
         value={title}
@@ -145,17 +175,27 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
           {(feature.children || []).map((c) => {
             const cm = STATUS_META[c.status];
             const open = !!expandedSubs[c.id];
+            const respId = c.resources?.[0] ?? null;
+            const resp = respId ? resources.find((x) => x.id === respId) ?? null : null;
             return (
               <div key={c.id} className="rounded" style={{ border: "1px solid #E2DFD9" }}>
                 <div className="flex items-center gap-1.5 px-2 py-1.5">
-                  <button onClick={() => setExpandedSubs((s) => ({ ...s, [c.id]: !s[c.id] }))} title={open ? "Collapse" : "Expand"} style={{ flexShrink: 0, width: 16 }}>
-                    <span style={{ fontSize: 12, color: "#64748B" }}>{open ? "▾" : "▸"}</span>
+                  <button onClick={() => setExpandedSubs((s) => ({ ...s, [c.id]: !s[c.id] }))} title={open ? "Collapse" : "Expand"} className="flex items-center justify-center" style={{ flexShrink: 0, width: 22 }}>
+                    <span style={{ fontSize: 22, lineHeight: 1, color: "#475569" }}>{open ? "▾" : "▸"}</span>
                   </button>
+                  <input
+                    type="checkbox"
+                    disabled={!canEdit}
+                    checked={c.status === "done"}
+                    onChange={(e) => setSubtaskStatus(c, e.target.checked ? "done" : "planned")}
+                    title={c.status === "done" ? "Mark not done" : "Mark done"}
+                    style={{ flexShrink: 0, accentColor: "#12A594", cursor: canEdit ? "pointer" : "default" }}
+                  />
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
-                  <SubtaskTitleInput title={c.title} disabled={!canEdit} onCommit={(v) => void patchSubtask(feature.id, c.id, { title: v })} />
-                  {(c.resources || []).length > 0 && <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{c.resources.length}👤</span>}
+                  <SubtaskTitleInput title={c.title} disabled={!canEdit} done={c.status === "done"} onCommit={(v) => void patchSubtask(feature.id, c.id, { title: v })} />
+                  {resp && <span className="mono" title={`Responsible: ${resp.name}`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(resp.id), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{resp.initials}</span>}
                   {canEdit && (
-                    <button onClick={() => window.confirm(`Delete subtask "${c.title}"?`) && void removeSubtask(feature.id, c.id)} title="Delete subtask">
+                    <button onClick={async (e) => { if (await confirmAt(e, { message: `Delete subtask "${c.title}"?` })) void removeSubtask(feature.id, c.id); }} title="Delete subtask">
                       <span style={{ fontSize: 12, color: "#64748B" }}>✕</span>
                     </button>
                   )}
@@ -166,7 +206,7 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
                       <select
                         value={c.status}
                         disabled={!canEdit}
-                        onChange={(e) => void patchSubtask(feature.id, c.id, { status: e.target.value as Subtask["status"] })}
+                        onChange={(e) => setSubtaskStatus(c, e.target.value as Subtask["status"])}
                         className="mono text-xs border rounded px-1 py-0.5 flex-1"
                         style={{ borderColor: "#E2DFD9" }}
                       >
@@ -174,43 +214,38 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
                           <option key={k} value={k}>{m.label}</option>
                         ))}
                       </select>
-                      <div className="flex items-center gap-1">
-                        <button disabled={!canEdit} onClick={() => void patchSubtask(feature.id, c.id, { effort: Math.max(1, (c.effort || 1) - 1) })} className="px-1 rounded border" style={{ borderColor: "#E2DFD9", fontSize: 11 }}>−</button>
-                        <span className="mono text-xs w-8 text-center" style={{ color: "#334155" }}>{c.effort || 1}e</span>
-                        <button disabled={!canEdit} onClick={() => void patchSubtask(feature.id, c.id, { effort: (c.effort || 1) + 1 })} className="px-1 rounded border" style={{ borderColor: "#E2DFD9", fontSize: 11 }}>+</button>
-                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B", flexShrink: 0 }}>finished:</span>
+                      <input
+                        type="date"
+                        disabled={!canEdit}
+                        value={c.finishedAt || ""}
+                        onChange={(e) => void patchSubtask(feature.id, c.id, { finishedAt: e.target.value || null })}
+                        title="Set automatically when marked done — editable"
+                        className="mono text-xs border rounded px-1 py-0.5"
+                        style={{ borderColor: "#E2DFD9", color: "#334155" }}
+                      />
+                      {c.finishedAt && canEdit && (
+                        <button onClick={() => void patchSubtask(feature.id, c.id, { finishedAt: null })} title="Clear finished date">
+                          <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
+                        </button>
+                      )}
                     </div>
                     <div className="mt-1.5">
-                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>assigned:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {resources.map((res) => {
-                          const on = (c.resources || []).includes(res.id);
-                          return (
-                            <button
-                              key={res.id}
-                              disabled={!canEdit}
-                              onClick={() => void toggleSubtaskResource(feature.id, c.id, res.id)}
-                              title={res.name}
-                              className="mono"
-                              style={{ fontSize: 9, fontWeight: 700, width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: on ? "#fff" : "#64748B", background: on ? colorForName(res.id) : "#F1F5F9", border: on ? "none" : "1px solid #E2DFD9", opacity: on ? 1 : 0.7 }}
-                            >
-                              {res.initials}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="mt-1.5">
-                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>attachments:</span>
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>responsible:</span>
                       <div className="mt-1">
-                        <Attachments
-                          compact
-                          canEdit={canEdit}
-                          items={c.attachments}
-                          onAdd={(t, u) => void addAttachment(feature.id, t, u, c.id)}
-                          onDelete={(aid) => void removeAttachment(feature.id, aid, c.id)}
+                        <ResponsibleSelect
+                          resources={resources}
+                          value={respId}
+                          disabled={!canEdit}
+                          onChange={(id) => void patchSubtask(feature.id, c.id, { resources: id ? [id] : [] })}
                         />
                       </div>
+                    </div>
+                    <div className="mt-1.5">
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>notes:</span>
+                      <SubtaskNotesInput notes={c.notes || ""} disabled={!canEdit} onCommit={(v) => void patchSubtask(feature.id, c.id, { notes: v })} />
                     </div>
                   </div>
                 )}
@@ -422,7 +457,7 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
         <span className="mono text-xs" style={{ color: "#64748B" }}>STATUS</span>
         <select
           value={feature.status}
-          disabled={!canEdit}
+          disabled={!canEditProp}
           onChange={(e) => void patchFeature(feature.id, { status: e.target.value as Feature["status"] })}
           className="mt-1 w-full text-sm border rounded px-2 py-1.5"
           style={{ borderColor: "#E2DFD9" }}
@@ -480,7 +515,7 @@ export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTa
   );
 }
 
-function SubtaskTitleInput({ title, disabled, onCommit }: { title: string; disabled: boolean; onCommit: (v: string) => void }) {
+function SubtaskTitleInput({ title, disabled, done, onCommit }: { title: string; disabled: boolean; done?: boolean; onCommit: (v: string) => void }) {
   const [local, onChange] = useDebouncedText(title, onCommit);
   return (
     <input
@@ -488,7 +523,90 @@ function SubtaskTitleInput({ title, disabled, onCommit }: { title: string; disab
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       className="text-xs font-medium flex-1 bg-transparent"
-      style={{ border: "none", outline: "none", color: "#334155", minWidth: 0 }}
+      style={{ border: "none", outline: "none", color: done ? "#94A3B8" : "#334155", textDecoration: done ? "line-through" : "none", minWidth: 0 }}
+    />
+  );
+}
+
+function ResponsibleSelect({ resources, value, disabled, onChange }: { resources: Resource[]; value: string | null; disabled: boolean; onChange: (id: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const current = resources.find((r) => r.id === value) ?? null;
+  const query = q.trim().toLowerCase();
+  const filtered = resources.filter((r) => !query || r.name.toLowerCase().includes(query) || (r.type || "").toLowerCase().includes(query));
+  const pick = (id: string | null) => {
+    onChange(id);
+    setOpen(false);
+    setQ("");
+  };
+  const badge = (r: Resource, size: number) => (
+    <span className="mono" style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: size, height: size, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+  );
+  return (
+    <div>
+      <div className="flex items-center gap-1">
+        <button
+          disabled={disabled}
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 flex-1 border rounded px-2 py-1"
+          style={{ borderColor: "#E2DFD9", background: disabled ? "#F8FAFC" : "#FFFFFF", minWidth: 0 }}
+        >
+          {current ? (
+            <>
+              {badge(current, 16)}
+              <span className="text-xs truncate" style={{ color: "#334155" }}>{current.name}</span>
+            </>
+          ) : (
+            <span className="text-xs" style={{ color: "#94A3B8" }}>Set responsible…</span>
+          )}
+          <span style={{ marginLeft: "auto", fontSize: 9, color: "#94A3B8" }}>{open ? "▲" : "▼"}</span>
+        </button>
+        {current && !disabled && (
+          <button onClick={() => pick(null)} title="Remove responsible" className="flex-shrink-0 rounded" style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}>
+            <span style={{ fontSize: 11, color: "#9F1D23" }}>✕</span>
+          </button>
+        )}
+      </div>
+      {open && !disabled && (
+        <div className="mt-1 rounded border" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            className="text-xs w-full px-2 py-1 border-b"
+            style={{ borderColor: "#F1F5F9", outline: "none" }}
+          />
+          <div style={{ maxHeight: 150, overflowY: "auto" }}>
+            <button onClick={() => pick(null)} className="flex items-center gap-1.5 w-full px-2 py-1 text-left">
+              <span className="text-xs" style={{ color: "#94A3B8" }}>— None —</span>
+            </button>
+            {filtered.map((r) => (
+              <button key={r.id} onClick={() => pick(r.id)} className="flex items-center gap-1.5 w-full px-2 py-1 text-left" style={{ background: r.id === value ? "#FFF7F1" : undefined }}>
+                {badge(r, 16)}
+                <span className="text-xs truncate" style={{ color: "#334155" }}>{r.name}</span>
+                {r.type && <span className="mono" style={{ marginLeft: "auto", fontSize: 9, color: "#94A3B8" }}>{r.type}</span>}
+              </button>
+            ))}
+            {filtered.length === 0 && <div className="text-xs px-2 py-1.5" style={{ color: "#94A3B8" }}>No matches</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubtaskNotesInput({ notes, disabled, onCommit }: { notes: string; disabled: boolean; onCommit: (v: string) => void }) {
+  const [local, onChange] = useDebouncedText(notes, onCommit);
+  return (
+    <textarea
+      value={local}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Add notes…"
+      rows={2}
+      className="text-xs w-full rounded px-2 py-1 mt-1"
+      style={{ border: "1px solid #E2DFD9", outline: "none", color: "#334155", resize: "vertical", background: disabled ? "#F8FAFC" : "#FFFFFF" }}
     />
   );
 }

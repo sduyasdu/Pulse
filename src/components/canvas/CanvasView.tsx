@@ -8,6 +8,7 @@ import { buildTimeline } from "@/domain/timeline";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, STATUS_META, colorForName, hexA, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { recordSingle, patchOp } from "@/stores/undoStore";
+import { confirmAt } from "@/stores/confirmStore";
 
 function EpicNameInput({ name, color, disabled, onCommit }: { name: string; color: string; disabled: boolean; onCommit: (name: string) => void }) {
   const [local, onChange] = useDebouncedText(name, onCommit);
@@ -418,6 +419,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     if (!canEdit) return;
     e.stopPropagation();
     onSelect(box.id);
+    // A "done" task is locked: still selectable (to reopen it), but can't be
+    // moved or resized.
+    if (box.status === "done") return;
     setDragId(box.id);
     dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
     window.addEventListener("pointermove", handleDragMove);
@@ -599,8 +603,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     {canEdit && (
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => {
-                          if (window.confirm(`Delete epic "${ep.name}"? Its features stay but become unassigned.`)) void removeEpic(ep.id);
+                        onClick={async (e) => {
+                          if (await confirmAt(e, { message: `Delete epic "${ep.name}"?`, detail: "Its features stay but become unassigned." })) void removeEpic(ep.id);
                         }}
                         title="Delete epic"
                         style={{ fontSize: 11, color: hexA(ep.color, 0.7) }}
@@ -697,7 +701,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   onDrop={(e) => {
                     e.preventDefault();
                     const rid = e.dataTransfer.getData("text/plain");
-                    if (rid && canEdit) void usePulseStore.getState().assignResource(box.id, rid);
+                    if (rid && canEdit && box.status !== "done") void usePulseStore.getState().assignResource(box.id, rid);
                     setDragOverBoxId(null);
                     // Deliberately doesn't call onSelect() here — assigning
                     // a resource by drag-and-drop shouldn't switch the left
@@ -748,6 +752,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     </div>
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}>📎{box.attachments!.length}</span>}
                     {box.ai && <span style={{ fontSize: 12, color: "#8B5CF6" }} className="flex-shrink-0">✨</span>}
+                    {box.status === "done" && <span className="flex-shrink-0" title="Done — locked. Change its status to edit." style={{ fontSize: 11 }}>🔒</span>}
                   </div>
                   {epicsShrunk ? null : !expanded ? (
                     <div className="px-2 py-1.5 flex flex-col justify-end" style={{ height: bodyHeight, position: "relative" }}>
@@ -779,17 +784,22 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     <div className="px-2 py-1" style={{ overflow: "hidden" }}>
                       {box.children!.map((c) => {
                         const cm = STATUS_META[c.status];
+                        const resp = c.resources?.[0] ? resourceById[c.resources[0]] : null;
                         return (
                           <div key={c.id} className="flex items-center gap-1.5" style={{ height: 27, borderBottom: "1px solid rgba(15,23,42,0.05)" }}>
                             <span style={{ width: 7, height: 7, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
                             <span className="text-xs truncate flex-1" title={c.title} style={{ color: "#334155" }}>{c.title}</span>
-                            {(!c.resources || c.resources.length === 0) ? <span className="mono" style={{ fontSize: 9, color: "#9F1D23" }}>—</span> : <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{c.resources.join(", ")}</span>}
+                            {resp ? (
+                              <span className="mono" title={resp.name} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(resp.id), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{resp.initials}</span>
+                            ) : (
+                              <span className="mono" style={{ fontSize: 9, color: "#9F1D23", flexShrink: 0 }}>—</span>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   )}
-                  {canEdit && (
+                  {canEdit && box.status !== "done" && (
                     <>
                       <div onPointerDown={(e) => startDrag("resize-left", box, e)} style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
                       <div onPointerDown={(e) => startDrag("resize-right", box, e)} style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />

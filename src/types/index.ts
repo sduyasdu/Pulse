@@ -145,9 +145,9 @@ export interface Subtask {
   title: string;
   status: FeatureStatus;
   resources: string[];
-  effort: number;
   alloc?: Record<string, number>;
-  attachments?: Attachment[];
+  notes?: string; // free-text detail annotation
+  finishedAt?: string | null; // YYYY-MM-DD; auto-set when marked done, cleared when reopened, editable
 }
 
 export interface Feature {

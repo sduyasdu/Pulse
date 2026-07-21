@@ -105,16 +105,16 @@ describe("allocSum / assignedEffort", () => {
     expect(allocSum({ resources: ["A"] })).toBe(1);
   });
 
-  it("includes subtask assignments", () => {
+  it("ignores subtask assignments (subtasks are responsibility markers, not load)", () => {
     const feature = {
       resources: ["A"],
       alloc: { A: 50 },
       children: [
-        { id: "c1", title: "a", status: "planned" as const, resources: ["B"], effort: 1, alloc: { B: 80 } },
-        { id: "c2", title: "b", status: "planned" as const, resources: ["C"], effort: 1 },
+        { id: "c1", title: "a", status: "planned" as const, resources: ["B"], alloc: { B: 80 } },
+        { id: "c2", title: "b", status: "planned" as const, resources: ["C"] },
       ],
     };
-    expect(allocSum(feature)).toBeCloseTo(2.3);
+    expect(allocSum(feature)).toBeCloseTo(0.5); // only the task-level A@50%
   });
 
   it("Assigned Effort = elapsed x sum of allocations", () => {

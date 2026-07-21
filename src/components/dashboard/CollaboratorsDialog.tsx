@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Invite, PulseMember, PulseRole } from "@/types";
 import { fetchInvites, inviteToPulse, revokeInvite } from "@/services/firestore/invites";
 import { removeMember, setMemberRole } from "@/services/firestore/memberships";
+import { confirmAt } from "@/stores/confirmStore";
 
 interface CollaboratorsDialogProps {
   pulseId: string;
@@ -90,8 +91,8 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
     }
   };
 
-  const handleRemoveMember = async (m: PulseMember) => {
-    if (!window.confirm(`Remove ${m.email} from “${pulseName}”? They'll lose access immediately.`)) return;
+  const handleRemoveMember = async (m: PulseMember, e: { clientX: number; clientY: number }) => {
+    if (!(await confirmAt(e, { message: `Remove ${m.email}?`, detail: `They'll lose access to “${pulseName}” immediately.`, confirmLabel: "Remove" }))) return;
     // The member's own users/{uid}/myPulses entry isn't ours to delete; their
     // dashboard self-heals it on next load (see DashboardPage's self-heal).
     await removeMember(pulseId, m.uid).catch(() => {});
@@ -140,7 +141,7 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
                         <option value="viewer">Viewer</option>
                       </select>
                       <button
-                        onClick={() => void handleRemoveMember(m)}
+                        onClick={(e) => void handleRemoveMember(m, e)}
                         className="text-xs text-red-600 hover:underline"
                         title="Remove this collaborator"
                       >

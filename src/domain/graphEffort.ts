@@ -2,7 +2,7 @@
 // editable unit of work, not styling: these functions are the single source
 // of truth for every number the canvas and side panels display, so nothing
 // here should depend on React or Firestore.
-import type { Feature, GraphConfig, Subtask } from "@/types";
+import type { Feature, GraphConfig } from "@/types";
 import { businessInSpan, businessToSpan } from "./dateUtils";
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -38,20 +38,12 @@ export function allocOf(alloc: Record<string, number> | undefined, rid: string):
   return alloc?.[rid] ?? 100;
 }
 
-function subtaskAllocOf(subtask: Subtask, rid: string): number {
-  return subtask.alloc?.[rid] ?? 100;
-}
-
-/** Sum of allocation % across assigned resources (fraction — 1.5 = 150%),
- * including subtasks' own assignments. */
+/** Sum of allocation % across the task's assigned resources (fraction —
+ * 1.5 = 150%). Subtask assignments are "who's responsible" markers only and
+ * deliberately contribute NO allocation — all effort/load comes from the
+ * task-level assignment. */
 export function allocSum(feature: AllocFeature): number {
-  let s = (feature.resources || []).reduce((a, rid) => a + allocOf(feature.alloc, rid) / 100, 0);
-  (feature.children ?? []).forEach((c) => {
-    (c.resources || []).forEach((rid) => {
-      s += subtaskAllocOf(c, rid) / 100;
-    });
-  });
-  return s;
+  return (feature.resources || []).reduce((a, rid) => a + allocOf(feature.alloc, rid) / 100, 0);
 }
 
 /** Graph Effort = Elapsed Time × work-per-day. Man-days. */

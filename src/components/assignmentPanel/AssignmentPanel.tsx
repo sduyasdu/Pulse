@@ -247,9 +247,14 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
                       const cellW = Math.max((p.end - p.start) * dayWidth - 2, 12);
                       const bg = a > 100 ? "#FDEBEC" : a >= 70 ? "#FFF6E2" : "#E6F7F4";
                       const fg = a > 100 ? "#9F1D23" : a >= 70 ? "#92400E" : "#0F6B5C";
+                      const label = `${a}%`;
+                      // Drop the number once the cell is too narrow on-screen to
+                      // render it legibly (it would just clip into a garbled
+                      // partial); the color stays as the at-a-glance signal.
+                      const showNum = cellW * viewZoom >= label.length * 6.5 + 6;
                       return (
                         <div key={i} title={`${a}% allocated in this ${density}`} style={{ position: "absolute", left: cellLeft + 1, top: 2, width: cellW, height: 16, background: bg, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                          <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: fg, transform: `scaleX(${1 / viewZoom})` }}>{a}%</span>
+                          {showNum && <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: fg, transform: `scaleX(${1 / viewZoom})` }}>{label}</span>}
                         </div>
                       );
                     })}

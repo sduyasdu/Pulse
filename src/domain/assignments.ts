@@ -6,7 +6,6 @@ import { allocOf, clamp } from "./graphEffort";
 
 export interface AssignmentRow {
   title: string;
-  effort: number;
   parent?: string;
   start: number;
   duration: number;
@@ -14,19 +13,15 @@ export interface AssignmentRow {
   pct: number;
 }
 
-/** Every assignment of a resource to a feature or subtask. Subtasks inherit
- * the parent's time span (spec §3 — "no independent schedule"). */
+/** Every TASK-level assignment of a resource. Subtask assignments are just
+ * "who's responsible" markers and don't count toward a resource's load, so
+ * they're excluded here (see allocSum). */
 export function assignmentsFor(features: Feature[], resourceId: string): AssignmentRow[] {
   const rows: AssignmentRow[] = [];
   features.forEach((f) => {
     if ((f.resources || []).includes(resourceId)) {
-      rows.push({ title: f.title, effort: f.work ?? f.effort ?? 1, start: f.x, duration: f.duration, status: f.status, pct: allocOf(f.alloc, resourceId) });
+      rows.push({ title: f.title, start: f.x, duration: f.duration, status: f.status, pct: allocOf(f.alloc, resourceId) });
     }
-    (f.children || []).forEach((c) => {
-      if ((c.resources || []).includes(resourceId)) {
-        rows.push({ title: c.title, effort: c.effort, parent: f.title, start: f.x, duration: f.duration, status: c.status, pct: allocOf(c.alloc, resourceId) });
-      }
-    });
   });
   return rows;
 }
