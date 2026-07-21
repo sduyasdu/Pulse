@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/space-grotesk/400.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
+/* Yasdu brand tokens — kept as plain CSS vars (matches the prototype's :root
+   block) AND registered in @theme so Tailwind utilities (bg-yasdu-*, etc.)
+   resolve to the same values. */
+:root {
+  --y-bg: #fdfcf8;
+  --y-fg: #1f2330;
+  --y-card: #ffffff;
+  --y-primary: #d85a28;
+  --y-primary-fg: #fdfdfd;
+  --y-secondary: #f4f2ec;
+  --y-muted: #6e7180;
+  --y-accent: #f7e8da;
+  --y-border: #e2dfd9;
+  --y-orange-soft: #f0a875;
+  --y-blue: #123359;
+  --y-ink: #000b1b;
+}
+
+@theme {
+  --color-yasdu-bg: var(--y-bg);
+  --color-yasdu-fg: var(--y-fg);
+  --color-yasdu-card: var(--y-card);
+  --color-yasdu-primary: var(--y-primary);
+  --color-yasdu-primary-fg: var(--y-primary-fg);
+  --color-yasdu-secondary: var(--y-secondary);
+  --color-yasdu-muted: var(--y-muted);
+  --color-yasdu-accent: var(--y-accent);
+  --color-yasdu-border: var(--y-border);
+  --color-yasdu-orange-soft: var(--y-orange-soft);
+  --color-yasdu-blue: var(--y-blue);
+  --color-yasdu-ink: var(--y-ink);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings:
+    "ss01",
+    "cv11";
+  background: var(--y-bg);
+  color: var(--y-fg);
+}
+
+/* Kept as a plain class (not just the `font-mono` Tailwind utility) so the
+   prototype's `className="mono ..."` usage ports over unchanged. */
+.mono {
+  font-family: var(--font-mono);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}

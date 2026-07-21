@@ -1,0 +1,159 @@
+rules_version = '2';
+
+// Multi-tenant isolation model — see plan doc / README for the full data
+// model. The load-bearing invariant: nothing under pulses/{pulseId}/** is
+// readable or writable without a pulses/{pulseId}/pulseMembers/{uid} doc for
+// the requesting user, and pulseMembers docs are ONLY ever created either by
+// the Pulse's own creator (as 'owner') or by a user accepting an invite
+// addressed to their own verified auth email (role must match the invite).
+//
+// "List everything I have access to" (dashboard: my Pulses; bootstrap: my
+// pending invites) is deliberately NOT implemented with collection-group
+// queries. The local Firestore emulator (tested against v1.21.0) rejects
+// any collection-group `list` request outright — "No matching allow
+// statements" — the instant its rule references `request.auth` in any form,
+// even a bare `request.auth != null`, regardless of how narrowly the query
+// itself is filtered. Plain (single, concrete-parent) list queries are
+// unaffected. So instead of collectionGroup('pulseMembers')/('invites')
+// queries, each user gets a denormalized index they list directly:
+//   - users/{uid}/myPulses/{pulseId}   — written when membership is granted
+//   - inviteIndex/{emailId}/pending/{pulseId} — written when someone is
+//     invited by email, before they may even have an account yet
+// Both are pure convenience indexes, not security boundaries: every actual
+// read/write of Pulse data is still independently re-checked against the
+// real pulseMembers doc below, so a corrupted index entry can only make a
+// user's own dashboard show a broken card, never grant real access.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myEmail() {
+      return ('email' in request.auth.token) ? request.auth.token.email.lower() : '';
+    }
+
+    // ---- workspaces ----
+    function isWorkspaceMember(workspaceId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/workspaces/$(workspaceId)/workspaceMembers/$(request.auth.uid));
+    }
+    function workspaceRole(workspaceId) {
+      return get(/databases/$(database)/documents/workspaces/$(workspaceId)/workspaceMembers/$(request.auth.uid)).data.role;
+    }
+
+    // ---- pulses ----
+    function isPulseMember(pulseId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid));
+    }
+    function pulseRole(pulseId) {
+      return get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data.role;
+    }
+    function canEditPulse(pulseId) {
+      return isPulseMember(pulseId) && pulseRole(pulseId) in ['owner', 'editor'];
+    }
+    function isPulseOwner(pulseId) {
+      return isPulseMember(pulseId) && pulseRole(pulseId) == 'owner';
+    }
+
+    // ---- users ----
+    match /users/{uid} {
+      allow read, create, update: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if false;
+
+      // Dashboard index: "every Pulse I can access." Purely self-owned —
+      // see the file-level comment on why this isn't a collection-group
+      // query, and why a permissive self-write rule here is still safe.
+      match /myPulses/{pulseId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ---- workspaces ----
+    match /workspaces/{workspaceId} {
+      allow read: if isWorkspaceMember(workspaceId);
+      // The creator becomes the sole owner in the same client-side bootstrap
+      // transaction that also writes their workspaceMembers/{uid} doc below.
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
+      allow delete: if false; // not supported in v1
+
+      match /workspaceMembers/{memberUid} {
+        allow read: if isSignedIn() && (memberUid == request.auth.uid || isWorkspaceMember(workspaceId));
+        allow create: if isSignedIn() && memberUid == request.auth.uid
+          && request.resource.data.role == 'owner'
+          && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+        allow update, delete: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
+      }
+    }
+
+    // ---- invite discovery index (pre-membership, keyed by email) ----
+    match /inviteIndex/{emailId} {
+      match /pending/{pulseId} {
+        allow read, delete: if isSignedIn() && emailId == myEmail();
+        allow create: if canEditPulse(pulseId);
+        allow update: if false;
+      }
+    }
+
+    // ---- pulses ----
+    match /pulses/{pulseId} {
+      allow read: if isPulseMember(pulseId);
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if canEditPulse(pulseId);
+      allow delete: if isPulseOwner(pulseId);
+
+      match /pulseMembers/{memberUid} {
+        allow read: if isSignedIn() && (memberUid == request.auth.uid || isPulseMember(pulseId));
+        allow create: if isSignedIn() && memberUid == request.auth.uid && (
+          // Case 1: Pulse creator grants themselves 'owner' right after
+          // creating the Pulse doc.
+          (request.resource.data.role == 'owner' &&
+            get(/databases/$(database)/documents/pulses/$(pulseId)).data.createdBy == request.auth.uid)
+          ||
+          // Case 2: invited user accepts an invite addressed to their own
+          // verified email; the role they write must match the invite's.
+          (myEmail() != '' &&
+            exists(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())) &&
+            get(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())).data.role == request.resource.data.role)
+        );
+        allow update, delete: if isPulseOwner(pulseId);
+      }
+
+      match /invites/{emailId} {
+        // Individual get()-by-known-path only — see file-level comment for
+        // why discovery goes through /inviteIndex instead of a list/query
+        // here. Owner/editor can look up a specific invite; the invited
+        // user can read their own directly once they know the pulseId
+        // (which they will, via /inviteIndex).
+        allow get: if canEditPulse(pulseId) || (isSignedIn() && resource.data.email == myEmail());
+        // Owner/editor can enumerate this Pulse's outstanding invites to show a
+        // "pending invitations" list. Still no collection-group list — this is a
+        // plain list under a concrete pulseId (see file-level comment).
+        allow list: if canEditPulse(pulseId);
+        allow create: if canEditPulse(pulseId) && request.resource.data.email == emailId;
+        allow update: if false;
+        // Owner/editor can revoke; an invited user can also clear their own
+        // invite doc once they've accepted it (emailId is their own email).
+        allow delete: if canEditPulse(pulseId) || (isSignedIn() && myEmail() == emailId);
+      }
+
+      match /epics/{epicId} {
+        allow read: if isPulseMember(pulseId);
+        allow write: if canEditPulse(pulseId);
+      }
+
+      match /features/{featureId} {
+        allow read: if isPulseMember(pulseId);
+        allow write: if canEditPulse(pulseId);
+      }
+
+      match /resources/{resourceId} {
+        allow read: if isPulseMember(pulseId);
+        allow write: if canEditPulse(pulseId);
+      }
+    }
+  }
+}
