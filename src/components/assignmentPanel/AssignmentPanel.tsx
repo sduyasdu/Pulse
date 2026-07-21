@@ -5,7 +5,7 @@ import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { STATUS_META, RES_LABEL_W, clamp, colorForName, type Density } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
-import type { Feature, FeatureStatus } from "@/types";
+import type { Feature } from "@/types";
 
 interface AssignmentPanelProps {
   offsetX: number;
@@ -34,12 +34,21 @@ function resourceIdsOn(feature: Feature): Set<string> {
 export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, setFilterResource, selectedFeature }: AssignmentPanelProps) {
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
+  const pulse = usePulseStore((s) => s.pulse);
 
-  const [assignFilterRes, setAssignFilterRes] = useState("all");
-  const [assignFilterStatus, setAssignFilterStatus] = useState<"all" | FeatureStatus>("all");
+  const [assignPeople, setAssignPeople] = useState<Set<string>>(new Set());
+  const [assignTypes, setAssignTypes] = useState<Set<string>>(new Set());
+  const [assignStatuses, setAssignStatuses] = useState<Set<string>>(new Set());
   const [assignHideIdle, setAssignHideIdle] = useState(false);
   const [assignCompact, setAssignCompact] = useState(false);
   const [assignAllocFilter, setAssignAllocFilter] = useState<AllocFilter>("all");
+
+  // Every type present, whether it's in the Pulse's configured list or set
+  // freeform on a resource.
+  const allTypes = useMemo(
+    () => Array.from(new Set([...(pulse?.resourceTypes ?? []), ...resources.map((r) => r.type).filter((t): t is string => !!t)])),
+    [pulse?.resourceTypes, resources],
+  );
 
   const xForDay = (day: number) => offsetX + day * dayWidth;
   const periods = useMemo(() => buildPeriods(density, startDay, endDay), [density, startDay, endDay]);
@@ -57,10 +66,11 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
   const rows = resources
     .filter((r) => !selectedResourceIds || selectedResourceIds.has(r.id))
     .filter((r) => !filterResource || r.id === filterResource)
-    .filter((r) => assignFilterRes === "all" || r.id === assignFilterRes)
+    .filter((r) => assignPeople.size === 0 || assignPeople.has(r.id))
+    .filter((r) => assignTypes.size === 0 || (r.type != null && assignTypes.has(r.type)))
     .map((r) => {
       let assignRows = assignmentsFor(features, r.id);
-      if (assignFilterStatus !== "all") assignRows = assignRows.filter((row) => row.status === assignFilterStatus);
+      if (assignStatuses.size > 0) assignRows = assignRows.filter((row) => assignStatuses.has(row.status));
       return { r, assignRows };
     })
     .filter(({ assignRows }) => !assignHideIdle || assignRows.length > 0)
@@ -86,18 +96,28 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
         </span>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="mono text-xs" style={{ color: "#78859A" }}>filter:</span>
-          <select value={assignFilterRes} onChange={(e) => setAssignFilterRes(e.target.value)} className="mono text-xs border rounded px-1.5 py-1" style={{ borderColor: "#E2DFD9", color: "#334155" }}>
-            <option value="all">all people</option>
-            {resources.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <select value={assignFilterStatus} onChange={(e) => setAssignFilterStatus(e.target.value as "all" | FeatureStatus)} className="mono text-xs border rounded px-1.5 py-1" style={{ borderColor: "#E2DFD9", color: "#334155" }}>
-            <option value="all">all statuses</option>
-            {Object.entries(STATUS_META).map(([k, m]) => (
-              <option key={k} value={k}>{m.label}</option>
-            ))}
-          </select>
+          <MultiSelectFilter
+            label="people"
+            searchable
+            options={resources.map((r) => ({ id: r.id, name: r.name }))}
+            selected={assignPeople}
+            onChange={setAssignPeople}
+          />
+          {allTypes.length > 0 && (
+            <MultiSelectFilter
+              label="types"
+              searchable
+              options={allTypes.map((t) => ({ id: t, name: t }))}
+              selected={assignTypes}
+              onChange={setAssignTypes}
+            />
+          )}
+          <MultiSelectFilter
+            label="statuses"
+            options={Object.entries(STATUS_META).map(([k, m]) => ({ id: k, name: m.label }))}
+            selected={assignStatuses}
+            onChange={setAssignStatuses}
+          />
           <button onClick={() => setAssignAllocFilter((v) => (v === "under" ? "all" : "under"))} title="Show only under-allocated (<70%)" className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignAllocFilter === "under" ? "#12A594" : "#E2DFD9", background: assignAllocFilter === "under" ? "#E6F7F4" : "#fff", color: assignAllocFilter === "under" ? "#0F6B5C" : "#64748B" }}>
             under
           </button>
@@ -110,11 +130,12 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           <button onClick={() => setAssignCompact((v) => !v)} title="Show only % per resource (hide task bars)" className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignCompact ? "#EE7240" : "#E2DFD9", background: assignCompact ? "#F7E8DA" : "#fff", color: assignCompact ? "#D85A28" : "#64748B" }}>
             {assignCompact ? "▣ compact" : "▤ compact"}
           </button>
-          {(assignFilterRes !== "all" || assignFilterStatus !== "all" || assignHideIdle) && (
+          {(assignPeople.size > 0 || assignTypes.size > 0 || assignStatuses.size > 0 || assignHideIdle) && (
             <button
               onClick={() => {
-                setAssignFilterRes("all");
-                setAssignFilterStatus("all");
+                setAssignPeople(new Set());
+                setAssignTypes(new Set());
+                setAssignStatuses(new Set());
                 setAssignHideIdle(false);
               }}
               className="mono text-xs px-2 py-1 rounded"
@@ -265,6 +286,71 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           );
         })}
       </div>
+    </div>
+  );
+}
+
+interface Option {
+  id: string;
+  name: string;
+}
+
+/** Compact multi-select dropdown for the panel's filters. Empty selection =
+ * no filter ("all"). Opens upward since the panel sits at the bottom. */
+function MultiSelectFilter({ label, options, selected, onChange, searchable }: { label: string; options: Option[]; selected: Set<string>; onChange: (next: Set<string>) => void; searchable?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const filtered = searchable && query ? options.filter((o) => o.name.toLowerCase().includes(query)) : options;
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  };
+
+  const summary =
+    selected.size === 0
+      ? `all ${label}`
+      : selected.size === 1
+        ? options.find((o) => selected.has(o.id))?.name ?? `1 ${label}`
+        : `${selected.size} ${label}`;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="mono text-xs border rounded px-1.5 py-1 flex items-center gap-1"
+        style={{ borderColor: selected.size ? "#EE7240" : "#E2DFD9", background: selected.size ? "#FFF7F1" : "#FFFFFF", color: "#334155", maxWidth: 150 }}
+      >
+        <span className="truncate">{summary}</span>
+        <span style={{ fontSize: 8, color: "#94A3B8" }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 40 }} onClick={() => { setOpen(false); setQ(""); }} />
+          <div className="absolute rounded border" style={{ bottom: "calc(100% + 4px)", left: 0, zIndex: 50, width: 200, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.18)" }}>
+            {searchable && (
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="text-xs w-full px-2 py-1.5 border-b" style={{ borderColor: "#F1F5F9", outline: "none" }} />
+            )}
+            {selected.size > 0 && (
+              <button onClick={() => onChange(new Set())} className="mono text-xs w-full text-left px-2 py-1 border-b" style={{ color: "#9F1D23", borderColor: "#F1F5F9" }}>
+                ✕ clear ({selected.size})
+              </button>
+            )}
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {filtered.length === 0 && <div className="mono text-xs px-2 py-1.5" style={{ color: "#94A3B8" }}>No matches</div>}
+              {filtered.map((o) => (
+                <button key={o.id} onClick={() => toggle(o.id)} className="text-xs w-full text-left px-2 py-1 flex items-center gap-2" style={{ background: selected.has(o.id) ? "#FFF7F1" : undefined }}>
+                  <input type="checkbox" readOnly checked={selected.has(o.id)} style={{ accentColor: "#EE7240", pointerEvents: "none", flexShrink: 0 }} />
+                  <span className="truncate" style={{ color: "#334155" }}>{o.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
