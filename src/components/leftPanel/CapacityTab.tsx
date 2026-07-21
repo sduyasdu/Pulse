@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { usePulseStore } from "@/stores/pulseStore";
-import { resourcePeakPct, utilizationPct } from "@/domain/assignments";
+import { allocInRange, resourcePeakPct, utilizationPct } from "@/domain/assignments";
+import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 
 interface CapacityTabProps {
   canEdit: boolean;
 }
+
+// Persisted (across reloads) collapse state for the overview + types boxes.
+// Absent key = collapsed, so it starts closed the first time.
+const OVERVIEW_KEY = "pulse.capacity.overviewOpen";
 
 function ResourceNameInput({ name, disabled, onCommit }: { name: string; disabled: boolean; onCommit: (name: string) => void }) {
   const [local, onChange] = useDebouncedText(name, onCommit);
@@ -33,8 +39,39 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
   const patchResource = usePulseStore((s) => s.patchResource);
   const setResourceTypes = usePulseStore((s) => s.setResourceTypes);
 
+  const [query, setQuery] = useState("");
+  const [showOverview, setShowOverview] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(OVERVIEW_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleOverview = () =>
+    setShowOverview((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(OVERVIEW_KEY, next ? "1" : "0");
+      } catch {
+        // storage unavailable (private mode) — state just won't persist
+      }
+      return next;
+    });
+
   const resourceTypes = pulse?.resourceTypes ?? [];
   const overLimit = resources.filter((r) => utilizationPct(features, r) > 100).length;
+
+  const q = query.trim().toLowerCase();
+  const filtered = resources.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q));
+
+  // Three forward 4-week windows from today for the per-resource load
+  // indicators (avg allocation over the window ÷ the person's capacity).
+  const today = todayIndex();
+  const LOAD_WINDOWS = [
+    { label: "1–4w", lo: today, hi: today + 28 },
+    { label: "5–8w", lo: today + 28, hi: today + 56 },
+    { label: "9–12w", lo: today + 56, hi: today + 84 },
+  ];
 
   const addType = () => {
     const n = window.prompt("New resource type:");
@@ -54,13 +91,28 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
 
   return (
     <div className="p-4 flex flex-col gap-4">
-      <div className="rounded px-3 py-2.5" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
-        <div className="flex justify-between mb-1">
-          <span className="mono text-xs" style={{ color: "#64748B" }}>TEAM — PEAK vs LIMIT</span>
-          <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{overLimit} over limit</span>
-        </div>
-        <div className="mono text-xs" style={{ color: "#78859A" }}>each bar = busiest-day load ÷ occupation limit</div>
-      </div>
+      <button
+        onClick={toggleOverview}
+        className="flex items-center justify-between rounded px-3 py-2"
+        style={{ border: "1px solid #E2DFD9", background: "#F8FAFC" }}
+        title={showOverview ? "Hide overview & resource types" : "Show overview & resource types"}
+      >
+        <span className="mono text-xs" style={{ color: "#64748B" }}>OVERVIEW &amp; RESOURCE TYPES</span>
+        <span className="flex items-center gap-2">
+          {overLimit > 0 && <span className="mono text-xs font-semibold" style={{ color: "#E5484D" }}>{overLimit} over limit</span>}
+          <span style={{ fontSize: 12, color: "#64748B" }}>{showOverview ? "▾" : "▸"}</span>
+        </span>
+      </button>
+
+      {showOverview && (
+        <>
+          <div className="rounded px-3 py-2.5" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
+            <div className="flex justify-between mb-1">
+              <span className="mono text-xs" style={{ color: "#64748B" }}>TEAM — PEAK vs LIMIT</span>
+              <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{overLimit} over limit</span>
+            </div>
+            <div className="mono text-xs" style={{ color: "#78859A" }}>per-person bars = avg load in weeks 1–4 · 5–8 · 9–12 ÷ occupation limit</div>
+          </div>
 
       <div className="rounded px-3 py-2.5" style={{ border: "1px solid #E2DFD9" }}>
         <div className="flex items-center justify-between">
@@ -84,11 +136,34 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
           {resourceTypes.length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>no types yet</span>}
         </div>
       </div>
+        </>
+      )}
 
-      {resources.map((r) => {
+      <div className="flex items-center gap-1.5 rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9", background: "#FDFCF8" }}>
+        <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by name or type…"
+          className="bg-transparent text-xs flex-1"
+          style={{ color: "#1F2330", outline: "none", minWidth: 0 }}
+        />
+        <span className="mono text-xs" style={{ color: "#94A3B8" }}>{filtered.length}</span>
+        {query && (
+          <button onClick={() => setQuery("")}>
+            <span style={{ fontSize: 11, color: "#64748B" }}>✕</span>
+          </button>
+        )}
+      </div>
+
+      {filtered.length === 0 && resources.length > 0 && (
+        <p className="mono text-xs text-center py-2" style={{ color: "#94A3B8" }}>No people match “{query}”.</p>
+      )}
+
+      {filtered.map((r) => {
         const pct = utilizationPct(features, r);
         const peak = resourcePeakPct(features, r.id);
-        const barColor = pct >= 100 ? "#E5484D" : pct >= 70 ? "#F5A524" : "#12A594";
+        const loadPct = (lo: number, hi: number) => clamp(Math.round((allocInRange(features, r.id, lo, hi) / (r.capacity || 100)) * 100), 0, 999);
         const rows = features.filter((f) => (f.resources || []).includes(r.id) || (f.children || []).some((c) => (c.resources || []).includes(r.id)));
         return (
           <div key={r.id} className="rounded px-3 py-3" style={{ border: "1px solid #E2DFD9" }}>
@@ -102,8 +177,22 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
               </div>
               {rows.length === 0 && <span className="mono text-xs px-1.5 py-0.5 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>idle</span>}
             </div>
-            <div className="mt-2" style={{ height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${clamp(pct, 0, 100)}%`, background: barColor }} />
+            <div className="mt-2 flex gap-1.5">
+              {LOAD_WINDOWS.map((w) => {
+                const load = loadPct(w.lo, w.hi);
+                const color = load >= 100 ? "#E5484D" : load >= 70 ? "#F5A524" : "#12A594";
+                return (
+                  <div key={w.label} className="flex-1" title={`${w.label}: ${load}% load`}>
+                    <div className="flex items-center justify-between">
+                      <span className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>{w.label}</span>
+                      <span className="mono" style={{ fontSize: 8, fontWeight: 700, color }}>{load}%</span>
+                    </div>
+                    <div style={{ height: 5, background: "#F1F5F9", borderRadius: 2, overflow: "hidden", marginTop: 2 }}>
+                      <div style={{ height: "100%", width: `${clamp(load, 0, 100)}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex items-center gap-2 mt-2">
               <div className="flex-1">

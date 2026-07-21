@@ -20,11 +20,12 @@ interface DetailsTabProps {
   feature: Feature;
   canEdit: boolean;
   onClose: () => void;
+  onDuplicate: () => void;
 }
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-export function DetailsTab({ feature, canEdit, onClose }: DetailsTabProps) {
+export function DetailsTab({ feature, canEdit, onClose, onDuplicate }: DetailsTabProps) {
   const epics = usePulseStore((s) => s.epics);
   const resources = usePulseStore((s) => s.resources);
   const pulse = usePulseStore((s) => s.pulse);
@@ -66,7 +67,31 @@ export function DetailsTab({ feature, canEdit, onClose }: DetailsTabProps) {
     <div className="p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>TASK DETAILS</span>
-        <button onClick={onClose}><span style={{ color: "#64748B", fontSize: 15 }}>✕</span></button>
+        {canEdit && (
+          <div className="flex items-center gap-1.5">
+            <button
+              title="Duplicate task"
+              onClick={onDuplicate}
+              className="rounded"
+              style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
+            >
+              <span style={{ fontSize: 12, color: "#64748B" }}>⧉</span>
+            </button>
+            <button
+              title="Delete task"
+              onClick={() => {
+                if (window.confirm(`Delete task "${feature.title}"? You can undo this (⌘Z).`)) {
+                  void removeFeature(feature.id);
+                  onClose();
+                }
+              }}
+              className="rounded"
+              style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
+            >
+              <span style={{ fontSize: 11, color: "#9F1D23" }}>🗑</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <input
@@ -451,20 +476,6 @@ export function DetailsTab({ feature, canEdit, onClose }: DetailsTabProps) {
         onDelete={(aid) => void removeAttachment(feature.id, aid)}
       />
 
-      {canEdit && (
-        <button
-          onClick={() => {
-            if (window.confirm(`Delete task "${feature.title}"? This can't be undone.`)) {
-              void removeFeature(feature.id);
-              onClose();
-            }
-          }}
-          className="mt-1 flex items-center justify-center gap-1.5 w-full py-2 rounded text-xs font-semibold"
-          style={{ background: "#FDEBEC", color: "#9F1D23", border: "1px solid #F5C2C5" }}
-        >
-          🗑 Delete task
-        </button>
-      )}
     </div>
   );
 }

@@ -37,6 +37,7 @@ export function PulsePage() {
   const setGraphConfig = usePulseStore((s) => s.setGraphConfig);
   const patchEpic = usePulseStore((s) => s.patchEpic);
   const patchFeature = usePulseStore((s) => s.patchFeature);
+  const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
 
   const undo = useUndoStore((s) => s.undo);
   const redo = useUndoStore((s) => s.redo);
@@ -267,7 +268,15 @@ export function PulsePage() {
               ) : !selectedFeature ? (
                 <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>Select a box on the canvas to see and edit its details here.</div>
               ) : (
-                <DetailsTab feature={selectedFeature} canEdit={canEdit} onClose={() => handleSelect(null)} />
+                <DetailsTab
+                  feature={selectedFeature}
+                  canEdit={canEdit}
+                  onClose={() => handleSelect(null)}
+                  onDuplicate={async () => {
+                    const newId = await duplicateFeature(selectedFeature.id);
+                    if (newId) handleSelect(newId);
+                  }}
+                />
               )}
             </div>
           </div>

@@ -46,11 +46,13 @@ interface PulseStoreState {
   addFeature: (patch: Partial<Feature> & Pick<Feature, "x" | "y">) => Promise<string>;
   patchFeature: (featureId: string, patch: Partial<Feature>, opts?: MutateOpts) => Promise<void>;
   removeFeature: (featureId: string) => Promise<void>;
+  duplicateFeature: (featureId: string) => Promise<string | null>;
   moveFeatureToEpic: (featureId: string, epicId: string | null) => Promise<void>;
 
   addResource: (name: string, type: string | null) => Promise<Resource>;
   patchResource: (resourceId: string, patch: Partial<Resource>) => Promise<void>;
   removeResource: (resourceId: string) => Promise<void>;
+  duplicateResource: (resourceId: string) => Promise<Resource | null>;
 
   assignResource: (featureId: string, resourceId: string) => Promise<void>;
   unassignResource: (featureId: string, resourceId: string) => Promise<void>;
@@ -212,6 +214,22 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (feature) recordSingle("Delete task", pulseId, deleteOp("feature", featureId, asDoc(feature)));
   },
 
+  duplicateFeature: async (featureId) => {
+    const { pulseId, features } = get();
+    if (!pulseId) return null;
+    const src = features.find((f) => f.id === featureId);
+    if (!src) return null;
+    const id = newFeatureId(pulseId);
+    // Copy everything (dates, effort, assignees, subtasks, attachments, epic,
+    // plan baseline) but nudge it down so it doesn't sit exactly on top of the
+    // original. Subtask/attachment ids stay — they only need to be unique
+    // within their own feature doc.
+    const dup: Feature = { ...src, id, title: `${src.title} (copy)`, y: src.y + 36 };
+    await createFeature(pulseId, dup);
+    recordSingle("Duplicate task", pulseId, createOp("feature", id, asDoc(dup)));
+    return id;
+  },
+
   moveFeatureToEpic: async (featureId, epicId) => {
     const { pulseId, features, epics } = get();
     if (!pulseId) return;
@@ -285,6 +303,21 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     );
     await deleteResource(pulseId, resourceId);
     recordMany("Delete resource", pulseId, ops);
+  },
+
+  duplicateResource: async (resourceId) => {
+    const { pulseId, resources } = get();
+    if (!pulseId) return null;
+    const src = resources.find((r) => r.id === resourceId);
+    if (!src) return null;
+    const id = newResourceId(pulseId);
+    const name = `${src.name} (copy)`;
+    // Copy name/type/capacity, mint fresh de-duplicated initials, and a new id.
+    // linkedUid is deliberately NOT copied — an account link is 1:1.
+    const resource: Resource = { id, initials: makeInitials(name, resources), name, capacity: src.capacity, type: src.type };
+    await createResource(pulseId, resource);
+    recordSingle("Duplicate resource", pulseId, createOp("resource", id, asDoc(resource)));
+    return resource;
   },
 
   assignResource: async (featureId, resourceId) => {

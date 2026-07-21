@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { usePulseStore } from "@/stores/pulseStore";
-import { utilizationPct } from "@/domain/assignments";
+import { allocInRange } from "@/domain/assignments";
+import { todayIndex } from "@/domain/dateUtils";
 import { clamp, colorForName } from "@/domain/constants";
 
 interface TeamTabProps {
@@ -15,12 +16,22 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   const members = usePulseStore((s) => s.members);
   const addResource = usePulseStore((s) => s.addResource);
   const removeResource = usePulseStore((s) => s.removeResource);
+  const duplicateResource = usePulseStore((s) => s.duplicateResource);
   const patchResource = usePulseStore((s) => s.patchResource);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
 
   const q = query.trim().toLowerCase();
   const filtered = resources.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q));
+
+  // Three forward 4-week windows from today, for the per-resource load
+  // indicators (avg allocation over the window ÷ the person's capacity).
+  const today = todayIndex();
+  const LOAD_WINDOWS = [
+    { label: "1–4w", lo: today, hi: today + 28 },
+    { label: "5–8w", lo: today + 28, hi: today + 56 },
+    { label: "9–12w", lo: today + 56, hi: today + 84 },
+  ];
 
   return (
     <div className="p-3 flex flex-col gap-2">
@@ -74,9 +85,8 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
         </button>
       )}
       {filtered.map((r) => {
-        const pct = utilizationPct(features, r);
-        const barColor = pct >= 100 ? "#E5484D" : pct >= 70 ? "#F5A524" : "#12A594";
         const active = filterResource === r.id;
+        const loadPct = (lo: number, hi: number) => clamp(Math.round((allocInRange(features, r.id, lo, hi) / (r.capacity || 100)) * 100), 0, 999);
         return (
           <div
             key={r.id}
@@ -115,6 +125,20 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               {active && <span className="mono text-xs" style={{ color: "#EE7240" }}>●</span>}
               {canEdit && (
                 <button
+                  title="Duplicate this resource"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void duplicateResource(r.id);
+                  }}
+                  className="flex-shrink-0 rounded"
+                  style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
+                >
+                  <span style={{ fontSize: 11, color: "#64748B" }}>⧉</span>
+                </button>
+              )}
+              {canEdit && (
+                <button
                   title="Remove this resource"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -122,14 +146,28 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                     if (window.confirm(`Remove ${r.name}? They'll be unassigned from all tasks.`)) void removeResource(r.id);
                   }}
                   className="flex-shrink-0 rounded"
-                  style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
+                  style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
                 >
-                  <span style={{ fontSize: 10, color: "#64748B" }}>✕</span>
+                  <span style={{ fontSize: 10, color: "#9F1D23" }}>🗑</span>
                 </button>
               )}
             </div>
-            <div className="mt-1.5" style={{ height: 4, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${clamp(pct, 0, 100)}%`, background: barColor }} />
+            <div className="mt-2 flex gap-1.5">
+              {LOAD_WINDOWS.map((w) => {
+                const load = loadPct(w.lo, w.hi);
+                const color = load >= 100 ? "#E5484D" : load >= 70 ? "#F5A524" : "#12A594";
+                return (
+                  <div key={w.label} className="flex-1" title={`${w.label}: ${load}% load`}>
+                    <div className="flex items-center justify-between">
+                      <span className="mono" style={{ fontSize: 8, color: "#94A3B8" }}>{w.label}</span>
+                      <span className="mono" style={{ fontSize: 8, fontWeight: 700, color }}>{load}%</span>
+                    </div>
+                    <div style={{ height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden", marginTop: 2 }}>
+                      <div style={{ height: "100%", width: `${clamp(load, 0, 100)}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {canEdit && members.length > 0 && (
               <select
