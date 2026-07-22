@@ -573,7 +573,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const q = featureQuery.trim().toLowerCase();
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "#FDFCF8" }}>
+    <div className="flex flex-1 flex-col overflow-hidden no-select" style={{ background: "#FDFCF8" }}>
       {/* Ruler */}
       <div className="flex flex-shrink-0" style={{ height: 46, background: "#FFFFFF", borderBottom: "1px solid #E2DFD9" }}>
         <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>

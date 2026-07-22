@@ -129,7 +129,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
   };
 
   return (
-    <div style={{ height: "100%", background: "#FFFFFF", display: "flex", flexDirection: "column" }}>
+    <div className="no-select" style={{ height: "100%", background: "#FFFFFF", display: "flex", flexDirection: "column" }}>
       <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0 flex-wrap gap-2" style={{ borderColor: "#EEF1F4" }}>
         <div className="flex items-center gap-2">
           {onCollapse && (

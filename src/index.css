@@ -106,3 +106,17 @@ button:disabled {
 .no-press:not(:disabled):active {
   transform: none;
 }
+
+/* Suppress the browser's long-press text-selection / iOS image callout on the
+   interactive canvas and resource panel (long-press is our select gesture).
+   Inputs/textareas stay selectable so editing still works. */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.no-select input,
+.no-select textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
