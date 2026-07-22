@@ -595,17 +595,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       setOffsetX(marginX / z - minDay * dayWidth);
       if (cont) cont.scrollTop = 0;
     },
-    // Zoom in/out by a step. Anchor at the leftmost task's current on-screen
-    // position (or the left margin if it's scrolled off), so the start of the
-    // roadmap — what you read first — stays put and the rest scales to its
-    // right, instead of the whole thing sliding sideways.
+    // Zoom in/out by a step, anchored at the CENTRE of the visible viewport —
+    // whatever is in front of you stays fixed and the roadmap scales around it
+    // (the same "keep the point in place" the trackpad pinch does at the
+    // cursor, minus the cursor).
     zoomStep: (delta: number) => {
-      const bands = epicBands.filter((b) => b.minX != null);
-      const starts = [...displayFeatures.map((f) => f.x), ...bands.map((b) => b.minX as number)];
-      const minDay = starts.length ? Math.min(...starts) : todayIndex();
+      const anchor = (containerRef.current?.clientWidth ?? containerWidth) / 2;
       setViewZoom((zPrev) => {
         const next = clamp(Math.round((zPrev + delta) * 100) / 100, 0.2, 2);
-        const anchor = Math.max(TODAY_LEFT_MARGIN_PX, (offsetXRef.current + minDay * dayWidth) * zPrev);
         const worldX = anchor / zPrev - offsetXRef.current;
         setOffsetX(anchor / next - worldX);
         return next;
