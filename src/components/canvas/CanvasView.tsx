@@ -875,6 +875,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       {box.labelColor && <span style={{ width: 10, height: 10, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
                       <span className="text-xs font-semibold truncate" title={box.title} style={{ color: "#1F2330" }}>{box.title}</span>
                     </div>
+                    {box.plannedX != null && <span className="flex-shrink-0" title="Baseline plan set" style={{ fontSize: 10 }}>📌</span>}
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}>📎{box.attachments!.length}</span>}
                     {box.ai && <span style={{ fontSize: 12, color: "#8B5CF6" }} className="flex-shrink-0">✨</span>}
                     {box.status === "done" && <span className="flex-shrink-0" title="Done — locked. Change its status to edit." style={{ fontSize: 11 }}>🔒</span>}

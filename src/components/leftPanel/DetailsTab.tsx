@@ -324,15 +324,19 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             <label className="flex items-center gap-1 mono text-xs cursor-pointer" style={{ color: feature.useWeekends ? "#D85A28" : "#94A3B8" }} title="Count weekends as working days (urgent)">
               <input type="checkbox" disabled={!canEdit} checked={!!feature.useWeekends} onChange={(e) => void patchFeature(feature.id, { useWeekends: e.target.checked })} /> weekends
             </label>
-            {canEdit && (
+            {canEdit ? (
               <button
                 onClick={() => void patchFeature(feature.id, { plannedX: feature.x, plannedDuration: feature.duration })}
-                title="Freeze the current dates as the plan (won't move when you drag)"
+                title={feature.plannedX != null ? "Baseline set — click to re-freeze the plan to the current dates" : "Freeze the current dates as the plan (won't move when you drag)"}
                 className="mono text-xs px-2 py-0.5 rounded"
-                style={{ background: "#EEF2FF", color: "#4338CA" }}
+                style={feature.plannedX != null ? { background: "#4338CA", color: "#FFFFFF" } : { background: "#EEF2FF", color: "#4338CA" }}
               >
-                📌 set plan
+                📌 {feature.plannedX != null ? "baseline set" : "set plan"}
               </button>
+            ) : (
+              feature.plannedX != null && (
+                <span className="mono text-xs px-2 py-0.5 rounded" title="A baseline plan has been set for this task" style={{ background: "#4338CA", color: "#FFFFFF" }}>📌 baseline set</span>
+              )
             )}
           </div>
         </div>
