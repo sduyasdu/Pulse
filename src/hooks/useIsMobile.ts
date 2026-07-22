@@ -21,3 +21,18 @@ export function useIsMobile(): boolean {
   }, []);
   return isMobile;
 }
+
+/** True on touch devices (iPad, phones) — used to make touch targets bigger. */
+export function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(pointer: coarse)").matches : false,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(pointer: coarse)");
+    const onChange = () => setCoarse(mql.matches);
+    mql.addEventListener("change", onChange);
+    setCoarse(mql.matches);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return coarse;
+}

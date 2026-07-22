@@ -5,7 +5,7 @@ import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { removeMyPulseEntry } from "@/services/firestore/pulses";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, type Density } from "@/domain/constants";
@@ -41,6 +41,22 @@ export function PulsePage() {
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const isMobile = useIsMobile();
+  const coarsePointer = useCoarsePointer();
+
+  // Pin the app to the actual visible height (px) rather than 100vh/100dvh,
+  // which on iPad Safari can mismatch as the address bar shifts and leave a
+  // white gap below the layout. Updated on real viewport resizes.
+  const [viewportH, setViewportH] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 0));
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    onResize();
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
+  }, []);
 
   const undo = useUndoStore((s) => s.undo);
   const redo = useUndoStore((s) => s.redo);
@@ -222,7 +238,7 @@ export function PulsePage() {
   }
 
   return (
-    <div className="w-full flex flex-col" style={{ background: "#0A1428", height: "100dvh" }}>
+    <div className="w-full flex flex-col" style={{ background: "#0A1428", height: viewportH ? `${viewportH}px` : "100dvh" }}>
       <Toolbar
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
@@ -341,9 +357,9 @@ export function PulsePage() {
               window.addEventListener("pointerup", up);
             }}
             title="Drag to resize the resource panel"
-            style={{ height: 18, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none" }}
+            style={{ height: coarsePointer ? 20 : 10, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none" }}
           >
-            <div style={{ width: 56, height: 4, borderRadius: 2, background: "#B4BECC" }} />
+            <div style={{ width: coarsePointer ? 56 : 44, height: coarsePointer ? 4 : 3, borderRadius: 2, background: "#B4BECC" }} />
           </div>
         ) : (
           <button
