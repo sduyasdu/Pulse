@@ -473,7 +473,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       if (resolved) return;
       resolved = true;
       remove();
-      onSelect(box.id); // long-press -> select
+      onSelect(selectedId === box.id ? null : box.id); // long-press -> toggle select
     }, 500);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
