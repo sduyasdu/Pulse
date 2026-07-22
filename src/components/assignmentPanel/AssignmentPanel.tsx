@@ -5,7 +5,7 @@ import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { STATUS_META, RES_LABEL_W, clamp, colorForName, type Density } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
-import type { Feature } from "@/types";
+import type { Feature, Resource } from "@/types";
 
 interface AssignmentPanelProps {
   offsetX: number;
@@ -19,6 +19,10 @@ interface AssignmentPanelProps {
   setFilterResource: (id: string | null) => void;
   selectedFeature: Feature | null;
   onCollapse?: () => void;
+  /** Width of the resource-label column. Tracks the sidebar so this panel's
+   * timeline shares the canvas's left origin and the two calendars stay
+   * aligned when the sidebar is collapsed. */
+  labelWidth?: number;
 }
 
 type AllocFilter = "all" | "under" | "over";
@@ -32,7 +36,7 @@ function resourceIdsOn(feature: Feature): Set<string> {
   return ids;
 }
 
-export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, setFilterResource, selectedFeature, onCollapse }: AssignmentPanelProps) {
+export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, setFilterResource, selectedFeature, onCollapse, labelWidth = RES_LABEL_W }: AssignmentPanelProps) {
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const pulse = usePulseStore((s) => s.pulse);
@@ -43,6 +47,9 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
   const [assignHideIdle, setAssignHideIdle] = useState(false);
   const [assignCompact, setAssignCompact] = useState(false);
   const [assignAllocFilter, setAssignAllocFilter] = useState<AllocFilter>("all");
+  // Rich hover card for the resource avatar — surfaced when the label column
+  // is collapsed (names clipped) so you can still identify who a badge is.
+  const [resCard, setResCard] = useState<{ x: number; y: number; r: Resource } | null>(null);
 
   // Every type present, whether it's in the Pulse's configured list or set
   // freeform on a resource.
@@ -157,7 +164,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
 
       {/* mini ruler */}
       <div className="flex flex-shrink-0" style={{ borderBottom: "1px solid #F1F5F9" }}>
-        <div style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9" }} />
+        <div style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9" }} />
         <div style={{ position: "relative", height: 22, flex: 1, overflow: "hidden" }}>
           <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
             {weekends.map((d) => (
@@ -199,10 +206,15 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
               <div
                 onClick={() => setFilterResource(filterResource === r.id ? null : r.id)}
                 title="Click to filter the canvas by this resource"
-                className={`flex gap-2 px-3 py-2 cursor-pointer ${assignCompact ? "items-center" : "items-start"}`}
-                style={{ width: RES_LABEL_W, flexShrink: 0, borderRight: "1px solid #F1F5F9", background: filterResource === r.id ? "#FFF7F1" : undefined }}
+                className={`flex gap-2 py-2 cursor-pointer ${assignCompact ? "items-center" : "items-start"}`}
+                style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", background: filterResource === r.id ? "#FFF7F1" : undefined, overflow: "hidden", paddingLeft: labelWidth < 100 ? 4 : 12, paddingRight: labelWidth < 100 ? 4 : 12 }}
               >
-                <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <span
+                  className="mono"
+                  onPointerEnter={(e) => { if (labelWidth < 100) setResCard({ x: e.clientX, y: e.clientY, r }); }}
+                  onPointerLeave={() => setResCard((c) => (c && c.r.id === r.id ? null : c))}
+                  style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
                   {r.initials}
                 </span>
                 <div className="flex-1 overflow-hidden">
@@ -294,6 +306,45 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           );
         })}
       </div>
+
+      {resCard && (() => {
+        const r = resCard.r;
+        const util = utilizationPct(features, r);
+        const today = todayIndex();
+        const windows = [
+          { label: "1–4w", lo: today, hi: today + 28 },
+          { label: "5–8w", lo: today + 28, hi: today + 56 },
+          { label: "9–12w", lo: today + 56, hi: today + 84 },
+        ];
+        const left = Math.min(resCard.x + 12, window.innerWidth - 212);
+        return (
+          <div className="fixed pointer-events-none rounded-lg" style={{ left: Math.max(8, left), top: resCard.y - 12, transform: "translateY(-100%)", width: 200, background: "#123359", border: "1px solid #EE7240", padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 100 }}>
+            <div className="flex items-center gap-1.5">
+              <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+              <span className="text-xs font-semibold truncate" style={{ color: "#F7F6F2" }}>{r.name}</span>
+            </div>
+            {r.type && <div className="mono" style={{ fontSize: 9, color: "#EE7240", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>{r.type}</div>}
+            <div className="mono" style={{ fontSize: 10, color: "#F0A875", marginTop: 5 }}>limit {r.capacity}% · {util}% used</div>
+            <div className="flex gap-1.5" style={{ marginTop: 6 }}>
+              {windows.map((w) => {
+                const load = clamp(Math.round((allocInRange(features, r.id, w.lo, w.hi) / (r.capacity || 100)) * 100), 0, 999);
+                const color = load > 100 ? "#E5484D" : load >= 50 ? "#12A594" : "#F5A524";
+                return (
+                  <div key={w.label} className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="mono" style={{ fontSize: 8, color: "#9FB3C8" }}>{w.label}</span>
+                      <span className="mono" style={{ fontSize: 8, fontWeight: 700, color }}>{load}%</span>
+                    </div>
+                    <div style={{ height: 3, background: "rgba(255,255,255,0.14)", borderRadius: 2, overflow: "hidden", marginTop: 2 }}>
+                      <div style={{ height: "100%", width: `${clamp(load, 0, 100)}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

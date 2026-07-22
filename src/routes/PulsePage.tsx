@@ -222,6 +222,16 @@ export function PulsePage() {
     await canvasRef.current?.addEpicAtCenter();
   };
 
+  // Collapsing the sidebar frees ~290px on the left of the canvas. Shift the
+  // canvas content by that (screen) amount so it stays put on screen and the
+  // freed space "uncovers" the earlier part of the roadmap, rather than the
+  // whole canvas sliding left. Expanding does the reverse.
+  const toggleSidebar = () => {
+    const delta = (320 - 30) / viewZoom;
+    setOffsetX((x) => x + (sidebarOpen ? delta : -delta));
+    setSidebarOpen((o) => !o);
+  };
+
   if (!pulseId) return null;
 
   if (loading || myRole === null) {
@@ -275,14 +285,14 @@ export function PulsePage() {
         <div className="flex overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
           {!sidebarOpen && (
             <div style={{ width: 30, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 8 }}>
-              <button onClick={() => setSidebarOpen(true)} title="Show panel" className="no-press" style={{ color: "#64748B", display: "flex", alignItems: "center" }}>
+              <button onClick={toggleSidebar} title="Show panel" className="no-press" style={{ color: "#64748B", display: "flex", alignItems: "center" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
               </button>
             </div>
           )}
           <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: sidebarOpen ? "flex" : "none", flexDirection: "column", overflow: "hidden" }}>
             <div className="flex items-center border-b" style={{ borderColor: "#E2DFD9" }}>
-              <button onClick={() => setSidebarOpen(false)} title="Collapse panel to maximize the canvas" className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
+              <button onClick={toggleSidebar} title="Collapse panel to maximize the canvas" className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
               {(["details", "team", "capacity"] as RightTab[]).map((t) => (
@@ -406,6 +416,7 @@ export function PulsePage() {
             setFilterResource={setFilterResource}
             selectedFeature={selectedFeature}
             onCollapse={() => setAssignPanelOpen(false)}
+            labelWidth={sidebarOpen ? 320 : 30}
           />
         </div>
         )}
