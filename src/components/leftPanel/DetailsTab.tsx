@@ -15,6 +15,7 @@ import {
 import { dayIndexFromDateInputValue, fmtDate, toDateInputValue } from "@/domain/dateUtils";
 import { STATUS_META, LABEL_COLORS, colorForName } from "@/domain/constants";
 import { Attachments } from "@/components/shared/Attachments";
+import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 
 interface DetailsTabProps {
@@ -245,7 +246,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                     </div>
                     <div className="mt-1.5">
                       <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>notes:</span>
-                      <SubtaskNotesInput notes={c.notes || ""} disabled={!canEdit} onCommit={(v) => void patchSubtask(feature.id, c.id, { notes: v })} />
+                      <RichTextEditor value={c.notes || ""} disabled={!canEdit} placeholder="Add notes…" minHeight={44} onChange={(v) => void patchSubtask(feature.id, c.id, { notes: v })} />
                     </div>
                   </div>
                 )}
@@ -504,6 +505,11 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         <input type="checkbox" disabled={!canEdit} checked={!!feature.ai} onChange={(e) => void patchFeature(feature.id, { ai: e.target.checked })} /> AI-assisted estimate <span style={{ fontSize: 13, color: "#8B5CF6" }}>✨</span>
       </label>
 
+      <div>
+        <div className="mono mb-1" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Notes</div>
+        <RichTextEditor value={feature.notes || ""} disabled={!canEdit} placeholder="Add notes about this task…" minHeight={72} onChange={(v) => void patchFeature(feature.id, { notes: v })} />
+      </div>
+
       <Attachments
         canEdit={canEdit}
         items={feature.attachments}
@@ -596,17 +602,3 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
   );
 }
 
-function SubtaskNotesInput({ notes, disabled, onCommit }: { notes: string; disabled: boolean; onCommit: (v: string) => void }) {
-  const [local, onChange] = useDebouncedText(notes, onCommit);
-  return (
-    <textarea
-      value={local}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Add notes…"
-      rows={2}
-      className="text-xs w-full rounded px-2 py-1 mt-1"
-      style={{ border: "1px solid #E2DFD9", outline: "none", color: "#334155", resize: "vertical", background: disabled ? "#F8FAFC" : "#FFFFFF" }}
-    />
-  );
-}

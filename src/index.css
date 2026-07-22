@@ -120,3 +120,29 @@ button:disabled {
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* Rich-text notes fields. Tailwind's preflight strips list styling, so restore
+   it inside the editor, and show the placeholder while it's empty. */
+.rich-editor {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.rich-editor ul {
+  list-style: disc;
+  padding-left: 1.3em;
+  margin: 2px 0;
+}
+.rich-editor ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+  margin: 2px 0;
+}
+.rich-editor a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.rich-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}

@@ -146,7 +146,7 @@ export interface Subtask {
   status: FeatureStatus;
   resources: string[];
   alloc?: Record<string, number>;
-  notes?: string; // free-text detail annotation
+  notes?: string; // rich-text (HTML) detail annotation
   finishedAt?: string | null; // YYYY-MM-DD; auto-set when marked done, cleared when reopened, editable
 }
 
@@ -161,6 +161,7 @@ export interface Feature {
   status: FeatureStatus;
   resources: string[];
   alloc?: Record<string, number>; // resourceId -> % time (default 100)
+  notes?: string; // rich-text (HTML) detail annotation
   lead?: string | null; // resource id marked as team leader
   epicId?: string | null;
   labelColor?: string | null;
