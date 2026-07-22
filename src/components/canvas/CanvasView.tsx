@@ -108,6 +108,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(1000);
+  // Non-null while a two-finger pinch (Safari gesture) is in progress; also
+  // makes single-finger drag/pan bail so the pinch isn't misread as a drag.
+  const gestureRef = useRef<{ startZoom: number } | null>(null);
   const [dimHint, setDimHint] = useState<{ x: number; y: number; text: string } | null>(null);
   // Full-detail popover shown on hover for boxes too small to display
   // everything (thin/short tasks) — see the collapsed feature-box body.
@@ -226,6 +229,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const handlePanMove = useCallback((e: PointerEvent) => {
     const p = panRef.current;
     if (!p) return;
+    if (gestureRef.current) return; // pinch in progress — don't pan
     if (!p.active) {
       if (Math.abs(e.clientX - p.startX) + Math.abs(e.clientY - p.startY) < 4) return;
       p.active = true;
@@ -297,22 +301,51 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     [setViewZoom, setOffsetX],
   );
 
+  // Safari (iPad) pinch-zoom: gesturechange carries a cumulative `scale`
+  // relative to gesturestart. Zoom viewZoom around the pinch centre, matching
+  // the wheel zoom's keep-the-point-under-the-cursor math.
+  const handleGestureStart = useCallback((e: Event) => {
+    e.preventDefault();
+    gestureRef.current = { startZoom: latestViewRef.current.viewZoom };
+  }, []);
+  const handleGestureChange = useCallback(
+    (e: Event) => {
+      e.preventDefault();
+      const g = gestureRef.current;
+      const cont = containerRef.current;
+      if (!g || !cont) return;
+      const ge = e as unknown as { scale: number; clientX: number };
+      const rect = cont.getBoundingClientRect();
+      const mouseX = ge.clientX - rect.left + cont.scrollLeft;
+      const next = clamp(Math.round(g.startZoom * ge.scale * 100) / 100, 0.3, 2);
+      setViewZoom((zPrev) => {
+        const worldX = mouseX / zPrev - offsetXRef.current;
+        setOffsetX(mouseX / next - worldX);
+        return next;
+      });
+    },
+    [setViewZoom, setOffsetX],
+  );
+  const handleGestureEnd = useCallback((e: Event) => {
+    e.preventDefault();
+    gestureRef.current = null;
+  }, []);
+
   useEffect(() => {
     const cont = containerRef.current;
     if (!cont) return;
     const wheelOpt: AddEventListenerOptions = { passive: false };
     cont.addEventListener("wheel", handleWheel, wheelOpt);
-    const prevent = (ev: Event) => ev.preventDefault();
-    cont.addEventListener("gesturestart", prevent, wheelOpt);
-    cont.addEventListener("gesturechange", prevent, wheelOpt);
-    cont.addEventListener("gestureend", prevent, wheelOpt);
+    cont.addEventListener("gesturestart", handleGestureStart, wheelOpt);
+    cont.addEventListener("gesturechange", handleGestureChange, wheelOpt);
+    cont.addEventListener("gestureend", handleGestureEnd, wheelOpt);
     return () => {
       cont.removeEventListener("wheel", handleWheel, wheelOpt);
-      cont.removeEventListener("gesturestart", prevent, wheelOpt);
-      cont.removeEventListener("gesturechange", prevent, wheelOpt);
-      cont.removeEventListener("gestureend", prevent, wheelOpt);
+      cont.removeEventListener("gesturestart", handleGestureStart, wheelOpt);
+      cont.removeEventListener("gesturechange", handleGestureChange, wheelOpt);
+      cont.removeEventListener("gestureend", handleGestureEnd, wheelOpt);
     };
-  }, [handleWheel]);
+  }, [handleWheel, handleGestureStart, handleGestureChange, handleGestureEnd]);
 
   // ---- box drag/resize ----
   const dragRef = useRef<{ kind: DragKind; id: string; startX: number; startY: number; orig: Feature; dayWidth: number; viewZoom: number; lastWrite: number } | null>(null);
@@ -327,6 +360,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d) return;
+      if (gestureRef.current) return; // pinch in progress — don't move the box
       const vz = d.viewZoom || 1;
       const dx = (e.clientX - d.startX) / vz;
       const dy = (e.clientY - d.startY) / vz;
@@ -450,6 +484,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     };
     function onMove(ev: PointerEvent) {
       if (resolved) return;
+      if (gestureRef.current) { resolved = true; remove(); return; } // pinch — cancel tap/drag
       if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 8) return;
       resolved = true;
       remove();
