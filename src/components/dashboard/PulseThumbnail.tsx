@@ -1,8 +1,5 @@
-import { useEffect, useState } from "react";
 import type { Epic, Feature } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
-import { fetchFeatures } from "@/services/firestore/features";
-import { fetchEpics } from "@/services/firestore/epics";
 import { boxHeight } from "@/domain/graphEffort";
 import { epicBandsFor } from "@/domain/layout";
 import { STATUS_META, hexA } from "@/domain/constants";
@@ -17,37 +14,13 @@ const PAD = 2;
 const MIN_BOX = 1.2;
 
 interface PulseThumbnailProps {
-  pulseId: string;
+  features: Feature[];
+  epics: Epic[];
 }
 
-export function PulseThumbnail({ pulseId }: PulseThumbnailProps) {
-  const [data, setData] = useState<{ features: Feature[]; epics: Epic[] } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [features, epics] = await Promise.all([fetchFeatures(pulseId), fetchEpics(pulseId)]);
-        if (!cancelled) setData({ features, epics });
-      } catch {
-        // A card for a Pulse we can no longer read (deleted, membership
-        // revoked) shouldn't break the dashboard — the empty state below
-        // is a fine fallback, and DashboardPage self-heals the stale entry.
-        if (!cancelled) setData({ features: [], epics: [] });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pulseId]);
-
+export function PulseThumbnail({ features, epics }: PulseThumbnailProps) {
   const frame = { background: "#FDFCF8", border: "1px solid #EEF1F4", borderRadius: 6 };
 
-  if (!data) {
-    return <div style={{ ...frame, height: 56 }} />;
-  }
-
-  const { features, epics } = data;
   if (features.length === 0) {
     return (
       <div className="flex items-center justify-center" style={{ ...frame, height: 56 }}>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { MyPulseIndexEntry } from "@/types";
 import { PulseThumbnail } from "./PulseThumbnail";
+import { usePulseSummary } from "./usePulseSummary";
 
 const ROLE_LABEL: Record<MyPulseIndexEntry["role"], string> = {
   owner: "Owner",
@@ -22,6 +23,8 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
   const isOwner = entry.role === "owner";
   const archived = !!entry.archived;
   const [menuOpen, setMenuOpen] = useState(false);
+  const summary = usePulseSummary(entry.pulseId);
+  const subtaskCount = summary?.features.reduce((n, f) => n + (f.children?.length ?? 0), 0) ?? 0;
 
   const stop = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -74,7 +77,11 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
       </div>
 
       <Link to={`/p/${entry.pulseId}`} className="flex-1">
-        <PulseThumbnail pulseId={entry.pulseId} />
+        {summary ? (
+          <PulseThumbnail features={summary.features} epics={summary.epics} />
+        ) : (
+          <div style={{ height: 56, background: "#FDFCF8", border: "1px solid #EEF1F4", borderRadius: 6 }} />
+        )}
         <div className="font-display mt-2.5 text-sm font-medium text-yasdu-fg">{entry.name || "Untitled Pulse"}</div>
         <div className="mt-1.5 flex items-center gap-1.5">
           <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#F7E8DA", color: "#D85A28" }}>
@@ -86,6 +93,14 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
             </span>
           )}
         </div>
+        {summary && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <StatBadge n={summary.epics.length} label="epic" bg="#EAF0FA" color="#1B3A63" />
+            <StatBadge n={summary.features.length} label="task" bg="#FCEEE4" color="#C2410C" />
+            <StatBadge n={subtaskCount} label="subtask" bg="#F1F5F9" color="#475569" />
+            <StatBadge n={summary.resources.length} label="resource" bg="#E7F6F1" color="#0F766E" />
+          </div>
+        )}
       </Link>
       {canInvite && !archived && (
         <button
@@ -96,6 +111,14 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
         </button>
       )}
     </div>
+  );
+}
+
+function StatBadge({ n, label, bg, color }: { n: number; label: string; bg: string; color: string }) {
+  return (
+    <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px]" style={{ background: bg, color }}>
+      <span style={{ fontWeight: 700 }}>{n}</span> {label}{n === 1 ? "" : "s"}
+    </span>
   );
 }
 

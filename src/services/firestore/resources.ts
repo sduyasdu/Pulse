@@ -1,10 +1,17 @@
-import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Resource } from "@/types";
 import { stripUndefined } from "./patch";
 
 export function newResourceId(pulseId: string): string {
   return doc(collection(db, "pulses", pulseId, "resources")).id;
+}
+
+/** One-shot read — for the dashboard's card summary badges, where a live
+ * listener per card would be wasted (the cards aren't interactive). */
+export async function fetchResources(pulseId: string): Promise<Resource[]> {
+  const snap = await getDocs(collection(db, "pulses", pulseId, "resources"));
+  return snap.docs.map((d) => d.data() as Resource);
 }
 
 export function subscribeResources(pulseId: string, cb: (resources: Resource[]) => void): () => void {
