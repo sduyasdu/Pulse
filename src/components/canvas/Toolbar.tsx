@@ -5,6 +5,7 @@ import type { Density } from "@/domain/constants";
 import { DENSITY_HINT, clamp } from "@/domain/constants";
 import { dateForDay, todayIndex } from "@/domain/dateUtils";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
 
 interface ToolbarProps {
   pulseName: string;
@@ -24,10 +25,10 @@ interface ToolbarProps {
   canRedo: boolean;
   featureQuery: string;
   setFeatureQuery: (v: string) => void;
-  featureStatusFilter: string;
-  setFeatureStatusFilter: (v: string) => void;
-  epicFilter: string;
-  setEpicFilter: (v: string) => void;
+  featureStatusFilter: Set<string>;
+  setFeatureStatusFilter: (v: Set<string>) => void;
+  epicFilter: Set<string>;
+  setEpicFilter: (v: Set<string>) => void;
   epicOptions: { id: string; name: string }[];
   showDelays: boolean;
   setShowDelays: (v: boolean) => void;
@@ -204,31 +205,34 @@ export function Toolbar({
           </div>
         )}
 
-        <div className="flex items-center gap-1 rounded px-1.5 ml-1" style={{ background: "#1B3A63", border: "1px solid #24406B" }}>
-          <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
-          <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#E2E8F0", outline: "none", width: 90 }} />
-          <select value={featureStatusFilter} onChange={(e) => setFeatureStatusFilter(e.target.value)} className="bg-transparent text-xs py-1.5" style={{ color: "#EE7240", outline: "none" }}>
-            <option value="all" style={{ color: "#000" }}>all</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value} style={{ color: "#000" }}>{s.label}</option>
-            ))}
-          </select>
-          <select value={epicFilter} onChange={(e) => setEpicFilter(e.target.value)} title="Filter by epic" className="bg-transparent text-xs py-1.5" style={{ color: "#EE7240", outline: "none", maxWidth: 110 }}>
-            <option value="all" style={{ color: "#000" }}>all epics</option>
-            {epicOptions.map((e) => (
-              <option key={e.id} value={e.id} style={{ color: "#000" }}>{e.name || "Untitled epic"}</option>
-            ))}
-          </select>
-          {(featureQuery || featureStatusFilter !== "all" || epicFilter !== "all") && (
+        <div className="flex items-center gap-1.5 ml-1">
+          <div className="flex items-center gap-1 rounded px-1.5" style={{ background: "#1B3A63", border: "1px solid #24406B" }}>
+            <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
+            <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#E2E8F0", outline: "none", width: 90 }} />
+          </div>
+          <MultiSelectFilter
+            label="statuses"
+            options={STATUS_OPTIONS.map((s) => ({ id: s.value, name: s.label }))}
+            selected={featureStatusFilter}
+            onChange={setFeatureStatusFilter}
+          />
+          <MultiSelectFilter
+            label="epics"
+            searchable
+            options={epicOptions}
+            selected={epicFilter}
+            onChange={setEpicFilter}
+          />
+          {(featureQuery || featureStatusFilter.size > 0 || epicFilter.size > 0) && (
             <button
               onClick={() => {
                 setFeatureQuery("");
-                setFeatureStatusFilter("all");
-                setEpicFilter("all");
+                setFeatureStatusFilter(new Set());
+                setEpicFilter(new Set());
               }}
               title="Clear feature filter"
             >
-              <span style={{ fontSize: 11, color: "#64748B" }}>✕</span>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
             </button>
           )}
         </div>

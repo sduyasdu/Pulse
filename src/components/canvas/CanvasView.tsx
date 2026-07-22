@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { Epic, Feature, FeatureStatus, GraphConfig } from "@/types";
+import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor } from "@/domain/layout";
@@ -55,8 +55,8 @@ interface CanvasViewProps {
   onSelect: (id: string | null) => void;
   filterResource: string | null;
   featureQuery: string;
-  featureStatusFilter: "all" | FeatureStatus;
-  epicFilter: string;
+  featureStatusFilter: Set<string>;
+  epicFilter: Set<string>;
   canEdit: boolean;
   onTimelineBoundsChange?: (bounds: { startDay: number; endDay: number; dayWidth: number }) => void;
 }
@@ -164,14 +164,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // so typing a search term doesn't yank the view on every keystroke.
   useEffect(() => {
     const q = featureQuery.trim().toLowerCase();
-    if (!q && featureStatusFilter === "all" && epicFilter === "all") return;
+    if (!q && featureStatusFilter.size === 0 && epicFilter.size === 0) return;
     const handle = setTimeout(() => {
       const { startDay: sd, endDay: ed, dayWidth: dw, viewZoom: vz, features: fs, filterResource: fr } = latestViewRef.current;
       const matching = fs.filter((box) => {
         const matchesRes = !fr || (box.resources || []).includes(fr) || (box.children || []).some((c) => (c.resources || []).includes(fr));
         const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
-        const matchesStatus = featureStatusFilter === "all" || box.status === featureStatusFilter;
-        const matchesEpic = epicFilter === "all" || box.epicId === epicFilter;
+        const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
+        const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
         return matchesRes && matchesQuery && matchesStatus && matchesEpic;
       });
       if (matching.length === 0) return;
@@ -794,8 +794,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const dragOver = dragOverBoxId === box.id;
               const matchesRes = !filterResource || (box.resources || []).includes(filterResource) || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
               const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
-              const matchesStatus = featureStatusFilter === "all" || box.status === featureStatusFilter;
-              const matchesEpic = epicFilter === "all" || box.epicId === epicFilter;
+              const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
+              const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
               const matches = matchesRes && matchesQuery && matchesStatus && matchesEpic;
               const est = estimateEffort(box, graph);
               const assigned = assignedEffort(box);

@@ -10,7 +10,7 @@ import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
-import type { FeatureStatus, PulseRole } from "@/types";
+import type { PulseRole } from "@/types";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
@@ -137,8 +137,9 @@ export function PulsePage() {
   const [rightTab, setRightTab] = useState<RightTab>("team");
   const [filterResource, setFilterResource] = useState<string | null>(null);
   const [featureQuery, setFeatureQuery] = useState("");
-  const [featureStatusFilter, setFeatureStatusFilter] = useState<"all" | FeatureStatus>("all");
-  const [epicFilter, setEpicFilter] = useState<string>("all");
+  // Empty set = no filter ("all"). Multi-select, so a set of chosen values.
+  const [featureStatusFilter, setFeatureStatusFilter] = useState<Set<string>>(new Set());
+  const [epicFilter, setEpicFilter] = useState<Set<string>>(new Set());
   const [epicsShrunk, setEpicsShrunk] = useState(false);
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -150,11 +151,15 @@ export function PulsePage() {
   const canvasRef = useRef<CanvasViewHandle>(null);
   const preShrinkRef = useRef<{ epics: { id: string; y0: number; y1: number; manualY0?: number | null; manualY1?: number | null }[]; features: { id: string; y: number }[] } | null>(null);
 
-  // If the epic being filtered on gets deleted, fall back to showing all so
-  // the canvas doesn't silently dim everything.
+  // Drop any filtered epics that get deleted, so the canvas doesn't silently
+  // dim everything against a stale id.
   useEffect(() => {
-    if (epicFilter !== "all" && !epics.some((e) => e.id === epicFilter)) setEpicFilter("all");
-  }, [epics, epicFilter]);
+    setEpicFilter((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set([...prev].filter((id) => epics.some((e) => e.id === id)));
+      return valid.size === prev.size ? prev : valid;
+    });
+  }, [epics]);
 
   // Every time a Pulse is opened, land on today rather than wherever the
   // canvas's fixed epoch (2020-01-01) happens to put the default offset.
@@ -275,10 +280,10 @@ export function PulsePage() {
         featureQuery={featureQuery}
         setFeatureQuery={setFeatureQuery}
         featureStatusFilter={featureStatusFilter}
-        setFeatureStatusFilter={(v) => setFeatureStatusFilter(v as "all" | FeatureStatus)}
+        setFeatureStatusFilter={setFeatureStatusFilter}
         epicFilter={epicFilter}
         setEpicFilter={setEpicFilter}
-        epicOptions={epics.map((e) => ({ id: e.id, name: e.name }))}
+        epicOptions={epics.map((e) => ({ id: e.id, name: e.name || "Untitled epic" }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
         epicsShrunk={epicsShrunk}
