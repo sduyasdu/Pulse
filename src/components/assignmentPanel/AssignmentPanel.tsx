@@ -92,6 +92,42 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
       return true;
     });
 
+  // Touch gesture on a resource avatar: a quick tap shows the info card, a
+  // long-press selects (filters the canvas by) the resource. A move cancels
+  // (lets the panel scroll). Mouse keeps hover — see the badge handlers.
+  const startBadgeGesture = (r: Resource, e: React.PointerEvent) => {
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let resolved = false;
+    let timer = 0;
+    const remove = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      clearTimeout(timer);
+    };
+    function onMove(ev: PointerEvent) {
+      if (!resolved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 8) {
+        resolved = true;
+        remove();
+      }
+    }
+    function onUp() {
+      if (!resolved) {
+        resolved = true;
+        setResCard((c) => (c && c.r.id === r.id ? null : { x: startX, y: startY, r })); // tap -> card
+      }
+      remove();
+    }
+    timer = window.setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      remove();
+      setFilterResource(filterResource === r.id ? null : r.id); // long-press -> select
+    }, 500);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
     <div style={{ height: "100%", background: "#FFFFFF", display: "flex", flexDirection: "column" }}>
       <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0 flex-wrap gap-2" style={{ borderColor: "#EEF1F4" }}>
@@ -206,7 +242,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           return (
             <div key={r.id} className="flex items-stretch border-b" style={{ borderColor: "#F5F6F8" }}>
               <div
-                onClick={() => setFilterResource(filterResource === r.id ? null : r.id)}
+                onClick={() => { if (!(coarse && labelWidth < 100)) setFilterResource(filterResource === r.id ? null : r.id); }}
                 title="Click to filter the canvas by this resource"
                 className={`flex gap-2 py-2 cursor-pointer ${assignCompact ? "items-center" : "items-start"}`}
                 style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", background: filterResource === r.id ? "#FFF7F1" : undefined, overflow: "hidden", paddingLeft: labelWidth < 100 ? 4 : 12, paddingRight: labelWidth < 100 ? 4 : 12 }}
@@ -215,12 +251,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
                   className="mono"
                   onPointerEnter={(e) => { if (!coarse && labelWidth < 100) setResCard({ x: e.clientX, y: e.clientY, r }); }}
                   onPointerLeave={() => { if (!coarse) setResCard((c) => (c && c.r.id === r.id ? null : c)); }}
-                  onClick={(e) => {
-                    if (coarse && labelWidth < 100) {
-                      e.stopPropagation();
-                      setResCard((c) => (c && c.r.id === r.id ? null : { x: e.clientX, y: e.clientY, r }));
-                    }
-                  }}
+                  onPointerDown={(e) => { if (coarse && labelWidth < 100) startBadgeGesture(r, e); }}
                   style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                 >
                   {r.initials}

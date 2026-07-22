@@ -7,6 +7,7 @@ import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } fro
 import { buildTimeline } from "@/domain/timeline";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, STATUS_META, colorForName, hexA, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { useCoarsePointer } from "@/hooks/useIsMobile";
 import { recordSingle, patchOp } from "@/stores/undoStore";
 import { confirmAt } from "@/stores/confirmStore";
 
@@ -64,6 +65,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, canEdit, onTimelineBoundsChange },
   ref,
 ) {
+  const coarse = useCoarsePointer();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
@@ -428,6 +430,55 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     window.addEventListener("pointerup", handleDragUp);
   };
 
+  // Touch gesture on a task box: a quick tap shows the info card, a long-press
+  // selects it (opens the details panel), and a drag past a small threshold
+  // moves it. On mouse, fall back to the normal press-to-select/drag.
+  const startBoxInteraction = (box: Feature, e: React.PointerEvent) => {
+    if (!coarse) {
+      startDrag("move", box, e);
+      return;
+    }
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let resolved = false;
+    let timer = 0;
+    const remove = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      clearTimeout(timer);
+    };
+    function onMove(ev: PointerEvent) {
+      if (resolved) return;
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 8) return;
+      resolved = true;
+      remove();
+      // Drag = move the task (locked/done tasks and viewers can't move).
+      if (canEdit && box.status !== "done") {
+        onSelect(box.id);
+        setDragId(box.id);
+        dragRef.current = { kind: "move", id: box.id, startX, startY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
+        window.addEventListener("pointermove", handleDragMove);
+        window.addEventListener("pointerup", handleDragUp);
+      }
+    }
+    function onUp() {
+      if (!resolved) {
+        resolved = true;
+        setHoverCard({ x: startX, y: startY, box }); // tap -> info card
+      }
+      remove();
+    }
+    timer = window.setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      remove();
+      onSelect(box.id); // long-press -> select
+    }, 500);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   const toggleCollapsed = (feature: Feature, e: React.MouseEvent) => {
     e.stopPropagation();
     void patchFeature(feature.id, { collapsed: !feature.collapsed });
@@ -689,10 +740,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               return (
                 <div
                   key={box.id}
-                  onPointerDown={(e) => startDrag("move", box, e)}
+                  onPointerDown={(e) => startBoxInteraction(box, e)}
                   onContextMenu={(e) => e.preventDefault()}
-                  onPointerEnter={(e) => { if (showHover && !dragId && !isPanning) setHoverCard({ x: e.clientX, y: e.clientY, box }); }}
-                  onPointerLeave={() => setHoverCard((h) => (h && h.box.id === box.id ? null : h))}
+                  onPointerEnter={(e) => { if (!coarse && showHover && !dragId && !isPanning) setHoverCard({ x: e.clientX, y: e.clientY, box }); }}
+                  onPointerLeave={() => { if (!coarse) setHoverCard((h) => (h && h.box.id === box.id ? null : h)); }}
                   onDragOver={(e) => {
                     e.preventDefault();
                     setDragOverBoxId(box.id);
@@ -823,6 +874,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         </div>
       )}
 
+      {hoverCard && coarse && <div className="fixed inset-0" style={{ zIndex: 99 }} onPointerDown={() => setHoverCard(null)} />}
       {hoverCard && !dimHint && (() => {
         const hb = hoverCard.box;
         const hm = STATUS_META[hb.status];
