@@ -56,6 +56,7 @@ interface CanvasViewProps {
   filterResource: string | null;
   featureQuery: string;
   featureStatusFilter: "all" | FeatureStatus;
+  epicFilter: string;
   canEdit: boolean;
   onTimelineBoundsChange?: (bounds: { startDay: number; endDay: number; dayWidth: number }) => void;
 }
@@ -63,7 +64,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, canEdit, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, canEdit, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -163,14 +164,15 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // so typing a search term doesn't yank the view on every keystroke.
   useEffect(() => {
     const q = featureQuery.trim().toLowerCase();
-    if (!q && featureStatusFilter === "all") return;
+    if (!q && featureStatusFilter === "all" && epicFilter === "all") return;
     const handle = setTimeout(() => {
       const { startDay: sd, endDay: ed, dayWidth: dw, viewZoom: vz, features: fs, filterResource: fr } = latestViewRef.current;
       const matching = fs.filter((box) => {
         const matchesRes = !fr || (box.resources || []).includes(fr) || (box.children || []).some((c) => (c.resources || []).includes(fr));
         const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
         const matchesStatus = featureStatusFilter === "all" || box.status === featureStatusFilter;
-        return matchesRes && matchesQuery && matchesStatus;
+        const matchesEpic = epicFilter === "all" || box.epicId === epicFilter;
+        return matchesRes && matchesQuery && matchesStatus && matchesEpic;
       });
       if (matching.length === 0) return;
       const first = matching.reduce((a, b) => (a.x < b.x ? a : b));
@@ -179,7 +181,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       }
     }, 400);
     return () => clearTimeout(handle);
-  }, [featureQuery, featureStatusFilter, setOffsetX]);
+  }, [featureQuery, featureStatusFilter, epicFilter, setOffsetX]);
 
   const weekends = useMemo(() => {
     if (density !== "day") return [];
@@ -793,7 +795,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const matchesRes = !filterResource || (box.resources || []).includes(filterResource) || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
               const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
               const matchesStatus = featureStatusFilter === "all" || box.status === featureStatusFilter;
-              const matches = matchesRes && matchesQuery && matchesStatus;
+              const matchesEpic = epicFilter === "all" || box.epicId === epicFilter;
+              const matches = matchesRes && matchesQuery && matchesStatus && matchesEpic;
               const est = estimateEffort(box, graph);
               const assigned = assignedEffort(box);
               const coverage = Math.round((assigned / Math.max(0.1, est)) * 100);

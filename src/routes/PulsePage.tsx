@@ -138,6 +138,7 @@ export function PulsePage() {
   const [filterResource, setFilterResource] = useState<string | null>(null);
   const [featureQuery, setFeatureQuery] = useState("");
   const [featureStatusFilter, setFeatureStatusFilter] = useState<"all" | FeatureStatus>("all");
+  const [epicFilter, setEpicFilter] = useState<string>("all");
   const [epicsShrunk, setEpicsShrunk] = useState(false);
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -148,6 +149,12 @@ export function PulsePage() {
 
   const canvasRef = useRef<CanvasViewHandle>(null);
   const preShrinkRef = useRef<{ epics: { id: string; y0: number; y1: number; manualY0?: number | null; manualY1?: number | null }[]; features: { id: string; y: number }[] } | null>(null);
+
+  // If the epic being filtered on gets deleted, fall back to showing all so
+  // the canvas doesn't silently dim everything.
+  useEffect(() => {
+    if (epicFilter !== "all" && !epics.some((e) => e.id === epicFilter)) setEpicFilter("all");
+  }, [epics, epicFilter]);
 
   // Every time a Pulse is opened, land on today rather than wherever the
   // canvas's fixed epoch (2020-01-01) happens to put the default offset.
@@ -269,6 +276,9 @@ export function PulsePage() {
         setFeatureQuery={setFeatureQuery}
         featureStatusFilter={featureStatusFilter}
         setFeatureStatusFilter={(v) => setFeatureStatusFilter(v as "all" | FeatureStatus)}
+        epicFilter={epicFilter}
+        setEpicFilter={setEpicFilter}
+        epicOptions={epics.map((e) => ({ id: e.id, name: e.name }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
         epicsShrunk={epicsShrunk}
@@ -344,6 +354,7 @@ export function PulsePage() {
             filterResource={filterResource}
             featureQuery={featureQuery}
             featureStatusFilter={featureStatusFilter}
+            epicFilter={epicFilter}
             canEdit={canEdit}
             onTimelineBoundsChange={setTimelineBounds}
           />

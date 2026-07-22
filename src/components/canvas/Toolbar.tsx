@@ -26,6 +26,9 @@ interface ToolbarProps {
   setFeatureQuery: (v: string) => void;
   featureStatusFilter: string;
   setFeatureStatusFilter: (v: string) => void;
+  epicFilter: string;
+  setEpicFilter: (v: string) => void;
+  epicOptions: { id: string; name: string }[];
   showDelays: boolean;
   setShowDelays: (v: boolean) => void;
   epicsShrunk: boolean;
@@ -66,6 +69,9 @@ export function Toolbar({
   setFeatureQuery,
   featureStatusFilter,
   setFeatureStatusFilter,
+  epicFilter,
+  setEpicFilter,
+  epicOptions,
   showDelays,
   setShowDelays,
   epicsShrunk,
@@ -207,11 +213,18 @@ export function Toolbar({
               <option key={s.value} value={s.value} style={{ color: "#000" }}>{s.label}</option>
             ))}
           </select>
-          {(featureQuery || featureStatusFilter !== "all") && (
+          <select value={epicFilter} onChange={(e) => setEpicFilter(e.target.value)} title="Filter by epic" className="bg-transparent text-xs py-1.5" style={{ color: "#EE7240", outline: "none", maxWidth: 110 }}>
+            <option value="all" style={{ color: "#000" }}>all epics</option>
+            {epicOptions.map((e) => (
+              <option key={e.id} value={e.id} style={{ color: "#000" }}>{e.name || "Untitled epic"}</option>
+            ))}
+          </select>
+          {(featureQuery || featureStatusFilter !== "all" || epicFilter !== "all") && (
             <button
               onClick={() => {
                 setFeatureQuery("");
                 setFeatureStatusFilter("all");
+                setEpicFilter("all");
               }}
               title="Clear feature filter"
             >
