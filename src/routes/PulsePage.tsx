@@ -126,6 +126,8 @@ export function PulsePage() {
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [assignPanelH, setAssignPanelH] = useState(280);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [assignPanelOpen, setAssignPanelOpen] = useState(true);
   const [timelineBounds, setTimelineBounds] = useState({ startDay: 0, endDay: 0, dayWidth: BASE_DAY_WIDTH });
 
   const canvasRef = useRef<CanvasViewHandle>(null);
@@ -255,8 +257,18 @@ export function PulsePage() {
 
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <div className="flex overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
-          <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div className="flex border-b" style={{ borderColor: "#E2DFD9" }}>
+          {!sidebarOpen && (
+            <div style={{ width: 30, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 8 }}>
+              <button onClick={() => setSidebarOpen(true)} title="Show panel" className="no-press" style={{ color: "#64748B", display: "flex", alignItems: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+              </button>
+            </div>
+          )}
+          <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: sidebarOpen ? "flex" : "none", flexDirection: "column", overflow: "hidden" }}>
+            <div className="flex items-center border-b" style={{ borderColor: "#E2DFD9" }}>
+              <button onClick={() => setSidebarOpen(false)} title="Collapse panel to maximize the canvas" className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+              </button>
               {(["details", "team", "capacity"] as RightTab[]).map((t) => (
                 <button
                   key={t}
@@ -310,28 +322,39 @@ export function PulsePage() {
           />
         </div>
 
-        <div
-          onPointerDown={(e) => {
-            try {
-              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-            } catch {
-              // ignore
-            }
-            const startY = e.clientY;
-            const startH = assignPanelH;
-            const mv = (ev: PointerEvent) => setAssignPanelH(Math.max(90, Math.min(620, startH - (ev.clientY - startY))));
-            const up = () => {
-              window.removeEventListener("pointermove", mv);
-              window.removeEventListener("pointerup", up);
-            };
-            window.addEventListener("pointermove", mv);
-            window.addEventListener("pointerup", up);
-          }}
-          title="Drag to resize the resource panel"
-          style={{ height: 10, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-        >
-          <div style={{ width: 44, height: 3, borderRadius: 2, background: "#B4BECC" }} />
-        </div>
+        {assignPanelOpen ? (
+          <div
+            onPointerDown={(e) => {
+              try {
+                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              } catch {
+                // ignore
+              }
+              const startY = e.clientY;
+              const startH = assignPanelH;
+              const mv = (ev: PointerEvent) => setAssignPanelH(Math.max(90, Math.min(620, startH - (ev.clientY - startY))));
+              const up = () => {
+                window.removeEventListener("pointermove", mv);
+                window.removeEventListener("pointerup", up);
+              };
+              window.addEventListener("pointermove", mv);
+              window.addEventListener("pointerup", up);
+            }}
+            title="Drag to resize the resource panel"
+            style={{ height: 10, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          >
+            <div style={{ width: 44, height: 3, borderRadius: 2, background: "#B4BECC" }} />
+          </div>
+        ) : (
+          <button
+            onClick={() => setAssignPanelOpen(true)}
+            title="Show the assignment-by-resource panel"
+            className="mono no-press"
+            style={{ height: 24, width: "100%", background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingLeft: 10, fontSize: 11, color: "#64748B" }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg> Assignment by resource
+          </button>
+        )}
 
         {toast && (
           <div
@@ -353,6 +376,7 @@ export function PulsePage() {
           />
         )}
 
+        {assignPanelOpen && (
         <div style={{ height: assignPanelH, flexShrink: 0 }}>
           <AssignmentPanel
             offsetX={offsetX}
@@ -365,8 +389,10 @@ export function PulsePage() {
             filterResource={filterResource}
             setFilterResource={setFilterResource}
             selectedFeature={selectedFeature}
+            onCollapse={() => setAssignPanelOpen(false)}
           />
         </div>
+        )}
       </div>
     </div>
   );

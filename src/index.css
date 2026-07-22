@@ -98,3 +98,11 @@ button:not(:disabled):active {
 button:disabled {
   cursor: default;
 }
+
+/* Large/edge buttons (collapse bars, panel toggles) opt out of the scale so
+   pressing doesn't shrink them away from the cursor and drop the click. They
+   still get the brightness hover. */
+.no-press:not(:disabled):hover,
+.no-press:not(:disabled):active {
+  transform: none;
+}
