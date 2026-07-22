@@ -1,6 +1,6 @@
 # Pulse — Kanban Board View Specification
 
-Status: **Draft for sign-off (D1–D12)** · Scope: v1 (one alternative view inside a single Pulse; desktop + mobile)
+Status: **Draft for sign-off (D1–D14)** · Scope: v1 (one alternative view inside a single Pulse; desktop + mobile). Custom statuses (D14) designed but phased.
 
 ## 1. Goal
 
@@ -62,6 +62,12 @@ and they shape every decision below:
 reuses `STATUS_META[status].label` and its `bg`/`border`/`text` colors so the
 board reads identically to the canvas boxes and the mobile list pills
 (`MobileTaskList.tsx:100`). Each header shows a count of cards in the column.
+(The v1 board assumes today's fixed four statuses; §12 / D14 generalizes these
+columns to per-Pulse custom statuses in a later phase, at which point the
+columns render from `pulse.statuses` instead of the constant.)
+
+Within each column, cards are further **grouped by epic and sorted by start
+date** — see §5.2 / D5.
 
 Alternative selectable groupings (a small segmented control in the toolbar,
 "Group by: Status · Epic · Assignee"):
@@ -126,9 +132,11 @@ instead.
 
 ### 5.1 Move between columns (the core gesture)
 
-Dragging a card from column A to column B commits
-`patchFeature(id, { status: B })` (status grouping) — a single write, a single
-undo entry (§9). Consequences to honor:
+Dragging a card from column A to column B changes its status — a single write,
+a single undo entry (§9). This must go through the shared status-change path
+that also maintains the finished date (see D6 below), i.e. a
+`setFeatureStatus(id, status)` store action rather than a bare
+`patchFeature({ status })`. Consequences to honor:
 
 - **Into "done":** the card becomes locked for content edits everywhere
   (DetailsTab, canvas). No confirmation needed; it's reversible via drag-back or
@@ -136,35 +144,56 @@ undo entry (§9). Consequences to honor:
   lock, because status is the one field that stays editable on a done task
   (`DetailsTab.tsx:465` keeps the status `<select>` on `canEditProp`, not
   `canEdit`).
-- **Out of "done":** unlocks the card. Trivial `patchFeature`.
-- **Finished-date behavior:** *subtasks* carry `finishedAt` and auto-stamp/clear
-  it when their own status flips (`DetailsTab.tsx:81-88` `setSubtaskStatus`).
-  **A Feature has no `finishedAt` field.** So moving a *card* to Done does **not**
-  touch any date today. Two open choices (D6):
-  1. Keep it simple — card→Done sets only `status`, subtasks untouched.
-     (Recommended for v1: least surprising, no cascade, no schema change.)
-  2. Cascade — card→Done also marks all `children` done and stamps their
-     `finishedAt`. Powerful but destructive and awkward to undo cleanly; defer.
+- **Out of "done":** unlocks the card and clears `finishedAt` (via the same
+  `setFeatureStatus` path).
+- **Finished-date behavior (settled — D6):** a Feature now carries its own
+  `finishedAt?: string | null` (YYYY-MM-DD, `src/types/index.ts:151`), mirroring
+  the subtask field. `DetailsTab` has a `setFeatureStatus` helper
+  (`DetailsTab.tsx:81-88`) that stamps `todayISO()` when the task **first**
+  becomes `done` and clears it when reopened — the exact mirror of
+  `setSubtaskStatus` (`DetailsTab.tsx:93-100`), and an editable "finished:" date
+  input is shown while `status === "done"` (`DetailsTab.tsx:486-499`). **The board
+  must move a card to Done through this same finished-date logic, not a bare
+  `patchFeature({ status: "done" })`** — otherwise the end date wouldn't be
+  stamped. Concretely: promote `setFeatureStatus` into a store action (e.g.
+  `setFeatureStatus(id, status)` on `usePulseStore`) so both DetailsTab and the
+  board call one code path that maintains `finishedAt`, records a single undo
+  entry, and applies the lock. Moving a card **out** of Done clears `finishedAt`
+  and unlocks. Subtasks are **not** cascaded (each subtask keeps its own
+  `finishedAt`, edited from DetailsTab).
 
-### 5.2 Reorder within a column
+### 5.2 In-column layout: grouped by epic, sorted by start date
 
-**D5 — Pulse tasks have no order field, so v1 does NOT persist intra-column
-order.** Cards within a column render in a stable derived order (recommended:
-by `x` start day ascending, then title) so the board is deterministic and
-useful without a schema change. Drag-to-reorder within the same column is
-**disabled** in v1 (a same-column drop is a no-op). Adding a real `order: number`
-field to `Feature` is possible but costs a migration, new write paths, and undo
-coverage — see §7 D5-alt. Recommendation: ship without it; revisit if users ask.
+**D5 — Within each column, cards are grouped by epic** (an epic sub-header/band
+inside the column, its tasks listed beneath it), and **within an epic group,
+ordered by start date (`Feature.x` ascending).** Tasks with no epic (or an
+`epicId` that no longer resolves) form their own "No epic" group at the bottom
+of the column. This reuses the exact grouping `MobileTaskList` already builds
+(`MobileTaskList.tsx:38-42`: an epic band with a color dot + name + count, loose
+tasks appended as a "No epic" group) — so a status column reads like a mini
+version of the mobile list.
+
+This design **removes the need for any manual reorder or an `order` field
+entirely**: order is fully derived (epic grouping → start-date sort), so there
+is nothing to persist. Free-form drag-to-reorder within a column is therefore
+**not offered** — dragging a card is always a *column change* (status), never a
+within-column re-rank. A drop back into the same column is a no-op.
+
+Because columns are subdivided by epic, the board doubles as a status × epic
+matrix, and adding an epic (D13) surfaces a new empty band in every column.
 
 ### 5.3 Open, add, duplicate, delete
 
 - **Click / tap a card → open DetailsTab.** Reuse `handleSelect(id)`
   (`PulsePage.tsx:188`) which sets `selectedId` and switches the sidebar to the
   Details tab — the board shares selection with the canvas.
-- **Add card per column.** A "+" in each column header calls `addFeature({ x,
-  y, status: <column status> })` (`pulseStore.ts:182`) pre-seeded with that
-  column's status, then `handleSelect(newId)` to open it. (`x`/`y` get sensible
+- **Add card per column / per epic-group.** A "+" in each column header calls
+  `addFeature({ x, y, status: <column status> })` (`pulseStore.ts:182`)
+  pre-seeded with that column's status, then `handleSelect(newId)` to open it.
+  A "+" on an epic band inside the column additionally seeds `epicId: <that
+  epic>` so the new card lands in the right group. (`x`/`y` get sensible
   defaults, e.g. `todayIndex()` like the mobile add, `MobilePulseView.tsx:41`.)
+- **Add epic from the board** — see §5.5 / D13.
 - **Duplicate / delete** — per-card overflow menu reusing `duplicateFeature`
   and `removeFeature` (with the existing `confirmAt` guard used in
   `DetailsTab.tsx:106`, whose copy already says "You can undo this (⌘Z)").
@@ -181,6 +210,20 @@ Match the canvas's established model (`CanvasView.tsx:472-523`):
   suppress the iOS long-press callout, exactly as the canvas does.
 - Respect `touch-action: none` on draggable cards (canvas pattern) so the board
   scroll and the card drag don't fight.
+
+### 5.5 Add epic from the board
+
+**D13 — Board mode needs an "add epic" affordance**, since with epic-grouped
+columns (D5) an epic is how you organize the board, not just the canvas. Reuse
+the store's existing `addEpic(y0)` (`pulseStore.ts:147`) — the same action the
+canvas toolbar's "Add epic" button drives (`Toolbar.tsx:177`,
+`PulsePage.tsx:233`). Because the board doesn't have a canvas `y` to seed from,
+pass a nominal `y0` (e.g. `0`); `addEpic` only needs it for canvas placement and
+the board ignores it. The new epic immediately appears as an **empty band in
+every status column**, ready to receive tasks (drag a card in, or use the band's
+"+"). `addEpic` already records an "Add epic" undo entry, so this is undoable for
+free. Surface it either in the toolbar (the existing "Add epic" button is
+already shared) or as a footer "+ Add epic" affordance on the board.
 
 ## 6. Filtering & search
 
@@ -208,21 +251,23 @@ within them (there's nothing to filter within a status column *by* status).
 
 ## 7. Data-model impact
 
-**Ideally none.** The board renders entirely from existing `Feature` fields, and
-every mutation is an existing store action. Specifically:
+**For the v1 board (fixed statuses): none.** The board renders entirely from
+existing `Feature` fields, and every mutation is an existing (or trivially
+wrapped) store action. Specifically:
 
 - Columns = `status` (exists).
+- In-column layout = epic grouping + `x` sort — both derived, **no new field**
+  (D5). There is deliberately no `order`/`rank` field.
 - Card content = `title`, `epicId`, `resources`/`lead`/`alloc`, `x`/`duration`,
-  `children`, `attachments`, `plannedX`, `ai`, `labelColor` (all exist).
-- Moves = `patchFeature`/`moveFeatureToEpic` (exist).
+  `finishedAt`, `children`, `attachments`, `plannedX`, `ai`, `labelColor` (all
+  exist; `finishedAt` was just added, `types/index.ts:151`).
+- Moves = `setFeatureStatus` (thin wrapper over `patchFeature`, D6) /
+  `moveFeatureToEpic` (exists); add-epic = `addEpic` (exists).
 
-**The only field the board *might* want and doesn't have is intra-column order.**
-
-**D5-alt (deferred):** adding `order?: number` to `Feature` would enable
-persisted drag-to-reorder within a column. Cost: a backfill for existing docs,
-reorder-write logic (fractional ranking or renumber), and undo coverage for it.
-**Recommendation: skip in v1** — derive a stable order from `x`/title (D5) and
-avoid the schema change until there's demand.
+**The one change that *does* touch the data model is custom statuses (§12) —
+and it is the largest work item in this spec.** It converts `FeatureStatus`
+from a hardcoded union + static `STATUS_META` into per-Pulse configurable data.
+It is intentionally **out of scope for the v1 board** and phased later (D14).
 
 ## 8. Permissions
 
@@ -241,15 +286,18 @@ writes are already `canEditPulse`-gated, `firestore.rules:148-151`):
 
 ## 9. Undo / redo
 
-No new undo work is required for status moves. `patchFeature(id, { status })`
-already calls `recordSingle("Edit task", pulseId, patchOp("feature", id, before,
-{ status }))` (`pulseStore.ts:206`), which is a **field-level** patch op — undo
-restores only `status`, preserving any concurrent edit to other fields (D1 of
-Undo-Spec). Redo is the mirror. Notes:
+Status moves ride on the existing undo engine with essentially no new work.
+`patchFeature` already records a **field-level** `patchOp` via
+`recordSingle("Edit task", …)` (`pulseStore.ts:206`) that restores only the keys
+it touched — here `{ status }` (and `{ finishedAt }` when crossing the Done
+boundary, D6) — preserving concurrent edits to other fields (D1 of Undo-Spec).
+Redo is the mirror. Notes:
 
-- A column drag is a **single** `patchFeature`, so — unlike canvas x/y drags,
+- A column drag is a **single** write (the `setFeatureStatus` wrapper issues one
+  `patchFeature` with `status` ± `finishedAt`), so — unlike canvas x/y drags,
   which need gesture coalescing (Undo-Spec §5) — it is already exactly one undo
-  entry. No coalescing needed.
+  entry. No coalescing needed. The `finishedAt` and `status` changes ride in the
+  same patch op, so undo restores them together.
 - Epic-grouping drags go through `moveFeatureToEpic`, already a single "Move
   task to epic" entry that reverses `epicId` **and** `y` together (Undo-Spec D3).
 - Add/duplicate/delete from the board reuse `addFeature`/`duplicateFeature`/
@@ -258,10 +306,9 @@ Undo-Spec). Redo is the mirror. Notes:
   (`PulsePage.tsx:94-111`, `Toolbar.tsx:203`) work over the board with zero
   changes.
 
-**D8:** relabel the status-move undo entry from the generic "Edit task" to
-"Move task" when the patch is a lone `{ status }` change, so the toast/tooltip
-reads naturally on the board (small tweak in `patchFeature`'s `record` label, or
-a dedicated `moveFeatureStatus` wrapper).
+**D8:** the `setFeatureStatus` store action (D6) is the natural home for a
+status-specific undo label — record it as **"Move task"** instead of the generic
+"Edit task", so the toast/tooltip reads naturally on the board.
 
 ## 10. Mobile
 
@@ -307,43 +354,160 @@ tablets to the desktop layout).
   keep the shared ones (search, status/epic filters, add task/epic, undo/redo,
   invite, effort scale).
 
-## 12. Non-goals (v1)
+## 12. Custom statuses (per-Pulse configurable)
 
-- Persisted intra-column ordering (needs a schema field — D5).
+**D14 — Statuses become per-Pulse configurable data**: users can add a new
+status, **insert it in the middle**, recolor/rename it, and reorder columns —
+except **"Done", which is a reserved terminal status** that cannot be removed,
+renamed away from its identity, or reordered out of the terminal slot, and which
+retains its special behavior (moving a task into it stamps `finishedAt` and
+locks the task, §5.1 / D6).
+
+This is **the single change that touches the data model**, and the **largest
+work item** in the spec. It is deliberately **not** in the v1 board — v1 ships on
+today's fixed four statuses — and lands as a later phase (see §14).
+
+### 12.1 Where statuses live today (what has to change)
+
+The current model hardcodes statuses in three places, all of which must become
+dynamic:
+
+- `FeatureStatus = "planned" | "in-progress" | "blocked" | "done"` — a string
+  union (`src/types/index.ts:120`), used by both `Feature.status` and
+  `Subtask.status`.
+- `STATUS_META: Record<FeatureStatus, {border,bg,text,label}>`
+  (`src/domain/constants.ts:24`) — the static label/color table read by the
+  canvas box (`CanvasView.tsx:842-843, 906`), the mobile row
+  (`MobileTaskList.tsx:86, 100`), and every DetailsTab status dropdown
+  (`DetailsTab.tsx:214, 470`).
+- `STATUS_OPTIONS` — a second hardcoded list in the toolbar
+  (`Toolbar.tsx:46-51`) feeding the `MultiSelectFilter`.
+
+### 12.2 Proposed model
+
+Store an **ordered status list on the Pulse doc**, alongside the existing
+per-Pulse config it already carries (`Pulse.graphConfig`, `Pulse.resourceTypes`,
+`src/types/index.ts:42-47`), managed by a new store action in the same shape as
+the existing `setResourceTypes` (`pulseStore.ts:140`, which already records an
+undo entry and writes one pulse field):
+
+```ts
+interface StatusDef { id: string; label: string; color: string } // color = base; bg/text derived
+interface Pulse { /* … */ statuses: StatusDef[] }  // ordered; "done" reserved, pinned terminal
+```
+
+- `Feature.status` (and `Subtask.status`) change from the union to a **status
+  `id`** (`string`). `id` is stable and opaque so rename/recolor never rewrites
+  feature docs; only reorder/insert changes the Pulse's `statuses` array, never
+  the features.
+- **`done` is a reserved id.** It always exists, is always the terminal column,
+  and cannot be deleted or moved out of terminal position. The board's Done
+  affordances (mute/collapse, lock, `finishedAt`) key off `status === "done"`
+  exactly as today.
+- **Derived colors.** `STATUS_META` currently stores `border`/`bg`/`text` per
+  status; for custom statuses, store one base `color` per status and derive the
+  soft `bg`/`text` at render (the codebase already has `hexA()` for exactly this
+  alpha-derivation, `constants.ts:59`). Default color for a newly added status =
+  next entry from a palette, reusing the `EPIC_PALETTE` / `colorForName` pattern
+  (`constants.ts:31-56`).
+
+### 12.3 Migration
+
+- **Backfill / default.** A Pulse with no `statuses` array defaults to today's
+  four (`planned`, `in-progress`, `blocked`, `done`) with their current
+  `STATUS_META` colors — so existing Pulses look unchanged. Because ids equal
+  today's string values, **existing `Feature.status` values need no rewrite**
+  (they already are the ids). This makes the migration additive and lazy: write
+  the default `statuses` on first edit, or fall back to a constant default when
+  the field is absent (mirrors how `graphConfigOf` falls back to
+  `DEFAULT_GRAPH_CONFIG`, `pulseStore.ts:436`).
+- **Lookups become Pulse-scoped.** Replace direct `STATUS_META[status]` reads
+  with a helper `statusMetaOf(pulse, id)` that resolves from `pulse.statuses`
+  (with the derived bg/text) and returns a safe fallback for an unknown id
+  (e.g. a task on a status that was just deleted → treat as the nearest
+  remaining, or a neutral "unknown" chip). Every current `STATUS_META[...]` and
+  `Object.entries(STATUS_META)` site
+  (`CanvasView.tsx`, `MobileTaskList.tsx`, `DetailsTab.tsx:214,470`,
+  `Toolbar.tsx`) routes through it.
+
+### 12.4 Ripple effects
+
+- **Status filter** (`MultiSelectFilter` fed by `STATUS_OPTIONS`,
+  `Toolbar.tsx:213-218`): build its options from `pulse.statuses` instead of the
+  constant. The "hide columns" semantics (D7) are unchanged.
+- **Canvas** `STATUS_META` lookups (box bg/border/text) → `statusMetaOf`.
+- **Mobile status picker** (D9) enumerates `pulse.statuses`.
+- **DetailsTab dropdowns** (`Object.entries(STATUS_META)`, `DetailsTab.tsx:214,
+  470`) enumerate `pulse.statuses`.
+- **Deleting a status in use is blocked** (user decision). A status can only be
+  deleted once **no task (or subtask) references it** — the status editor
+  disables/denies delete while any card still uses it and tells the user how
+  many, so they move those cards to another status first. This keeps delete a
+  pure config change (no bulk task rewrite, no compound reassign op), at the
+  cost of a manual move-first step. (`done` is never deletable regardless.)
+- **Status editor UI.** A small management surface (add / rename / recolor /
+  reorder, drag handles, "done" pinned) — natural home is the board itself
+  (edit-columns affordance) and/or a Pulse settings menu.
+
+**Recommendation:** phase it. Ship the v1 board on the fixed four statuses;
+implement custom statuses as a dedicated later phase because it spans the type
+system, three render sites, the filter, migration, and a new editor UI.
+
+## 13. Non-goals (v1)
+
+- Persisted free-form intra-column ordering (not needed — order is derived from
+  epic grouping + start date, D5).
+- Custom / configurable statuses in the **first** board release (designed in
+  §12, D14, but phased later).
 - WIP limits / column policies / swimlanes.
 - Drag-driven assignment when grouping by assignee (read-only lens only).
-- A "cascade subtasks to done" behavior (D6 option 2).
+- Cascading a card→Done down to its subtasks (each subtask keeps its own
+  `finishedAt`).
 - Multi-select / bulk-move of cards.
 - Cross-Pulse boards or a portfolio board (single-Pulse only).
 
-## 13. Proposed implementation phases
+## 14. Proposed implementation phases
 
-1. **`KanbanView` with status columns + drag-to-move** (`patchFeature({status})`),
+1. **`setFeatureStatus` store action** wrapping `patchFeature` + the
+   finished-date logic (D6), then reused by DetailsTab so there's one status
+   path. Small, unblocks the board.
+2. **`KanbanView` with the fixed 4 status columns + drag-to-move** (via
+   `setFeatureStatus`), cards grouped by epic and sorted by start date (D5),
    card renderer mirroring the canvas header, click-to-open DetailsTab,
-   per-column add, viewer read-only, undo working for free. Toolbar
-   Canvas|Board toggle; hide canvas-only controls + assignment panel.
-2. **Filters wired** (reuse `featureQuery` / `MultiSelectFilter` status+epic /
+   per-column / per-epic-group add, add-epic affordance (D13), viewer read-only,
+   undo working for free. Toolbar Canvas|Board toggle; hide canvas-only controls
+   + assignment panel.
+3. **Filters wired** (reuse `featureQuery` / `MultiSelectFilter` status+epic /
    `filterResource`) with the "hide columns" status semantics (D7); overflow
    menu (duplicate/delete). Undo label tweak (D8).
-3. **Epic grouping** (drag = `moveFeatureToEpic`) and the group-by segmented
-   control.
-4. **Mobile Board mode** in the Tasks tab (single-column + status picker, D9);
+4. **Explicit epic grouping mode** (columns = epics, drag = `moveFeatureToEpic`)
+   and the group-by segmented control.
+5. **Mobile Board mode** in the Tasks tab (single-column + status picker, D9);
    subtask progress count on cards (D4).
-5. **Assignee grouping** as a read-only lens (phase 3+).
+6. **Assignee grouping** as a read-only lens.
+7. **Custom statuses (§12, D14)** — the data-model change: `Pulse.statuses`,
+   `Feature.status` as id, `statusMetaOf` helper replacing static `STATUS_META`,
+   migration/default, status-editor UI, and the filter/canvas/mobile ripple.
+   Largest phase; ships after the board is proven on the fixed statuses.
 
-## 14. Testing
+## 15. Testing
 
-- Unit (Vitest, no Firestore): the column-bucketing + stable-order function
-  (given features, produce per-column ordered lists) — table-driven over the 4
-  statuses, empty columns, and done-last ordering.
-- Interaction: a status drag issues exactly one `patchFeature({status})` and
-  exactly one undo entry; same-column drop is a no-op (D5).
+- Unit (Vitest, no Firestore): the column-bucketing function (given features,
+  produce per-column → per-epic-group → start-date-sorted lists), table-driven
+  over the statuses, empty columns/groups, "No epic" fallback, and done-last.
+- Interaction: a status drag issues exactly one `setFeatureStatus` write and
+  exactly one undo entry; a card→Done stamps `finishedAt`, card→(not done)
+  clears it; a same-column drop is a no-op (D5).
 - Permissions: viewer renders no drag handles/actions; a done card is draggable
   between columns but its DetailsTab stays locked.
-- Rules-emulator: a board `patchFeature` from a viewer is denied; from an
-  editor is allowed (reuses existing `features` write coverage).
+- Rules-emulator: a board status write from a viewer is denied; from an editor
+  is allowed (reuses existing `features` write coverage).
+- (Custom-statuses phase) migration: a Pulse with no `statuses` field resolves
+  to the default four and existing `Feature.status` ids render unchanged;
+  deleting a status is disabled while any task/subtask still references it
+  (user must move those cards first) and always disabled for `done`.
 
-## 15. Decisions to confirm (D-list)
+## 16. Decisions to confirm (D-list)
 
 1. **D1 — Default grouping = Status** (Planned/In progress/Blocked/Done), from
    `STATUS_META`. *Recommend: yes.*
@@ -353,12 +517,13 @@ tablets to the desktop layout).
    order.*
 4. **D4 — Add `done/total` subtask progress to the card** (optionally back-port
    to canvas/mobile). *Recommend: yes.*
-5. **D5 — No intra-column order field in v1**; derive stable order from
-   `x`/title; same-column reorder disabled. *Recommend: yes; defer `order`
-   field until requested.*
-6. **D6 — Moving a card to Done sets only `status`** (no subtask cascade, no
-   feature-level finished date — the model has none). *Recommend: option 1
-   (simple).* Confirm you don't want the cascade.
+5. **D5 — In-column layout = grouped by epic, sorted by start date** (`Feature.x`
+   asc), "No epic" group last; no manual reorder and no `order` field.
+   *Settled (user decision).*
+6. **D6 — Moving a card to Done stamps the feature's `finishedAt`** and locks it;
+   moving out clears it. Uses the new `Feature.finishedAt` field
+   (`types/index.ts:151`) and `setFeatureStatus` (`DetailsTab.tsx:81`), promoted
+   to a shared store action. No subtask cascade. *Settled (user decision).*
 7. **D7 — Status filter hides columns** when grouping by status. *Recommend:
    yes.*
 8. **D8 — Relabel the lone-`{status}` undo entry to "Move task."** *Recommend:
@@ -372,3 +537,13 @@ tablets to the desktop layout).
     yes.*
 12. **D12 — View toggle lives in the Toolbar**, `view` state in `PulsePage`,
     shared `selectedId`/filters across Canvas ↔ Kanban. *Recommend: yes.*
+13. **D13 — Add-epic affordance on the board** (reuse `addEpic`,
+    `pulseStore.ts:147`); a new epic appears as an empty band in every column.
+    Keep add-task per column / per epic-group. *Settled (new scope).*
+14. **D14 — Custom per-Pulse statuses** (§12): ordered `Pulse.statuses`
+    (`{id,label,color}[]`), `Feature.status` becomes a status **id**, **"Done"
+    reserved + terminal** (stamps finished date + lock), migrate off the
+    hardcoded `FeatureStatus` union + `STATUS_META`, derive bg/text via `hexA`,
+    default color from a palette, ripple through the status filter / canvas /
+    mobile picker. **The one data-model change; largest work item.**
+    *Recommend: phase last — v1 board ships on the fixed four statuses.*
