@@ -222,7 +222,7 @@ export function PulsePage() {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col" style={{ background: "#0A1428" }}>
+    <div className="w-full flex flex-col" style={{ background: "#0A1428", height: "100dvh" }}>
       <Toolbar
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
@@ -341,16 +341,16 @@ export function PulsePage() {
               window.addEventListener("pointerup", up);
             }}
             title="Drag to resize the resource panel"
-            style={{ height: 10, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            style={{ height: 18, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none" }}
           >
-            <div style={{ width: 44, height: 3, borderRadius: 2, background: "#B4BECC" }} />
+            <div style={{ width: 56, height: 4, borderRadius: 2, background: "#B4BECC" }} />
           </div>
         ) : (
           <button
             onClick={() => setAssignPanelOpen(true)}
             title="Show the assignment-by-resource panel"
             className="mono no-press"
-            style={{ height: 24, width: "100%", background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingLeft: 10, fontSize: 11, color: "#64748B" }}
+            style={{ height: 30, width: "100%", background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingLeft: 10, fontSize: 11, color: "#64748B" }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg> Assignment by resource
           </button>
