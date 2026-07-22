@@ -75,6 +75,18 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
+  // Changing the task's status maintains its finished date the same way a
+  // subtask's does: stamp today when it first becomes done, clear it when
+  // reopened. Manual edits to the date field go straight through patchFeature.
+  const setFeatureStatus = (status: Feature["status"]) => {
+    const patch: Partial<Feature> = { status };
+    const wasDone = feature.status === "done";
+    const nowDone = status === "done";
+    if (nowDone && !wasDone) patch.finishedAt = todayISO();
+    else if (!nowDone && wasDone) patch.finishedAt = null;
+    void patchFeature(feature.id, patch);
+  };
+
   // Changing a subtask's status also maintains its finished date: stamp today
   // when it first becomes done, clear it when reopened. (Manual edits to the
   // date field go straight through patchSubtask and aren't touched here.)
@@ -463,7 +475,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         <select
           value={feature.status}
           disabled={!canEditProp}
-          onChange={(e) => void patchFeature(feature.id, { status: e.target.value as Feature["status"] })}
+          onChange={(e) => setFeatureStatus(e.target.value as Feature["status"])}
           className="mt-1 w-full text-sm border rounded px-2 py-1.5"
           style={{ borderColor: "#E2DFD9" }}
         >
@@ -471,6 +483,25 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             <option key={k} value={k}>{m.label}</option>
           ))}
         </select>
+        {(feature.status === "done" || feature.finishedAt) && (
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>finished:</span>
+            <input
+              type="date"
+              disabled={!canEditProp}
+              value={feature.finishedAt || ""}
+              onChange={(e) => void patchFeature(feature.id, { finishedAt: e.target.value || null })}
+              title="Actual completion date (set automatically when marked done, editable)"
+              className="text-sm border rounded px-1.5 py-1"
+              style={{ borderColor: "#E2DFD9", color: "#334155" }}
+            />
+            {feature.finishedAt && canEditProp && (
+              <button onClick={() => void patchFeature(feature.id, { finishedAt: null })} title="Clear finished date">
+                <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div>

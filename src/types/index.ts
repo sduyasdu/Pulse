@@ -162,6 +162,7 @@ export interface Feature {
   status: FeatureStatus;
   resources: string[];
   alloc?: Record<string, number>; // resourceId -> % time (default 100)
+  finishedAt?: string | null; // YYYY-MM-DD; auto-set when marked done, cleared when reopened, editable
   notes?: string; // rich-text (HTML) detail annotation
   lead?: string | null; // resource id marked as team leader
   epicId?: string | null;
