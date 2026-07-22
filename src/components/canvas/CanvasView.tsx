@@ -260,6 +260,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
   const handlePanPointerDown = (e: React.PointerEvent) => {
     onSelect(null);
+    setHoverCard(null); // tapping empty canvas dismisses any open info card
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -455,12 +456,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   }, [handleDragMove, patchFeature]);
 
   const startDrag = (kind: DragKind, box: Feature, e: React.PointerEvent) => {
-    if (!canEdit) return;
+    // Selection must happen for everyone (viewers included) and must stop the
+    // event before it bubbles to the canvas's deselect handler — do both first,
+    // then gate the actual drag. A viewer or a locked/done task can be selected
+    // (to inspect / reopen) but not moved or resized.
     e.stopPropagation();
     onSelect(box.id);
-    // A "done" task is locked: still selectable (to reopen it), but can't be
-    // moved or resized.
-    if (box.status === "done") return;
+    if (!canEdit || box.status === "done") return;
     setDragId(box.id);
     dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
     window.addEventListener("pointermove", handleDragMove);
@@ -491,6 +493,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 8) return;
       resolved = true;
       remove();
+      setHoverCard(null);
       // Drag = move the task (locked/done tasks and viewers can't move).
       if (canEdit && box.status !== "done") {
         onSelect(box.id);
@@ -503,7 +506,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     function onUp() {
       if (!resolved) {
         resolved = true;
-        setHoverCard({ x: startX, y: startY, box }); // tap -> info card
+        // tap -> toggle the info card (tapping the same task again dismisses it)
+        setHoverCard((h) => (h && h.box.id === box.id ? null : { x: startX, y: startY, box }));
       }
       remove();
     }
@@ -511,6 +515,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       if (resolved) return;
       resolved = true;
       remove();
+      setHoverCard(null);
       onSelect(selectedId === box.id ? null : box.id); // long-press -> toggle select
     }, 500);
     window.addEventListener("pointermove", onMove);
@@ -943,7 +948,6 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         </div>
       )}
 
-      {hoverCard && coarse && <div className="fixed inset-0" style={{ zIndex: 99 }} onPointerDown={() => setHoverCard(null)} />}
       {hoverCard && !dimHint && (() => {
         const hb = hoverCard.box;
         const hm = STATUS_META[hb.status];
