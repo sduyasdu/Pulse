@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole } from "@/services/firestore/pulses";
+import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, setMyPulseArchived, deletePulse } from "@/services/firestore/pulses";
 import { fetchMembership } from "@/services/firestore/memberships";
 import { inviteToPulse } from "@/services/firestore/invites";
+import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry, PulseRole } from "@/types";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
@@ -52,16 +53,36 @@ export function DashboardPage() {
   }, [firebaseUser, pulses]);
 
   if (!firebaseUser) return null;
+  const uid = firebaseUser.uid;
 
+  // Archived Pulses drop out of the main sections into their own group.
   // "Your Pulses" are the ones you own; everything you were invited to
   // (editor/viewer) lives under "Shared with you".
-  const owned = pulses?.filter((p) => p.role === "owner") ?? [];
-  const shared = pulses?.filter((p) => p.role !== "owner") ?? [];
+  const active = pulses?.filter((p) => !p.archived) ?? [];
+  const owned = active.filter((p) => p.role === "owner");
+  const shared = active.filter((p) => p.role !== "owner");
+  const archived = pulses?.filter((p) => p.archived) ?? [];
+
+  const del = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
+    const ok = await confirmAt(pt, {
+      message: `Delete "${entry.name || "Untitled Pulse"}" permanently?`,
+      detail: "This erases the Pulse and all its data for everyone — it can't be undone. Archiving instead keeps everything and just hides it from your dashboard.",
+      confirmLabel: "Delete forever",
+    });
+    if (ok) await deletePulse(entry.pulseId, uid);
+  };
 
   const grid = (entries: MyPulseIndexEntry[]) => (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {entries.map((entry) => (
-        <PulseCard key={entry.pulseId} entry={entry} onInviteClick={() => setInvitingPulse(entry)} />
+        <PulseCard
+          key={entry.pulseId}
+          entry={entry}
+          onInviteClick={() => setInvitingPulse(entry)}
+          onArchive={() => void setMyPulseArchived(uid, entry.pulseId, true)}
+          onUnarchive={() => void setMyPulseArchived(uid, entry.pulseId, false)}
+          onDelete={(pt) => void del(entry, pt)}
+        />
       ))}
     </div>
   );
@@ -106,6 +127,16 @@ export function DashboardPage() {
           <>
             <h2 className="font-display mb-4 mt-10 text-lg font-medium text-yasdu-fg">Shared with you</h2>
             {grid(shared)}
+          </>
+        )}
+
+        {archived.length > 0 && (
+          <>
+            <h2 className="font-display mb-4 mt-10 flex items-center gap-2 text-lg font-medium text-yasdu-fg">
+              Archived
+              <span className="mono text-xs text-yasdu-muted">{archived.length}</span>
+            </h2>
+            {grid(archived)}
           </>
         )}
       </main>

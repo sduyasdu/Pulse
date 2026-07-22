@@ -71,6 +71,14 @@ export async function removeMyPulseEntry(uid: string, pulseId: string): Promise<
   await deleteDoc(doc(db, "users", uid, "myPulses", pulseId)).catch(() => {});
 }
 
+/** Per-user archive toggle. Archiving lives on the user's own myPulses index
+ * entry (which only they can write), so it hides the Pulse from their
+ * dashboard's main sections without touching the shared Pulse or anyone else's
+ * view — and keeps all the data intact, unlike delete. */
+export async function setMyPulseArchived(uid: string, pulseId: string, archived: boolean): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { archived });
+}
+
 /** Self-heal: an owner may have changed this user's role (in the authoritative
  * pulseMembers doc) but can't touch this user's own dashboard index entry —
  * so the client reconciles the cached role label itself. Self-write only. */

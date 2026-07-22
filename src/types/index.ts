@@ -98,6 +98,7 @@ export interface MyPulseIndexEntry {
   workspaceId: string;
   role: PulseRole;
   joinedAt: Timestamp;
+  archived?: boolean; // per-user: hides the Pulse into the dashboard's Archived section
 }
 
 /**
