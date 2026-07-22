@@ -5,6 +5,7 @@ import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { STATUS_META, RES_LABEL_W, clamp, colorForName, type Density } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
+import { useCoarsePointer } from "@/hooks/useIsMobile";
 import type { Feature, Resource } from "@/types";
 
 interface AssignmentPanelProps {
@@ -40,6 +41,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const pulse = usePulseStore((s) => s.pulse);
+  const coarse = useCoarsePointer();
 
   const [assignPeople, setAssignPeople] = useState<Set<string>>(new Set());
   const [assignTypes, setAssignTypes] = useState<Set<string>>(new Set());
@@ -211,8 +213,14 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
               >
                 <span
                   className="mono"
-                  onPointerEnter={(e) => { if (labelWidth < 100) setResCard({ x: e.clientX, y: e.clientY, r }); }}
-                  onPointerLeave={() => setResCard((c) => (c && c.r.id === r.id ? null : c))}
+                  onPointerEnter={(e) => { if (!coarse && labelWidth < 100) setResCard({ x: e.clientX, y: e.clientY, r }); }}
+                  onPointerLeave={() => { if (!coarse) setResCard((c) => (c && c.r.id === r.id ? null : c)); }}
+                  onClick={(e) => {
+                    if (coarse && labelWidth < 100) {
+                      e.stopPropagation();
+                      setResCard((c) => (c && c.r.id === r.id ? null : { x: e.clientX, y: e.clientY, r }));
+                    }
+                  }}
                   style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                 >
                   {r.initials}
@@ -307,6 +315,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
         })}
       </div>
 
+      {resCard && coarse && <div className="fixed inset-0" style={{ zIndex: 99 }} onClick={() => setResCard(null)} />}
       {resCard && (() => {
         const r = resCard.r;
         const util = utilizationPct(features, r);
