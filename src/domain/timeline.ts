@@ -54,7 +54,8 @@ export function buildTimeline(density: Density, startDay: number, endDay: number
     mon = new Date(Date.UTC(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate() - shift));
     let g2 = 0;
     while (dayIndex(mon) <= endDay && g2 < 90) {
-      secondary.push({ day: dayIndex(mon), label: `${mon.getUTCDate()}/${mon.getUTCMonth() + 1}` });
+      // Day only — the month is shown in the primary (month) row above.
+      secondary.push({ day: dayIndex(mon), label: String(mon.getUTCDate()) });
       mon = new Date(Date.UTC(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate() + 7));
       g2++;
     }

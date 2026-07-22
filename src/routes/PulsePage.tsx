@@ -254,7 +254,8 @@ export function PulsePage() {
         onRenamePulse={(name) => void renamePulse(name)}
         onInvite={() => setShowInvite(true)}
         viewZoom={viewZoom}
-        setViewZoom={setViewZoom}
+        onZoomIn={() => canvasRef.current?.zoomStep(0.15)}
+        onZoomOut={() => canvasRef.current?.zoomStep(-0.15)}
         density={density}
         setDensity={setDensity}
         onResetView={() => canvasRef.current?.resetView()}

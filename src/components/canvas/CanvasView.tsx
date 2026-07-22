@@ -34,6 +34,7 @@ export const TODAY_LEFT_MARGIN_PX = 80;
 
 export interface CanvasViewHandle {
   fitRoadmap: () => void;
+  zoomStep: (delta: number) => void;
   resetView: () => void;
   centerOnToday: () => void;
   addTaskAtCenter: () => Promise<string>;
@@ -567,18 +568,48 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // ---- imperative handle for the toolbar ----
   useImperativeHandle(ref, () => ({
     fitRoadmap: () => {
-      if (features.length === 0) {
+      // Horizontal extent across BOTH tasks and epic bands (a manually-widened
+      // epic can reach past its tasks).
+      const bands = epicBands.filter((b) => b.minX != null && b.maxX != null);
+      const starts = [...displayFeatures.map((f) => f.x), ...bands.map((b) => b.minX as number)];
+      const ends = [...displayFeatures.map((f) => f.x + f.duration), ...bands.map((b) => b.maxX as number)];
+      const cont = containerRef.current;
+      const width = cont?.clientWidth ?? containerWidth;
+      const height = cont?.clientHeight ?? 400;
+      if (starts.length === 0) {
         setViewZoom(1);
+        setOffsetX(TODAY_LEFT_MARGIN_PX - dayWidth * todayIndex());
         return;
       }
-      const minDay = Math.min(...features.map((f) => f.x));
-      const maxDay = Math.max(...features.map((f) => f.x + f.duration));
-      const spanPx = (maxDay - minDay) * dayWidth + 80;
-      const avail = Math.max(200, containerWidth - 24);
-      const z = clamp(Math.round((avail / spanPx) * 100) / 100, 0.2, 1);
+      const minDay = Math.min(...starts);
+      const maxDay = Math.max(...ends);
+      // The canvas scales in BOTH axes, so fit to whichever is the binding
+      // constraint — otherwise tall roadmaps stay cut off after a "fit".
+      const yMax = Math.max(1, ...displayFeatures.map((f) => f.y + boxHeight(f, graph)), ...epicBands.map((b) => b.y1));
+      const marginX = 32;
+      const marginY = 24;
+      const zX = Math.max(120, width - marginX * 2) / Math.max(1, (maxDay - minDay) * dayWidth);
+      const zY = Math.max(80, height - marginY * 2) / yMax;
+      const z = clamp(Math.round(Math.min(zX, zY) * 100) / 100, 0.1, 1);
       setViewZoom(z);
-      setOffsetX(-minDay * dayWidth + 24);
-      if (containerRef.current) containerRef.current.scrollTop = 0;
+      setOffsetX(marginX / z - minDay * dayWidth);
+      if (cont) cont.scrollTop = 0;
+    },
+    // Zoom in/out by a step, keeping the CENTRE OF THE TASKS fixed on screen so
+    // the roadmap (which usually clusters near "today") doesn't drift sideways.
+    zoomStep: (delta: number) => {
+      const bands = epicBands.filter((b) => b.minX != null && b.maxX != null);
+      const starts = [...displayFeatures.map((f) => f.x), ...bands.map((b) => b.minX as number)];
+      const ends = [...displayFeatures.map((f) => f.x + f.duration), ...bands.map((b) => b.maxX as number)];
+      const midDay = starts.length ? (Math.min(...starts) + Math.max(...ends)) / 2 : todayIndex();
+      setViewZoom((zPrev) => {
+        const next = clamp(Math.round((zPrev + delta) * 100) / 100, 0.2, 2);
+        // Screen X of the tasks' centre right now; keep it put after the zoom.
+        const anchor = (offsetXRef.current + midDay * dayWidth) * zPrev;
+        const worldX = anchor / zPrev - offsetXRef.current;
+        setOffsetX(anchor / next - worldX);
+        return next;
+      });
     },
     resetView: () => {
       setViewZoom(1);
@@ -623,11 +654,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                 </div>
               ))}
             </div>
-            {timeline.secondary.map((t) => (
-              <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 20, bottom: 0, borderLeft: "1px solid #D9DEE6", paddingLeft: 4, display: "flex", alignItems: "center" }}>
-                <span className="mono text-xs" style={{ color: "#64748B", transform: `scaleX(${1 / viewZoom})`, transformOrigin: "left" }}>{t.label}</span>
-              </div>
-            ))}
+            {timeline.secondary.map((t, i) => {
+              const nextDay = timeline.secondary[i + 1]?.day ?? t.day + (density === "day" ? 1 : density === "week" ? 7 : 30);
+              return (
+                <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), width: (nextDay - t.day) * dayWidth, top: 20, bottom: 0, borderLeft: "1px solid #D9DEE6", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <span className="mono text-xs" style={{ color: "#64748B", transform: `scaleX(${1 / viewZoom})` }}>{t.label}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

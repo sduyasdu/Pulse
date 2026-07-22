@@ -11,7 +11,8 @@ interface ToolbarProps {
   onRenamePulse: (name: string) => void;
   onInvite: () => void;
   viewZoom: number;
-  setViewZoom: React.Dispatch<React.SetStateAction<number>>;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
   density: Density;
   setDensity: (d: Density) => void;
   onResetView: () => void;
@@ -50,7 +51,8 @@ export function Toolbar({
   onRenamePulse,
   onInvite,
   viewZoom,
-  setViewZoom,
+  onZoomIn,
+  onZoomOut,
   density,
   setDensity,
   onResetView,
@@ -174,9 +176,9 @@ export function Toolbar({
           </div>
         )}
         <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
-          <button onClick={() => setViewZoom((z) => clamp(Math.round((z - 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍−</span></button>
+          <button onClick={onZoomOut} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍−</span></button>
           <span className="mono text-xs w-9 text-center" style={{ color: "#EE7240" }}>{Math.round(viewZoom * 100)}%</span>
-          <button onClick={() => setViewZoom((z) => clamp(Math.round((z + 0.15) * 100) / 100, 0.2, 2))} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍+</span></button>
+          <button onClick={onZoomIn} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍+</span></button>
           <button onClick={onFitRoadmap} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#EE7240" }} title="Fit the whole roadmap on screen">fit</button>
         </div>
 

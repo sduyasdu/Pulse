@@ -208,11 +208,14 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
             {weekends.map((d) => (
               <div key={`wm${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, bottom: 0, width: dayWidth, background: "rgba(100,116,139,0.10)" }} />
             ))}
-            {secondaryTicks.map((t) => (
-              <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 0, bottom: 0, borderLeft: "1px solid #DDE2EA", paddingLeft: 3, display: "flex", alignItems: "center" }}>
-                <span className="mono" style={{ fontSize: 9, color: "#78859A", transform: `scaleX(${1 / viewZoom})`, transformOrigin: "left" }}>{t.label}</span>
-              </div>
-            ))}
+            {secondaryTicks.map((t, i) => {
+              const nextDay = secondaryTicks[i + 1]?.day ?? t.day + (density === "day" ? 1 : density === "week" ? 7 : 30);
+              return (
+                <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), width: (nextDay - t.day) * dayWidth, top: 0, bottom: 0, borderLeft: "1px solid #DDE2EA", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <span className="mono" style={{ fontSize: 9, color: "#78859A", transform: `scaleX(${1 / viewZoom})` }}>{t.label}</span>
+                </div>
+              );
+            })}
             <div style={{ position: "absolute", left: xForDay(0), top: 0, bottom: 0, width: 2, background: "#EE7240", opacity: 0.6 }} />
           </div>
         </div>
