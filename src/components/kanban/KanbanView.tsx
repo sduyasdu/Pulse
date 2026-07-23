@@ -66,7 +66,10 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
     [features, q, epicFilter, filterResource],
   );
 
-  const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses), [visibleFeatures, epics, statuses]);
+  // When a filter narrows the tasks, don't resurrect the hidden epics as empty
+  // bands — only show the epics that actually have matching tasks.
+  const filtered = !!q || epicFilter.size > 0 || !!filterResource;
+  const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses, !filtered), [visibleFeatures, epics, statuses, filtered]);
   const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
 
   const addTask = async (status: FeatureStatus, epicId: string | null = null) => {

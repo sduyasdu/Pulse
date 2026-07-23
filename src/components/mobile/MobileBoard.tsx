@@ -43,7 +43,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
     [features, epics, byId, q],
   );
 
-  const columns = useMemo(() => buildBoard(filtered, epics, statuses), [filtered, epics, statuses]);
+  const columns = useMemo(() => buildBoard(filtered, epics, statuses, !q), [filtered, epics, statuses, q]);
   const [active, setActive] = useState<string | null>(null);
   const col = columns.find((c) => c.status === active) ?? columns[0];
 

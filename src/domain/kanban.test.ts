@@ -56,4 +56,12 @@ describe("buildBoard", () => {
     expect(planned.groups.map((g) => g.epicId)).toEqual(["A", "B"]); // A has a task, B empty-everywhere
     expect(blocked.groups.map((g) => g.epicId)).toEqual(["B"]); // A not here; B still shown (brand new)
   });
+
+  it("suppresses empty-epic bands when includeEmptyEpics is false (filtering)", () => {
+    const epics = [epic("A"), epic("B")];
+    const cols = buildBoard([mk("planned", 1, "A")], epics, DEFAULT_STATUSES, false);
+    const planned = cols.find((c) => c.status === "planned")!;
+    expect(planned.groups.map((g) => g.epicId)).toEqual(["A"]); // B (empty) not shown
+    expect(cols.find((c) => c.status === "blocked")!.groups).toHaveLength(0);
+  });
 });
