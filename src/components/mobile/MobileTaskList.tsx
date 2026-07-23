@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Epic, Feature, Resource } from "@/types";
-import { colorForName, statusesOf, statusMetaOf } from "@/domain/constants";
+import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants";
 import { usePulseStore } from "@/stores/pulseStore";
 import { dateForDay } from "@/domain/dateUtils";
 
@@ -78,10 +78,9 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
         )}
         {groups.map((g, i) => (
           <div key={g.epic?.id ?? `loose-${i}`}>
-            <div className="flex items-center gap-2 mb-1.5 px-1">
-              {g.epic && <span style={{ width: 8, height: 8, borderRadius: 3, background: g.epic.color, flexShrink: 0 }} />}
-              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#64748B" }}>{g.epic ? g.epic.name : "No epic"}</span>
-              <span className="mono text-xs" style={{ color: "#94A3B8" }}>{g.items.length}</span>
+            <div className="flex items-center gap-1.5 mb-1.5 rounded" style={{ background: hexA(g.epic?.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.epic?.color || "#94A3B8"}`, padding: "3px 8px" }}>
+              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.epic ? g.epic.name : "No epic"}</span>
+              <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.items.length}</span>
             </div>
             <div className="flex flex-col gap-1.5">
               {g.items.map((f) => {
