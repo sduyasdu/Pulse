@@ -15,6 +15,7 @@ import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { KanbanView } from "@/components/kanban/KanbanView";
 import { PresenceBar } from "@/components/presence/PresenceBar";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -268,7 +269,12 @@ export function PulsePage() {
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
         onInvite={() => setShowInvite(true)}
-        presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />}
+        presence={
+          <div className="flex items-center gap-2">
+            <PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />
+            <NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark />
+          </div>
+        }
         viewMode={viewMode}
         setViewMode={setViewMode}
         viewZoom={viewZoom}

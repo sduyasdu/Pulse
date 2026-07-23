@@ -160,6 +160,19 @@ service cloud.firestore {
         allow delete: if canEditPulse(pulseId) || (isSignedIn() && myEmail() == emailId);
       }
 
+      // In-Pulse notifications: a member creates one addressed to another
+      // member; only the target reads/updates/deletes their own.
+      match /notifications/{notifId} {
+        allow read: if isSignedIn() && resource.data.targetUid == request.auth.uid;
+        allow create: if isPulseMember(pulseId)
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.targetUid != request.auth.uid
+          && exists(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.resource.data.targetUid));
+        allow update: if isSignedIn() && resource.data.targetUid == request.auth.uid
+          && request.resource.data.targetUid == resource.data.targetUid;
+        allow delete: if isSignedIn() && resource.data.targetUid == request.auth.uid;
+      }
+
       // Live presence: each member writes only their own heartbeat; all members
       // read to see who's viewing. Stale entries are filtered client-side.
       match /presence/{presenceUid} {

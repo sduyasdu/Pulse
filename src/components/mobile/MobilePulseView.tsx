@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useAuthStore } from "@/stores/authStore";
 import { PresenceBar } from "@/components/presence/PresenceBar";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { todayIndex } from "@/domain/dateUtils";
 import type { Pulse, PulseRole } from "@/types";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
@@ -58,6 +59,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
         </div>
         <PresenceBar pulseId={pulse?.id} uid={uid} email={email} dark />
+        <NotificationsBell pulseId={pulse?.id} uid={uid} onOpenTask={setSelectedId} dark />
         {canEdit && (
           <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#F0A875", fontSize: 12, fontWeight: 600 }}>
             ＋ Invite

@@ -3,6 +3,7 @@ import type { Comment } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore } from "@/stores/pulseStore";
 import { subscribeComments, addComment, deleteComment } from "@/services/firestore/comments";
+import { createNotification } from "@/services/firestore/notifications";
 import { colorForName } from "@/domain/constants";
 import { confirmAt } from "@/stores/confirmStore";
 
@@ -25,6 +26,8 @@ export function Comments({ pulseId, featureId }: { pulseId: string; featureId: s
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const email = useAuthStore((s) => s.firebaseUser?.email ?? "");
   const isOwner = usePulseStore((s) => (uid ? s.roleOf(uid) === "owner" : false));
+  const featureTitle = usePulseStore((s) => s.features.find((f) => f.id === featureId)?.title ?? "a task");
+  const members = usePulseStore((s) => s.members);
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,6 +41,25 @@ export function Comments({ pulseId, featureId }: { pulseId: string; featureId: s
     setText("");
     try {
       await addComment(pulseId, featureId, uid, email, t);
+      // Notify the other participants already in this thread (and who are still
+      // members), so they see the reply.
+      const memberUids = new Set(members.map((m) => m.uid));
+      const recipients = [...new Set(comments.map((c) => c.authorUid))].filter((p) => p !== uid && memberUids.has(p));
+      await Promise.all(
+        recipients.map((targetUid) =>
+          createNotification(pulseId, {
+            targetUid,
+            actorUid: uid,
+            actorEmail: email,
+            type: "comment",
+            featureId,
+            featureTitle,
+            text: t.slice(0, 90),
+            createdAt: Date.now(),
+            read: false,
+          }),
+        ),
+      );
     } finally {
       setBusy(false);
     }

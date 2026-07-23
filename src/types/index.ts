@@ -95,6 +95,20 @@ export interface Comment {
   editedAt?: number;
 }
 
+/** An in-Pulse notification for a member, at pulses/{id}/notifications/{nid}. */
+export interface Notification {
+  id: string;
+  targetUid: string;
+  actorUid: string;
+  actorEmail: string;
+  type: "comment";
+  featureId: string;
+  featureTitle: string;
+  text: string; // short snippet
+  createdAt: number;
+  read?: boolean;
+}
+
 /** Live presence heartbeat — one per viewer, at pulses/{id}/presence/{uid}. */
 export interface PresenceEntry {
   uid: string;
