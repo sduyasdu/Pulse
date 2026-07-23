@@ -45,6 +45,19 @@ export interface Pulse {
    * the prototype's Nubceo-flavored starter list isn't shipped as a
    * default (spec §9/§11: no domain-specific sample data in the real app). */
   resourceTypes: string[];
+  /** User-managed, ordered Kanban statuses. Unset/empty = the built-in four
+   * (DEFAULT_STATUSES). "done" is a reserved terminal status: always present,
+   * can't be removed or reordered out of last position, and moving a task into
+   * it stamps the finished date and locks it. */
+  statuses?: StatusDef[];
+}
+
+/** One Kanban/status column. `id` is what Feature.status / Subtask.status
+ * reference; `color` drives the badge/column tint (bg/text derived). */
+export interface StatusDef {
+  id: string;
+  label: string;
+  color: string;
 }
 
 /** Graph Effort scale (spec §4) — user-adjustable per Pulse. */
@@ -117,7 +130,10 @@ export interface PendingInviteEntry {
 // Canvas entities (spec §3, §4) — live under pulses/{pulseId}/...
 // ---------------------------------------------------------------------------
 
-export type FeatureStatus = "planned" | "in-progress" | "blocked" | "done";
+// A status id. The built-in ids are "planned" | "in-progress" | "blocked" |
+// "done"; Pulses may define additional custom ids (see Pulse.statuses). "done"
+// is always reserved/terminal. Kept as a plain string so custom statuses work.
+export type FeatureStatus = string;
 
 export interface Attachment {
   id: string;

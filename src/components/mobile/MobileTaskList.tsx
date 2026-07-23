@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Epic, Feature, Resource } from "@/types";
-import { STATUS_META, colorForName } from "@/domain/constants";
+import { colorForName, statusesOf, statusMetaOf } from "@/domain/constants";
+import { usePulseStore } from "@/stores/pulseStore";
 import { dateForDay } from "@/domain/dateUtils";
 
 interface MobileTaskListProps {
@@ -14,6 +15,7 @@ const fmt = (day: number) => dateForDay(day).toLocaleDateString("en-US", { month
 
 export function MobileTaskList({ features, epics, resources, onSelect }: MobileTaskListProps) {
   const byId = Object.fromEntries(resources.map((r) => [r.id, r]));
+  const statuses = statusesOf(usePulseStore((s) => s.pulse));
   const [query, setQuery] = useState("");
 
   if (features.length === 0) {
@@ -83,7 +85,7 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
             </div>
             <div className="flex flex-col gap-1.5">
               {g.items.map((f) => {
-                const meta = STATUS_META[f.status];
+                const meta = statusMetaOf(f.status, statuses);
                 return (
                   <button
                     key={f.id}

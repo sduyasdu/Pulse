@@ -32,6 +32,7 @@ interface ToolbarProps {
   epicFilter: Set<string>;
   setEpicFilter: (v: Set<string>) => void;
   epicOptions: { id: string; name: string }[];
+  statusOptions: { id: string; name: string }[];
   showDelays: boolean;
   setShowDelays: (v: boolean) => void;
   epicsShrunk: boolean;
@@ -44,13 +45,6 @@ interface ToolbarProps {
   canEdit: boolean;
   roleLabel: string;
 }
-
-const STATUS_OPTIONS = [
-  { value: "planned", label: "Planned" },
-  { value: "in-progress", label: "In progress" },
-  { value: "blocked", label: "Blocked" },
-  { value: "done", label: "Done" },
-];
 
 export function Toolbar({
   pulseName,
@@ -77,6 +71,7 @@ export function Toolbar({
   epicFilter,
   setEpicFilter,
   epicOptions,
+  statusOptions,
   showDelays,
   setShowDelays,
   epicsShrunk,
@@ -227,7 +222,7 @@ export function Toolbar({
           </div>
           <MultiSelectFilter
             label="statuses"
-            options={STATUS_OPTIONS.map((s) => ({ id: s.value, name: s.label }))}
+            options={statusOptions}
             selected={featureStatusFilter}
             onChange={setFeatureStatusFilter}
           />

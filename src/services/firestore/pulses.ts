@@ -13,7 +13,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { MyPulseIndexEntry, Pulse, PulseMember, PulseRole } from "@/types";
+import type { MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { stripUndefined } from "./patch";
 
@@ -100,6 +100,10 @@ export async function updateGraphConfig(pulseId: string, graphConfig: Pulse["gra
 
 export async function updateResourceTypes(pulseId: string, resourceTypes: string[]): Promise<void> {
   await updateDoc(doc(db, "pulses", pulseId), { resourceTypes, updatedAt: Date.now() });
+}
+
+export async function updatePulseStatuses(pulseId: string, statuses: StatusDef[]): Promise<void> {
+  await updateDoc(doc(db, "pulses", pulseId), { statuses, updatedAt: Date.now() });
 }
 
 /** Generic field-level patch of the Pulse doc — used by the undo/redo engine

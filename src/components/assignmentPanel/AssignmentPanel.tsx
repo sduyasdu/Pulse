@@ -3,7 +3,7 @@ import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange, assignmentsFor, utilizationPct } from "@/domain/assignments";
 import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
-import { STATUS_META, RES_LABEL_W, clamp, colorForName, type Density } from "@/domain/constants";
+import { RES_LABEL_W, clamp, colorForName, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
 import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
@@ -42,6 +42,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const pulse = usePulseStore((s) => s.pulse);
+  const statuses = statusesOf(pulse);
   const coarse = useCoarsePointer();
 
   const [assignPeople, setAssignPeople] = useState<Set<string>>(new Set());
@@ -171,7 +172,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
           <MultiSelectFilter
             label="statuses"
             openUp
-            options={Object.entries(STATUS_META).map(([k, m]) => ({ id: k, name: m.label }))}
+            options={statuses.map((s) => ({ id: s.id, name: s.label }))}
             selected={assignStatuses}
             onChange={setAssignStatuses}
           />
@@ -304,7 +305,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
                       ))}
                       <div style={{ position: "absolute", left: xForDay(0), top: 0, bottom: 0, width: 1, background: "rgba(34,211,238,0.35)" }} />
                       {stacked.map((row, i) => {
-                        const m = STATUS_META[row.status];
+                        const m = statusMetaOf(row.status, statuses);
                         const bLeft = xForDay(row.start);
                         const bWidth = Math.max(row.duration * dayWidth, 26);
                         return (

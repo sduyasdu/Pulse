@@ -2,7 +2,7 @@ import type { Epic, Feature } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { boxHeight } from "@/domain/graphEffort";
 import { epicBandsFor } from "@/domain/layout";
-import { STATUS_META, hexA } from "@/domain/constants";
+import { hexA, statusMetaOf } from "@/domain/constants";
 import { todayIndex } from "@/domain/dateUtils";
 
 // SVG user-space canvas the roadmap is squashed into. The x-axis is in days
@@ -82,7 +82,7 @@ export function PulseThumbnail({ features, epics }: PulseThumbnailProps) {
         />
       ))}
       {visible.map((f) => {
-        const meta = STATUS_META[f.status] ?? STATUS_META.planned;
+        const meta = statusMetaOf(f.status);
         return (
           <rect
             key={f.id}

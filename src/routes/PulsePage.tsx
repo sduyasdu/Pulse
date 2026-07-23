@@ -8,7 +8,7 @@ import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog"
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
-import { BASE_DAY_WIDTH, DENSITY_DAY_PX, type Density } from "@/domain/constants";
+import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import type { PulseRole } from "@/types";
 import { Toolbar } from "@/components/canvas/Toolbar";
@@ -288,6 +288,7 @@ export function PulsePage() {
         epicFilter={epicFilter}
         setEpicFilter={setEpicFilter}
         epicOptions={epics.map((e) => ({ id: e.id, name: e.name || "Untitled epic" }))}
+        statusOptions={statusesOf(pulse).map((s) => ({ id: s.id, name: s.label }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
         epicsShrunk={epicsShrunk}

@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import type { Feature, FeatureStatus } from "@/types";
+import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard, type StatusColumn } from "@/domain/kanban";
-import { STATUS_META, colorForName, hexA } from "@/domain/constants";
+import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
 import { confirmAt } from "@/stores/confirmStore";
+import { StatusEditorDialog } from "./StatusEditorDialog";
 
 interface KanbanViewProps {
   selectedId: string | null;
@@ -29,11 +30,13 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const removeFeature = usePulseStore((s) => s.removeFeature);
   const graph = graphConfigOf(pulse);
+  const statuses = statusesOf(pulse);
 
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
   const [draggingStatus, setDraggingStatus] = useState<FeatureStatus | null>(null);
+  const [editStatuses, setEditStatuses] = useState(false);
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
   // columns (D7). Matching mirrors the canvas so the two views agree.
@@ -49,7 +52,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
     [features, q, epicFilter, filterResource],
   );
 
-  const columns = useMemo(() => buildBoard(visibleFeatures, epics), [visibleFeatures, epics]);
+  const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses), [visibleFeatures, epics, statuses]);
   const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
 
   const addTask = async (status: FeatureStatus) => {
@@ -95,11 +98,18 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
         <span className="mono text-xs" style={{ color: "#94A3B8" }}>{visibleFeatures.length} task{visibleFeatures.length === 1 ? "" : "s"}</span>
         <div className="flex-1" />
         {canEdit && (
-          <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-            ▤ Add epic
-          </button>
+          <>
+            <button onClick={() => setEditStatuses(true)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
+              ⚙ Statuses
+            </button>
+            <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
+              ▤ Add epic
+            </button>
+          </>
         )}
       </div>
+
+      {editStatuses && <StatusEditorDialog onClose={() => setEditStatuses(false)} />}
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex gap-3 p-3 h-full" style={{ minWidth: "min-content" }}>
@@ -111,6 +121,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               selectedId={selectedId}
               onSelect={onSelect}
               graph={graph}
+              statuses={statuses}
               resById={resById}
               dragOver={dragOverCol === col.status}
               dragOverGroup={dragOverGroup}
@@ -138,6 +149,7 @@ function Column({
   selectedId,
   onSelect,
   graph,
+  statuses,
   resById,
   dragOver,
   dragOverGroup,
@@ -157,6 +169,7 @@ function Column({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   graph: ReturnType<typeof graphConfigOf>;
+  statuses: StatusDef[];
   resById: Record<string, { initials: string; name: string }>;
   dragOver: boolean;
   dragOverGroup: string | null;
@@ -171,7 +184,7 @@ function Column({
   onDrop: (epicId: string | null | undefined, e: React.DragEvent) => void;
   onAddTask: () => void;
 }) {
-  const meta = STATUS_META[col.status];
+  const meta = statusMetaOf(col.status, statuses);
   return (
     <div
       className="flex flex-col rounded-xl"
@@ -213,7 +226,7 @@ function Column({
               </div>
               <div className="flex flex-col gap-1.5">
                 {g.tasks.map((f) => (
-                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} onDuplicate={onDuplicate} onDelete={onDelete} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
+                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} statuses={statuses} resById={resById} onDuplicate={onDuplicate} onDelete={onDelete} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
                 ))}
               </div>
             </div>
@@ -236,6 +249,7 @@ function Card({
   selected,
   onSelect,
   graph,
+  statuses,
   resById,
   onDuplicate,
   onDelete,
@@ -247,6 +261,7 @@ function Card({
   selected: boolean;
   onSelect: (id: string | null) => void;
   graph: ReturnType<typeof graphConfigOf>;
+  statuses: StatusDef[];
   resById: Record<string, { initials: string; name: string }>;
   onDuplicate: (id: string) => void;
   onDelete: (f: Feature, pt: { clientX: number; clientY: number }) => void;
@@ -319,7 +334,7 @@ function Card({
             ) : null;
           })}
           {(f.resources || []).length > 4 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>+{f.resources!.length - 4}</span>}
-          {est > 0 && <span className="mono flex-shrink-0" title={`${Math.round(assignedEffort(f))}md assigned of ${Math.round(est)}md`} style={{ fontSize: 9, fontWeight: 700, color: STATUS_META[f.status].text, opacity: 0.85, marginLeft: 2 }}>{coverage}%</span>}
+          {est > 0 && <span className="mono flex-shrink-0" title={`${Math.round(assignedEffort(f))}md assigned of ${Math.round(est)}md`} style={{ fontSize: 9, fontWeight: 700, color: statusMetaOf(f.status, statuses).text, opacity: 0.85, marginLeft: 2 }}>{coverage}%</span>}
         </div>
       </div>
     </div>

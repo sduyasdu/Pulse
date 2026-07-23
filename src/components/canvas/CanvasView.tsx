@@ -5,7 +5,7 @@ import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, alloc
 import { epicAtBox, epicBandsFor } from "@/domain/layout";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
-import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, STATUS_META, colorForName, hexA, type Density } from "@/domain/constants";
+import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
 import { recordSingle, patchOp } from "@/stores/undoStore";
@@ -71,6 +71,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
+  const statuses = statusesOf(usePulseStore((s) => s.pulse));
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const patchEpic = usePulseStore((s) => s.patchEpic);
   const addFeature = usePulseStore((s) => s.addFeature);
@@ -786,7 +787,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
             {/* Feature boxes */}
             {displayFeatures.map((box) => {
-              const meta = STATUS_META[box.status];
+              const meta = statusMetaOf(box.status, statuses);
               const left = xForDay(box.x);
               const width = Math.max(box.duration * dayWidth, 34);
               const top = box.y;
@@ -909,7 +910,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   ) : (
                     <div className="px-2 py-1" style={{ overflow: "hidden" }}>
                       {box.children!.map((c) => {
-                        const cm = STATUS_META[c.status];
+                        const cm = statusMetaOf(c.status, statuses);
                         const resp = c.resources?.[0] ? resourceById[c.resources[0]] : null;
                         return (
                           <div key={c.id} className="flex items-center gap-1.5" style={{ height: 27, borderBottom: "1px solid rgba(15,23,42,0.05)" }}>
@@ -951,7 +952,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
       {hoverCard && !dimHint && (() => {
         const hb = hoverCard.box;
-        const hm = STATUS_META[hb.status];
+        const hm = statusMetaOf(hb.status, statuses);
         const hEst = estimateEffort(hb, graph);
         const hAssigned = assignedEffort(hb);
         const hCov = Math.round((hAssigned / Math.max(0.1, hEst)) * 100);

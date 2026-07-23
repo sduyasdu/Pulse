@@ -1,4 +1,4 @@
-import type { FeatureStatus } from "@/types";
+import type { FeatureStatus, StatusDef } from "@/types";
 
 // Canvas layout constants — ported 1:1 from the prototype.
 export const BASE_DAY_WIDTH = 26; // px per day at 100% in DAY view
@@ -21,12 +21,43 @@ export interface StatusMeta {
   label: string;
 }
 
-export const STATUS_META: Record<FeatureStatus, StatusMeta> = {
+// Hand-tuned palette for the four built-in statuses. Custom statuses derive
+// their meta from a single colour via statusMetaOf().
+export const STATUS_META: Record<string, StatusMeta> = {
   planned: { border: "#64748B", bg: "#EEF2F7", text: "#475569", label: "Planned" },
   "in-progress": { border: "#F5A524", bg: "#FFF6E2", text: "#92400E", label: "In progress" },
   blocked: { border: "#E5484D", bg: "#FDEBEC", text: "#9F1D23", label: "Blocked" },
   done: { border: "#12A594", bg: "#E6F7F4", text: "#0F6B5C", label: "Done" },
 };
+
+export const DONE_STATUS_ID = "done";
+
+// The columns a Pulse gets until it customises its statuses (Pulse.statuses).
+export const DEFAULT_STATUSES: StatusDef[] = [
+  { id: "planned", label: "Planned", color: "#64748B" },
+  { id: "in-progress", label: "In progress", color: "#F5A524" },
+  { id: "blocked", label: "Blocked", color: "#E5484D" },
+  { id: DONE_STATUS_ID, label: "Done", color: "#12A594" },
+];
+
+// Colour palette offered when creating a custom status.
+export const STATUS_COLORS = ["#64748B", "#F5A524", "#E5484D", "#12A594", "#6366F1", "#EC4899", "#0EA5E9", "#8B5CF6", "#22C55E", "#0F766E"];
+
+/** The effective, ordered status list for a Pulse (defaults when unset). */
+export function statusesOf(pulse: { statuses?: StatusDef[] } | null | undefined): StatusDef[] {
+  return pulse?.statuses && pulse.statuses.length ? pulse.statuses : DEFAULT_STATUSES;
+}
+
+/** Render meta for a status id. The four built-ins keep their hand-tuned
+ * palette; a custom status derives bg/text from its colour; an unknown id
+ * falls back to neutral grey — never undefined, so no call site can crash. */
+export function statusMetaOf(id: FeatureStatus, statuses?: StatusDef[]): StatusMeta {
+  const base = STATUS_META[id];
+  if (base) return base;
+  const def = statuses?.find((s) => s.id === id);
+  const color = def?.color || "#64748B";
+  return { border: color, bg: hexA(color, 0.14), text: "#334155", label: def?.label || id };
+}
 
 export const AVATAR_COLORS = ["#6366F1", "#EC4899", "#14B8A6", "#F59E0B", "#8B5CF6", "#0EA5E9"];
 

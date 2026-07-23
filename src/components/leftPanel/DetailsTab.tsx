@@ -13,7 +13,7 @@ import {
   theoreticalElapsed,
 } from "@/domain/graphEffort";
 import { dayIndexFromDateInputValue, fmtDate, toDateInputValue } from "@/domain/dateUtils";
-import { STATUS_META, LABEL_COLORS, colorForName } from "@/domain/constants";
+import { LABEL_COLORS, colorForName, statusesOf, statusMetaOf } from "@/domain/constants";
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
@@ -37,6 +37,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   const epics = usePulseStore((s) => s.epics);
   const resources = usePulseStore((s) => s.resources);
   const pulse = usePulseStore((s) => s.pulse);
+  const statuses = statusesOf(pulse);
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
@@ -175,7 +176,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         <div className="flex flex-col gap-1.5 mt-2">
           {(feature.children || []).length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>No subtasks yet — break this feature into steps.</span>}
           {(feature.children || []).map((c) => {
-            const cm = STATUS_META[c.status];
+            const cm = statusMetaOf(c.status, statuses);
             const open = !!expandedSubs[c.id];
             const respId = c.resources?.[0] ?? null;
             const resp = respId ? resources.find((x) => x.id === respId) ?? null : null;
@@ -212,8 +213,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                         className="mono text-xs border rounded px-1 py-0.5 flex-1"
                         style={{ borderColor: "#E2DFD9" }}
                       >
-                        {Object.entries(STATUS_META).map(([k, m]) => (
-                          <option key={k} value={k}>{m.label}</option>
+                        {statuses.map((s) => (
+                          <option key={s.id} value={s.id}>{s.label}</option>
                         ))}
                       </select>
                     </div>
@@ -468,8 +469,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           className="mt-1 w-full text-sm border rounded px-2 py-1.5"
           style={{ borderColor: "#E2DFD9" }}
         >
-          {Object.entries(STATUS_META).map(([k, m]) => (
-            <option key={k} value={k}>{m.label}</option>
+          {statuses.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
           ))}
         </select>
         {(feature.status === "done" || feature.finishedAt) && (

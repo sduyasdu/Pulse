@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Attachment, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, Subtask } from "@/types";
+import type { Attachment, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { subscribeEpics, createEpic, updateEpic, deleteEpic, newEpicId } from "@/services/firestore/epics";
 import { subscribeFeatures, createFeature, updateFeature, deleteFeature, newFeatureId } from "@/services/firestore/features";
@@ -11,7 +11,7 @@ import {
   newResourceId,
   makeInitials,
 } from "@/services/firestore/resources";
-import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes } from "@/services/firestore/pulses";
+import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes, updatePulseStatuses } from "@/services/firestore/pulses";
 import { subscribePulseMembers } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
@@ -39,6 +39,7 @@ interface PulseStoreState {
   renamePulse: (name: string) => Promise<void>;
   setGraphConfig: (stepPx: number, workPerStep: number) => Promise<void>;
   setResourceTypes: (types: string[]) => Promise<void>;
+  setStatuses: (statuses: StatusDef[]) => Promise<void>;
 
   addEpic: (y0: number) => Promise<string>;
   patchEpic: (epicId: string, patch: Partial<Epic>, opts?: MutateOpts) => Promise<void>;
@@ -144,6 +145,13 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (!pulseId) return;
     await updateResourceTypes(pulseId, types);
     if (pulse) recordSingle("Edit resource types", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { resourceTypes: types }));
+  },
+
+  setStatuses: async (statuses) => {
+    const { pulseId, pulse } = get();
+    if (!pulseId) return;
+    await updatePulseStatuses(pulseId, statuses);
+    if (pulse) recordSingle("Edit statuses", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { statuses }));
   },
 
   addEpic: async (y0) => {
