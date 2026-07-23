@@ -15,6 +15,7 @@ export function MultiSelectFilter({
   onChange,
   searchable,
   openUp,
+  dark,
 }: {
   label: string;
   options: Option[];
@@ -22,6 +23,9 @@ export function MultiSelectFilter({
   onChange: (next: Set<string>) => void;
   searchable?: boolean;
   openUp?: boolean;
+  /** Match the dark toolbar's buttons (dark bg + light text) instead of the
+   * default light-panel look. The dropdown menu itself stays light. */
+  dark?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -47,10 +51,14 @@ export function MultiSelectFilter({
       <button
         onClick={() => setOpen((o) => !o)}
         className="mono text-xs border rounded px-1.5 py-1 flex items-center gap-1 no-press"
-        style={{ borderColor: selected.size ? "#EE7240" : "#E2DFD9", background: selected.size ? "#FFF7F1" : "#FFFFFF", color: "#334155", maxWidth: 150 }}
+        style={
+          dark
+            ? { borderColor: selected.size ? "#EE7240" : "#24406B", background: "#1B3A63", color: "#EE7240", maxWidth: 150 }
+            : { borderColor: selected.size ? "#EE7240" : "#E2DFD9", background: selected.size ? "#FFF7F1" : "#FFFFFF", color: "#334155", maxWidth: 150 }
+        }
       >
         <span className="truncate">{summary}</span>
-        <span style={{ fontSize: 8, color: "#94A3B8" }}>{open ? "▲" : "▼"}</span>
+        <span style={{ fontSize: 8, color: dark ? "#F0A875" : "#94A3B8" }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <>

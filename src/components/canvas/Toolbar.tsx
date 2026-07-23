@@ -222,6 +222,7 @@ export function Toolbar({
           </div>
           <MultiSelectFilter
             label="statuses"
+            dark
             options={statusOptions}
             selected={featureStatusFilter}
             onChange={setFeatureStatusFilter}
@@ -229,6 +230,7 @@ export function Toolbar({
           <MultiSelectFilter
             label="epics"
             searchable
+            dark
             options={epicOptions}
             selected={epicFilter}
             onChange={setEpicFilter}
