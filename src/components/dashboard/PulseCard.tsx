@@ -87,16 +87,22 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
           <div style={{ height: 56, background: "#FDFCF8", border: "1px solid #EEF1F4", borderRadius: 6 }} />
         )}
         <div className="font-display mt-2.5 text-sm font-medium text-yasdu-fg">{entry.name || "Untitled Pulse"}</div>
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#F7E8DA", color: "#D85A28" }}>
-            {ROLE_LABEL[entry.role]}
-          </span>
-          {archived && (
-            <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#64748B" }}>
-              Archived
-            </span>
-          )}
-        </div>
+        {/* The section already conveys ownership, so the "Owner" badge is
+            redundant — only show Editor/Viewer (and the archived tag). */}
+        {(!isOwner || archived) && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            {!isOwner && (
+              <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#F7E8DA", color: "#D85A28" }}>
+                {ROLE_LABEL[entry.role]}
+              </span>
+            )}
+            {archived && (
+              <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#64748B" }}>
+                Archived
+              </span>
+            )}
+          </div>
+        )}
         {summary && (
           <div className="mt-2 flex flex-wrap items-center gap-1" style={{ paddingRight: 30 }}>
             <StatBadge n={summary.epics.length} label="epic" bg="#EAF0FA" color="#1B3A63" />

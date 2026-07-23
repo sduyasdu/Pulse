@@ -16,6 +16,7 @@ export function DashboardPage() {
   const [pulses, setPulses] = useState<MyPulseIndexEntry[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [invitingPulse, setInvitingPulse] = useState<MyPulseIndexEntry | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -55,13 +56,15 @@ export function DashboardPage() {
   if (!firebaseUser) return null;
   const uid = firebaseUser.uid;
 
-  // Archived Pulses drop out of the main sections into their own group.
-  // "Your Pulses" are the ones you own; everything you were invited to
-  // (editor/viewer) lives under "Shared with you".
+  // Three groups: Pulses you own, ones shared with you, and archived ones —
+  // each narrowed by the search box (matched on name).
+  const q = query.trim().toLowerCase();
+  const match = (p: MyPulseIndexEntry) => !q || (p.name || "").toLowerCase().includes(q);
   const active = pulses?.filter((p) => !p.archived) ?? [];
-  const owned = active.filter((p) => p.role === "owner");
-  const shared = active.filter((p) => p.role !== "owner");
-  const archived = pulses?.filter((p) => p.archived) ?? [];
+  const owned = active.filter((p) => p.role === "owner" && match(p));
+  const shared = active.filter((p) => p.role !== "owner" && match(p));
+  const archived = (pulses?.filter((p) => p.archived) ?? []).filter(match);
+  const noResults = q !== "" && owned.length === 0 && shared.length === 0 && archived.length === 0;
 
   const del = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
     const ok = await confirmAt(pt, {
@@ -100,11 +103,27 @@ export function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="font-display text-xl font-medium text-yasdu-fg">Your Pulses</h1>
+        <div className="mb-8 flex items-center gap-3">
+          <div className="relative flex-1" style={{ maxWidth: 420 }}>
+            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#94A3B8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+              <circle cx={11} cy={11} r={7} />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search Pulses…"
+              className="w-full rounded-lg border text-sm"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "9px 34px", outline: "none" }}
+            />
+            {query && (
+              <button onClick={() => setQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}>✕</button>
+            )}
+          </div>
+          <div className="flex-1" />
           <button
             onClick={() => setCreating(true)}
-            className="rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg"
+            className="rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0"
             style={{ background: "#D85A28" }}
           >
             + New Pulse
@@ -113,30 +132,38 @@ export function DashboardPage() {
 
         {pulses === null ? (
           <p className="text-sm text-yasdu-muted">Loading…</p>
-        ) : owned.length === 0 ? (
+        ) : noResults ? (
           <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
-            <p className="text-sm text-yasdu-muted">
-              No Pulses yet. Create one to start laying out your roadmap.
-            </p>
+            <p className="text-sm text-yasdu-muted">No Pulses match “{query.trim()}”.</p>
           </div>
         ) : (
-          grid(owned)
-        )}
-
-        {shared.length > 0 && (
           <>
-            <h2 className="font-display mb-4 mt-10 text-lg font-medium text-yasdu-fg">Shared with you</h2>
-            {grid(shared)}
-          </>
-        )}
+            {(owned.length > 0 || !q) && (
+              <>
+                <SectionHeading first count={owned.length}>Your Pulses</SectionHeading>
+                {owned.length > 0 ? (
+                  grid(owned)
+                ) : (
+                  <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
+                    <p className="text-sm text-yasdu-muted">No Pulses yet. Create one to start laying out your roadmap.</p>
+                  </div>
+                )}
+              </>
+            )}
 
-        {archived.length > 0 && (
-          <>
-            <h2 className="font-display mb-4 mt-10 flex items-center gap-2 text-lg font-medium text-yasdu-fg">
-              Archived
-              <span className="mono text-xs text-yasdu-muted">{archived.length}</span>
-            </h2>
-            {grid(archived)}
+            {shared.length > 0 && (
+              <>
+                <SectionHeading count={shared.length}>Shared with me</SectionHeading>
+                {grid(shared)}
+              </>
+            )}
+
+            {archived.length > 0 && (
+              <>
+                <SectionHeading count={archived.length}>Archived</SectionHeading>
+                {grid(archived)}
+              </>
+            )}
           </>
         )}
       </main>
@@ -166,5 +193,14 @@ export function DashboardPage() {
         />
       )}
     </div>
+  );
+}
+
+function SectionHeading({ children, count, first }: { children: React.ReactNode; count: number; first?: boolean }) {
+  return (
+    <h2 className={`font-display flex items-center gap-2 font-medium text-yasdu-fg ${first ? "mb-4 text-xl" : "mb-4 mt-10 text-lg"}`}>
+      {children}
+      <span className="mono text-xs text-yasdu-muted">{count}</span>
+    </h2>
   );
 }
