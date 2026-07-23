@@ -42,13 +42,14 @@ describe("buildBoard", () => {
   it("treats an unknown epicId as 'No epic'", () => {
     const feats = [mk("planned", 1, "ghost")];
     const planned = buildBoard(feats, [epic("A")]).find((c) => c.status === "planned")!;
-    expect(planned.groups).toHaveLength(1);
-    expect(planned.groups[0].epicId).toBeNull();
+    const noEpic = planned.groups.find((g) => g.epicId === null);
+    expect(noEpic?.tasks).toHaveLength(1);
   });
 
-  it("omits epic groups that have no tasks in a column", () => {
+  it("keeps every epic as a group (empty ones are drop targets); 'No epic' only when used", () => {
     const epics = [epic("A"), epic("B")];
     const planned = buildBoard([mk("planned", 1, "A")], epics).find((c) => c.status === "planned")!;
-    expect(planned.groups.map((g) => g.epicId)).toEqual(["A"]);
+    expect(planned.groups.map((g) => g.epicId)).toEqual(["A", "B"]); // B empty but present, no "No epic"
+    expect(planned.groups.find((g) => g.epicId === "B")!.tasks).toHaveLength(0);
   });
 });

@@ -22,12 +22,14 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const resources = usePulseStore((s) => s.resources);
   const pulse = usePulseStore((s) => s.pulse);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
+  const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
   const addFeature = usePulseStore((s) => s.addFeature);
   const addEpic = usePulseStore((s) => s.addEpic);
   const graph = graphConfigOf(pulse);
 
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
   // columns (D7). Matching mirrors the canvas so the two views agree.
@@ -51,11 +53,20 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
     if (id) onSelect(id);
   };
 
-  const drop = (status: FeatureStatus, e: React.DragEvent) => {
+  // A drop sets the card's status to the target column, and — when dropped on a
+  // specific epic band (epicId !== undefined) — also its epic. Each is a
+  // separate field change / undo entry, and no-ops when already at the target.
+  const handleDrop = (status: FeatureStatus, epicId: string | null | undefined, e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverCol(null);
+    setDragOverGroup(null);
     const id = e.dataTransfer.getData("text/plain");
-    if (id && canEdit) void setFeatureStatus(id, status);
+    if (!id || !canEdit) return;
+    const f = features.find((x) => x.id === id);
+    if (!f) return;
+    if (f.status !== status) void setFeatureStatus(id, status);
+    if (epicId !== undefined && (f.epicId ?? null) !== epicId) void moveFeatureToEpic(id, epicId);
   };
 
   return (
@@ -83,9 +94,11 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               graph={graph}
               resById={resById}
               dragOver={dragOverCol === col.status}
+              dragOverGroup={dragOverGroup}
+              setDragOverGroup={setDragOverGroup}
               onDragEnterCol={() => setDragOverCol(col.status)}
-              onDragLeaveCol={() => setDragOverCol((s) => (s === col.status ? null : s))}
-              onDrop={(e) => drop(col.status, e)}
+              onDragLeaveCol={() => { setDragOverCol((s) => (s === col.status ? null : s)); setDragOverGroup(null); }}
+              onDrop={(epicId, e) => handleDrop(col.status, epicId, e)}
               onAddTask={() => void addTask(col.status)}
             />
           ))}
@@ -103,6 +116,8 @@ function Column({
   graph,
   resById,
   dragOver,
+  dragOverGroup,
+  setDragOverGroup,
   onDragEnterCol,
   onDragLeaveCol,
   onDrop,
@@ -115,9 +130,11 @@ function Column({
   graph: ReturnType<typeof graphConfigOf>;
   resById: Record<string, { initials: string; name: string }>;
   dragOver: boolean;
+  dragOverGroup: string | null;
+  setDragOverGroup: (k: string | null) => void;
   onDragEnterCol: () => void;
   onDragLeaveCol: () => void;
-  onDrop: (e: React.DragEvent) => void;
+  onDrop: (epicId: string | null | undefined, e: React.DragEvent) => void;
   onAddTask: () => void;
 }) {
   const meta = STATUS_META[col.status];
@@ -128,7 +145,7 @@ function Column({
       onDragOver={(e) => e.preventDefault()}
       onDragEnter={onDragEnterCol}
       onDragLeave={onDragLeaveCol}
-      onDrop={onDrop}
+      onDrop={(e) => onDrop(undefined, e)}
     >
       <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0">
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: meta.border, flexShrink: 0 }} />
@@ -137,25 +154,39 @@ function Column({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ minHeight: 40 }}>
-        {col.count === 0 && <div className="mono text-xs text-center py-4" style={{ color: "#B4BECC" }}>—</div>}
-        {col.groups.map((g) => (
-          <div key={g.epicId ?? "none"} className="mb-2">
-            {/* Full-width epic band: the epic's colour spans the whole column so
-                the groups read as clearly separated sections. */}
+        {col.groups.length === 0 && <div className="mono text-xs text-center py-4" style={{ color: "#B4BECC" }}>—</div>}
+        {col.groups.map((g) => {
+          const key = `${col.status}::${g.epicId ?? "none"}`;
+          const over = dragOverGroup === key;
+          const empty = g.tasks.length === 0;
+          return (
+            // Each epic band is a drop target: dropping a card here reassigns its
+            // epic (and its status to this column).
             <div
-              className="flex items-center gap-1.5 mb-1.5 rounded"
-              style={{ background: hexA(g.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.color || "#94A3B8"}`, padding: "3px 8px" }}
+              key={g.epicId ?? "none"}
+              className="mb-2 rounded"
+              style={{ outline: over ? "2px dashed #EE7240" : "none", outlineOffset: 1 }}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!over) setDragOverGroup(key); }}
+              onDrop={(e) => onDrop(g.epicId, e)}
             >
-              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.name}</span>
-              <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
+              {/* Full-width epic band: the epic's colour spans the whole column so
+                  the groups read as clearly separated sections. */}
+              <div
+                className="flex items-center gap-1.5 mb-1.5 rounded"
+                style={{ background: hexA(g.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.color || "#94A3B8"}`, padding: "3px 8px" }}
+              >
+                <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.name}</span>
+                <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
+              </div>
+              <div className="flex flex-col gap-1.5" style={{ minHeight: empty ? 8 : undefined }}>
+                {g.tasks.map((f) => (
+                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} />
+                ))}
+                {empty && over && <div className="mono text-xs text-center rounded" style={{ color: "#EE7240", padding: "6px 0", border: "1px dashed #EE7240" }}>drop here</div>}
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              {g.tasks.map((f) => (
-                <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {canEdit && (
