@@ -23,7 +23,27 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
   const statuses = statusesOf(pulse);
   const byId = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
 
-  const columns = useMemo(() => buildBoard(features, epics, statuses), [features, epics, statuses]);
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  // Match on task title, its epic's name, and any assigned resource's name or
+  // initials — same handles as the list view's search.
+  const filtered = useMemo(
+    () =>
+      q
+        ? features.filter((f) => {
+            if ((f.title || "").toLowerCase().includes(q)) return true;
+            const ep = epics.find((e) => e.id === f.epicId);
+            if (ep && ep.name.toLowerCase().includes(q)) return true;
+            return (f.resources || []).some((rid) => {
+              const r = byId[rid];
+              return r && (r.name.toLowerCase().includes(q) || r.initials.toLowerCase().includes(q));
+            });
+          })
+        : features,
+    [features, epics, byId, q],
+  );
+
+  const columns = useMemo(() => buildBoard(filtered, epics, statuses), [filtered, epics, statuses]);
   const [active, setActive] = useState<string | null>(null);
   const col = columns.find((c) => c.status === active) ?? columns[0];
 
@@ -31,9 +51,31 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
 
   return (
     <div>
-      {/* Status picker — one column at a time. */}
-      <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto px-3 py-2" style={{ background: "#F7F6F2", borderBottom: "1px solid #E2DFD9" }}>
-        {columns.map((c) => {
+      <div className="sticky top-0 z-10" style={{ background: "#F7F6F2", borderBottom: "1px solid #E2DFD9" }}>
+        {/* Search */}
+        <div className="px-3 pt-3 pb-2">
+          <div className="relative">
+            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#94A3B8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+              <circle cx={11} cy={11} r={7} />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search tasks, epics, people"
+              className="w-full rounded-lg border text-sm"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "9px 34px 9px 34px", outline: "none" }}
+            />
+            {query && (
+              <button onClick={() => setQuery("")} aria-label="Clear search" className="no-press" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", fontSize: 16, lineHeight: 1 }}>
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        {/* Status picker — one column at a time. */}
+        <div className="flex gap-1.5 overflow-x-auto px-3 pb-2">
+          {columns.map((c) => {
           const meta = statusMetaOf(c.status, statuses);
           const on = c.status === col.status;
           return (
@@ -49,6 +91,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
             </button>
           );
         })}
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 p-3">
