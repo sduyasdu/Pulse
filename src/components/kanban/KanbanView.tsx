@@ -30,6 +30,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+  const [draggingStatus, setDraggingStatus] = useState<FeatureStatus | null>(null);
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
   // columns (D7). Matching mirrors the canvas so the two views agree.
@@ -53,20 +54,26 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
     if (id) onSelect(id);
   };
 
-  // A drop sets the card's status to the target column, and — when dropped on a
-  // specific epic band (epicId !== undefined) — also its epic. Each is a
-  // separate field change / undo entry, and no-ops when already at the target.
+  // Drop rules:
+  //  - across columns (status differs) → change status, KEEP the epic (the card
+  //    is accommodated under its own epic band in the new column);
+  //  - within the same column, onto another epic band → change the epic, keep
+  //    the status.
   const handleDrop = (status: FeatureStatus, epicId: string | null | undefined, e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverCol(null);
     setDragOverGroup(null);
+    setDraggingStatus(null);
     const id = e.dataTransfer.getData("text/plain");
     if (!id || !canEdit) return;
     const f = features.find((x) => x.id === id);
     if (!f) return;
-    if (f.status !== status) void setFeatureStatus(id, status);
-    if (epicId !== undefined && (f.epicId ?? null) !== epicId) void moveFeatureToEpic(id, epicId);
+    if (f.status !== status) {
+      void setFeatureStatus(id, status);
+    } else if (epicId !== undefined && (f.epicId ?? null) !== epicId) {
+      void moveFeatureToEpic(id, epicId);
+    }
   };
 
   return (
@@ -96,6 +103,9 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               dragOver={dragOverCol === col.status}
               dragOverGroup={dragOverGroup}
               setDragOverGroup={setDragOverGroup}
+              sameColumnDrag={draggingStatus === col.status}
+              onDragStartTask={setDraggingStatus}
+              onDragEndTask={() => { setDraggingStatus(null); setDragOverCol(null); setDragOverGroup(null); }}
               onDragEnterCol={() => setDragOverCol(col.status)}
               onDragLeaveCol={() => { setDragOverCol((s) => (s === col.status ? null : s)); setDragOverGroup(null); }}
               onDrop={(epicId, e) => handleDrop(col.status, epicId, e)}
@@ -118,6 +128,9 @@ function Column({
   dragOver,
   dragOverGroup,
   setDragOverGroup,
+  sameColumnDrag,
+  onDragStartTask,
+  onDragEndTask,
   onDragEnterCol,
   onDragLeaveCol,
   onDrop,
@@ -132,6 +145,9 @@ function Column({
   dragOver: boolean;
   dragOverGroup: string | null;
   setDragOverGroup: (k: string | null) => void;
+  sameColumnDrag: boolean;
+  onDragStartTask: (status: FeatureStatus) => void;
+  onDragEndTask: () => void;
   onDragEnterCol: () => void;
   onDragLeaveCol: () => void;
   onDrop: (epicId: string | null | undefined, e: React.DragEvent) => void;
@@ -157,16 +173,15 @@ function Column({
         {col.groups.length === 0 && <div className="mono text-xs text-center py-4" style={{ color: "#B4BECC" }}>—</div>}
         {col.groups.map((g) => {
           const key = `${col.status}::${g.epicId ?? "none"}`;
-          const over = dragOverGroup === key;
-          const empty = g.tasks.length === 0;
+          // Only a same-column drag can reassign the epic, so only then does the
+          // band read as a drop target.
+          const over = sameColumnDrag && dragOverGroup === key;
           return (
-            // Each epic band is a drop target: dropping a card here reassigns its
-            // epic (and its status to this column).
             <div
               key={g.epicId ?? "none"}
               className="mb-2 rounded"
               style={{ outline: over ? "2px dashed #EE7240" : "none", outlineOffset: 1 }}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!over) setDragOverGroup(key); }}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragOverGroup !== key) setDragOverGroup(key); }}
               onDrop={(e) => onDrop(g.epicId, e)}
             >
               {/* Full-width epic band: the epic's colour spans the whole column so
@@ -178,11 +193,10 @@ function Column({
                 <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.name}</span>
                 <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
               </div>
-              <div className="flex flex-col gap-1.5" style={{ minHeight: empty ? 8 : undefined }}>
+              <div className="flex flex-col gap-1.5">
                 {g.tasks.map((f) => (
-                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} />
+                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
                 ))}
-                {empty && over && <div className="mono text-xs text-center rounded" style={{ color: "#EE7240", padding: "6px 0", border: "1px dashed #EE7240" }}>drop here</div>}
               </div>
             </div>
           );
@@ -205,6 +219,8 @@ function Card({
   onSelect,
   graph,
   resById,
+  onDragStartTask,
+  onDragEndTask,
 }: {
   f: Feature;
   canEdit: boolean;
@@ -212,6 +228,8 @@ function Card({
   onSelect: (id: string | null) => void;
   graph: ReturnType<typeof graphConfigOf>;
   resById: Record<string, { initials: string; name: string }>;
+  onDragStartTask: (status: FeatureStatus) => void;
+  onDragEndTask: () => void;
 }) {
   const done = f.status === "done";
   const est = estimateEffort(f, graph);
@@ -224,7 +242,9 @@ function Card({
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", f.id);
         e.dataTransfer.effectAllowed = "move";
+        onDragStartTask(f.status);
       }}
+      onDragEnd={onDragEndTask}
       onClick={() => onSelect(selected ? null : f.id)}
       className="relative rounded-lg overflow-hidden"
       style={{
