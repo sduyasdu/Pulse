@@ -8,6 +8,7 @@ import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { MobileTaskList } from "@/components/mobile/MobileTaskList";
+import { MobileBoard } from "@/components/mobile/MobileBoard";
 
 interface MobilePulseViewProps {
   pulse: Pulse | null;
@@ -32,6 +33,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
 
   const [tab, setTab] = useState<Tab>("tasks");
+  const [taskView, setTaskView] = useState<"list" | "board">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
 
@@ -58,9 +60,31 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
         )}
       </header>
 
+      {/* List/Board switch for the Tasks tab (kept out of the scroll area so it
+          stays put above whichever view is scrolling). */}
+      {tab === "tasks" && (
+        <div className="flex gap-1 px-3 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #E2DFD9", background: "#FFFFFF" }}>
+          {(["list", "board"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setTaskView(v)}
+              className="text-xs font-semibold rounded-full px-3 py-1 capitalize"
+              style={{ background: taskView === v ? "#123359" : "#F4F2EC", color: taskView === v ? "#FFFFFF" : "#64748B" }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-        {tab === "tasks" && <MobileTaskList features={features} epics={epics} resources={resources} onSelect={setSelectedId} />}
+        {tab === "tasks" &&
+          (taskView === "list" ? (
+            <MobileTaskList features={features} epics={epics} resources={resources} onSelect={setSelectedId} />
+          ) : (
+            <MobileBoard features={features} epics={epics} resources={resources} canEdit={canEdit} onSelect={setSelectedId} />
+          ))}
         {tab === "team" && <TeamTab canEdit={canEdit} filterResource={null} setFilterResource={() => {}} />}
         {tab === "capacity" && <CapacityTab canEdit={canEdit} />}
       </div>
