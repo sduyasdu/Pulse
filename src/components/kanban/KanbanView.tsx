@@ -5,6 +5,7 @@ import { buildBoard, type StatusColumn } from "@/domain/kanban";
 import { STATUS_META, colorForName, hexA } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
+import { confirmAt } from "@/stores/confirmStore";
 
 interface KanbanViewProps {
   selectedId: string | null;
@@ -25,6 +26,8 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
   const addFeature = usePulseStore((s) => s.addFeature);
   const addEpic = usePulseStore((s) => s.addEpic);
+  const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
+  const removeFeature = usePulseStore((s) => s.removeFeature);
   const graph = graphConfigOf(pulse);
 
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
@@ -52,6 +55,15 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const addTask = async (status: FeatureStatus) => {
     const id = await addFeature({ x: todayIndex(), y: 20, status });
     if (id) onSelect(id);
+  };
+
+  const duplicate = async (id: string) => {
+    const nid = await duplicateFeature(id);
+    if (nid) onSelect(nid);
+  };
+
+  const del = async (f: Feature, pt: { clientX: number; clientY: number }) => {
+    if (await confirmAt(pt, { message: `Delete "${f.title || "Untitled task"}"?`, confirmLabel: "Delete" })) void removeFeature(f.id);
   };
 
   // Drop rules:
@@ -104,6 +116,8 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               dragOverGroup={dragOverGroup}
               setDragOverGroup={setDragOverGroup}
               sameColumnDrag={draggingStatus === col.status}
+              onDuplicate={duplicate}
+              onDelete={del}
               onDragStartTask={setDraggingStatus}
               onDragEndTask={() => { setDraggingStatus(null); setDragOverCol(null); setDragOverGroup(null); }}
               onDragEnterCol={() => setDragOverCol(col.status)}
@@ -129,6 +143,8 @@ function Column({
   dragOverGroup,
   setDragOverGroup,
   sameColumnDrag,
+  onDuplicate,
+  onDelete,
   onDragStartTask,
   onDragEndTask,
   onDragEnterCol,
@@ -146,6 +162,8 @@ function Column({
   dragOverGroup: string | null;
   setDragOverGroup: (k: string | null) => void;
   sameColumnDrag: boolean;
+  onDuplicate: (id: string) => void;
+  onDelete: (f: Feature, pt: { clientX: number; clientY: number }) => void;
   onDragStartTask: (status: FeatureStatus) => void;
   onDragEndTask: () => void;
   onDragEnterCol: () => void;
@@ -195,7 +213,7 @@ function Column({
               </div>
               <div className="flex flex-col gap-1.5">
                 {g.tasks.map((f) => (
-                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
+                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} onDuplicate={onDuplicate} onDelete={onDelete} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
                 ))}
               </div>
             </div>
@@ -219,6 +237,8 @@ function Card({
   onSelect,
   graph,
   resById,
+  onDuplicate,
+  onDelete,
   onDragStartTask,
   onDragEndTask,
 }: {
@@ -228,6 +248,8 @@ function Card({
   onSelect: (id: string | null) => void;
   graph: ReturnType<typeof graphConfigOf>;
   resById: Record<string, { initials: string; name: string }>;
+  onDuplicate: (id: string) => void;
+  onDelete: (f: Feature, pt: { clientX: number; clientY: number }) => void;
   onDragStartTask: (status: FeatureStatus) => void;
   onDragEndTask: () => void;
 }) {
@@ -236,6 +258,7 @@ function Card({
   const coverage = Math.round((assignedEffort(f) / Math.max(0.1, est)) * 100);
   const subs = f.children || [];
   const subDone = subs.filter((c) => c.status === "done").length;
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   return (
     <div
       draggable={canEdit}
@@ -246,7 +269,7 @@ function Card({
       }}
       onDragEnd={onDragEndTask}
       onClick={() => onSelect(selected ? null : f.id)}
-      className="relative rounded-lg overflow-hidden"
+      className="group relative rounded-lg overflow-hidden"
       style={{
         background: "#FFFFFF",
         border: `1px solid ${selected ? "#EE7240" : "#E7E3DC"}`,
@@ -256,6 +279,27 @@ function Card({
       }}
     >
       {f.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: f.labelColor }} />}
+      {canEdit && (
+        <button
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right, y: r.bottom }); }}
+          className="absolute opacity-0 group-hover:opacity-100 flex items-center justify-center rounded"
+          style={{ top: 2, right: 2, width: 20, height: 18, background: "#F1EFE8", color: "#64748B", fontSize: 15, lineHeight: 1, zIndex: 3 }}
+          title="More actions"
+          aria-label="More actions"
+        >
+          ⋯
+        </button>
+      )}
+      {menu && (
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={(e) => { e.stopPropagation(); setMenu(null); }} />
+          <div className="fixed rounded-lg border py-1" style={{ left: menu.x - 150, top: menu.y + 2, zIndex: 61, minWidth: 150, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}>
+            <button onClick={(e) => { e.stopPropagation(); setMenu(null); onDuplicate(f.id); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: "#334155" }}>Duplicate</button>
+            <button onClick={(e) => { e.stopPropagation(); const pt = { clientX: menu.x, clientY: menu.y }; setMenu(null); onDelete(f, pt); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: "#DC2626" }}>Delete…</button>
+          </div>
+        </>
+      )}
       <div className="flex items-center gap-1.5">
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(f, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
         <span className="text-xs font-semibold flex-1 truncate" title={f.title} style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
