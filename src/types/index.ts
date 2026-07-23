@@ -85,6 +85,13 @@ export interface PulseMember {
   joinToken?: string;
 }
 
+/** Live presence heartbeat — one per viewer, at pulses/{id}/presence/{uid}. */
+export interface PresenceEntry {
+  uid: string;
+  email: string;
+  lastSeen: number; // ms epoch; stale entries are filtered client-side
+}
+
 /** A shareable "copy-link" invite living on the Pulse doc. The token is the
  * unguessable capability; the role is what a joiner is granted. Null/absent =
  * no active link. */

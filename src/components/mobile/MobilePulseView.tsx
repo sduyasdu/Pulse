@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
+import { useAuthStore } from "@/stores/authStore";
+import { PresenceBar } from "@/components/presence/PresenceBar";
 import { todayIndex } from "@/domain/dateUtils";
 import type { Pulse, PulseRole } from "@/types";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
@@ -33,6 +35,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
 
   const navigate = useNavigate();
+  const email = useAuthStore((s) => s.firebaseUser?.email ?? "");
   const [tab, setTab] = useState<Tab>("tasks");
   const [taskView, setTaskView] = useState<"list" | "board">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,6 +57,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
           <div className="font-display text-white text-sm font-semibold truncate">{pulse?.name?.trim() || "Untitled Pulse"}</div>
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
         </div>
+        <PresenceBar pulseId={pulse?.id} uid={uid} email={email} dark />
         {canEdit && (
           <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#F0A875", fontSize: 12, fontWeight: 600 }}>
             ＋ Invite

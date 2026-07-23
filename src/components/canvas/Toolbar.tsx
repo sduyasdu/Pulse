@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { GraphConfig } from "@/types";
 import type { Density } from "@/domain/constants";
@@ -11,6 +11,7 @@ interface ToolbarProps {
   pulseName: string;
   onRenamePulse: (name: string) => void;
   onInvite: () => void;
+  presence?: ReactNode;
   viewMode: "canvas" | "board";
   setViewMode: (m: "canvas" | "board") => void;
   viewZoom: number;
@@ -50,6 +51,7 @@ export function Toolbar({
   pulseName,
   onRenamePulse,
   onInvite,
+  presence,
   viewMode,
   setViewMode,
   viewZoom,
@@ -125,6 +127,7 @@ export function Toolbar({
         >
           Today · {dateForDay(todayIndex()).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
         </button>
+        {presence}
         <div className="flex-1" />
         <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{DENSITY_HINT[density]}</span>
         {canEdit && (

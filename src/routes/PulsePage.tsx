@@ -14,6 +14,7 @@ import type { PulseRole } from "@/types";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { KanbanView } from "@/components/kanban/KanbanView";
+import { PresenceBar } from "@/components/presence/PresenceBar";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -267,6 +268,7 @@ export function PulsePage() {
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
         onInvite={() => setShowInvite(true)}
+        presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />}
         viewMode={viewMode}
         setViewMode={setViewMode}
         viewZoom={viewZoom}
