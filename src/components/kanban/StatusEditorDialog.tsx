@@ -12,6 +12,7 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
   const setStatuses = usePulseStore((s) => s.setStatuses);
   const [list, setList] = useState<StatusDef[]>(() => statusesOf(pulse).map((s) => ({ ...s })));
   const [saving, setSaving] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   // How many tasks/subtasks reference each status id (delete is blocked > 0).
   const usage = useMemo(() => {
@@ -28,15 +29,20 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
 
   const update = (id: string, patch: Partial<StatusDef>) => setList((l) => l.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const remove = (id: string) => setList((l) => l.filter((s) => s.id !== id));
-  const move = (id: string, dir: -1 | 1) =>
+  // Live drag reorder within the non-done rows ("done" stays pinned last).
+  const reorder = (overId: string) => {
+    if (!dragId || dragId === overId || overId === DONE_STATUS_ID) return;
     setList((l) => {
       const nd = l.filter((s) => s.id !== DONE_STATUS_ID);
-      const i = nd.findIndex((s) => s.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= nd.length) return l;
-      [nd[i], nd[j]] = [nd[j], nd[i]];
-      return done ? [...nd, done] : nd;
+      const from = nd.findIndex((s) => s.id === dragId);
+      const to = nd.findIndex((s) => s.id === overId);
+      if (from < 0 || to < 0 || from === to) return l;
+      const copy = [...nd];
+      const [moved] = copy.splice(from, 1);
+      copy.splice(to, 0, moved);
+      return done ? [...copy, done] : copy;
     });
+  };
   const add = () =>
     setList((l) => {
       const nd = l.filter((s) => s.id !== DONE_STATUS_ID);
@@ -61,13 +67,23 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
           <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Edit statuses</span>
           <button onClick={onClose} className="no-press" style={{ color: "#94A3B8", fontSize: 18, lineHeight: 1 }} aria-label="Close">✕</button>
         </div>
-        <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>Columns on the board, left to right. “Done” is reserved and always last.</p>
+        <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>Columns on the board, left to right — drag to reorder. “Done” is reserved and always last.</p>
 
         <div className="flex flex-col gap-2">
-          {nonDone.map((s, i) => (
-            <Row key={s.id} s={s} usage={usage[s.id] || 0} first={i === 0} last={i === nonDone.length - 1} onUpdate={update} onMove={move} onRemove={remove} />
+          {nonDone.map((s) => (
+            <Row
+              key={s.id}
+              s={s}
+              usage={usage[s.id] || 0}
+              dragging={dragId === s.id}
+              onUpdate={update}
+              onRemove={remove}
+              onDragStart={() => setDragId(s.id)}
+              onDragOver={(e) => { e.preventDefault(); reorder(s.id); }}
+              onDragEnd={() => setDragId(null)}
+            />
           ))}
-          {done && <Row s={done} usage={usage[done.id] || 0} reserved onUpdate={update} onMove={move} onRemove={remove} />}
+          {done && <Row s={done} usage={usage[done.id] || 0} reserved onUpdate={update} onRemove={remove} onDragStart={() => {}} onDragOver={(e) => e.preventDefault()} onDragEnd={() => {}} />}
         </div>
 
         <button onClick={add} className="mono text-xs mt-3" style={{ color: "#0F766E" }}>+ add status</button>
@@ -84,30 +100,42 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
 function Row({
   s,
   usage,
-  first,
-  last,
   reserved,
+  dragging,
   onUpdate,
-  onMove,
   onRemove,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
 }: {
   s: StatusDef;
   usage: number;
-  first?: boolean;
-  last?: boolean;
   reserved?: boolean;
+  dragging?: boolean;
   onUpdate: (id: string, patch: Partial<StatusDef>) => void;
-  onMove: (id: string, dir: -1 | 1) => void;
   onRemove: (id: string) => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   const meta = statusMetaOf(s.id, [s]);
   const canDelete = !reserved && usage === 0;
   return (
-    <div className="flex items-center gap-2 rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9", background: meta.bg }}>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <button onClick={() => onMove(s.id, -1)} disabled={reserved || first} className="no-press" style={{ color: "#94A3B8", fontSize: 11, opacity: reserved || first ? 0.3 : 1 }} title="Move left">▲</button>
-        <button onClick={() => onMove(s.id, 1)} disabled={reserved || last} className="no-press" style={{ color: "#94A3B8", fontSize: 11, opacity: reserved || last ? 0.3 : 1 }} title="Move right">▼</button>
-      </div>
+    <div
+      onDragOver={onDragOver}
+      className="flex items-center gap-2 rounded px-2 py-1.5"
+      style={{ border: "1px solid #E2DFD9", background: meta.bg, opacity: dragging ? 0.4 : 1 }}
+    >
+      <span
+        draggable={!reserved}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        className="flex-shrink-0"
+        title={reserved ? "" : "Drag to reorder"}
+        style={{ color: reserved ? "#CBD5E1" : "#94A3B8", fontSize: 13, lineHeight: 1, cursor: reserved ? "default" : "grab" }}
+      >
+        ⠿
+      </span>
       <input
         value={s.label}
         onChange={(e) => onUpdate(s.id, { label: e.target.value })}

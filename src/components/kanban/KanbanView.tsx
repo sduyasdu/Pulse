@@ -6,6 +6,7 @@ import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
 import { confirmAt } from "@/stores/confirmStore";
+import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { StatusEditorDialog } from "./StatusEditorDialog";
 
 interface KanbanViewProps {
@@ -29,8 +30,15 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const addEpic = usePulseStore((s) => s.addEpic);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const removeFeature = usePulseStore((s) => s.removeFeature);
+  const setStatuses = usePulseStore((s) => s.setStatuses);
   const graph = graphConfigOf(pulse);
   const statuses = statusesOf(pulse);
+
+  const renameStatus = (id: string, label: string) => {
+    const t = label.trim();
+    if (!t) return;
+    void setStatuses(statuses.map((s) => (s.id === id ? { ...s, label: t } : s)));
+  };
 
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
@@ -123,6 +131,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               graph={graph}
               statuses={statuses}
               resById={resById}
+              onRenameStatus={renameStatus}
               dragOver={dragOverCol === col.status}
               dragOverGroup={dragOverGroup}
               setDragOverGroup={setDragOverGroup}
@@ -151,6 +160,7 @@ function Column({
   graph,
   statuses,
   resById,
+  onRenameStatus,
   dragOver,
   dragOverGroup,
   setDragOverGroup,
@@ -171,6 +181,7 @@ function Column({
   graph: ReturnType<typeof graphConfigOf>;
   statuses: StatusDef[];
   resById: Record<string, { initials: string; name: string }>;
+  onRenameStatus: (id: string, label: string) => void;
   dragOver: boolean;
   dragOverGroup: string | null;
   setDragOverGroup: (k: string | null) => void;
@@ -185,6 +196,7 @@ function Column({
   onAddTask: () => void;
 }) {
   const meta = statusMetaOf(col.status, statuses);
+  const [labelDraft, onLabelChange] = useDebouncedText(meta.label, (v) => onRenameStatus(col.status, v));
   return (
     <div
       className="flex flex-col rounded-xl"
@@ -196,8 +208,18 @@ function Column({
     >
       <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0">
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: meta.border, flexShrink: 0 }} />
-        <span className="text-xs font-semibold" style={{ color: "#1F2330" }}>{meta.label}</span>
-        <span className="mono text-xs" style={{ color: "#94A3B8" }}>{col.count}</span>
+        {canEdit ? (
+          <input
+            value={labelDraft}
+            onChange={(e) => onLabelChange(e.target.value)}
+            title="Rename this status"
+            className="text-xs font-semibold bg-transparent flex-1"
+            style={{ border: "none", outline: "none", color: "#1F2330", minWidth: 0 }}
+          />
+        ) : (
+          <span className="text-xs font-semibold flex-1 truncate" style={{ color: "#1F2330" }}>{meta.label}</span>
+        )}
+        <span className="mono text-xs flex-shrink-0" style={{ color: "#94A3B8" }}>{col.count}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ minHeight: 40 }}>
