@@ -85,6 +85,16 @@ export interface PulseMember {
   joinToken?: string;
 }
 
+/** A comment on a task, at pulses/{id}/features/{fid}/comments/{cid}. */
+export interface Comment {
+  id: string;
+  authorUid: string;
+  authorEmail: string;
+  text: string;
+  createdAt: number;
+  editedAt?: number;
+}
+
 /** Live presence heartbeat — one per viewer, at pulses/{id}/presence/{uid}. */
 export interface PresenceEntry {
   uid: string;

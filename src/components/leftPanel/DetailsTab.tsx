@@ -16,6 +16,7 @@ import { dayIndexFromDateInputValue, fmtDate, toDateInputValue } from "@/domain/
 import { LABEL_COLORS, colorForName, statusesOf, statusMetaOf } from "@/domain/constants";
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
+import { Comments } from "@/components/comments/Comments";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 
 interface DetailsTabProps {
@@ -541,6 +542,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         onAdd={(t, u) => void addAttachment(feature.id, t, u)}
         onDelete={(aid) => void removeAttachment(feature.id, aid)}
       />
+
+      {pulse && <Comments pulseId={pulse.id} featureId={feature.id} />}
 
     </div>
   );
