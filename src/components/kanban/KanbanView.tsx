@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Feature, FeatureStatus } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard, type StatusColumn } from "@/domain/kanban";
-import { STATUS_META, colorForName } from "@/domain/constants";
+import { STATUS_META, colorForName, hexA } from "@/domain/constants";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
 
@@ -140,10 +140,14 @@ function Column({
         {col.count === 0 && <div className="mono text-xs text-center py-4" style={{ color: "#B4BECC" }}>—</div>}
         {col.groups.map((g) => (
           <div key={g.epicId ?? "none"} className="mb-2">
-            <div className="flex items-center gap-1.5 px-1 mb-1">
-              {g.color && <span style={{ width: 8, height: 8, borderRadius: 3, background: g.color, flexShrink: 0 }} />}
-              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#78859A" }}>{g.name}</span>
-              <span className="mono text-xs" style={{ color: "#B4BECC" }}>{g.tasks.length}</span>
+            {/* Full-width epic band: the epic's colour spans the whole column so
+                the groups read as clearly separated sections. */}
+            <div
+              className="flex items-center gap-1.5 mb-1.5 rounded"
+              style={{ background: hexA(g.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.color || "#94A3B8"}`, padding: "3px 8px" }}
+            >
+              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.name}</span>
+              <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
             </div>
             <div className="flex flex-col gap-1.5">
               {g.tasks.map((f) => (
