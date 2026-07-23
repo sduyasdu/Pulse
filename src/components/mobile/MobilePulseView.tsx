@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
 import { todayIndex } from "@/domain/dateUtils";
 import type { Pulse, PulseRole } from "@/types";
@@ -32,6 +32,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
   const addFeature = usePulseStore((s) => s.addFeature);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
 
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("tasks");
   const [taskView, setTaskView] = useState<"list" | "board">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -141,6 +142,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
           currentUid={uid}
           myRole={myRole}
           onClose={() => setShowInvite(false)}
+          onLeave={() => navigate("/")}
         />
       )}
     </div>

@@ -433,6 +433,7 @@ export function PulsePage() {
             currentUid={uid}
             myRole={myRole}
             onClose={() => setShowInvite(false)}
+            onLeave={() => navigate("/")}
           />
         )}
 

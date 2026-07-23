@@ -27,3 +27,11 @@ export async function setMemberRole(pulseId: string, uid: string, role: PulseRol
 export async function removeMember(pulseId: string, uid: string): Promise<void> {
   await deleteDoc(doc(db, "pulses", pulseId, "pulseMembers", uid));
 }
+
+/** Leave a Pulse: the caller removes their OWN membership (allowed by the
+ * pulseMembers delete rule for `memberUid == request.auth.uid`) and their own
+ * dashboard index entry. */
+export async function leavePulse(pulseId: string, uid: string): Promise<void> {
+  await deleteDoc(doc(db, "pulses", pulseId, "pulseMembers", uid));
+  await deleteDoc(doc(db, "users", uid, "myPulses", pulseId)).catch(() => {});
+}

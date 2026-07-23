@@ -17,9 +17,10 @@ interface PulseCardProps {
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: (pt: { clientX: number; clientY: number }) => void;
+  onLeave: (pt: { clientX: number; clientY: number }) => void;
 }
 
-export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, onUnarchive, onDelete }: PulseCardProps) {
+export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, onUnarchive, onDelete, onLeave }: PulseCardProps) {
   const canInvite = entry.role === "owner" || entry.role === "editor";
   const isOwner = entry.role === "owner";
   const archived = !!entry.archived;
@@ -65,7 +66,7 @@ export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, o
               ) : (
                 <MenuItem label="Archive" onClick={(e) => { stop(e); setMenuOpen(false); onArchive(); }} />
               )}
-              {isOwner && (
+              {isOwner ? (
                 <MenuItem
                   label="Delete…"
                   danger
@@ -74,6 +75,17 @@ export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, o
                     stop(e);
                     setMenuOpen(false);
                     onDelete(pt);
+                  }}
+                />
+              ) : (
+                <MenuItem
+                  label="Leave Pulse"
+                  danger
+                  onClick={(e) => {
+                    const pt = { clientX: e.clientX, clientY: e.clientY };
+                    stop(e);
+                    setMenuOpen(false);
+                    onLeave(pt);
                   }}
                 />
               )}

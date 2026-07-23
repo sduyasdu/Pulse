@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Invite, PulseMember, PulseRole } from "@/types";
 import { fetchInvites, revokeInvite } from "@/services/firestore/invites";
-import { removeMember, setMemberRole } from "@/services/firestore/memberships";
+import { removeMember, setMemberRole, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import { InviteLinkPanel } from "./InviteLinkPanel";
 
@@ -12,6 +12,8 @@ interface CollaboratorsDialogProps {
   currentUid: string;
   myRole: PulseRole;
   onClose: () => void;
+  /** Called after the current user leaves the Pulse (e.g. navigate away). */
+  onLeave?: () => void;
 }
 
 const ROLE_BADGE: Record<PulseRole, { label: string; bg: string; fg: string }> = {
@@ -29,9 +31,13 @@ function RoleBadge({ role }: { role: PulseRole }) {
   );
 }
 
-export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, myRole, onClose }: CollaboratorsDialogProps) {
+export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, myRole, onClose, onLeave }: CollaboratorsDialogProps) {
   const canManage = myRole === "owner" || myRole === "editor"; // may invite / revoke
   const isOwner = myRole === "owner"; // may remove members
+  // The sole owner can't leave (would orphan the Pulse) — they transfer/grant
+  // ownership first, or delete the Pulse.
+  const ownerCount = members.filter((m) => m.role === "owner").length;
+  const canLeave = myRole !== "owner" || ownerCount > 1;
 
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loadingInvites, setLoadingInvites] = useState(true);
@@ -70,6 +76,17 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
     // The member's own users/{uid}/myPulses entry isn't ours to delete; their
     // dashboard self-heals it on next load (see DashboardPage's self-heal).
     await removeMember(pulseId, m.uid).catch(() => {});
+  };
+
+  const handleMakeOwner = async (m: PulseMember, e: { clientX: number; clientY: number }) => {
+    if (!(await confirmAt(e, { message: `Make ${m.email} an owner?`, detail: "Owners can manage members, permissions and delete the Pulse. You stay an owner too — after this you can leave to fully hand off.", confirmLabel: "Make owner" }))) return;
+    await setMemberRole(pulseId, m.uid, "owner").catch(() => {});
+  };
+
+  const handleLeave = async (e: { clientX: number; clientY: number }) => {
+    if (!(await confirmAt(e, { message: `Leave “${pulseName}”?`, detail: "You'll lose access until someone shares a new invite link with you.", confirmLabel: "Leave" }))) return;
+    await leavePulse(pulseId, currentUid).catch(() => {});
+    (onLeave ?? onClose)();
   };
 
   const handleSetRole = async (m: PulseMember, next: PulseRole) => {
@@ -114,6 +131,14 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
                         <option value="editor">Editor</option>
                         <option value="viewer">Viewer</option>
                       </select>
+                      <button
+                        onClick={(e) => void handleMakeOwner(m, e)}
+                        className="text-xs hover:underline"
+                        style={{ color: "#0F766E" }}
+                        title="Grant ownership (transfer)"
+                      >
+                        Make owner
+                      </button>
                       <button
                         onClick={(e) => void handleRemoveMember(m, e)}
                         className="text-xs text-red-600 hover:underline"
@@ -167,7 +192,12 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
           </div>
         )}
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex items-center justify-between">
+          {canLeave ? (
+            <button onClick={(e) => void handleLeave(e)} className="text-sm text-red-600 hover:underline" title="Remove yourself from this Pulse">Leave Pulse</button>
+          ) : (
+            <span className="text-xs text-yasdu-muted" title="Transfer ownership or delete the Pulse to leave">Sole owner — transfer to leave</span>
+          )}
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg" style={{ background: "#D85A28" }}>Close</button>
         </div>
       </div>

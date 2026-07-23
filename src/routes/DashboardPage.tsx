@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, setMyPulseArchived, deletePulse, duplicatePulse, type DuplicateMode } from "@/services/firestore/pulses";
-import { fetchMembership } from "@/services/firestore/memberships";
+import { fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
@@ -76,6 +76,15 @@ export function DashboardPage() {
     if (ok) await deletePulse(entry.pulseId, uid);
   };
 
+  const leave = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
+    const ok = await confirmAt(pt, {
+      message: `Leave "${entry.name || "Untitled Pulse"}"?`,
+      detail: "You'll lose access until someone shares a new invite link with you.",
+      confirmLabel: "Leave",
+    });
+    if (ok) await leavePulse(entry.pulseId, uid);
+  };
+
   const grid = (entries: MyPulseIndexEntry[]) => (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {entries.map((entry) => (
@@ -87,6 +96,7 @@ export function DashboardPage() {
           onArchive={() => void setMyPulseArchived(uid, entry.pulseId, true)}
           onUnarchive={() => void setMyPulseArchived(uid, entry.pulseId, false)}
           onDelete={(pt) => void del(entry, pt)}
+          onLeave={(pt) => void leave(entry, pt)}
         />
       ))}
     </div>

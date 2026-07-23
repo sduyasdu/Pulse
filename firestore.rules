@@ -137,7 +137,9 @@ service cloud.firestore {
           // Pulse's active `invite`).
           joinLinkOk(pulseId, request.resource.data)
         );
-        allow update, delete: if isPulseOwner(pulseId);
+        allow update: if isPulseOwner(pulseId);
+        // The owner may remove anyone; anyone may remove THEMSELVES (leave).
+        allow delete: if isPulseOwner(pulseId) || memberUid == request.auth.uid;
       }
 
       match /invites/{emailId} {
