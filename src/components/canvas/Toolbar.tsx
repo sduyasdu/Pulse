@@ -127,7 +127,6 @@ export function Toolbar({
         >
           Today · {dateForDay(todayIndex()).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
         </button>
-        {presence}
         <div className="flex-1" />
         <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{DENSITY_HINT[density]}</span>
         {canEdit && (
@@ -171,6 +170,7 @@ export function Toolbar({
             )}
           </div>
         )}
+        {presence}
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>

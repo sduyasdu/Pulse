@@ -24,11 +24,14 @@ interface DetailsTabProps {
   canEdit: boolean;
   onClose: () => void;
   onDuplicate: () => void;
+  /** Desktop hosts comments in their own right-panel tab, so hide the inline
+   * thread there; mobile keeps it inline (no tabs). */
+  hideComments?: boolean;
 }
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate }: DetailsTabProps) {
+export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate, hideComments }: DetailsTabProps) {
   // A "done" task is locked: every content field is read-only. Only the status
   // (so it can be reopened) and the duplicate/delete actions stay on the real
   // permission. Reusing the name `canEdit` means all field bindings below pick
@@ -543,7 +546,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         onDelete={(aid) => void removeAttachment(feature.id, aid)}
       />
 
-      {pulse && <Comments pulseId={pulse.id} featureId={feature.id} />}
+      {!hideComments && pulse && <Comments pulseId={pulse.id} featureId={feature.id} />}
 
     </div>
   );

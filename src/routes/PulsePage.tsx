@@ -16,6 +16,7 @@ import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/compo
 import { KanbanView } from "@/components/kanban/KanbanView";
 import { PresenceBar } from "@/components/presence/PresenceBar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { Comments } from "@/components/comments/Comments";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -23,7 +24,7 @@ import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 
 const ROLE_LABEL: Record<PulseRole, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer · read-only" };
 
-type RightTab = "details" | "team" | "capacity";
+type RightTab = "details" | "comments" | "team" | "capacity";
 
 export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
@@ -324,7 +325,7 @@ export function PulsePage() {
               <button onClick={toggleSidebar} title="Collapse panel to maximize the canvas" className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              {(["details", "team", "capacity"] as RightTab[]).map((t) => (
+              {(["details", "comments", "team", "capacity"] as RightTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setRightTab(t)}
@@ -340,12 +341,22 @@ export function PulsePage() {
                 <TeamTab canEdit={canEdit} filterResource={filterResource} setFilterResource={setFilterResource} />
               ) : rightTab === "capacity" ? (
                 <CapacityTab canEdit={canEdit} />
+              ) : rightTab === "comments" ? (
+                !selectedFeature ? (
+                  <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>Select a task to see and add comments.</div>
+                ) : (
+                  <div className="p-4">
+                    <div className="font-display text-sm font-medium mb-3 truncate" style={{ color: "#1F2330" }}>{selectedFeature.title || "Untitled task"}</div>
+                    <Comments pulseId={pulseId} featureId={selectedFeature.id} />
+                  </div>
+                )
               ) : !selectedFeature ? (
                 <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>Select a box on the canvas to see and edit its details here.</div>
               ) : (
                 <DetailsTab
                   feature={selectedFeature}
                   canEdit={canEdit}
+                  hideComments
                   onClose={() => handleSelect(null)}
                   onDuplicate={async () => {
                     const newId = await duplicateFeature(selectedFeature.id);
