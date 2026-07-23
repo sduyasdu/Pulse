@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, setMyPulseArchived, deletePulse, duplicatePulse, type DuplicateMode } from "@/services/firestore/pulses";
 import { fetchMembership } from "@/services/firestore/memberships";
-import { inviteToPulse } from "@/services/firestore/invites";
 import { confirmAt } from "@/stores/confirmStore";
-import type { MyPulseIndexEntry, PulseRole } from "@/types";
+import type { MyPulseIndexEntry } from "@/types";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
@@ -189,10 +188,9 @@ export function DashboardPage() {
       {invitingPulse && (
         <InviteDialog
           pulseName={invitingPulse.name}
+          pulseId={invitingPulse.pulseId}
+          canEdit={invitingPulse.role !== "viewer"}
           onClose={() => setInvitingPulse(null)}
-          onInvite={async (email, role: PulseRole) => {
-            await inviteToPulse(invitingPulse.pulseId, email, role, firebaseUser.uid);
-          }}
         />
       )}
 

@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { firebaseUser, initializing, bootstrapping } = useAuthStore();
+  const location = useLocation();
 
   if (initializing || bootstrapping) {
     return (
@@ -13,7 +14,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!firebaseUser) return <Navigate to="/login" replace />;
+  // Preserve where they were headed (e.g. a /join/... link) so login returns there.
+  if (!firebaseUser) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
 
   return <>{children}</>;
 }

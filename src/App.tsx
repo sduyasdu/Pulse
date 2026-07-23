@@ -10,6 +10,7 @@ import { ConfirmPopover } from "@/components/shared/ConfirmPopover";
 const LoginPage = lazy(() => import("@/routes/LoginPage").then((m) => ({ default: m.LoginPage })));
 const DashboardPage = lazy(() => import("@/routes/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PulsePage = lazy(() => import("@/routes/PulsePage").then((m) => ({ default: m.PulsePage })));
+const JoinPage = lazy(() => import("@/routes/JoinPage").then((m) => ({ default: m.JoinPage })));
 
 function RouteFallback() {
   return (
@@ -42,6 +43,14 @@ function App() {
             element={
               <RequireAuth>
                 <PulsePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/join/:pulseId/:token/:role"
+            element={
+              <RequireAuth>
+                <JoinPage />
               </RequireAuth>
             }
           />

@@ -57,6 +57,15 @@ service cloud.firestore {
     function isPulseOwner(pulseId) {
       return isPulseMember(pulseId) && pulseRole(pulseId) == 'owner';
     }
+    // A copy-link self-join is valid when the Pulse has an active `invite` and
+    // the membership doc being written carries a joinToken + role matching it.
+    // The token is an unguessable capability only reachable via the shared link.
+    function joinLinkOk(pulseId, data) {
+      let invite = get(/databases/$(database)/documents/pulses/$(pulseId)).data.get('invite', null);
+      return invite != null &&
+        'joinToken' in data && data.joinToken == invite.token &&
+        data.role == invite.role;
+    }
 
     // ---- users ----
     match /users/{uid} {
@@ -102,7 +111,12 @@ service cloud.firestore {
     match /pulses/{pulseId} {
       allow read: if isPulseMember(pulseId);
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if canEditPulse(pulseId);
+      // An invite link may only ever grant viewer/editor — never owner — so an
+      // editor can't mint an owner-granting link (owner promotion stays
+      // owner-only via setMemberRole).
+      allow update: if canEditPulse(pulseId)
+        && (request.resource.data.get('invite', null) == null
+            || request.resource.data.invite.role in ['viewer', 'editor']);
       allow delete: if isPulseOwner(pulseId);
 
       match /pulseMembers/{memberUid} {
@@ -113,11 +127,15 @@ service cloud.firestore {
           (request.resource.data.role == 'owner' &&
             get(/databases/$(database)/documents/pulses/$(pulseId)).data.createdBy == request.auth.uid)
           ||
-          // Case 2: invited user accepts an invite addressed to their own
-          // verified email; the role they write must match the invite's.
+          // Case 2 (legacy, being retired): invited user accepts an invite
+          // addressed to their own verified email; role must match the invite's.
           (myEmail() != '' &&
             exists(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())) &&
             get(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())).data.role == request.resource.data.role)
+          ||
+          // Case 3: joining via a valid copy-link (token + role match the
+          // Pulse's active `invite`).
+          joinLinkOk(pulseId, request.resource.data)
         );
         allow update, delete: if isPulseOwner(pulseId);
       }

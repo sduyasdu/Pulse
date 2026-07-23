@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Invite, PulseMember, PulseRole } from "@/types";
-import { fetchInvites, inviteToPulse, revokeInvite } from "@/services/firestore/invites";
+import { fetchInvites, revokeInvite } from "@/services/firestore/invites";
 import { removeMember, setMemberRole } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
+import { InviteLinkPanel } from "./InviteLinkPanel";
 
 interface CollaboratorsDialogProps {
   pulseId: string;
@@ -18,11 +19,6 @@ const ROLE_BADGE: Record<PulseRole, { label: string; bg: string; fg: string }> =
   editor: { label: "Editor", bg: "#EAF1FB", fg: "#1D4ED8" },
   viewer: { label: "Viewer", bg: "#F1F5F9", fg: "#475569" },
 };
-
-const INVITE_ROLES: { value: PulseRole; label: string; hint: string }[] = [
-  { value: "editor", label: "Editor", hint: "Can edit everything" },
-  { value: "viewer", label: "Viewer", hint: "Read-only" },
-];
 
 function RoleBadge({ role }: { role: PulseRole }) {
   const b = ROLE_BADGE[role];
@@ -40,11 +36,6 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loadingInvites, setLoadingInvites] = useState(true);
   const [invitesError, setInvitesError] = useState<string | null>(null);
-
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<PulseRole>("editor");
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
 
   const reloadInvites = useCallback(async () => {
     if (!canManage) {
@@ -64,23 +55,6 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
   useEffect(() => {
     void reloadInvites();
   }, [reloadInvites]);
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = email.trim();
-    if (!clean) return;
-    setBusy(true);
-    setFormError(null);
-    try {
-      await inviteToPulse(pulseId, clean, role, currentUid);
-      setEmail("");
-      await reloadInvites();
-    } catch (err) {
-      setFormError((err as Error).message || "Couldn't send this invite — try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleRevoke = async (inviteEmail: string) => {
     try {
@@ -185,52 +159,17 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
           )}
         </div>
 
-        {/* Invite form */}
+        {/* Invite by link */}
         {canManage && (
-          <form onSubmit={handleInvite} className="mt-1 flex flex-col gap-2 border-t pt-4" style={{ borderColor: "#E2DFD9" }}>
-            <div className="mono text-[11px] uppercase tracking-wide text-yasdu-muted">Invite someone</div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="colleague@company.com"
-              className="rounded-lg border px-3 py-2.5 text-sm outline-none"
-              style={{ borderColor: "#E2DFD9" }}
-            />
-            <div className="flex gap-2">
-              {INVITE_ROLES.map((r) => (
-                <button
-                  type="button"
-                  key={r.value}
-                  onClick={() => setRole(r.value)}
-                  className="flex-1 rounded-lg border px-3 py-2 text-left text-xs"
-                  style={{ borderColor: role === r.value ? "#EE7240" : "#E2DFD9", background: role === r.value ? "#FFF7F1" : "#FFFFFF" }}
-                >
-                  <div className="font-semibold text-yasdu-fg">{r.label}</div>
-                  <div className="text-yasdu-muted">{r.hint}</div>
-                </button>
-              ))}
-            </div>
-            {formError && <span className="text-xs text-red-600">{formError}</span>}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-yasdu-muted">Close</button>
-              <button
-                type="submit"
-                disabled={!email.trim() || busy}
-                className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg disabled:opacity-50"
-                style={{ background: "#D85A28" }}
-              >
-                Send invite
-              </button>
-            </div>
-          </form>
-        )}
-
-        {!canManage && (
-          <div className="mt-3 flex justify-end">
-            <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg" style={{ background: "#D85A28" }}>Close</button>
+          <div className="mt-1 flex flex-col gap-2 border-t pt-4" style={{ borderColor: "#E2DFD9" }}>
+            <div className="mono text-[11px] uppercase tracking-wide text-yasdu-muted">Invite by link</div>
+            <InviteLinkPanel pulseId={pulseId} canEdit={canManage} />
           </div>
         )}
+
+        <div className="mt-4 flex justify-end">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg" style={{ background: "#D85A28" }}>Close</button>
+        </div>
       </div>
     </div>
   );

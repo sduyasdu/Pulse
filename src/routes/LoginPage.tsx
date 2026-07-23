@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { EmailPasswordForm } from "@/components/auth/EmailPasswordForm";
@@ -7,8 +7,10 @@ import { EmailPasswordForm } from "@/components/auth/EmailPasswordForm";
 export function LoginPage() {
   const { firebaseUser, initializing, signInWithGoogle, signInWithEmail, registerWithEmail } = useAuthStore();
   const [mode, setMode] = useState<"signin" | "register">("signin");
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
 
-  if (!initializing && firebaseUser) return <Navigate to="/" replace />;
+  if (!initializing && firebaseUser) return <Navigate to={from || "/"} replace />;
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg px-4">

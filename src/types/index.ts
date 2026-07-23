@@ -50,6 +50,8 @@ export interface Pulse {
    * can't be removed or reordered out of last position, and moving a task into
    * it stamps the finished date and locks it. */
   statuses?: StatusDef[];
+  /** Active copy-link invite (owner/editor generated). Null/absent = none. */
+  invite?: InviteLink | null;
 }
 
 /** One Kanban/status column. `id` is what Feature.status / Subtask.status
@@ -78,6 +80,17 @@ export interface PulseMember {
   email: string;
   role: PulseRole;
   joinedAt: Timestamp;
+  /** Present when the member joined via a copy-link; the security rule checks
+   * it matches the Pulse's active invite token. */
+  joinToken?: string;
+}
+
+/** A shareable "copy-link" invite living on the Pulse doc. The token is the
+ * unguessable capability; the role is what a joiner is granted. Null/absent =
+ * no active link. */
+export interface InviteLink {
+  token: string;
+  role: PulseRole;
 }
 
 /**
