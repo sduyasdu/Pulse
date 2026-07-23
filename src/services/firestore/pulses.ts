@@ -13,9 +13,12 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef } from "@/types";
+import type { Feature, MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { stripUndefined } from "./patch";
+import { fetchResources, newResourceId, createResource } from "./resources";
+import { fetchEpics, newEpicId, createEpic } from "./epics";
+import { fetchFeatures, newFeatureId, createFeature } from "./features";
 
 /**
  * Creates a Pulse and grants the creator 'owner'. These are three
@@ -50,6 +53,86 @@ export async function createPulse(uid: string, workspaceId: string, name: string
   };
   await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
 
+  return pulseRef.id;
+}
+
+export type DuplicateMode = "full" | "noResources" | "empty";
+
+/**
+ * Creates a new Pulse owned by `uid` from an existing one. `mode`:
+ *   - "full": copy config, resources, epics and tasks (with assignments);
+ *   - "noResources": copy config, epics and tasks but drop every resource
+ *     reference (tasks left unassigned);
+ *   - "empty": a blank Pulse (default config, nothing copied) — just the name.
+ * Ids are freshly minted and remapped (epic ↔ task, resource ↔ assignment).
+ */
+export async function duplicatePulse(uid: string, workspaceId: string, sourcePulseId: string, name: string, mode: DuplicateMode): Promise<string> {
+  const source = mode === "empty" ? null : await getPulse(sourcePulseId);
+  const now = Date.now();
+  const pulseRef = doc(collection(db, "pulses"));
+  const pulse: Pulse = {
+    id: pulseRef.id,
+    workspaceId,
+    name,
+    createdBy: uid,
+    createdAt: now,
+    updatedAt: now,
+    graphConfig: source?.graphConfig ?? DEFAULT_GRAPH_CONFIG,
+    resourceTypes: source?.resourceTypes ?? [],
+    ...(source?.statuses ? { statuses: source.statuses } : {}),
+  };
+  await setDoc(pulseRef, stripUndefined(pulse));
+  await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), { uid, email: "", role: "owner", joinedAt: now } satisfies PulseMember);
+  const indexEntry: MyPulseIndexEntry = { pulseId: pulseRef.id, name, workspaceId, role: "owner", joinedAt: now };
+  await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
+
+  if (mode === "empty") return pulseRef.id;
+  const copyResources = mode === "full";
+
+  // Resources first, so tasks can point at the new ids.
+  const resMap = new Map<string, string>();
+  if (copyResources) {
+    const resources = await fetchResources(sourcePulseId);
+    await Promise.all(
+      resources.map((r) => {
+        const nid = newResourceId(pulseRef.id);
+        resMap.set(r.id, nid);
+        return createResource(pulseRef.id, { ...r, id: nid });
+      }),
+    );
+  }
+
+  const [epics, features] = await Promise.all([fetchEpics(sourcePulseId), fetchFeatures(sourcePulseId)]);
+  const epicMap = new Map<string, string>();
+  await Promise.all(
+    epics.map((e) => {
+      const nid = newEpicId(pulseRef.id);
+      epicMap.set(e.id, nid);
+      return createEpic(pulseRef.id, { ...e, id: nid });
+    }),
+  );
+
+  const remapRes = (ids?: string[]) => (copyResources ? (ids || []).map((r) => resMap.get(r)).filter((x): x is string => !!x) : []);
+  const remapAlloc = (alloc?: Record<string, number>) => {
+    const out: Record<string, number> = {};
+    if (copyResources && alloc) for (const [k, v] of Object.entries(alloc)) { const nk = resMap.get(k); if (nk) out[nk] = v; }
+    return out;
+  };
+  await Promise.all(
+    features.map((f) => {
+      const children: Subtask[] = (f.children || []).map((c) => ({ ...c, resources: remapRes(c.resources), alloc: remapAlloc(c.alloc) }));
+      const nf: Feature = {
+        ...f,
+        id: newFeatureId(pulseRef.id),
+        epicId: f.epicId ? epicMap.get(f.epicId) ?? null : null,
+        resources: remapRes(f.resources),
+        lead: copyResources && f.lead ? resMap.get(f.lead) ?? null : null,
+        alloc: remapAlloc(f.alloc),
+        children,
+      };
+      return createFeature(pulseRef.id, stripUndefined(nf) as Feature);
+    }),
+  );
   return pulseRef.id;
 }
 

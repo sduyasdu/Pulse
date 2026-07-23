@@ -13,12 +13,13 @@ const ROLE_LABEL: Record<MyPulseIndexEntry["role"], string> = {
 interface PulseCardProps {
   entry: MyPulseIndexEntry;
   onInviteClick: () => void;
+  onDuplicateClick: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: (pt: { clientX: number; clientY: number }) => void;
 }
 
-export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDelete }: PulseCardProps) {
+export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, onUnarchive, onDelete }: PulseCardProps) {
   const canInvite = entry.role === "owner" || entry.role === "editor";
   const isOwner = entry.role === "owner";
   const archived = !!entry.archived;
@@ -58,6 +59,7 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
               {canInvite && !archived && (
                 <MenuItem label="Invite collaborator" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
               )}
+              <MenuItem label="Duplicate…" onClick={(e) => { stop(e); setMenuOpen(false); onDuplicateClick(); }} />
               {archived ? (
                 <MenuItem label="Unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
               ) : (
