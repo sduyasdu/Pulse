@@ -13,6 +13,7 @@ import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import type { PulseRole } from "@/types";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
+import { KanbanView } from "@/components/kanban/KanbanView";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -132,6 +133,7 @@ export function PulsePage() {
   // zoom is handled by viewZoom. Kept as a value so the canvas keeps working.
   const scale = 1;
   const [viewZoom, setViewZoom] = useState(1);
+  const [viewMode, setViewMode] = useState<"canvas" | "board">("canvas");
   const [density, setDensity] = useState<Density>("week");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<RightTab>("team");
@@ -265,6 +267,8 @@ export function PulsePage() {
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
         onInvite={() => setShowInvite(true)}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         viewZoom={viewZoom}
         onZoomIn={() => canvasRef.current?.zoomStep(0.15)}
         onZoomOut={() => canvasRef.current?.zoomStep(-0.15)}
@@ -343,29 +347,41 @@ export function PulsePage() {
             </div>
           </div>
 
-          <CanvasView
-            ref={canvasRef}
-            graph={graph}
-            density={density}
-            scale={scale}
-            viewZoom={viewZoom}
-            setViewZoom={setViewZoom}
-            offsetX={offsetX}
-            setOffsetX={setOffsetX}
-            epicsShrunk={epicsShrunk}
-            showDelays={showDelays}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            filterResource={filterResource}
-            featureQuery={featureQuery}
-            featureStatusFilter={featureStatusFilter}
-            epicFilter={epicFilter}
-            canEdit={canEdit}
-            onTimelineBoundsChange={setTimelineBounds}
-          />
+          {viewMode === "board" ? (
+            <KanbanView
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              canEdit={canEdit}
+              featureQuery={featureQuery}
+              featureStatusFilter={featureStatusFilter}
+              epicFilter={epicFilter}
+              filterResource={filterResource}
+            />
+          ) : (
+            <CanvasView
+              ref={canvasRef}
+              graph={graph}
+              density={density}
+              scale={scale}
+              viewZoom={viewZoom}
+              setViewZoom={setViewZoom}
+              offsetX={offsetX}
+              setOffsetX={setOffsetX}
+              epicsShrunk={epicsShrunk}
+              showDelays={showDelays}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              filterResource={filterResource}
+              featureQuery={featureQuery}
+              featureStatusFilter={featureStatusFilter}
+              epicFilter={epicFilter}
+              canEdit={canEdit}
+              onTimelineBoundsChange={setTimelineBounds}
+            />
+          )}
         </div>
 
-        {assignPanelOpen ? (
+        {viewMode === "canvas" && (assignPanelOpen ? (
           <div
             onPointerDown={(e) => {
               try {
@@ -397,7 +413,7 @@ export function PulsePage() {
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg> Assignment by resource
           </button>
-        )}
+        ))}
 
         {toast && (
           <div
@@ -419,7 +435,7 @@ export function PulsePage() {
           />
         )}
 
-        {assignPanelOpen && (
+        {viewMode === "canvas" && assignPanelOpen && (
         <div style={{ height: assignPanelH, flexShrink: 0 }}>
           <AssignmentPanel
             offsetX={offsetX}

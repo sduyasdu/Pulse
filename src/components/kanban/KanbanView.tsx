@@ -1,0 +1,228 @@
+import { useMemo, useState } from "react";
+import type { Feature, FeatureStatus } from "@/types";
+import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
+import { buildBoard, type StatusColumn } from "@/domain/kanban";
+import { STATUS_META, colorForName } from "@/domain/constants";
+import { fmtDate, todayIndex } from "@/domain/dateUtils";
+import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
+
+interface KanbanViewProps {
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  canEdit: boolean;
+  featureQuery: string;
+  featureStatusFilter: Set<string>;
+  epicFilter: Set<string>;
+  filterResource: string | null;
+}
+
+export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featureStatusFilter, epicFilter, filterResource }: KanbanViewProps) {
+  const epics = usePulseStore((s) => s.epics);
+  const features = usePulseStore((s) => s.features);
+  const resources = usePulseStore((s) => s.resources);
+  const pulse = usePulseStore((s) => s.pulse);
+  const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
+  const addFeature = usePulseStore((s) => s.addFeature);
+  const addEpic = usePulseStore((s) => s.addEpic);
+  const graph = graphConfigOf(pulse);
+
+  const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
+  const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
+
+  // Query / epic / resource narrow the cards shown; status filter hides whole
+  // columns (D7). Matching mirrors the canvas so the two views agree.
+  const q = featureQuery.trim().toLowerCase();
+  const visibleFeatures = useMemo(
+    () =>
+      features.filter((f) => {
+        const matchesQuery = !q || (f.title || "").toLowerCase().includes(q) || (f.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
+        const matchesEpic = epicFilter.size === 0 || (f.epicId != null && epicFilter.has(f.epicId));
+        const matchesRes = !filterResource || (f.resources || []).includes(filterResource) || (f.children || []).some((c) => (c.resources || []).includes(filterResource));
+        return matchesQuery && matchesEpic && matchesRes;
+      }),
+    [features, q, epicFilter, filterResource],
+  );
+
+  const columns = useMemo(() => buildBoard(visibleFeatures, epics), [visibleFeatures, epics]);
+  const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
+
+  const addTask = async (status: FeatureStatus) => {
+    const id = await addFeature({ x: todayIndex(), y: 20, status });
+    if (id) onSelect(id);
+  };
+
+  const drop = (status: FeatureStatus, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverCol(null);
+    const id = e.dataTransfer.getData("text/plain");
+    if (id && canEdit) void setFeatureStatus(id, status);
+  };
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "#FDFCF8" }}>
+      <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #E2DFD9" }}>
+        <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Board</span>
+        <span className="mono text-xs" style={{ color: "#94A3B8" }}>{visibleFeatures.length} task{visibleFeatures.length === 1 ? "" : "s"}</span>
+        <div className="flex-1" />
+        {canEdit && (
+          <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
+            ▤ Add epic
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="flex gap-3 p-3 h-full" style={{ minWidth: "min-content" }}>
+          {shownColumns.map((col) => (
+            <Column
+              key={col.status}
+              col={col}
+              canEdit={canEdit}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              graph={graph}
+              resById={resById}
+              dragOver={dragOverCol === col.status}
+              onDragEnterCol={() => setDragOverCol(col.status)}
+              onDragLeaveCol={() => setDragOverCol((s) => (s === col.status ? null : s))}
+              onDrop={(e) => drop(col.status, e)}
+              onAddTask={() => void addTask(col.status)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Column({
+  col,
+  canEdit,
+  selectedId,
+  onSelect,
+  graph,
+  resById,
+  dragOver,
+  onDragEnterCol,
+  onDragLeaveCol,
+  onDrop,
+  onAddTask,
+}: {
+  col: StatusColumn;
+  canEdit: boolean;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  graph: ReturnType<typeof graphConfigOf>;
+  resById: Record<string, { initials: string; name: string }>;
+  dragOver: boolean;
+  onDragEnterCol: () => void;
+  onDragLeaveCol: () => void;
+  onDrop: (e: React.DragEvent) => void;
+  onAddTask: () => void;
+}) {
+  const meta = STATUS_META[col.status];
+  return (
+    <div
+      className="flex flex-col rounded-xl"
+      style={{ width: 280, flexShrink: 0, background: dragOver ? "#FFF4EC" : "#F4F2EC", border: `1px solid ${dragOver ? "#EE7240" : "#E2DFD9"}` }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnter={onDragEnterCol}
+      onDragLeave={onDragLeaveCol}
+      onDrop={onDrop}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0">
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: meta.border, flexShrink: 0 }} />
+        <span className="text-xs font-semibold" style={{ color: "#1F2330" }}>{meta.label}</span>
+        <span className="mono text-xs" style={{ color: "#94A3B8" }}>{col.count}</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ minHeight: 40 }}>
+        {col.count === 0 && <div className="mono text-xs text-center py-4" style={{ color: "#B4BECC" }}>—</div>}
+        {col.groups.map((g) => (
+          <div key={g.epicId ?? "none"} className="mb-2">
+            <div className="flex items-center gap-1.5 px-1 mb-1">
+              {g.color && <span style={{ width: 8, height: 8, borderRadius: 3, background: g.color, flexShrink: 0 }} />}
+              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#78859A" }}>{g.name}</span>
+              <span className="mono text-xs" style={{ color: "#B4BECC" }}>{g.tasks.length}</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {g.tasks.map((f) => (
+                <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} resById={resById} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {canEdit && (
+        <button onClick={onAddTask} className="mono text-xs px-3 py-2 text-left flex-shrink-0" style={{ color: "#78859A", borderTop: "1px solid #E2DFD9" }}>
+          + add task
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Card({
+  f,
+  canEdit,
+  selected,
+  onSelect,
+  graph,
+  resById,
+}: {
+  f: Feature;
+  canEdit: boolean;
+  selected: boolean;
+  onSelect: (id: string | null) => void;
+  graph: ReturnType<typeof graphConfigOf>;
+  resById: Record<string, { initials: string; name: string }>;
+}) {
+  const done = f.status === "done";
+  const est = estimateEffort(f, graph);
+  const coverage = Math.round((assignedEffort(f) / Math.max(0.1, est)) * 100);
+  const subs = f.children || [];
+  const subDone = subs.filter((c) => c.status === "done").length;
+  return (
+    <div
+      draggable={canEdit}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", f.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onClick={() => onSelect(selected ? null : f.id)}
+      className="relative rounded-lg overflow-hidden"
+      style={{
+        background: "#FFFFFF",
+        border: `1px solid ${selected ? "#EE7240" : "#E7E3DC"}`,
+        boxShadow: selected ? "0 0 0 1px #EE7240" : "0 1px 2px rgba(15,23,42,0.05)",
+        cursor: canEdit ? "grab" : "pointer",
+        padding: "7px 9px 7px 11px",
+      }}
+    >
+      {f.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: f.labelColor }} />}
+      <div className="flex items-center gap-1.5">
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(f, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
+        <span className="text-xs font-semibold flex-1 truncate" title={f.title} style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
+        {f.plannedX != null && <span title="Baseline plan set" style={{ fontSize: 10 }}>📌</span>}
+        {(f.attachments || []).length > 0 && <span className="mono" style={{ fontSize: 9, color: "#D85A28" }}>📎{f.attachments!.length}</span>}
+        {f.ai && <span style={{ fontSize: 11, color: "#8B5CF6" }}>✨</span>}
+        {done && <span title="Done — locked" style={{ fontSize: 10 }}>🔒</span>}
+      </div>
+      <div className="flex items-center gap-2 mt-1.5">
+        <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{fmtDate(f.x)} → {fmtDate(f.x + f.duration)}</span>
+        {subs.length > 0 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>☑ {subDone}/{subs.length}</span>}
+        <div className="flex items-center gap-0.5" style={{ marginLeft: "auto" }}>
+          {(f.resources || []).slice(0, 4).map((rid) => {
+            const r = resById[rid];
+            return r ? (
+              <span key={rid} className="mono" title={r.name} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(rid), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+            ) : null;
+          })}
+          {(f.resources || []).length > 4 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>+{f.resources!.length - 4}</span>}
+          {est > 0 && <span className="mono flex-shrink-0" title={`${Math.round(assignedEffort(f))}md assigned of ${Math.round(est)}md`} style={{ fontSize: 9, fontWeight: 700, color: STATUS_META[f.status].text, opacity: 0.85, marginLeft: 2 }}>{coverage}%</span>}
+        </div>
+      </div>
+    </div>
+  );
+}

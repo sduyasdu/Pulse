@@ -14,6 +14,7 @@ import {
 import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes } from "@/services/firestore/pulses";
 import { subscribePulseMembers } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
+import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
 
 /** Options accepted by the recording mutations. Pass { record: false } for
  * intermediate/streamed writes (canvas drags, bulk layout ops) that record a
@@ -45,6 +46,7 @@ interface PulseStoreState {
 
   addFeature: (patch: Partial<Feature> & Pick<Feature, "x" | "y">) => Promise<string>;
   patchFeature: (featureId: string, patch: Partial<Feature>, opts?: MutateOpts) => Promise<void>;
+  setFeatureStatus: (featureId: string, status: Feature["status"]) => Promise<void>;
   removeFeature: (featureId: string) => Promise<void>;
   duplicateFeature: (featureId: string) => Promise<string | null>;
   moveFeatureToEpic: (featureId: string, epicId: string | null) => Promise<void>;
@@ -204,6 +206,23 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const before = features.find((f) => f.id === featureId);
     await updateFeature(pulseId, featureId, patch);
     if (opts?.record !== false && before) recordSingle("Edit task", pulseId, patchOp("feature", featureId, asDoc(before), patch));
+  },
+
+  // Single status path shared by the details panel and the Kanban board:
+  // maintains the finished date (stamp today entering "done", clear leaving it)
+  // and records one undo entry carrying both fields together.
+  setFeatureStatus: async (featureId, status) => {
+    const { pulseId, features } = get();
+    if (!pulseId) return;
+    const before = features.find((f) => f.id === featureId);
+    if (!before || before.status === status) return;
+    const patch: Partial<Feature> = { status };
+    const wasDone = before.status === "done";
+    const nowDone = status === "done";
+    if (nowDone && !wasDone) patch.finishedAt = toDateInputValue(todayIndex());
+    else if (!nowDone && wasDone) patch.finishedAt = null;
+    await updateFeature(pulseId, featureId, patch);
+    recordSingle("Change status", pulseId, patchOp("feature", featureId, asDoc(before), patch));
   },
 
   removeFeature: async (featureId) => {

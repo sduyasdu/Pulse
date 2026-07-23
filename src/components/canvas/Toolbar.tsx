@@ -11,6 +11,8 @@ interface ToolbarProps {
   pulseName: string;
   onRenamePulse: (name: string) => void;
   onInvite: () => void;
+  viewMode: "canvas" | "board";
+  setViewMode: (m: "canvas" | "board") => void;
   viewZoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -54,6 +56,8 @@ export function Toolbar({
   pulseName,
   onRenamePulse,
   onInvite,
+  viewMode,
+  setViewMode,
   viewZoom,
   onZoomIn,
   onZoomOut,
@@ -182,6 +186,15 @@ export function Toolbar({
             </button>
           </div>
         )}
+        <div className="flex rounded overflow-hidden" style={{ background: "#1B3A63" }} title="Switch between the timeline canvas and the Kanban board">
+          {(["canvas", "board"] as const).map((m) => (
+            <button key={m} onClick={() => setViewMode(m)} className="px-2.5 py-1.5 text-xs capitalize" style={{ background: viewMode === m ? "#EE7240" : "transparent", color: viewMode === m ? "#0A1428" : "#EE7240", fontWeight: 600 }}>
+              {m}
+            </button>
+          ))}
+        </div>
+        {viewMode === "canvas" && (
+          <>
         <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
           <button onClick={onZoomOut} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍−</span></button>
           <span className="mono text-xs w-9 text-center" style={{ color: "#EE7240" }}>{Math.round(viewZoom * 100)}%</span>
@@ -197,6 +210,8 @@ export function Toolbar({
           ))}
         </div>
         <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><span style={{ color: "#CBD5E1", fontSize: 14 }}>⟲</span></button>
+          </>
+        )}
 
         {canEdit && (
           <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Undo / redo (⌘Z · ⇧⌘Z)">
@@ -236,16 +251,20 @@ export function Toolbar({
             </button>
           )}
         </div>
-        <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
-          ⟞ {showDelays ? "Delays on" : "Delays"}
-        </button>
-        <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
-          {epicsShrunk ? "▣" : "▢"} {epicsShrunk ? "Unshrink" : "Shrink epics"}
-        </button>
-        {canEdit && (
-          <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
-            ⇕ Compact
-          </button>
+        {viewMode === "canvas" && (
+          <>
+            <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
+              ⟞ {showDelays ? "Delays on" : "Delays"}
+            </button>
+            <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
+              {epicsShrunk ? "▣" : "▢"} {epicsShrunk ? "Unshrink" : "Shrink epics"}
+            </button>
+            {canEdit && (
+              <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
+                ⇕ Compact
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

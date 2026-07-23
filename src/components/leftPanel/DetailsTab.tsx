@@ -38,6 +38,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   const resources = usePulseStore((s) => s.resources);
   const pulse = usePulseStore((s) => s.pulse);
   const patchFeature = usePulseStore((s) => s.patchFeature);
+  const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
   const removeFeature = usePulseStore((s) => s.removeFeature);
   const setAlloc = usePulseStore((s) => s.setAlloc);
@@ -73,18 +74,6 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   const todayISO = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  // Changing the task's status maintains its finished date the same way a
-  // subtask's does: stamp today when it first becomes done, clear it when
-  // reopened. Manual edits to the date field go straight through patchFeature.
-  const setFeatureStatus = (status: Feature["status"]) => {
-    const patch: Partial<Feature> = { status };
-    const wasDone = feature.status === "done";
-    const nowDone = status === "done";
-    if (nowDone && !wasDone) patch.finishedAt = todayISO();
-    else if (!nowDone && wasDone) patch.finishedAt = null;
-    void patchFeature(feature.id, patch);
   };
 
   // Changing a subtask's status also maintains its finished date: stamp today
@@ -475,7 +464,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         <select
           value={feature.status}
           disabled={!canEditProp}
-          onChange={(e) => setFeatureStatus(e.target.value as Feature["status"])}
+          onChange={(e) => void setFeatureStatus(feature.id, e.target.value as Feature["status"])}
           className="mt-1 w-full text-sm border rounded px-2 py-1.5"
           style={{ borderColor: "#E2DFD9" }}
         >
