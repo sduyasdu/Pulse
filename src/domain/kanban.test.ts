@@ -44,13 +44,16 @@ describe("buildBoard", () => {
   it("treats an unknown epicId as 'No epic'", () => {
     const feats = [mk("planned", 1, "ghost")];
     const planned = board(feats, [epic("A")]).find((c) => c.status === "planned")!;
-    expect(planned.groups).toHaveLength(1);
-    expect(planned.groups[0].epicId).toBeNull();
+    const noEpic = planned.groups.find((g) => g.epicId === null);
+    expect(noEpic?.tasks).toHaveLength(1);
   });
 
-  it("omits epic groups that have no tasks in a column", () => {
-    const epics = [epic("A"), epic("B")];
-    const planned = board([mk("planned", 1, "A")], epics).find((c) => c.status === "planned")!;
-    expect(planned.groups.map((g) => g.epicId)).toEqual(["A"]);
+  it("shows a populated epic only where it has tasks, but an empty epic everywhere", () => {
+    const epics = [epic("A"), epic("B")]; // A gets a planned task; B stays empty
+    const cols = board([mk("planned", 1, "A")], epics);
+    const planned = cols.find((c) => c.status === "planned")!;
+    const blocked = cols.find((c) => c.status === "blocked")!;
+    expect(planned.groups.map((g) => g.epicId)).toEqual(["A", "B"]); // A has a task, B empty-everywhere
+    expect(blocked.groups.map((g) => g.epicId)).toEqual(["B"]); // A not here; B still shown (brand new)
   });
 });

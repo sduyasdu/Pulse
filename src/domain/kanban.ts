@@ -22,18 +22,23 @@ function byStart(a: Feature, b: Feature): number {
  * Bucket features into one column per status (in the given `statuses` order, so
  * whatever order the Pulse defines — "done" last by convention). Each column's
  * tasks are grouped by epic and sorted by start date (Feature.x ascending, title
- * as tiebreak). Only epics with at least one task in that column get a band (in
- * `epics` array order); a "No epic" group (features with no/unknown epicId) is
+ * as tiebreak). A populated epic only gets a band in the columns where it has
+ * tasks (no empty bands cluttering the rest); an epic that has NO tasks anywhere
+ * — i.e. brand new — shows as an empty band in EVERY column so it's visible and
+ * can be populated. A "No epic" group (features with no/unknown epicId) is
  * appended last when it has tasks. Pure and side-effect-free — unit tested.
  */
 export function buildBoard(features: Feature[], epics: Epic[], statuses: StatusDef[]): StatusColumn[] {
   const epicIds = new Set(epics.map((e) => e.id));
+  const usedEpics = new Set(features.map((f) => f.epicId).filter((id): id is string => !!id));
   return statuses.map((sd) => {
     const inCol = features.filter((f) => f.status === sd.id);
     const groups: EpicGroup[] = [];
     for (const ep of epics) {
       const tasks = inCol.filter((f) => f.epicId === ep.id).sort(byStart);
-      if (tasks.length) groups.push({ epicId: ep.id, name: ep.name || "Untitled epic", color: ep.color, tasks });
+      if (tasks.length || !usedEpics.has(ep.id)) {
+        groups.push({ epicId: ep.id, name: ep.name || "Untitled epic", color: ep.color, tasks });
+      }
     }
     const loose = inCol.filter((f) => !f.epicId || !epicIds.has(f.epicId)).sort(byStart);
     if (loose.length) groups.push({ epicId: null, name: "No epic", color: null, tasks: loose });

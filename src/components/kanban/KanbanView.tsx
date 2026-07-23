@@ -63,8 +63,8 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses), [visibleFeatures, epics, statuses]);
   const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
 
-  const addTask = async (status: FeatureStatus) => {
-    const id = await addFeature({ x: todayIndex(), y: 20, status });
+  const addTask = async (status: FeatureStatus, epicId: string | null = null) => {
+    const id = await addFeature({ x: todayIndex(), y: 20, status, epicId });
     if (id) onSelect(id);
   };
 
@@ -143,7 +143,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               onDragEnterCol={() => setDragOverCol(col.status)}
               onDragLeaveCol={() => { setDragOverCol((s) => (s === col.status ? null : s)); setDragOverGroup(null); }}
               onDrop={(epicId, e) => handleDrop(col.status, epicId, e)}
-              onAddTask={() => void addTask(col.status)}
+              onAddTask={(epicId) => void addTask(col.status, epicId)}
             />
           ))}
         </div>
@@ -193,7 +193,7 @@ function Column({
   onDragEnterCol: () => void;
   onDragLeaveCol: () => void;
   onDrop: (epicId: string | null | undefined, e: React.DragEvent) => void;
-  onAddTask: () => void;
+  onAddTask: (epicId: string | null) => void;
 }) {
   const meta = statusMetaOf(col.status, statuses);
   const [labelDraft, onLabelChange] = useDebouncedText(meta.label, (v) => onRenameStatus(col.status, v));
@@ -245,6 +245,9 @@ function Column({
               >
                 <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.name}</span>
                 <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
+                {canEdit && (
+                  <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title="Add a task to this epic" className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}>＋</button>
+                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 {g.tasks.map((f) => (
@@ -257,7 +260,7 @@ function Column({
       </div>
 
       {canEdit && (
-        <button onClick={onAddTask} className="mono text-xs px-3 py-2 text-left flex-shrink-0" style={{ color: "#78859A", borderTop: "1px solid #E2DFD9" }}>
+        <button onClick={() => onAddTask(null)} className="mono text-xs px-3 py-2 text-left flex-shrink-0" style={{ color: "#78859A", borderTop: "1px solid #E2DFD9" }}>
           + add task
         </button>
       )}

@@ -171,7 +171,7 @@ export function Toolbar({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>
-        {canEdit && (
+        {canEdit && viewMode === "canvas" && (
           <div className="flex items-center gap-1.5" style={{ borderRight: "1px solid #24406B", paddingRight: 6, marginRight: 2 }}>
             <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
               ▤ Add epic
