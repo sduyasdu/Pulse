@@ -706,11 +706,11 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
 
 ## 7. Open questions / decisions to confirm (D-list)
 
-1. **D1 — Copy-link invites, link-only.** *Recommend:* `pulses/{p}/joinLinks/{token}`
-   (token-as-id), default viewer / optional editor, token-validated self-join,
-   revoke = delete / regenerate = new token; **retire email invites &
-   `inviteIndex`** after a one-release deprecation window. No email, no server.
-   *Confirm: fully link-only, or retain email-address invites as a secondary path?*
+1. **D1 — Copy-link invites, link-only. ✅ DECIDED (fully link-only).**
+   `pulses/{p}/joinLinks/{token}` (token-as-id), default viewer / optional editor,
+   token-validated self-join, revoke = delete / regenerate = new token; **retire
+   email invites & `inviteIndex`** after a one-release deprecation window. No
+   email, no server. Email-address invites are *not* retained as a secondary path.
 2. **D2 — Teams via the workspace layer.** *Recommend:* union-cascade
    (team membership grants all team Pulses; per-Pulse guests still allowed;
    effective role = max(team, per-Pulse)); team roles unified to
@@ -746,12 +746,12 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     (§1.9). *Recommend:* let a `JoinLink` optionally carry `linkResourceId` to
     auto-bind a joining member to a resource row, and start keying behavior
     (assignment notifications, §3.6) off `linkedUid`. *Confirm this is desired.*
-11. **D11 — Who may create a link, and per-Pulse override direction (NEW).**
-    (a) Link creation: `canEditPulse` (owner+editor) or `isPulseOwner`
-    (owner-only)? *Recommend editor+owner for low friction.* (b) In Teams, a
-    per-Pulse grant can only *raise* capability above the team role, never lower
-    it in v1 — *confirm that's acceptable (no per-Pulse "exclude a team member"
-    yet).*
+11. **D11 — Who may create a link, and per-Pulse override direction.**
+    (a) Link creation: **✅ DECIDED — `canEditPulse` (owner + editor).** Both
+    owners and editors can generate/copy/revoke join links.
+    (b) In Teams, a per-Pulse grant can only *raise* capability above the team
+    role, never lower it in v1 (no per-Pulse "exclude a team member" yet). *Still
+    open — recommend accepting for v1; keeps the rules simple.*
 12. **D12 — Email channel later.** Pulse sends no email at all now (§3.1). If
     notifications (D6) ever want email, that re-introduces a mail provider.
     *Recommend:* defer; in-app only for the foreseeable roadmap. *Confirm.*
