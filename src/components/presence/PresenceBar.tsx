@@ -17,23 +17,30 @@ function usePresence(pulseId: string | undefined, uid: string | undefined, email
   const [entries, setEntries] = useState<PresenceEntry[]>([]);
   useEffect(() => {
     if (!pulseId || !uid) return;
+    let raw: PresenceEntry[] = [];
+    const apply = () => {
+      const cutoff = Date.now() - STALE_MS;
+      setEntries(raw.filter((p) => p.lastSeen > cutoff));
+    };
     void heartbeatPresence(pulseId, uid, email);
+    // Keep the heartbeat going while this view is mounted (even if the window
+    // is in the background), so others keep seeing you; re-filter on a timer so
+    // people who closed their tab drop off even without a new snapshot.
     const beat = window.setInterval(() => {
-      if (!document.hidden) void heartbeatPresence(pulseId, uid, email);
+      void heartbeatPresence(pulseId, uid, email);
+      apply();
     }, BEAT_MS);
     const unsub = subscribePresence(pulseId, (list) => {
-      const cutoff = Date.now() - STALE_MS;
-      setEntries(list.filter((p) => p.lastSeen > cutoff));
+      raw = list;
+      apply();
     });
-    const onVis = () => {
-      if (document.hidden) void clearPresence(pulseId, uid);
-      else void heartbeatPresence(pulseId, uid, email);
-    };
-    document.addEventListener("visibilitychange", onVis);
+    // Best-effort clear when the tab actually closes.
+    const onUnload = () => void clearPresence(pulseId, uid);
+    window.addEventListener("pagehide", onUnload);
     return () => {
       window.clearInterval(beat);
       unsub();
-      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", onUnload);
       void clearPresence(pulseId, uid);
     };
   }, [pulseId, uid, email]);
