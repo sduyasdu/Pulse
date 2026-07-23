@@ -36,12 +36,13 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
       className="group relative flex flex-col justify-between rounded-xl border p-4 transition-shadow hover:shadow-md"
       style={{ borderColor: "#E2DFD9", background: archived ? "#FAF9F5" : "#FFFFFF", minHeight: 108, opacity: archived ? 0.85 : 1 }}
     >
-      {/* Actions menu — sits above the card's Link so it doesn't navigate. */}
-      <div className="absolute right-2 top-2" style={{ zIndex: 10 }}>
+      {/* Actions menu — bottom-right, always visible, sits above the card's
+          Link so it doesn't navigate. Opens upward so it doesn't overflow. */}
+      <div className="absolute right-2 bottom-2" style={{ zIndex: 10 }}>
         <button
           onClick={(e) => { stop(e); setMenuOpen((o) => !o); }}
-          className="flex items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
-          style={{ width: 26, height: 26, background: "#F4F2EC", color: "#64748B", fontSize: 18, lineHeight: 1, opacity: menuOpen ? 1 : undefined }}
+          className="flex items-center justify-center rounded"
+          style={{ width: 26, height: 26, background: "#F1EFE8", color: "#64748B", fontSize: 18, lineHeight: 1, border: "1px solid #E2DFD9" }}
           title="More actions"
           aria-label="More actions"
         >
@@ -51,9 +52,12 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
           <>
             <div className="fixed inset-0" style={{ zIndex: 20 }} onClick={(e) => { stop(e); setMenuOpen(false); }} />
             <div
-              className="absolute right-0 mt-1 rounded-lg border py-1"
-              style={{ top: "100%", zIndex: 30, minWidth: 156, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
+              className="absolute right-0 mb-1 rounded-lg border py-1"
+              style={{ bottom: "100%", zIndex: 30, minWidth: 168, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
             >
+              {canInvite && !archived && (
+                <MenuItem label="Invite collaborator" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
+              )}
               {archived ? (
                 <MenuItem label="Unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
               ) : (
@@ -94,7 +98,7 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
           )}
         </div>
         {summary && (
-          <div className="mt-2 flex flex-wrap items-center gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1" style={{ paddingRight: 30 }}>
             <StatBadge n={summary.epics.length} label="epic" bg="#EAF0FA" color="#1B3A63" />
             <StatBadge n={summary.features.length} label="task" bg="#FCEEE4" color="#C2410C" />
             <StatBadge n={subtaskCount} label="subtask" bg="#F1F5F9" color="#475569" />
@@ -102,14 +106,6 @@ export function PulseCard({ entry, onInviteClick, onArchive, onUnarchive, onDele
           </div>
         )}
       </Link>
-      {canInvite && !archived && (
-        <button
-          onClick={onInviteClick}
-          className="mono mt-3 self-start text-[11px] text-yasdu-muted opacity-0 transition-opacity group-hover:opacity-100 hover:text-yasdu-primary"
-        >
-          + invite collaborator
-        </button>
-      )}
     </div>
   );
 }
