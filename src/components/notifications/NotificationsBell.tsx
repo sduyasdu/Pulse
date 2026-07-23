@@ -29,7 +29,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark }: { pulseId?
   const openItem = (n: Notification) => {
     setOpen(false);
     if (!n.read) void markNotificationRead(pulseId, n.id);
-    onOpenTask(n.featureId);
+    if (n.featureId) onOpenTask(n.featureId);
   };
 
   return (

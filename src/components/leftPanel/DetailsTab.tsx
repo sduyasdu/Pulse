@@ -546,7 +546,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         onDelete={(aid) => void removeAttachment(feature.id, aid)}
       />
 
-      {!hideComments && pulse && <Comments pulseId={pulse.id} featureId={feature.id} />}
+      {!hideComments && pulse && <Comments pulseId={pulse.id} targetId={feature.id} />}
 
     </div>
   );

@@ -85,9 +85,12 @@ export interface PulseMember {
   joinToken?: string;
 }
 
-/** A comment on a task, at pulses/{id}/features/{fid}/comments/{cid}. */
+/** A comment, at pulses/{id}/comments/{cid}. `targetId` is the task it's on, or
+ * null for a Pulse-level comment; `parentId` is set on a reply. */
 export interface Comment {
   id: string;
+  targetId: string | null;
+  parentId: string | null;
   authorUid: string;
   authorEmail: string;
   text: string;
