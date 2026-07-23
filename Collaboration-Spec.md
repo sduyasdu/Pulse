@@ -1,6 +1,6 @@
 # Pulse — Collaboration Specification
 
-Status: **Draft for sign-off (D1–D12)** · Scope: documents today's shipped
+Status: **Decisions confirmed (D1–D12) — ready to build** · Scope: documents today's shipped
 collaboration model, then proposes enhancements. Two directions are now **chosen,
 not optional**: (1) activate the dormant workspace layer into real **Teams** that
 own Pulses; (2) replace emailed invites with a **copy-link join** model. Both are
@@ -749,9 +749,10 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
 11. **D11 — Who may create a link, and per-Pulse override direction.**
     (a) Link creation: **✅ DECIDED — `canEditPulse` (owner + editor).** Both
     owners and editors can generate/copy/revoke join links.
-    (b) In Teams, a per-Pulse grant can only *raise* capability above the team
-    role, never lower it in v1 (no per-Pulse "exclude a team member" yet). *Still
-    open — recommend accepting for v1; keeps the rules simple.*
+    (b) **✅ DECIDED — accepted for v1.** In Teams, a per-Pulse grant can only
+    *raise* capability above the team role, never lower it (no per-Pulse
+    "exclude a team member" yet); a team member sees every team Pulse at least at
+    their team role. Per-Pulse exclusions are a possible later addition.
 12. **D12 — Email channel later.** Pulse sends no email at all now (§3.1). If
     notifications (D6) ever want email, that re-introduces a mail provider.
     *Recommend:* defer; in-app only for the foreseeable roadmap. *Confirm.*
