@@ -28,6 +28,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
   const addFeature = usePulseStore((s) => s.addFeature);
   const addEpic = usePulseStore((s) => s.addEpic);
+  const patchEpic = usePulseStore((s) => s.patchEpic);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const removeFeature = usePulseStore((s) => s.removeFeature);
   const setStatuses = usePulseStore((s) => s.setStatuses);
@@ -38,6 +39,11 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
     const t = label.trim();
     if (!t) return;
     void setStatuses(statuses.map((s) => (s.id === id ? { ...s, label: t } : s)));
+  };
+
+  const renameEpic = (id: string, name: string) => {
+    const t = name.trim();
+    if (t) void patchEpic(id, { name: t });
   };
 
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
@@ -132,6 +138,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               statuses={statuses}
               resById={resById}
               onRenameStatus={renameStatus}
+              onRenameEpic={renameEpic}
               dragOver={dragOverCol === col.status}
               dragOverGroup={dragOverGroup}
               setDragOverGroup={setDragOverGroup}
@@ -161,6 +168,7 @@ function Column({
   statuses,
   resById,
   onRenameStatus,
+  onRenameEpic,
   dragOver,
   dragOverGroup,
   setDragOverGroup,
@@ -182,6 +190,7 @@ function Column({
   statuses: StatusDef[];
   resById: Record<string, { initials: string; name: string }>;
   onRenameStatus: (id: string, label: string) => void;
+  onRenameEpic: (id: string, name: string) => void;
   dragOver: boolean;
   dragOverGroup: string | null;
   setDragOverGroup: (k: string | null) => void;
@@ -243,8 +252,8 @@ function Column({
                 className="flex items-center gap-1.5 mb-1.5 rounded"
                 style={{ background: hexA(g.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.color || "#94A3B8"}`, padding: "3px 8px" }}
               >
-                <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.name}</span>
-                <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
+                <EpicBandName epicId={g.epicId} name={g.name} canEdit={canEdit} onRename={onRenameEpic} />
+                <span className="mono text-xs flex-shrink-0" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
                 {canEdit && (
                   <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title="Add a task to this epic" className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}>＋</button>
                 )}
@@ -265,6 +274,23 @@ function Column({
         </button>
       )}
     </div>
+  );
+}
+
+function EpicBandName({ epicId, name, canEdit, onRename }: { epicId: string | null; name: string; canEdit: boolean; onRename: (id: string, name: string) => void }) {
+  const [draft, onChange] = useDebouncedText(name, (v) => { if (epicId != null) onRename(epicId, v); });
+  // The "No epic" band and viewers aren't editable.
+  if (!canEdit || epicId == null) {
+    return <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{name}</span>;
+  }
+  return (
+    <input
+      value={draft}
+      onChange={(e) => onChange(e.target.value)}
+      title="Rename epic"
+      className="mono text-xs uppercase tracking-wide bg-transparent flex-1"
+      style={{ border: "none", outline: "none", color: "#334155", fontWeight: 600, letterSpacing: "0.05em", minWidth: 0 }}
+    />
   );
 }
 
