@@ -175,15 +175,6 @@ export function Toolbar({
             )}
           </div>
         )}
-        <button
-          onClick={onToggleComments}
-          title="Comments"
-          className="flex items-center justify-center rounded"
-          style={{ width: 26, height: 26, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
-        >
-          <Icon name="forum" size={15} />
-        </button>
-        {presence}
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>
@@ -232,9 +223,9 @@ export function Toolbar({
         )}
 
         <div className="flex items-center gap-1.5 ml-1">
-          <div className="flex items-center gap-1 rounded px-1.5" style={{ background: "#1B3A63", border: "1px solid #24406B" }}>
+          <div className="flex items-center gap-1 rounded px-1.5" style={{ background: "#F4F7FB", border: "1px solid #24406B" }}>
             <Icon name="search" size={13} style={{ color: "#64748B" }} />
-            <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#E2E8F0", outline: "none", width: 90 }} />
+            <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#1F2330", outline: "none", width: 90 }} />
           </div>
           <MultiSelectFilter
             label="statuses"
@@ -279,6 +270,20 @@ export function Toolbar({
             )}
           </>
         )}
+
+        {/* Collaboration controls — comments toggle, live presence, and the
+            notifications bell, pushed to the right edge of the bottom row. */}
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={onToggleComments}
+            title="Comments"
+            className="flex items-center justify-center rounded"
+            style={{ width: 26, height: 26, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
+          >
+            <Icon name="forum" size={15} />
+          </button>
+          {presence}
+        </div>
       </div>
     </div>
   );
