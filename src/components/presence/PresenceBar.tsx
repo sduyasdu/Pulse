@@ -55,7 +55,7 @@ export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; u
   const shown = others.slice(0, 4);
   const ring = dark ? "#123359" : "#FFFFFF";
   return (
-    <div className="presence-stack hoverable flex items-center" title={`${others.length} other${others.length === 1 ? "" : "s"} viewing`}>
+    <div className="presence-stack hoverable--ring flex items-center" title={`${others.length} other${others.length === 1 ? "" : "s"} viewing`}>
       {shown.map((p) => (
         <span
           key={p.uid}

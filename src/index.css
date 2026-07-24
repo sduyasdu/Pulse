@@ -132,36 +132,36 @@ button:disabled {
   }
 }
 
-/* Live-presence avatar stack (PresenceBar). Overlapped by default; on hover the
-   avatars fan apart and lift so each is legible. Follows the hover-effects
-   skill: the spread is decorative (who's viewing is also in the container
-   title), so it's gated behind (hover: hover) — it never fires or sticks on
-   touch, where the stack simply stays overlapped — and motion is disabled under
-   reduced-motion. */
+/* Variant: the canvas-task highlight — a soft orange ring + drop shadow, the
+   same language a selected task box uses on the canvas. Self-contained; apply
+   on its own. Touch-safe and motion-safe. */
+.hoverable--ring {
+  transition: box-shadow 0.14s ease;
+}
+@media (hover: hover) {
+  .hoverable--ring:hover {
+    box-shadow:
+      0 0 0 2px #ee7240,
+      0 6px 14px rgba(15, 23, 42, 0.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoverable--ring {
+    transition: none;
+  }
+}
+
+/* Live-presence avatar stack (PresenceBar): the avatars overlap. Its hover
+   highlight is the canvas-task ring (.hoverable--ring on the container), so the
+   badge reacts like a task box. Rounded so the ring hugs the circular cluster. */
 .presence-avatar {
   margin-left: -7px;
-  transition:
-    margin-left 0.16s ease,
-    transform 0.16s ease;
 }
 .presence-avatar:first-child {
   margin-left: 0;
 }
-@media (hover: hover) {
-  .presence-stack:hover .presence-avatar {
-    margin-left: 2px;
-    /* Scale so the reaction reads even with a single avatar (fan-out alone is
-       invisible when there's nothing to spread); lift for depth. */
-    transform: translateY(-2px) scale(1.12);
-  }
-  .presence-stack:hover .presence-avatar:first-child {
-    margin-left: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .presence-avatar {
-    transition: none;
-  }
+.presence-stack {
+  border-radius: 999px;
 }
 
 /* Suppress the browser's long-press text-selection / iOS image callout on the

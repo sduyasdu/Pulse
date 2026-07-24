@@ -123,9 +123,18 @@ Rules for the standard:
   variant or a deliberately chosen Tailwind `hover:` utility — never a bare,
   ungated `:hover`.
 - **Need a new recurring treatment?** Add it as a variant **in `index.css` and
-  document it here** (e.g. `.hoverable--raise` for card lift, `.hoverable--underline`
-  for text links) rather than hand-rolling per component. Keep every variant
+  document it here** rather than hand-rolling per component. Keep every variant
   gated by `@media (hover: hover)` and guarded for reduced motion.
+
+Defined variants:
+- **`.hoverable--ring`** — the canvas-task highlight: a soft orange ring +
+  drop shadow (`0 0 0 2px #EE7240, 0 6px 14px rgba(15,23,42,.15)`), the same
+  language a selected task box uses. Reach for this when an element should read
+  like a highlighted/selected canvas item (e.g. the PresenceBar badge). Self-
+  contained — apply on its own, not alongside `.hoverable`.
+  ```tsx
+  <div className="hoverable--ring rounded-full …">…</div>
+  ```
 - The global `button:hover` scale is a *baseline affordance*, not a substitute
   for choosing a hover — it's the "standard/default" this skill tells you to
   replace with an explicit one.
