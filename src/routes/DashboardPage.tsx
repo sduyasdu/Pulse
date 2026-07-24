@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseArchived, deletePulse, duplicatePulse, renamePulse, type DuplicateMode } from "@/services/firestore/pulses";
+import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
 import { fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
@@ -27,13 +27,15 @@ export function DashboardPage() {
     return subscribeMyPulses(firebaseUser.uid, setPulses);
   }, [firebaseUser]);
 
-  // Self-heal stale dashboard entries against the authoritative pulseMembers
-  // doc (always self-readable), since a user's users/{uid}/myPulses index is
-  // theirs alone and no one else can fix it:
+  // Self-heal stale dashboard entries against the authoritative source docs,
+  // since a user's users/{uid}/myPulses index is theirs alone and no one else
+  // can fix it:
   //   - membership gone (removed / Pulse deleted) -> drop the dangling entry;
-  //   - role changed by an owner -> sync the cached role label + section.
+  //   - role changed by an owner -> sync the cached role label + section;
+  //   - Pulse renamed by someone else -> sync the cached (denormalized) name.
   // Only acts on a definitive read (getDoc succeeded); a transient/network
-  // error leaves the entry for the next load to retry.
+  // error leaves the entry for the next load to retry. Updates only when a
+  // value actually changed, so it converges (no write/re-run loop).
   useEffect(() => {
     if (!firebaseUser || !pulses || pulses.length === 0) return;
     let cancelled = false;
@@ -44,8 +46,15 @@ export function DashboardPage() {
           if (cancelled) return;
           if (membership === null) {
             await removeMyPulseEntry(firebaseUser.uid, p.pulseId);
-          } else if (membership.role !== p.role) {
+            continue;
+          }
+          if (membership.role !== p.role) {
             await updateMyPulseRole(firebaseUser.uid, p.pulseId, membership.role);
+          }
+          const pulse = await getPulse(p.pulseId);
+          if (cancelled) return;
+          if (pulse && (pulse.name ?? "") !== (p.name ?? "")) {
+            await updateMyPulseName(firebaseUser.uid, p.pulseId, pulse.name ?? "");
           }
         } catch {
           // transient — skip; a later load retries
