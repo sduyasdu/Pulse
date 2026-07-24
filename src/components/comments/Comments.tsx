@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Comment } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore } from "@/stores/pulseStore";
-import { subscribeCommentsFor, addComment, deleteComment } from "@/services/firestore/comments";
+import { subscribeCommentsFor, addComment, editComment, deleteComment } from "@/services/firestore/comments";
 import { confirmAt } from "@/stores/confirmStore";
 import { CommentThread } from "./CommentThread";
 import { notifyParticipants } from "./notify";
@@ -27,11 +27,14 @@ export function Comments({ pulseId, targetId }: { pulseId: string; targetId: str
   const del = async (c: Comment, e: { clientX: number; clientY: number }) => {
     if (await confirmAt(e, { message: "Delete this comment?", confirmLabel: "Delete" })) await deleteComment(pulseId, c.id).catch(() => {});
   };
+  const edit = async (c: Comment, text: string) => {
+    await editComment(pulseId, c.id, text).catch(() => {});
+  };
 
   return (
     <div>
       <div className="mono mb-1.5" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Comments</div>
-      <CommentThread comments={comments} currentUid={uid} canModerate={isOwner} onAdd={add} onDelete={del} />
+      <CommentThread comments={comments} currentUid={uid} canModerate={isOwner} onAdd={add} onDelete={del} onEdit={edit} />
     </div>
   );
 }

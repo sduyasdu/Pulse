@@ -85,17 +85,32 @@ export interface PulseMember {
   joinToken?: string;
 }
 
-/** A comment, at pulses/{id}/comments/{cid}. `targetId` is the task it's on, or
- * null for a Pulse-level comment; `parentId` is set on a reply. */
+/** An @-mention of a task or resource embedded in a comment. `label` is the
+ * name at authoring time (kept so a mention still renders if the entity is
+ * later renamed or removed). */
+export interface CommentRef {
+  kind: "task" | "resource";
+  id: string;
+  label: string;
+}
+
+/** A comment, at pulses/{id}/comments/{cid}. `targetId` is what it's attached
+ * to — a task or resource (see `targetKind`), or null for a Pulse-level
+ * comment; `parentId` is set on a reply. `mentions` are inline @-tags. */
 export interface Comment {
   id: string;
   targetId: string | null;
+  /** What `targetId` refers to when set. Absent/"task" = a task (back-compat
+   * with pre-resource-comment data). */
+  targetKind?: "task" | "resource";
   parentId: string | null;
   authorUid: string;
   authorEmail: string;
   text: string;
   createdAt: number;
   editedAt?: number;
+  /** Tasks/resources @-tagged in the body. */
+  mentions?: CommentRef[];
 }
 
 /** An in-Pulse notification for a member, at pulses/{id}/notifications/{nid}. */

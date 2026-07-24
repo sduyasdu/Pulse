@@ -1,6 +1,6 @@
 import { collection, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Comment } from "@/types";
+import type { Comment, CommentRef } from "@/types";
 
 function col(pulseId: string) {
   return collection(db, "pulses", pulseId, "comments");
@@ -18,8 +18,21 @@ export function subscribeCommentsFor(pulseId: string, targetId: string | null, c
   return onSnapshot(query(col(pulseId), where("targetId", "==", targetId)), (snap) => cb(map(snap.docs)), () => cb([]));
 }
 
-export async function addComment(pulseId: string, targetId: string | null, parentId: string | null, authorUid: string, authorEmail: string, text: string): Promise<void> {
-  await setDoc(doc(col(pulseId)), { targetId, parentId, authorUid, authorEmail, text, createdAt: Date.now() });
+export async function addComment(
+  pulseId: string,
+  targetId: string | null,
+  parentId: string | null,
+  authorUid: string,
+  authorEmail: string,
+  text: string,
+  opts?: { targetKind?: "task" | "resource"; mentions?: CommentRef[] },
+): Promise<void> {
+  // Firestore rejects `undefined` field values, so only include the optional
+  // fields when they carry information.
+  const data: Record<string, unknown> = { targetId, parentId, authorUid, authorEmail, text, createdAt: Date.now() };
+  if (targetId && opts?.targetKind === "resource") data.targetKind = "resource";
+  if (opts?.mentions && opts.mentions.length > 0) data.mentions = opts.mentions;
+  await setDoc(doc(col(pulseId)), data);
 }
 
 export async function editComment(pulseId: string, id: string, text: string): Promise<void> {

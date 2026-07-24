@@ -482,7 +482,13 @@ export function PulsePage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <AllCommentsPanel pulseId={pulseId} onSelectTask={handleSelect} />
+              <AllCommentsPanel
+                pulseId={pulseId}
+                onSelectTask={handleSelect}
+                selectedFeatureId={selectedId}
+                selectedResourceId={filterResource}
+                onSelectResource={setFilterResource}
+              />
             </div>
           </div>
         )}
