@@ -12,6 +12,8 @@ interface ToolbarProps {
   pulseName: string;
   onRenamePulse: (name: string) => void;
   onInvite: () => void;
+  commentsOpen: boolean;
+  onToggleComments: () => void;
   presence?: ReactNode;
   viewMode: "canvas" | "board";
   setViewMode: (m: "canvas" | "board") => void;
@@ -52,6 +54,8 @@ export function Toolbar({
   pulseName,
   onRenamePulse,
   onInvite,
+  commentsOpen,
+  onToggleComments,
   presence,
   viewMode,
   setViewMode,
@@ -171,6 +175,14 @@ export function Toolbar({
             )}
           </div>
         )}
+        <button
+          onClick={onToggleComments}
+          title="Comments"
+          className="flex items-center justify-center rounded"
+          style={{ width: 26, height: 26, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
+        >
+          <Icon name="forum" size={15} />
+        </button>
         {presence}
       </div>
 

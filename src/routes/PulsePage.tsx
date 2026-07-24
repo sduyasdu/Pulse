@@ -17,6 +17,7 @@ import { KanbanView } from "@/components/kanban/KanbanView";
 import { PresenceBar } from "@/components/presence/PresenceBar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
+import { Icon } from "@/components/shared/Icon";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -24,7 +25,7 @@ import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 
 const ROLE_LABEL: Record<PulseRole, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer · read-only" };
 
-type RightTab = "details" | "team" | "capacity" | "comments";
+type RightTab = "details" | "team" | "capacity";
 
 export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
@@ -140,6 +141,7 @@ export function PulsePage() {
   const [density, setDensity] = useState<Density>("week");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<RightTab>("team");
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [filterResource, setFilterResource] = useState<string | null>(null);
   const [featureQuery, setFeatureQuery] = useState("");
   // Empty set = no filter ("all"). Multi-select, so a set of chosen values.
@@ -270,6 +272,8 @@ export function PulsePage() {
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
         onInvite={() => setShowInvite(true)}
+        commentsOpen={commentsOpen}
+        onToggleComments={() => setCommentsOpen((v) => !v)}
         presence={
           <div className="flex items-center gap-2">
             <PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />
@@ -312,7 +316,7 @@ export function PulsePage() {
       />
 
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        <div className="flex overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
+        <div className="flex overflow-hidden relative" style={{ flex: 1, minHeight: 0 }}>
           {!sidebarOpen && (
             <div style={{ width: 30, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 8 }}>
               <button onClick={toggleSidebar} title="Show panel" className="no-press" style={{ color: "#64748B", display: "flex", alignItems: "center" }}>
@@ -325,7 +329,7 @@ export function PulsePage() {
               <button onClick={toggleSidebar} title="Collapse panel to maximize the canvas" className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              {(["details", "team", "capacity", "comments"] as RightTab[]).map((t) => (
+              {(["details", "team", "capacity"] as RightTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setRightTab(t)}
@@ -341,8 +345,6 @@ export function PulsePage() {
                 <TeamTab canEdit={canEdit} filterResource={filterResource} setFilterResource={setFilterResource} />
               ) : rightTab === "capacity" ? (
                 <CapacityTab canEdit={canEdit} />
-              ) : rightTab === "comments" ? (
-                <AllCommentsPanel pulseId={pulseId} onSelectTask={(id) => { handleSelect(id); setRightTab("details"); }} />
               ) : !selectedFeature ? (
                 <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>Select a box on the canvas to see and edit its details here.</div>
               ) : (
@@ -391,6 +393,22 @@ export function PulsePage() {
               canEdit={canEdit}
               onTimelineBoundsChange={setTimelineBounds}
             />
+          )}
+
+          {/* Comments drawer — overlays the right of the canvas so toggling it
+              doesn't reflow the board/timeline. Hidden by default. */}
+          {commentsOpen && (
+            <div className="absolute flex flex-col" style={{ right: 0, top: 0, bottom: 0, width: 360, maxWidth: "92%", background: "#FFFFFF", borderLeft: "1px solid #E2DFD9", boxShadow: "-10px 0 28px rgba(15,23,42,0.10)", zIndex: 30 }}>
+              <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>
+                <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Comments</span>
+                <button onClick={() => setCommentsOpen(false)} className="no-press" style={{ color: "#94A3B8", display: "flex" }} title="Hide comments">
+                  <Icon name="close" size={18} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <AllCommentsPanel pulseId={pulseId} onSelectTask={handleSelect} />
+              </div>
+            </div>
           )}
         </div>
 
