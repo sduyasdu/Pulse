@@ -119,9 +119,9 @@ export function DashboardPage() {
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
         <span className="font-display text-base font-semibold text-white">Pulse</span>
-        <span className="mono text-[9px] uppercase tracking-wide text-yasdu-orange-soft">by Yasdu</span>
+        <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">by Yasdu</span>
         <div className="flex-1" />
-        <span className="mono text-xs text-yasdu-orange-soft">{firebaseUser.email}</span>
+        <span className="mono text-xs text-yasdu-primary">{firebaseUser.email}</span>
         <button onClick={() => void signOutUser()} className="mono text-xs text-white/70 hover:text-white">
           sign out
         </button>
