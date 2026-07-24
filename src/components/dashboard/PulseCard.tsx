@@ -59,17 +59,18 @@ export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, o
               style={{ bottom: "100%", zIndex: 30, minWidth: 168, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
             >
               {canInvite && !archived && (
-                <MenuItem label="Invite collaborator" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
+                <MenuItem label="Invite collaborator" icon="person_add" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
               )}
-              <MenuItem label="Duplicate…" onClick={(e) => { stop(e); setMenuOpen(false); onDuplicateClick(); }} />
+              <MenuItem label="Duplicate…" icon="content_copy" onClick={(e) => { stop(e); setMenuOpen(false); onDuplicateClick(); }} />
               {archived ? (
-                <MenuItem label="Unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
+                <MenuItem label="Unarchive" icon="unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
               ) : (
-                <MenuItem label="Archive" onClick={(e) => { stop(e); setMenuOpen(false); onArchive(); }} />
+                <MenuItem label="Archive" icon="archive" onClick={(e) => { stop(e); setMenuOpen(false); onArchive(); }} />
               )}
               {isOwner ? (
                 <MenuItem
                   label="Delete…"
+                  icon="delete"
                   danger
                   onClick={(e) => {
                     const pt = { clientX: e.clientX, clientY: e.clientY };
@@ -81,6 +82,7 @@ export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, o
               ) : (
                 <MenuItem
                   label="Leave Pulse"
+                  icon="logout"
                   danger
                   onClick={(e) => {
                     const pt = { clientX: e.clientX, clientY: e.clientY };
@@ -139,9 +141,10 @@ function StatBadge({ n, label, bg, color }: { n: number; label: string; bg: stri
   );
 }
 
-function MenuItem({ label, danger, onClick }: { label: string; danger?: boolean; onClick: (e: React.MouseEvent) => void }) {
+function MenuItem({ label, icon, danger, onClick }: { label: string; icon: string; danger?: boolean; onClick: (e: React.MouseEvent) => void }) {
   return (
-    <button onClick={onClick} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: danger ? "#DC2626" : "#334155" }}>
+    <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: danger ? "#DC2626" : "#334155" }}>
+      <Icon name={icon} size={15} style={{ color: danger ? "#DC2626" : "#64748B" }} />
       {label}
     </button>
   );
