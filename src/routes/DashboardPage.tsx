@@ -116,24 +116,25 @@ export function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="relative flex-1" style={{ maxWidth: 420 }}>
+        {/* On mobile this stacks: New Pulse on top, a full-width search box
+            below it. On sm+ it's the usual one row (search left, button right). */}
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative order-2 w-full sm:order-1 sm:flex-1 sm:max-w-[420px]">
             <Icon name="search" size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search Pulses…"
               className="w-full rounded-lg border text-sm"
-              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "9px 34px", outline: "none" }}
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "11px 36px", outline: "none" }}
             />
             {query && (
               <button onClick={() => setQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}><Icon name="close" size={15} /></button>
             )}
           </div>
-          <div className="flex-1" />
           <button
             onClick={() => setCreating(true)}
-            className="rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0"
+            className="order-1 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-start sm:order-2 sm:ml-auto sm:self-auto"
             style={{ background: "#D85A28" }}
           >
             + New Pulse
