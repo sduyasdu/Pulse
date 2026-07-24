@@ -79,7 +79,7 @@ export function MentionTextarea({ value, onChange, suggestions, placeholder, row
       {matches.length > 0 && (
         <div
           className="absolute z-50 rounded-lg border py-1"
-          style={{ top: "100%", left: 0, marginTop: 4, minWidth: 180, maxWidth: 260, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
+          style={{ bottom: "100%", left: 0, marginBottom: 4, minWidth: 180, maxWidth: 260, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
         >
           {matches.map((s, i) => (
             <button

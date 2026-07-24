@@ -11,6 +11,7 @@ import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
+import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { MobileTaskList } from "@/components/mobile/MobileTaskList";
 import { MobileBoard } from "@/components/mobile/MobileBoard";
 
@@ -42,6 +43,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
   const [taskView, setTaskView] = useState<"list" | "board">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
+  const [showComments, setShowComments] = useState(false);
 
   const selected = features.find((f) => f.id === selectedId) ?? null;
 
@@ -60,6 +62,11 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
         </div>
         <PresenceBar pulseId={pulse?.id} uid={uid} email={email} dark />
+        {pulse && (
+          <button onClick={() => setShowComments(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#F0A875" }} title="Comments" aria-label="Comments">
+            <Icon name="forum" size={20} />
+          </button>
+        )}
         <NotificationsBell pulseId={pulse?.id} uid={uid} onOpenTask={setSelectedId} dark />
         {canEdit && (
           <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#F0A875", fontSize: 12, fontWeight: 600 }}>
@@ -136,6 +143,26 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
                 const newId = await duplicateFeature(selected.id);
                 if (newId) setSelectedId(newId);
               }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen Pulse conversation — every comment, pulse-level posts,
+          @-mentions and filtering (mirrors the desktop comments drawer). */}
+      {showComments && pulse && (
+        <div className="fixed inset-0 flex flex-col" style={{ background: "#FFFFFF", zIndex: 50 }}>
+          <header className="flex items-center gap-2 px-3 flex-shrink-0 border-b" style={{ height: 52, borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+            <button onClick={() => setShowComments(false)} className="flex items-center gap-1" style={{ color: "#123359", fontSize: 14, fontWeight: 600 }}>
+              <Icon name="chevron_left" size={22} /> Back
+            </button>
+            <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Comments</span>
+          </header>
+          <div className="flex-1" style={{ minHeight: 0 }}>
+            <AllCommentsPanel
+              pulseId={pulse.id}
+              onSelectTask={(id) => { setShowComments(false); setSelectedId(id); }}
+              selectedFeatureId={selectedId}
             />
           </div>
         </div>
