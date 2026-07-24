@@ -274,12 +274,8 @@ export function PulsePage() {
         onInvite={() => setShowInvite(true)}
         commentsOpen={commentsOpen}
         onToggleComments={() => setCommentsOpen((v) => !v)}
-        presence={
-          <div className="flex items-center gap-2">
-            <PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />
-            <NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark />
-          </div>
-        }
+        presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />}
+        notifications={<NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark />}
         viewMode={viewMode}
         setViewMode={setViewMode}
         viewZoom={viewZoom}
