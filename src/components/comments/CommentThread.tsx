@@ -25,12 +25,15 @@ interface ThreadProps {
   onDelete: (c: Comment, e: { clientX: number; clientY: number }) => void;
   onEdit?: (c: Comment, text: string) => Promise<void> | void;
   onRefClick?: (ref: CommentRef) => void;
+  /** Resolves the task/resource a comment is attached to, rendered as a chip so
+   * the flat feed still shows what each comment is about. */
+  targetOf?: (c: Comment) => CommentRef | null;
 }
 
 /** Renders a threaded comment list (top-level comments with nested replies) plus
  * (optionally) a box to add a new top-level comment. Presentational — data +
  * persistence are passed in. */
-export function CommentThread({ comments, currentUid, canModerate, composer = true, onAdd, onDelete, onEdit, onRefClick }: ThreadProps) {
+export function CommentThread({ comments, currentUid, canModerate, composer = true, onAdd, onDelete, onEdit, onRefClick, targetOf }: ThreadProps) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const tops = comments.filter((c) => !c.parentId);
@@ -52,7 +55,7 @@ export function CommentThread({ comments, currentUid, canModerate, composer = tr
       <div className="flex flex-col gap-2.5 mb-2">
         {tops.length === 0 && <span className="text-xs" style={{ color: "#94A3B8" }}>No comments yet.</span>}
         {tops.map((c) => (
-          <Item key={c.id} c={c} replies={comments.filter((r) => r.parentId === c.id)} currentUid={currentUid} canModerate={canModerate} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} />
+          <Item key={c.id} c={c} replies={comments.filter((r) => r.parentId === c.id)} currentUid={currentUid} canModerate={canModerate} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
         ))}
       </div>
       {composer && (
@@ -75,7 +78,7 @@ export function CommentThread({ comments, currentUid, canModerate, composer = tr
   );
 }
 
-function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, onRefClick }: { c: Comment; replies: Comment[]; currentUid?: string; canModerate: boolean; onAdd: ThreadProps["onAdd"]; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"] }) {
+function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, onRefClick, targetOf }: { c: Comment; replies: Comment[]; currentUid?: string; canModerate: boolean; onAdd: ThreadProps["onAdd"]; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"]; targetOf: ThreadProps["targetOf"] }) {
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,11 +98,11 @@ function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, on
 
   return (
     <div>
-      <Bubble c={c} currentUid={currentUid} canModerate={canModerate} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} />
+      <Bubble c={c} currentUid={currentUid} canModerate={canModerate} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
       {replies.length > 0 && (
         <div className="flex flex-col gap-2 mt-2" style={{ marginLeft: 20, borderLeft: "2px solid #F1F5F9", paddingLeft: 8 }}>
           {replies.map((r) => (
-            <Bubble key={r.id} c={r} currentUid={currentUid} canModerate={canModerate} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} />
+            <Bubble key={r.id} c={r} currentUid={currentUid} canModerate={canModerate} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
           ))}
         </div>
       )}
@@ -126,11 +129,23 @@ function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, on
   );
 }
 
-function Bubble({ c, currentUid, canModerate, onDelete, onEdit, onRefClick }: { c: Comment; currentUid?: string; canModerate: boolean; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"] }) {
+function Bubble({ c, currentUid, canModerate, onDelete, onEdit, onRefClick, targetOf }: { c: Comment; currentUid?: string; canModerate: boolean; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"]; targetOf: ThreadProps["targetOf"] }) {
   const mine = c.authorUid === currentUid;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(c.text);
   const [busy, setBusy] = useState(false);
+
+  // The target this comment is attached to, plus its @-mentions, deduped — so
+  // the flat feed still shows what each comment is about.
+  const refs: CommentRef[] = [];
+  const seen = new Set<string>();
+  for (const r of [targetOf?.(c) ?? null, ...(c.mentions ?? [])]) {
+    if (!r) continue;
+    const k = r.kind + ":" + r.id;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    refs.push(r);
+  }
 
   const save = async () => {
     const t = draft.trim();
@@ -153,11 +168,11 @@ function Bubble({ c, currentUid, canModerate, onDelete, onEdit, onRefClick }: { 
           <span className="text-xs font-semibold truncate" style={{ color: "#334155" }}>{mine ? "You" : c.authorEmail}</span>
           <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{when(c.createdAt)}{c.editedAt ? " · edited" : ""}</span>
           {!editing && (mine || canModerate) && (
-            <span className="flex items-center gap-1 ml-auto">
+            <span className="flex items-center gap-1.5 ml-auto">
               {mine && onEdit && (
-                <button onClick={() => { setDraft(c.text); setEditing(true); }} className="mono" style={{ color: "#CBD5E1" }} title="Edit"><Icon name="edit" size={12} /></button>
+                <button onClick={() => { setDraft(c.text); setEditing(true); }} className="no-press" style={{ color: "#64748B", display: "flex" }} title="Edit"><Icon name="edit" size={15} /></button>
               )}
-              <button onClick={(e) => onDelete(c, e)} className="mono" style={{ color: "#CBD5E1" }} title="Delete"><Icon name="delete" size={12} /></button>
+              <button onClick={(e) => onDelete(c, e)} className="no-press" style={{ color: "#DC2626", display: "flex" }} title="Delete"><Icon name="delete" size={15} /></button>
             </span>
           )}
         </div>
@@ -180,9 +195,9 @@ function Bubble({ c, currentUid, canModerate, onDelete, onEdit, onRefClick }: { 
         ) : (
           <>
             <div className="text-xs" style={{ color: "#1F2330", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{c.text}</div>
-            {c.mentions && c.mentions.length > 0 && (
+            {refs.length > 0 && (
               <div className="flex flex-wrap items-center gap-1 mt-1">
-                {c.mentions.map((r) => (
+                {refs.map((r) => (
                   <button
                     key={r.kind + r.id}
                     onClick={() => onRefClick?.(r)}

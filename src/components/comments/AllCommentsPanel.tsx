@@ -20,11 +20,10 @@ interface Props {
   onSelectResource?: (resourceId: string | null) => void;
 }
 
-type Scope = { kind: "all" | "pulse" } | { kind: "task" | "resource"; id: string };
-
 /** The Comments drawer: a context-aware composer (attaches to the selected
- * task/resource, with @-mention autocomplete), a content/target filter, and the
- * full comment feed grouped by target. */
+ * task/resource, with @-mention autocomplete), a content/target filter, and one
+ * flat conversation feed — every comment in the Pulse, each showing the
+ * task/resource it's about as a chip. */
 export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, selectedResourceId, onSelectResource }: Props) {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const email = useAuthStore((s) => s.firebaseUser?.email ?? "");
@@ -47,6 +46,11 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   useEffect(() => setDetach(false), [selectedFeatureId, selectedResourceId]);
 
   const resourceName = (r: { name: string; initials: string }) => r.name?.trim() || r.initials;
+  const nameFor = (kind: "task" | "resource", id: string): string =>
+    kind === "task"
+      ? features.find((f) => f.id === id)?.title || "Untitled task"
+      : (() => { const r = resources.find((x) => x.id === id); return r ? resourceName(r) : "Unknown resource"; })();
+
   const suggestions: MentionSuggestion[] = useMemo(
     () => [
       ...features.map((f) => ({ kind: "task" as const, id: f.id, label: f.title || "Untitled task" })),
@@ -66,37 +70,53 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   }, [detach, selectedFeatureId, selectedResourceId, features, resources]);
   const hasSelection = !!(selectedFeatureId || selectedResourceId);
 
-  // ── Feed grouping (unfiltered) ────────────────────────────────────────────
-  const nameFor = (kind: "task" | "resource", id: string) =>
-    kind === "task"
-      ? features.find((f) => f.id === id)?.title || "Untitled task"
-      : (() => { const r = resources.find((x) => x.id === id); return r ? resourceName(r) : "Unknown resource"; })();
+  // The task this comment is attached to (task/resource), for the feed chips.
+  const targetOf = (c: Comment): CommentRef | null =>
+    c.targetId ? { kind: c.targetKind ?? "task", id: c.targetId, label: nameFor(c.targetKind ?? "task", c.targetId) } : null;
 
-  const { pulseComments, taskGroups, resourceGroups } = useMemo(() => {
-    const pulse = all.filter((c) => c.targetId == null);
-    const groupBy = (kind: "task" | "resource") => {
-      const ids = [...new Set(all.filter((c) => c.targetId != null && (c.targetKind ?? "task") === kind).map((c) => c.targetId as string))];
-      return ids
-        .map((id) => ({ id, name: nameFor(kind, id), comments: all.filter((c) => c.targetId === id && (c.targetKind ?? "task") === kind) }))
-        .sort((a, b) => Math.max(...b.comments.map((c) => c.createdAt)) - Math.max(...a.comments.map((c) => c.createdAt)));
-    };
-    return { pulseComments: pulse, taskGroups: groupBy("task"), resourceGroups: groupBy("resource") };
+  // Tasks/resources referenced anywhere (as a target or a mention) — the filter
+  // dropdown options.
+  const { refTasks, refResources, hasPulse } = useMemo(() => {
+    const tasks = new Map<string, string>();
+    const res = new Map<string, string>();
+    let pulse = false;
+    for (const c of all) {
+      if (c.targetId == null) pulse = true;
+      else (c.targetKind === "resource" ? res : tasks).set(c.targetId, nameFor(c.targetKind ?? "task", c.targetId));
+      for (const m of c.mentions ?? []) (m.kind === "resource" ? res : tasks).set(m.id, m.label || nameFor(m.kind, m.id));
+    }
+    const toArr = (m: Map<string, string>) => [...m].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    return { refTasks: toArr(tasks), refResources: toArr(res), hasPulse: pulse };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, features, resources]);
 
-  // ── Filtering (content + scope) ───────────────────────────────────────────
+  // ── Filtering (content + scope), thread-preserving ────────────────────────
   const ql = q.trim().toLowerCase();
-  const matchesQ = (cs: Comment[]) =>
-    !ql || cs.some((c) => c.text.toLowerCase().includes(ql) || (c.mentions ?? []).some((m) => m.label.toLowerCase().includes(ql)));
-  const inScope = (kind: Scope["kind"], id?: string) => {
+  const refersTo = (c: Comment, kind: string, id: string) =>
+    (c.targetId === id && (c.targetKind ?? "task") === kind) || (c.mentions ?? []).some((m) => m.kind === kind && m.id === id);
+  const matchContent = (c: Comment) =>
+    !ql ||
+    c.text.toLowerCase().includes(ql) ||
+    (c.mentions ?? []).some((m) => m.label.toLowerCase().includes(ql)) ||
+    (targetOf(c)?.label.toLowerCase().includes(ql) ?? false);
+  const matchScope = (c: Comment) => {
     if (scopeSel === "all") return true;
-    const [k, sid] = scopeSel.split(":");
-    return k === kind && (sid === undefined || sid === id);
+    if (scopeSel === "pulse") return c.targetId == null;
+    const [k, id] = scopeSel.split(":");
+    return refersTo(c, k, id);
   };
-  const showPulse = inScope("pulse") && matchesQ(pulseComments) && pulseComments.length > 0;
-  const shownTasks = taskGroups.filter((g) => inScope("task", g.id) && matchesQ(g.comments));
-  const shownResources = resourceGroups.filter((g) => inScope("resource", g.id) && matchesQ(g.comments));
-  const nothing = !showPulse && shownTasks.length === 0 && shownResources.length === 0;
+
+  const visible = useMemo(() => {
+    const tops = all.filter((c) => !c.parentId);
+    const repliesOf = (id: string) => all.filter((c) => c.parentId === id);
+    const out: Comment[] = [];
+    for (const top of tops) {
+      const thread = [top, ...repliesOf(top.id)];
+      if (thread.some(matchScope) && thread.some(matchContent)) out.push(...thread);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, ql, scopeSel]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const del = async (c: Comment, e: { clientX: number; clientY: number }) => {
@@ -124,10 +144,14 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
     }
   };
 
-  // Reply / thread-add helper for a specific existing group.
-  const addTo = (targetId: string | null, targetKind: "task" | "resource", label: string) => async (parentId: string | null, body: string) => {
-    if (!uid) return;
+  // Replies inherit the target of the comment they answer.
+  const onReply = async (parentId: string | null, body: string) => {
+    if (!uid || !parentId) return;
+    const parent = all.find((c) => c.id === parentId);
+    const targetId = parent?.targetId ?? null;
+    const targetKind = parent?.targetKind ?? "task";
     const mentions = detectMentions(body, suggestions).map((m) => ({ kind: m.kind, id: m.id, label: m.label }));
+    const label = targetId ? nameFor(targetKind, targetId) : "the Pulse";
     await addComment(pulseId, targetId, parentId, uid, email, body, { targetKind, mentions });
     await notifyParticipants({ pulseId, targetId, threadComments: all.filter((c) => c.targetId === targetId), actorUid: uid, actorEmail: email, memberUids: members.map((m) => m.uid), featureTitle: label, text: body });
   };
@@ -166,67 +190,31 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
           {q && <button onClick={() => setQ("")} title="Clear"><Icon name="close" size={12} style={{ color: "#94A3B8" }} /></button>}
         </div>
         <select value={scopeSel} onChange={(e) => setScopeSel(e.target.value)} className="text-xs rounded px-1.5 py-1" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF", color: "#334155", maxWidth: 130 }} title="Filter by task or resource">
-          <option value="all">All</option>
-          {pulseComments.length > 0 && <option value="pulse">Pulse discussion</option>}
-          {taskGroups.length > 0 && (
+          <option value="all">All comments</option>
+          {hasPulse && <option value="pulse">Pulse-level only</option>}
+          {refTasks.length > 0 && (
             <optgroup label="Tasks">
-              {taskGroups.map((g) => <option key={g.id} value={`task:${g.id}`}>{g.name}</option>)}
+              {refTasks.map((t) => <option key={t.id} value={`task:${t.id}`}>{t.name}</option>)}
             </optgroup>
           )}
-          {resourceGroups.length > 0 && (
+          {refResources.length > 0 && (
             <optgroup label="Resources">
-              {resourceGroups.map((g) => <option key={g.id} value={`resource:${g.id}`}>{g.name}</option>)}
+              {refResources.map((r) => <option key={r.id} value={`resource:${r.id}`}>{r.name}</option>)}
             </optgroup>
           )}
         </select>
       </div>
 
-      {/* Feed. */}
-      <div className="flex flex-col gap-5 p-3">
-        {showPulse && (
-          <section>
-            <div className="mono text-xs font-semibold mb-2" style={{ color: "#334155" }}>Pulse discussion</div>
-            <CommentThread comments={pulseComments} currentUid={uid} canModerate={isOwner} composer={false} onAdd={addTo(null, "task", "the Pulse")} onDelete={del} onEdit={edit} onRefClick={onRefClick} />
-          </section>
-        )}
-
-        {shownTasks.map((g) => (
-          <GroupSection key={"t" + g.id} kind="task" name={g.name} count={g.comments.filter((c) => !c.parentId).length} onOpen={() => onSelectTask(g.id)}>
-            <CommentThread comments={g.comments} currentUid={uid} canModerate={isOwner} composer={false} onAdd={addTo(g.id, "task", g.name)} onDelete={del} onEdit={edit} onRefClick={onRefClick} />
-          </GroupSection>
-        ))}
-
-        {shownResources.map((g) => (
-          <GroupSection key={"r" + g.id} kind="resource" name={g.name} count={g.comments.filter((c) => !c.parentId).length} onOpen={() => onSelectResource?.(g.id)}>
-            <CommentThread comments={g.comments} currentUid={uid} canModerate={isOwner} composer={false} onAdd={addTo(g.id, "resource", g.name)} onDelete={del} onEdit={edit} onRefClick={onRefClick} />
-          </GroupSection>
-        ))}
-
-        {nothing && (
+      {/* One flat conversation. */}
+      <div className="p-3">
+        {visible.length === 0 ? (
           <span className="text-xs" style={{ color: "#94A3B8" }}>
-            {q || scopeSel !== "all" ? "No comments match this filter." : "No comments yet. Select a task or resource and comment above, or comment on the Pulse."}
+            {all.length === 0 ? "No comments yet. Select a task or resource and comment above, or comment on the Pulse." : "No comments match this filter."}
           </span>
+        ) : (
+          <CommentThread comments={visible} currentUid={uid} canModerate={isOwner} composer={false} onAdd={onReply} onDelete={del} onEdit={edit} onRefClick={onRefClick} targetOf={targetOf} />
         )}
       </div>
     </div>
-  );
-}
-
-function GroupSection({ kind, name, count, onOpen, children }: { kind: "task" | "resource"; name: string; count: number; onOpen: () => void; children: React.ReactNode }) {
-  return (
-    <section>
-      <button
-        onClick={onOpen}
-        className="flex items-center gap-1 text-xs font-semibold mb-2 hover:underline text-left w-full"
-        style={{ color: kind === "task" ? "#1B3A63" : "#0F766E" }}
-        title={kind === "task" ? "Open this task" : "Filter by this resource"}
-      >
-        <Icon name={kind === "task" ? "checklist" : "group"} size={12} />
-        <span className="truncate">@{name}</span>
-        <span style={{ color: "#94A3B8" }}>· {count}</span>
-        <Icon name={kind === "task" ? "open_in_new" : "filter_alt"} size={12} style={{ color: "#94A3B8", marginLeft: "auto" }} />
-      </button>
-      {children}
-    </section>
   );
 }

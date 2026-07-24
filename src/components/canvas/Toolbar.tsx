@@ -211,14 +211,14 @@ export function Toolbar({
             </button>
           ))}
         </div>
-        <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><Icon name="refresh" size={16} style={{ color: "#CBD5E1" }} /></button>
+        <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><Icon name="refresh" size={16} style={{ color: "#EE7240" }} /></button>
           </>
         )}
 
         {canEdit && (
           <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Undo / redo (⌘Z · ⇧⌘Z)">
-            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.35, cursor: canUndo ? "pointer" : "default" }}><Icon name="undo" size={16} style={{ color: "#EE7240" }} /></button>
-            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.35, cursor: canRedo ? "pointer" : "default" }}><Icon name="redo" size={16} style={{ color: "#EE7240" }} /></button>
+            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.5, cursor: canUndo ? "pointer" : "default" }}><Icon name="undo" size={16} style={{ color: "#EE7240" }} /></button>
+            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.5, cursor: canRedo ? "pointer" : "default" }}><Icon name="redo" size={16} style={{ color: "#EE7240" }} /></button>
           </div>
         )}
 
