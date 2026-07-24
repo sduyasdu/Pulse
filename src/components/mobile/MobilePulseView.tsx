@@ -56,20 +56,20 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
     <div className="flex flex-col" style={{ height: "100dvh", background: "#F7F6F2" }}>
       {/* Header */}
       <header className="flex items-center gap-2 px-3 flex-shrink-0" style={{ height: 52, background: "#123359" }}>
-        <Link to="/" className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#F0A875", fontSize: 20 }} title="Back to dashboard"><Icon name="chevron_left" size={24} /></Link>
+        <Link to="/" className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240", fontSize: 20 }} title="Back to dashboard"><Icon name="chevron_left" size={24} /></Link>
         <div className="flex-1 overflow-hidden">
           <div className="font-display text-white text-sm font-semibold truncate">{pulse?.name?.trim() || "Untitled Pulse"}</div>
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
         </div>
         <PresenceBar pulseId={pulse?.id} uid={uid} email={email} dark />
         {pulse && (
-          <button onClick={() => setShowComments(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#F0A875" }} title="Comments" aria-label="Comments">
+          <button onClick={() => setShowComments(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240" }} title="Comments" aria-label="Comments">
             <Icon name="forum" size={20} />
           </button>
         )}
         <NotificationsBell pulseId={pulse?.id} uid={uid} onOpenTask={setSelectedId} dark />
         {canEdit && (
-          <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#F0A875", fontSize: 12, fontWeight: 600 }}>
+          <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#EE7240", fontSize: 12, fontWeight: 600 }}>
             <Icon name="add" size={13} /> Invite
           </button>
         )}
