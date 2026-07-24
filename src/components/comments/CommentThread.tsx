@@ -188,10 +188,10 @@ function Bubble({ c, currentUid, canModerate, suggestions, onDelete, onEdit, onR
         </div>
         {editing ? (
           <div className="mt-1">
-            <MentionTextarea value={draft} onChange={setDraft} suggestions={suggestions} autoFocus onSubmit={() => void save()} placeholder="Edit comment… (⌘↵)" />
-            <div className="flex items-center gap-1.5 mt-1">
-              <button onClick={() => void save()} disabled={!draft.trim() || busy} className="rounded px-2 py-0.5 text-xs font-semibold disabled:opacity-40" style={{ background: "#D85A28", color: "#fff" }}>Save</button>
-              <button onClick={() => setEditing(false)} className="mono text-xs" style={{ color: "#94A3B8" }}>Cancel</button>
+            <div className="flex items-end gap-1.5">
+              <MentionTextarea value={draft} onChange={setDraft} suggestions={suggestions} autoFocus onSubmit={() => void save()} placeholder="Edit comment… (⌘↵)" />
+              <SendButton onClick={() => void save()} disabled={!draft.trim() || busy} title="Save" size={28} />
+              <button onClick={() => setEditing(false)} className="mono text-xs flex-shrink-0" style={{ color: "#94A3B8" }} title="Cancel"><Icon name="close" size={14} /></button>
             </div>
           </div>
         ) : (
