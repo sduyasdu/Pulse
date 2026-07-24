@@ -35,8 +35,11 @@ export async function addComment(
   await setDoc(doc(col(pulseId)), data);
 }
 
-export async function editComment(pulseId: string, id: string, text: string): Promise<void> {
-  await updateDoc(doc(col(pulseId), id), { text, editedAt: Date.now() });
+export async function editComment(pulseId: string, id: string, text: string, mentions?: CommentRef[]): Promise<void> {
+  const data: Record<string, unknown> = { text, editedAt: Date.now() };
+  // Re-detected on edit; pass [] to clear removed @-mentions.
+  if (mentions) data.mentions = mentions;
+  await updateDoc(doc(col(pulseId), id), data);
 }
 
 export async function deleteComment(pulseId: string, id: string): Promise<void> {

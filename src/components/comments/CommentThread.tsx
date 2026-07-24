@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Comment, CommentRef } from "@/types";
 import { colorForName } from "@/domain/constants";
+import { MentionTextarea } from "./MentionTextarea";
+import type { MentionSuggestion } from "./mentions";
 
 function initials(email: string): string {
   const local = (email.split("@")[0] || email).replace(/[^a-zA-Z0-9]/g, "");
@@ -16,11 +18,28 @@ function when(ms: number): string {
     : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/** Orange circular icon button used for Send / Reply. */
+function SendButton({ onClick, disabled, title, size = 32 }: { onClick: () => void; disabled: boolean; title: string; size?: number }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="rounded flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+      style={{ width: size, height: size, background: "#D85A28", color: "#fff" }}
+    >
+      <Icon name="send" size={Math.round(size * 0.5)} />
+    </button>
+  );
+}
+
 interface ThreadProps {
   comments: Comment[]; // flat list for ONE target (top-level + replies)
   currentUid?: string;
   canModerate: boolean; // owner can delete any
   composer?: boolean; // show the new-top-level-comment box (default true)
+  suggestions?: MentionSuggestion[]; // tasks/resources for @-autocomplete in reply/edit
   onAdd: (parentId: string | null, text: string) => Promise<void> | void;
   onDelete: (c: Comment, e: { clientX: number; clientY: number }) => void;
   onEdit?: (c: Comment, text: string) => Promise<void> | void;
@@ -33,7 +52,7 @@ interface ThreadProps {
 /** Renders a threaded comment list (top-level comments with nested replies) plus
  * (optionally) a box to add a new top-level comment. Presentational — data +
  * persistence are passed in. */
-export function CommentThread({ comments, currentUid, canModerate, composer = true, onAdd, onDelete, onEdit, onRefClick, targetOf }: ThreadProps) {
+export function CommentThread({ comments, currentUid, canModerate, composer = true, suggestions = [], onAdd, onDelete, onEdit, onRefClick, targetOf }: ThreadProps) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const tops = comments.filter((c) => !c.parentId);
@@ -55,30 +74,20 @@ export function CommentThread({ comments, currentUid, canModerate, composer = tr
       <div className="flex flex-col gap-2.5 mb-2">
         {tops.length === 0 && <span className="text-xs" style={{ color: "#94A3B8" }}>No comments yet.</span>}
         {tops.map((c) => (
-          <Item key={c.id} c={c} replies={comments.filter((r) => r.parentId === c.id)} currentUid={currentUid} canModerate={canModerate} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
+          <Item key={c.id} c={c} replies={comments.filter((r) => r.parentId === c.id)} currentUid={currentUid} canModerate={canModerate} suggestions={suggestions} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
         ))}
       </div>
       {composer && (
         <div className="flex items-end gap-1.5">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit(); }}
-            placeholder="Add a comment… (⌘↵)"
-            rows={2}
-            className="text-xs flex-1 rounded px-2 py-1.5"
-            style={{ border: "1px solid #E2DFD9", outline: "none", color: "#334155", resize: "vertical" }}
-          />
-          <button onClick={() => void submit()} disabled={!text.trim() || busy} className="rounded px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" style={{ background: "#D85A28", color: "#fff" }}>
-            Send
-          </button>
+          <MentionTextarea value={text} onChange={setText} suggestions={suggestions} onSubmit={() => void submit()} placeholder="Add a comment… (⌘↵)" />
+          <SendButton onClick={() => void submit()} disabled={!text.trim() || busy} title="Send" />
         </div>
       )}
     </div>
   );
 }
 
-function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, onRefClick, targetOf }: { c: Comment; replies: Comment[]; currentUid?: string; canModerate: boolean; onAdd: ThreadProps["onAdd"]; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"]; targetOf: ThreadProps["targetOf"] }) {
+function Item({ c, replies, currentUid, canModerate, suggestions, onAdd, onDelete, onEdit, onRefClick, targetOf }: { c: Comment; replies: Comment[]; currentUid?: string; canModerate: boolean; suggestions: MentionSuggestion[]; onAdd: ThreadProps["onAdd"]; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"]; targetOf: ThreadProps["targetOf"] }) {
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -98,28 +107,29 @@ function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, on
 
   return (
     <div>
-      <Bubble c={c} currentUid={currentUid} canModerate={canModerate} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
+      <Bubble c={c} currentUid={currentUid} canModerate={canModerate} suggestions={suggestions} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
       {replies.length > 0 && (
         <div className="flex flex-col gap-2 mt-2" style={{ marginLeft: 20, borderLeft: "2px solid #F1F5F9", paddingLeft: 8 }}>
           {replies.map((r) => (
-            <Bubble key={r.id} c={r} currentUid={currentUid} canModerate={canModerate} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
+            <Bubble key={r.id} c={r} currentUid={currentUid} canModerate={canModerate} suggestions={suggestions} onDelete={onDelete} onEdit={onEdit} onRefClick={onRefClick} targetOf={targetOf} />
           ))}
         </div>
       )}
       <div style={{ marginLeft: 28 }}>
         {replying ? (
           <div className="flex items-end gap-1.5 mt-1.5">
-            <input
-              autoFocus
+            <MentionTextarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void send(); if (e.key === "Escape") setReplying(false); }}
-              placeholder="Reply…"
-              className="text-xs flex-1 rounded px-2 py-1"
-              style={{ border: "1px solid #E2DFD9", outline: "none", color: "#334155" }}
+              onChange={setText}
+              suggestions={suggestions}
+              rows={1}
+              autoFocus
+              submitOnEnter
+              onSubmit={() => void send()}
+              placeholder="Reply… (↵)"
             />
-            <button onClick={() => void send()} disabled={!text.trim() || busy} className="rounded px-2 py-1 text-xs font-semibold disabled:opacity-40" style={{ background: "#D85A28", color: "#fff" }}>Reply</button>
-            <button onClick={() => setReplying(false)} className="mono text-xs" style={{ color: "#94A3B8" }}><Icon name="close" size={13} /></button>
+            <SendButton onClick={() => void send()} disabled={!text.trim() || busy} title="Reply" size={28} />
+            <button onClick={() => setReplying(false)} className="mono text-xs flex-shrink-0" style={{ color: "#94A3B8" }} title="Cancel"><Icon name="close" size={14} /></button>
           </div>
         ) : (
           <button onClick={() => setReplying(true)} className="mono mt-1" style={{ fontSize: 9, color: "#94A3B8" }}><Icon name="reply" size={11} /> Reply</button>
@@ -129,7 +139,7 @@ function Item({ c, replies, currentUid, canModerate, onAdd, onDelete, onEdit, on
   );
 }
 
-function Bubble({ c, currentUid, canModerate, onDelete, onEdit, onRefClick, targetOf }: { c: Comment; currentUid?: string; canModerate: boolean; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"]; targetOf: ThreadProps["targetOf"] }) {
+function Bubble({ c, currentUid, canModerate, suggestions, onDelete, onEdit, onRefClick, targetOf }: { c: Comment; currentUid?: string; canModerate: boolean; suggestions: MentionSuggestion[]; onDelete: ThreadProps["onDelete"]; onEdit: ThreadProps["onEdit"]; onRefClick: ThreadProps["onRefClick"]; targetOf: ThreadProps["targetOf"] }) {
   const mine = c.authorUid === currentUid;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(c.text);
@@ -178,15 +188,7 @@ function Bubble({ c, currentUid, canModerate, onDelete, onEdit, onRefClick, targ
         </div>
         {editing ? (
           <div className="mt-1">
-            <textarea
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void save(); if (e.key === "Escape") setEditing(false); }}
-              rows={2}
-              className="text-xs w-full rounded px-2 py-1.5"
-              style={{ border: "1px solid #E2DFD9", outline: "none", color: "#334155", resize: "vertical" }}
-            />
+            <MentionTextarea value={draft} onChange={setDraft} suggestions={suggestions} autoFocus onSubmit={() => void save()} placeholder="Edit comment… (⌘↵)" />
             <div className="flex items-center gap-1.5 mt-1">
               <button onClick={() => void save()} disabled={!draft.trim() || busy} className="rounded px-2 py-0.5 text-xs font-semibold disabled:opacity-40" style={{ background: "#D85A28", color: "#fff" }}>Save</button>
               <button onClick={() => setEditing(false)} className="mono text-xs" style={{ color: "#94A3B8" }}>Cancel</button>

@@ -481,7 +481,7 @@ export function PulsePage() {
                 <Icon name="close" size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1" style={{ minHeight: 0 }}>
               <AllCommentsPanel
                 pulseId={pulseId}
                 onSelectTask={handleSelect}

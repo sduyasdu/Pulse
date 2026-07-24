@@ -8,14 +8,16 @@ interface Props {
   suggestions: MentionSuggestion[];
   placeholder?: string;
   rows?: number;
-  onSubmit?: () => void; // fired on ⌘/Ctrl+↵
+  autoFocus?: boolean;
+  onSubmit?: () => void; // fired on ⌘/Ctrl+↵ (and plain ↵ when submitOnEnter)
+  submitOnEnter?: boolean; // plain Enter submits (used by the quick reply box)
 }
 
 /** A textarea with "@" autocomplete over tasks and resources. Typing "@" opens
  * a suggestion menu filtered by what follows; picking one inserts "@Label " at
  * the caret. Mentions are recovered from the final text at submit time (by
  * scanning for "@Label"), so deleting the text simply removes the mention. */
-export function MentionTextarea({ value, onChange, suggestions, placeholder, rows = 2, onSubmit }: Props) {
+export function MentionTextarea({ value, onChange, suggestions, placeholder, rows = 2, autoFocus, onSubmit, submitOnEnter }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState<string | null>(null); // active "@token" (sans @), or null when not mentioning
   const [active, setActive] = useState(0);
@@ -50,6 +52,8 @@ export function MentionTextarea({ value, onChange, suggestions, placeholder, row
     <div className="relative flex-1">
       <textarea
         ref={ref}
+        // eslint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus={autoFocus}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
@@ -64,7 +68,8 @@ export function MentionTextarea({ value, onChange, suggestions, placeholder, row
             if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[active]); return; }
             if (e.key === "Escape") { e.preventDefault(); setQuery(null); return; }
           }
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSubmit?.(); }
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSubmit?.(); return; }
+          if (submitOnEnter && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit?.(); }
         }}
         placeholder={placeholder}
         rows={rows}

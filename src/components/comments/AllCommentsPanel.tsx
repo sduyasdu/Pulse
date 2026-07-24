@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Comment, CommentRef } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
@@ -32,6 +32,7 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
   const [all, setAll] = useState<Comment[]>([]);
+  const feedRef = useRef<HTMLDivElement>(null);
 
   // Composer state.
   const [text, setText] = useState("");
@@ -44,6 +45,11 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   useEffect(() => subscribeAllComments(pulseId, setAll), [pulseId]);
   // Re-attach the composer to whatever is now selected on the canvas.
   useEffect(() => setDetach(false), [selectedFeatureId, selectedResourceId]);
+  // Keep the newest comment (nearest the bottom composer) in view.
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [all.length]);
 
   const resourceName = (r: { name: string; initials: string }) => r.name?.trim() || r.initials;
   const nameFor = (kind: "task" | "resource", id: string): string =>
@@ -123,7 +129,8 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
     if (await confirmAt(e, { message: "Delete this comment?", confirmLabel: "Delete" })) await deleteComment(pulseId, c.id).catch(() => {});
   };
   const edit = async (c: Comment, newText: string) => {
-    await editComment(pulseId, c.id, newText).catch(() => {});
+    const mentions = detectMentions(newText, suggestions).map((m) => ({ kind: m.kind, id: m.id, label: m.label }));
+    await editComment(pulseId, c.id, newText, mentions).catch(() => {});
   };
   const onRefClick = (r: CommentRef) => (r.kind === "task" ? onSelectTask(r.id) : onSelectResource?.(r.id));
 
@@ -157,33 +164,9 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   };
 
   return (
-    <div className="flex flex-col">
-      {/* Composer — attaches to the selected task/resource, with @-mentions. */}
-      <div className="p-3 border-b" style={{ borderColor: "#E2DFD9", background: "#FBFAF7" }}>
-        <div className="flex items-center gap-1.5 mb-1.5" style={{ minHeight: 20 }}>
-          <span className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>Comment on</span>
-          {context ? (
-            <span className="mono inline-flex items-center gap-0.5 rounded px-1.5 py-0.5" style={{ fontSize: 10, background: context.kind === "task" ? "#FCEEE4" : "#E7F6F1", color: context.kind === "task" ? "#C2410C" : "#0F766E" }}>
-              <Icon name={context.kind === "task" ? "checklist" : "group"} size={11} /> @{context.label}
-              <button onClick={() => setDetach(true)} title="Comment on the Pulse instead" style={{ display: "flex", marginLeft: 2 }}><Icon name="close" size={11} /></button>
-            </span>
-          ) : (
-            <>
-              <span className="text-xs font-semibold" style={{ color: "#334155" }}>the Pulse</span>
-              {hasSelection && detach && (
-                <button onClick={() => setDetach(false)} className="mono hover:underline" style={{ fontSize: 9, color: "#1B3A63" }}>attach to selection</button>
-              )}
-            </>
-          )}
-        </div>
-        <div className="flex items-end gap-1.5">
-          <MentionTextarea value={text} onChange={setText} suggestions={suggestions} onSubmit={() => void post()} placeholder="Add a comment… type @ to tag a task or resource (⌘↵)" />
-          <button onClick={() => void post()} disabled={!text.trim() || busy} className="rounded px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" style={{ background: "#D85A28", color: "#fff" }}>Send</button>
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full">
       {/* Filter bar — by content and/or by a specific task/resource. */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b" style={{ borderColor: "#E2DFD9" }}>
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>
         <div className="flex items-center gap-1 rounded px-1.5 flex-1" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF" }}>
           <Icon name="search" size={13} style={{ color: "#94A3B8" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter comments…" className="bg-transparent text-xs py-1 flex-1" style={{ color: "#334155", outline: "none", minWidth: 0 }} />
@@ -205,15 +188,42 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
         </select>
       </div>
 
-      {/* One flat conversation. */}
-      <div className="p-3">
+      {/* One flat conversation — scrolls between the filter and the composer. */}
+      <div ref={feedRef} className="flex-1 overflow-y-auto p-3" style={{ minHeight: 0 }}>
         {visible.length === 0 ? (
           <span className="text-xs" style={{ color: "#94A3B8" }}>
-            {all.length === 0 ? "No comments yet. Select a task or resource and comment above, or comment on the Pulse." : "No comments match this filter."}
+            {all.length === 0 ? "No comments yet. Select a task or resource and comment below, or comment on the Pulse." : "No comments match this filter."}
           </span>
         ) : (
-          <CommentThread comments={visible} currentUid={uid} canModerate={isOwner} composer={false} onAdd={onReply} onDelete={del} onEdit={edit} onRefClick={onRefClick} targetOf={targetOf} />
+          <CommentThread comments={visible} currentUid={uid} canModerate={isOwner} composer={false} suggestions={suggestions} onAdd={onReply} onDelete={del} onEdit={edit} onRefClick={onRefClick} targetOf={targetOf} />
         )}
+      </div>
+
+      {/* Composer — pinned to the bottom; attaches to the selected
+          task/resource, with @-mention autocomplete. */}
+      <div className="p-3 border-t flex-shrink-0" style={{ borderColor: "#E2DFD9", background: "#FBFAF7" }}>
+        <div className="flex items-center gap-1.5 mb-1.5" style={{ minHeight: 20 }}>
+          <span className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>Comment on</span>
+          {context ? (
+            <span className="mono inline-flex items-center gap-0.5 rounded px-1.5 py-0.5" style={{ fontSize: 10, background: context.kind === "task" ? "#FCEEE4" : "#E7F6F1", color: context.kind === "task" ? "#C2410C" : "#0F766E" }}>
+              <Icon name={context.kind === "task" ? "checklist" : "group"} size={11} /> @{context.label}
+              <button onClick={() => setDetach(true)} title="Comment on the Pulse instead" style={{ display: "flex", marginLeft: 2 }}><Icon name="close" size={11} /></button>
+            </span>
+          ) : (
+            <>
+              <span className="text-xs font-semibold" style={{ color: "#334155" }}>the Pulse</span>
+              {hasSelection && detach && (
+                <button onClick={() => setDetach(false)} className="mono hover:underline" style={{ fontSize: 9, color: "#1B3A63" }}>attach to selection</button>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex items-end gap-1.5">
+          <MentionTextarea value={text} onChange={setText} suggestions={suggestions} onSubmit={() => void post()} placeholder="Add a comment… type @ to tag a task or resource (⌘↵)" />
+          <button onClick={() => void post()} disabled={!text.trim() || busy} title="Send" aria-label="Send" className="rounded flex items-center justify-center flex-shrink-0 disabled:opacity-40" style={{ width: 32, height: 32, background: "#D85A28", color: "#fff" }}>
+            <Icon name="send" size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
