@@ -116,10 +116,11 @@ export function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
-        {/* On mobile this stacks: New Pulse on top, a full-width search box
-            below it. On sm+ it's the usual one row (search left, button right). */}
+        {/* On mobile this stacks: a full-width search box on top, then the
+            New Pulse button below it aligned right. On sm+ it's the usual one
+            row (search left, button right). */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative order-2 w-full sm:order-1 sm:flex-1 sm:max-w-[420px]">
+          <div className="relative order-1 w-full sm:flex-1 sm:max-w-[420px]">
             <Icon name="search" size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
             <input
               value={query}
@@ -134,7 +135,7 @@ export function DashboardPage() {
           </div>
           <button
             onClick={() => setCreating(true)}
-            className="order-1 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-start sm:order-2 sm:ml-auto sm:self-auto"
+            className="order-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-end sm:ml-auto sm:self-auto"
             style={{ background: "#D85A28" }}
           >
             + New Pulse
