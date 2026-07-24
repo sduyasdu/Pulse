@@ -150,7 +150,9 @@ button:disabled {
 @media (hover: hover) {
   .presence-stack:hover .presence-avatar {
     margin-left: 2px;
-    transform: translateY(-2px);
+    /* Scale so the reaction reads even with a single avatar (fan-out alone is
+       invisible when there's nothing to spread); lift for depth. */
+    transform: translateY(-2px) scale(1.12);
   }
   .presence-stack:hover .presence-avatar:first-child {
     margin-left: 0;
