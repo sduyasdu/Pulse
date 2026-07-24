@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
@@ -705,7 +706,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
             {panArmed && (
               <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none" }} className="mono text-xs px-2 py-1 rounded">
-                <span style={{ background: "#123359", color: "#F0A875", padding: "3px 8px", borderRadius: 4 }}>✋ panning the timeline</span>
+                <span style={{ background: "#123359", color: "#F0A875", padding: "3px 8px", borderRadius: 4 }}><Icon name="pan_tool" size={12} /> panning the timeline</span>
               </div>
             )}
 
@@ -734,7 +735,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                         title="Delete epic"
                         style={{ fontSize: 11, color: hexA(ep.color, 0.7) }}
                       >
-                        ✕
+                        <Icon name="delete" size={13} />
                       </button>
                     )}
                   </div>
@@ -869,17 +870,17 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     <div className="flex items-center gap-1 overflow-hidden">
                       {hasChildren && (
                         <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => toggleCollapsed(box, e)} className="flex-shrink-0 flex items-center justify-center" title={expanded ? "Collapse subtasks" : "Expand subtasks"} style={{ width: 22, height: 22, borderRadius: 5, background: hexA(meta.border, 0.15), marginRight: 2 }}>
-                          <span style={{ fontSize: 17, color: meta.border, lineHeight: 1 }}>{expanded ? "▾" : "▸"}</span>
+                          <Icon name={expanded ? "keyboard_arrow_down" : "chevron_right"} size={19} style={{ color: meta.border }} />
                         </button>
                       )}
                       <span style={{ width: 10, height: 10, borderRadius: "50%", background: staffingColor(box, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
                       {box.labelColor && <span style={{ width: 10, height: 10, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
                       <span className="text-xs font-semibold truncate" title={box.title} style={{ color: "#1F2330" }}>{box.title}</span>
                     </div>
-                    {box.plannedX != null && <span className="flex-shrink-0" title="Baseline plan set" style={{ fontSize: 10 }}>📌</span>}
-                    {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}>📎{box.attachments!.length}</span>}
-                    {box.ai && <span style={{ fontSize: 12, color: "#8B5CF6" }} className="flex-shrink-0">✨</span>}
-                    {box.status === "done" && <span className="flex-shrink-0" title="Done — locked. Change its status to edit." style={{ fontSize: 11 }}>🔒</span>}
+                    {box.plannedX != null && <Icon name="keep" size={12} title="Baseline plan set" className="flex-shrink-0" />}
+                    {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{box.attachments!.length}</span>}
+                    {box.ai && <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} className="flex-shrink-0" />}
+                    {box.status === "done" && <Icon name="lock" size={13} title="Done — locked. Change its status to edit." className="flex-shrink-0" />}
                   </div>
                   {epicsShrunk ? null : !expanded ? (
                     <div className="px-2 py-1.5 flex flex-col justify-end" style={{ height: bodyHeight, position: "relative" }}>

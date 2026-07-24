@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, setMyPulseArchived, deletePulse, duplicatePulse, type DuplicateMode } from "@/services/firestore/pulses";
@@ -117,10 +118,7 @@ export function DashboardPage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <div className="mb-8 flex items-center gap-3">
           <div className="relative flex-1" style={{ maxWidth: 420 }}>
-            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#94A3B8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-              <circle cx={11} cy={11} r={7} />
-              <path d="M21 21l-4.3-4.3" />
-            </svg>
+            <Icon name="search" size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -129,7 +127,7 @@ export function DashboardPage() {
               style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "9px 34px", outline: "none" }}
             />
             {query && (
-              <button onClick={() => setQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}>✕</button>
+              <button onClick={() => setQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}><Icon name="close" size={15} /></button>
             )}
           </div>
           <div className="flex-1" />

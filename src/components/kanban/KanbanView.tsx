@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard, type StatusColumn } from "@/domain/kanban";
@@ -117,10 +118,10 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
         {canEdit && (
           <>
             <button onClick={() => setEditStatuses(true)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              ⚙ Statuses
+              <Icon name="settings" size={13} /> Statuses
             </button>
             <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              ▤ Add epic
+              <Icon name="view_agenda" size={13} /> Add epic
             </button>
           </>
         )}
@@ -258,7 +259,7 @@ function Column({
                 <EpicBandName epicId={g.epicId} name={g.name} canEdit={canEdit} onRename={onRenameEpic} />
                 <span className="mono text-xs flex-shrink-0" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
                 {canEdit && (
-                  <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title="Add a task to this epic" className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}>＋</button>
+                  <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title="Add a task to this epic" className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}><Icon name="add" size={16} /></button>
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
@@ -357,7 +358,7 @@ function Card({
           title="More actions"
           aria-label="More actions"
         >
-          ⋯
+          <Icon name="more_horiz" size={16} />
         </button>
       )}
       {menu && (
@@ -372,14 +373,14 @@ function Card({
       <div className="flex items-center gap-1.5">
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(f, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
         <span className="text-xs font-semibold flex-1 truncate" title={f.title} style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
-        {f.plannedX != null && <span title="Baseline plan set" style={{ fontSize: 10 }}>📌</span>}
-        {(f.attachments || []).length > 0 && <span className="mono" style={{ fontSize: 9, color: "#D85A28" }}>📎{f.attachments!.length}</span>}
-        {f.ai && <span style={{ fontSize: 11, color: "#8B5CF6" }}>✨</span>}
-        {done && <span title="Done — locked" style={{ fontSize: 10 }}>🔒</span>}
+        {f.plannedX != null && <Icon name="keep" size={12} title="Baseline plan set" />}
+        {(f.attachments || []).length > 0 && <span className="mono" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{f.attachments!.length}</span>}
+        {f.ai && <Icon name="bolt" size={13} style={{ color: "#8B5CF6" }} />}
+        {done && <Icon name="lock" size={12} title="Done — locked" />}
       </div>
       <div className="flex items-center gap-2 mt-1.5">
         <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{fmtDate(f.x)} → {fmtDate(f.x + f.duration)}</span>
-        {subs.length > 0 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>☑ {subDone}/{subs.length}</span>}
+        {subs.length > 0 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}><Icon name="check_box" size={11} style={{ verticalAlign: "-2px" }} /> {subDone}/{subs.length}</span>}
         <div className="flex items-center gap-0.5" style={{ marginLeft: "auto" }}>
           {(f.resources || []).slice(0, 4).map((rid) => {
             const r = resById[rid];

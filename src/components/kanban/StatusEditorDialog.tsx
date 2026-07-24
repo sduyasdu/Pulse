@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
 import { statusesOf, statusMetaOf, STATUS_COLORS, DONE_STATUS_ID } from "@/domain/constants";
 import type { StatusDef } from "@/types";
@@ -65,7 +66,7 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
       <div className="rounded-xl" style={{ width: 480, maxWidth: "92vw", maxHeight: "85vh", overflow: "auto", background: "#FFFFFF", padding: 18 }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Edit statuses</span>
-          <button onClick={onClose} className="no-press" style={{ color: "#94A3B8", fontSize: 18, lineHeight: 1 }} aria-label="Close">✕</button>
+          <button onClick={onClose} className="no-press" style={{ color: "#94A3B8", fontSize: 18, lineHeight: 1 }} aria-label="Close"><Icon name="close" size={18} /></button>
         </div>
         <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>Columns on the board, left to right — drag to reorder. “Done” is reserved and always last.</p>
 
@@ -134,7 +135,7 @@ function Row({
         title={reserved ? "" : "Drag to reorder"}
         style={{ color: reserved ? "#CBD5E1" : "#94A3B8", fontSize: 13, lineHeight: 1, cursor: reserved ? "default" : "grab" }}
       >
-        ⠿
+        <Icon name="drag_indicator" size={16} />
       </span>
       <input
         value={s.label}
@@ -163,7 +164,7 @@ function Row({
           className="no-press flex-shrink-0"
           style={{ color: canDelete ? "#DC2626" : "#CBD5E1", fontSize: 13, width: 54, textAlign: "right", cursor: canDelete ? "pointer" : "not-allowed" }}
         >
-          {usage > 0 ? <span className="mono" style={{ fontSize: 9 }}>in use {usage}</span> : "🗑"}
+          {usage > 0 ? <span className="mono" style={{ fontSize: 9 }}>in use {usage}</span> : <Icon name="delete" size={13} />}
         </button>
       )}
     </div>

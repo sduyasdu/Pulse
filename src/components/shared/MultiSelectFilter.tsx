@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 
 export interface Option {
   id: string;
@@ -58,7 +59,7 @@ export function MultiSelectFilter({
         }
       >
         <span className="truncate">{summary}</span>
-        <span style={{ fontSize: 8, color: dark ? "#F0A875" : "#94A3B8" }}>{open ? "▲" : "▼"}</span>
+        <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={13} style={{ color: dark ? "#F0A875" : "#94A3B8" }} />
       </button>
       {open && (
         <>
@@ -72,7 +73,7 @@ export function MultiSelectFilter({
             )}
             {selected.size > 0 && (
               <button onClick={() => onChange(new Set())} className="mono text-xs w-full text-left px-2 py-1 border-b" style={{ color: "#9F1D23", borderColor: "#F1F5F9" }}>
-                ✕ clear ({selected.size})
+                <Icon name="close" size={11} /> clear ({selected.size})
               </button>
             )}
             <div style={{ maxHeight: 220, overflowY: "auto" }}>

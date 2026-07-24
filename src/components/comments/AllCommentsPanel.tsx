@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Comment } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore } from "@/stores/pulseStore";
@@ -56,7 +57,7 @@ export function AllCommentsPanel({ pulseId, onSelectTask }: { pulseId: string; o
           >
             <span className="truncate">{g.feature.title || "Untitled task"}</span>
             <span style={{ color: "#94A3B8" }}>· {g.comments.filter((c) => !c.parentId).length}</span>
-            <span style={{ color: "#94A3B8", marginLeft: "auto" }}>↗</span>
+            <Icon name="open_in_new" size={12} style={{ color: "#94A3B8", marginLeft: "auto" }} />
           </button>
           <CommentThread comments={g.comments} currentUid={uid} canModerate={isOwner} onAdd={addTo(g.feature.id, g.feature.title || "a task")} onDelete={del} />
         </section>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -23,9 +24,9 @@ interface MobilePulseViewProps {
 type Tab = "tasks" | "team" | "capacity";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "tasks", label: "Tasks", icon: "📋" },
-  { id: "team", label: "Team", icon: "👥" },
-  { id: "capacity", label: "Capacity", icon: "📊" },
+  { id: "tasks", label: "Tasks", icon: "checklist" },
+  { id: "team", label: "Team", icon: "group" },
+  { id: "capacity", label: "Capacity", icon: "bar_chart" },
 ];
 
 export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseViewProps) {
@@ -53,7 +54,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
     <div className="flex flex-col" style={{ height: "100dvh", background: "#F7F6F2" }}>
       {/* Header */}
       <header className="flex items-center gap-2 px-3 flex-shrink-0" style={{ height: 52, background: "#123359" }}>
-        <Link to="/" className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#F0A875", fontSize: 20 }} title="Back to dashboard">‹</Link>
+        <Link to="/" className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#F0A875", fontSize: 20 }} title="Back to dashboard"><Icon name="chevron_left" size={24} /></Link>
         <div className="flex-1 overflow-hidden">
           <div className="font-display text-white text-sm font-semibold truncate">{pulse?.name?.trim() || "Untitled Pulse"}</div>
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
@@ -62,7 +63,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
         <NotificationsBell pulseId={pulse?.id} uid={uid} onOpenTask={setSelectedId} dark />
         {canEdit && (
           <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#F0A875", fontSize: 12, fontWeight: 600 }}>
-            ＋ Invite
+            <Icon name="add" size={13} /> Invite
           </button>
         )}
       </header>
@@ -112,7 +113,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
       <nav className="flex flex-shrink-0 border-t" style={{ borderColor: "#E2DFD9", background: "#FFFFFF", paddingBottom: "env(safe-area-inset-bottom)" }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className="flex-1 flex flex-col items-center justify-center gap-0.5" style={{ height: 56, color: tab === t.id ? "#EE7240" : "#94A3B8" }}>
-            <span style={{ fontSize: 18, filter: tab === t.id ? "none" : "grayscale(1) opacity(0.7)" }}>{t.icon}</span>
+            <Icon name={t.icon} size={20} style={{ opacity: tab === t.id ? 1 : 0.75 }} />
             <span className="mono" style={{ fontSize: 10, fontWeight: tab === t.id ? 700 : 500 }}>{t.label}</span>
           </button>
         ))}
@@ -123,7 +124,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
         <div className="fixed inset-0 flex flex-col" style={{ background: "#FFFFFF", zIndex: 50 }}>
           <header className="flex items-center gap-2 px-3 flex-shrink-0 border-b" style={{ height: 52, borderColor: "#E2DFD9", background: "#FFFFFF" }}>
             <button onClick={() => setSelectedId(null)} className="flex items-center gap-1" style={{ color: "#123359", fontSize: 14, fontWeight: 600 }}>
-              <span style={{ fontSize: 20 }}>‹</span> Tasks
+              <Icon name="chevron_left" size={22} /> Tasks
             </button>
           </header>
           <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>

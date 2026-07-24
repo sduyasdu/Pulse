@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, Resource } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard } from "@/domain/kanban";
@@ -55,10 +56,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
         {/* Search */}
         <div className="px-3 pt-3 pb-2">
           <div className="relative">
-            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#94A3B8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-              <circle cx={11} cy={11} r={7} />
-              <path d="M21 21l-4.3-4.3" />
-            </svg>
+            <Icon name="search" size={16} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -68,7 +66,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
             />
             {query && (
               <button onClick={() => setQuery("")} aria-label="Clear search" className="no-press" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", fontSize: 16, lineHeight: 1 }}>
-                ✕
+                <Icon name="close" size={16} />
               </button>
             )}
           </div>
@@ -113,8 +111,8 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
                       <div className="flex items-center gap-2">
                         <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(f, graph), flexShrink: 0 }} />
                         <span className="text-sm font-medium flex-1 truncate" style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
-                        {f.plannedX != null && <span style={{ fontSize: 11 }}>📌</span>}
-                        {done && <span style={{ fontSize: 12 }}>🔒</span>}
+                        {f.plannedX != null && <Icon name="keep" size={12} />}
+                        {done && <Icon name="lock" size={13} />}
                       </div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{fmt(f.x)} → {fmt(f.x + f.duration)}</span>

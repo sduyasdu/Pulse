@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Comment } from "@/types";
 import { colorForName } from "@/domain/constants";
 
@@ -110,10 +111,10 @@ function Item({ c, replies, currentUid, canModerate, onAdd, onDelete }: { c: Com
               style={{ border: "1px solid #E2DFD9", outline: "none", color: "#334155" }}
             />
             <button onClick={() => void send()} disabled={!text.trim() || busy} className="rounded px-2 py-1 text-xs font-semibold disabled:opacity-40" style={{ background: "#D85A28", color: "#fff" }}>Reply</button>
-            <button onClick={() => setReplying(false)} className="mono text-xs" style={{ color: "#94A3B8" }}>✕</button>
+            <button onClick={() => setReplying(false)} className="mono text-xs" style={{ color: "#94A3B8" }}><Icon name="close" size={13} /></button>
           </div>
         ) : (
-          <button onClick={() => setReplying(true)} className="mono mt-1" style={{ fontSize: 9, color: "#94A3B8" }}>↩ Reply</button>
+          <button onClick={() => setReplying(true)} className="mono mt-1" style={{ fontSize: 9, color: "#94A3B8" }}><Icon name="reply" size={11} /> Reply</button>
         )}
       </div>
     </div>
@@ -130,7 +131,7 @@ function Bubble({ c, currentUid, canModerate, onDelete }: { c: Comment; currentU
           <span className="text-xs font-semibold truncate" style={{ color: "#334155" }}>{mine ? "You" : c.authorEmail}</span>
           <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{when(c.createdAt)}{c.editedAt ? " · edited" : ""}</span>
           {(mine || canModerate) && (
-            <button onClick={(e) => onDelete(c, e)} className="mono ml-auto" style={{ fontSize: 9, color: "#CBD5E1" }} title="Delete">✕</button>
+            <button onClick={(e) => onDelete(c, e)} className="mono ml-auto" style={{ fontSize: 9, color: "#CBD5E1" }} title="Delete"><Icon name="close" size={11} /></button>
           )}
         </div>
         <div className="text-xs" style={{ color: "#1F2330", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{c.text}</div>

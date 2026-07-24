@@ -6,6 +6,7 @@ import { DENSITY_HINT, clamp } from "@/domain/constants";
 import { dateForDay, todayIndex } from "@/domain/dateUtils";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
+import { Icon } from "@/components/shared/Icon";
 
 interface ToolbarProps {
   pulseName: string;
@@ -116,7 +117,7 @@ export function Toolbar({
             style={{ fontSize: 10, fontWeight: 600, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}
             title="Invite a collaborator to this Pulse"
           >
-            <span style={{ fontSize: 11, lineHeight: 1 }}>＋</span> Invite
+            <Icon name="add" size={12} /> Invite
           </button>
         )}
         <button
@@ -132,7 +133,7 @@ export function Toolbar({
         {canEdit && (
           <div className="relative" style={{ flexShrink: 0 }}>
             <button onClick={() => setShowGraphSettings((v) => !v)} title="Graph Effort scale settings" className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>
-              <span style={{ fontSize: 13, lineHeight: 1 }}>⚙️</span> Effort scale
+              <Icon name="settings" size={13} /> Effort scale
             </button>
             {showGraphSettings && (
               <div className="absolute z-50 mt-1 rounded-lg p-3" style={{ top: "100%", right: 0, width: 230, background: "#FFFFFF", border: "1px solid #E2DFD9", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
@@ -177,7 +178,7 @@ export function Toolbar({
         {canEdit && viewMode === "canvas" && (
           <div className="flex items-center gap-1.5" style={{ borderRight: "1px solid #24406B", paddingRight: 6, marginRight: 2 }}>
             <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
-              ▤ Add epic
+              <Icon name="view_agenda" size={14} /> Add epic
             </button>
             <button onClick={onAddTask} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold" style={{ background: "#EE7240", color: "#FDFDFD" }}>
               + Add task
@@ -194,9 +195,9 @@ export function Toolbar({
         {viewMode === "canvas" && (
           <>
         <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
-          <button onClick={onZoomOut} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍−</span></button>
+          <button onClick={onZoomOut} className="p-1.5 rounded"><Icon name="zoom_out" size={16} style={{ color: "#EE7240" }} /></button>
           <span className="mono text-xs w-9 text-center" style={{ color: "#EE7240" }}>{Math.round(viewZoom * 100)}%</span>
-          <button onClick={onZoomIn} className="p-1.5 rounded"><span style={{ color: "#EE7240", fontSize: 14 }}>🔍+</span></button>
+          <button onClick={onZoomIn} className="p-1.5 rounded"><Icon name="zoom_in" size={16} style={{ color: "#EE7240" }} /></button>
           <button onClick={onFitRoadmap} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#EE7240" }} title="Fit the whole roadmap on screen">fit</button>
         </div>
 
@@ -207,20 +208,20 @@ export function Toolbar({
             </button>
           ))}
         </div>
-        <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><span style={{ color: "#CBD5E1", fontSize: 14 }}>⟲</span></button>
+        <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><Icon name="refresh" size={16} style={{ color: "#CBD5E1" }} /></button>
           </>
         )}
 
         {canEdit && (
           <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Undo / redo (⌘Z · ⇧⌘Z)">
-            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.35, cursor: canUndo ? "pointer" : "default" }}><span style={{ color: "#EE7240", fontSize: 14 }}>↶</span></button>
-            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.35, cursor: canRedo ? "pointer" : "default" }}><span style={{ color: "#EE7240", fontSize: 14 }}>↷</span></button>
+            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.35, cursor: canUndo ? "pointer" : "default" }}><Icon name="undo" size={16} style={{ color: "#EE7240" }} /></button>
+            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.35, cursor: canRedo ? "pointer" : "default" }}><Icon name="redo" size={16} style={{ color: "#EE7240" }} /></button>
           </div>
         )}
 
         <div className="flex items-center gap-1.5 ml-1">
           <div className="flex items-center gap-1 rounded px-1.5" style={{ background: "#1B3A63", border: "1px solid #24406B" }}>
-            <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
+            <Icon name="search" size={13} style={{ color: "#64748B" }} />
             <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#E2E8F0", outline: "none", width: 90 }} />
           </div>
           <MultiSelectFilter
@@ -247,21 +248,21 @@ export function Toolbar({
               }}
               title="Clear feature filter"
             >
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
+              <Icon name="close" size={13} style={{ color: "#94A3B8" }} />
             </button>
           )}
         </div>
         {viewMode === "canvas" && (
           <>
             <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
-              ⟞ {showDelays ? "Delays on" : "Delays"}
+              <Icon name="timeline" size={13} /> {showDelays ? "Delays on" : "Delays"}
             </button>
             <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
-              {epicsShrunk ? "▣" : "▢"} {epicsShrunk ? "Unshrink" : "Shrink epics"}
+              <Icon name={epicsShrunk ? "check_box" : "check_box_outline_blank"} size={13} /> {epicsShrunk ? "Unshrink" : "Shrink epics"}
             </button>
             {canEdit && (
               <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
-                ⇕ Compact
+                <Icon name="compress" size={13} /> Compact
               </button>
             )}
           </>

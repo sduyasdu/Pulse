@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Notification } from "@/types";
 import { subscribeMyNotifications, markNotificationRead, deleteNotification } from "@/services/firestore/notifications";
 
@@ -41,7 +42,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark }: { pulseId?
         title="Notifications"
         aria-label="Notifications"
       >
-        🔔
+        <Icon name="notifications" size={15} />
         {unread > 0 && (
           <span className="mono" style={{ position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, borderRadius: 8, background: "#E5484D", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
             {unread > 9 ? "9+" : unread}
@@ -72,7 +73,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark }: { pulseId?
                     <div className="text-xs truncate" style={{ color: "#64748B" }}>“{n.text}”</div>
                     <div className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{when(n.createdAt)}</div>
                   </button>
-                  <button onClick={() => void deleteNotification(pulseId, n.id)} className="mono flex-shrink-0" style={{ fontSize: 10, color: "#CBD5E1" }} title="Dismiss">✕</button>
+                  <button onClick={() => void deleteNotification(pulseId, n.id)} className="mono flex-shrink-0" style={{ fontSize: 10, color: "#CBD5E1" }} title="Dismiss"><Icon name="close" size={12} /></button>
                 </div>
               ))
             )}

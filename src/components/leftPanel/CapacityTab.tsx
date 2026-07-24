@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange, resourcePeakPct, utilizationPct } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
@@ -101,7 +102,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         <span className="mono text-xs" style={{ color: "#64748B" }}>OVERVIEW &amp; RESOURCE TYPES</span>
         <span className="flex items-center gap-2">
           {overLimit > 0 && <span className="mono text-xs font-semibold" style={{ color: "#E5484D" }}>{overLimit} over limit</span>}
-          <span style={{ fontSize: 12, color: "#64748B" }}>{showOverview ? "▾" : "▸"}</span>
+          <Icon name={showOverview ? "keyboard_arrow_down" : "chevron_right"} size={14} style={{ color: "#64748B" }} />
         </span>
       </button>
 
@@ -128,8 +129,8 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
               {t}
               {canEdit && (
                 <>
-                  <button onClick={() => renameType(t)} title="Rename"><span style={{ fontSize: 9, color: "#64748B" }}>✎</span></button>
-                  <button onClick={(e) => void deleteType(t, e)} title="Delete"><span style={{ fontSize: 9, color: "#64748B" }}>✕</span></button>
+                  <button onClick={() => renameType(t)} title="Rename"><Icon name="edit" size={12} style={{ color: "#64748B" }} /></button>
+                  <button onClick={(e) => void deleteType(t, e)} title="Delete"><Icon name="close" size={12} style={{ color: "#64748B" }} /></button>
                 </>
               )}
             </span>
@@ -141,7 +142,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
       )}
 
       <div className="flex items-center gap-1.5 rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9", background: "#FDFCF8" }}>
-        <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
+        <Icon name="search" size={13} style={{ color: "#64748B" }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -152,7 +153,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         <span className="mono text-xs" style={{ color: "#94A3B8" }}>{filtered.length}</span>
         {query && (
           <button onClick={() => setQuery("")}>
-            <span style={{ fontSize: 11, color: "#64748B" }}>✕</span>
+            <Icon name="close" size={12} style={{ color: "#64748B" }} />
           </button>
         )}
       </div>

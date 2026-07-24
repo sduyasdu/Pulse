@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
@@ -37,7 +38,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   return (
     <div className="p-3 flex flex-col gap-2">
       <div className="flex items-center gap-1.5 rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9", background: "#FDFCF8" }}>
-        <span style={{ fontSize: 12, color: "#64748B" }}>🔍</span>
+        <Icon name="search" size={13} style={{ color: "#64748B" }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -47,7 +48,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
         />
         {query && (
           <button onClick={() => setQuery("")}>
-            <span style={{ fontSize: 11, color: "#64748B" }}>✕</span>
+            <Icon name="close" size={12} style={{ color: "#64748B" }} />
           </button>
         )}
       </div>
@@ -82,7 +83,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
           <span className="mono text-xs" style={{ color: "#D85A28" }}>
             filtering canvas by: {resources.find((x) => x.id === filterResource)?.name ?? filterResource}
           </span>
-          <span className="mono text-xs" style={{ color: "#D85A28" }}>clear ✕</span>
+          <span className="mono text-xs" style={{ color: "#D85A28", display: "inline-flex", alignItems: "center", gap: 3 }}>clear <Icon name="close" size={11} /></span>
         </button>
       )}
       {filtered.map((r) => {
@@ -135,7 +136,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                   className="flex-shrink-0 rounded"
                   style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
                 >
-                  <span style={{ fontSize: 11, color: "#64748B" }}>⧉</span>
+                  <Icon name="content_copy" size={12} style={{ color: "#64748B" }} />
                 </button>
               )}
               {canEdit && (
@@ -149,7 +150,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                   className="flex-shrink-0 rounded"
                   style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
                 >
-                  <span style={{ fontSize: 10, color: "#9F1D23" }}>🗑</span>
+                  <Icon name="delete" size={13} style={{ color: "#9F1D23" }} />
                 </button>
               )}
             </div>

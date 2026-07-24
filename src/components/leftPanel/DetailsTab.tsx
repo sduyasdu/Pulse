@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Feature, Resource, Subtask } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { confirmAt } from "@/stores/confirmStore";
@@ -105,7 +106,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               className="rounded"
               style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
             >
-              <span style={{ fontSize: 12, color: "#64748B" }}>⧉</span>
+              <Icon name="content_copy" size={13} style={{ color: "#64748B" }} />
             </button>
             <button
               title="Delete task"
@@ -118,7 +119,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               className="rounded"
               style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
             >
-              <span style={{ fontSize: 11, color: "#9F1D23" }}>🗑</span>
+              <Icon name="delete" size={13} style={{ color: "#9F1D23" }} />
             </button>
           </div>
         )}
@@ -126,7 +127,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
 
       {locked && (
         <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#E6F7F4", border: "1px solid #A7E3D8", color: "#0F6B5C" }}>
-          <span style={{ fontSize: 13 }}>🔒</span>
+          <Icon name="lock" size={14} />
           <span>Done — locked. Change its status below to edit this task.</span>
         </div>
       )}
@@ -188,7 +189,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               <div key={c.id} className="rounded" style={{ border: "1px solid #E2DFD9" }}>
                 <div className="flex items-center gap-1.5 px-2 py-1.5">
                   <button onClick={() => setExpandedSubs((s) => ({ ...s, [c.id]: !s[c.id] }))} title={open ? "Collapse" : "Expand"} className="flex items-center justify-center" style={{ flexShrink: 0, width: 22 }}>
-                    <span style={{ fontSize: 22, lineHeight: 1, color: "#475569" }}>{open ? "▾" : "▸"}</span>
+                    <Icon name={open ? "keyboard_arrow_down" : "chevron_right"} size={22} style={{ color: "#475569" }} />
                   </button>
                   <input
                     type="checkbox"
@@ -203,7 +204,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                   {resp && <span className="mono" title={`Responsible: ${resp.name}`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(resp.id), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{resp.initials}</span>}
                   {canEdit && (
                     <button onClick={async (e) => { if (await confirmAt(e, { message: `Delete subtask "${c.title}"?` })) void removeSubtask(feature.id, c.id); }} title="Delete subtask">
-                      <span style={{ fontSize: 12, color: "#64748B" }}>✕</span>
+                      <Icon name="close" size={13} style={{ color: "#64748B" }} />
                     </button>
                   )}
                 </div>
@@ -235,7 +236,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                       />
                       {c.finishedAt && canEdit && (
                         <button onClick={() => void patchSubtask(feature.id, c.id, { finishedAt: null })} title="Clear finished date">
-                          <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
+                          <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
                         </button>
                       )}
                     </div>
@@ -270,7 +271,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       <div>
         <div className="flex items-center justify-between">
           <span className="mono text-xs" style={{ color: "#64748B" }}>RESOURCES & % TIME</span>
-          <span className="mono text-xs" style={{ color: "#64748B" }}>★ = team leader</span>
+          <span className="mono text-xs" style={{ color: "#64748B", display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="star" size={11} /> = team leader</span>
         </div>
         <div className="flex flex-col gap-2 mt-2">
           {(feature.resources || []).length === 0 && <span className="text-xs" style={{ color: "#9F1D23" }}>No one assigned — drag someone from the Team tab onto this box</span>}
@@ -280,7 +281,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             return (
               <div key={r} className="rounded px-2 py-2" style={{ border: isLead ? "1px solid #F5A524" : "1px solid #E2DFD9", background: isLead ? "#FFFBEB" : "#fff" }}>
                 <div className="flex items-center gap-2">
-                  <button disabled={!canEdit} title={isLead ? "Team leader — click to unset" : "Make team leader"} onClick={() => void patchFeature(feature.id, { lead: isLead ? null : r })} style={{ fontSize: 13, lineHeight: 1, color: isLead ? "#F5A524" : "#CBD5E1", flexShrink: 0 }}>★</button>
+                  <button disabled={!canEdit} title={isLead ? "Team leader — click to unset" : "Make team leader"} onClick={() => void patchFeature(feature.id, { lead: isLead ? null : r })} style={{ fontSize: 13, lineHeight: 1, color: isLead ? "#F5A524" : "#CBD5E1", flexShrink: 0 }}><Icon name="star" size={14} /></button>
                   <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r), width: 18, height: 18, borderRadius: isLead ? 4 : "50%", border: isLead ? "2px solid #F5A524" : "none", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {resources.find((x) => x.id === r)?.initials || "?"}
                   </span>
@@ -302,7 +303,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                   <span className="mono text-xs" style={{ color: "#64748B" }}>%</span>
                   {canEdit && (
                     <button onClick={() => void unassignResource(feature.id, r)}>
-                      <span style={{ fontSize: 12, color: "#64748B" }}>✕</span>
+                      <Icon name="close" size={13} style={{ color: "#64748B" }} />
                     </button>
                   )}
                 </div>
@@ -337,11 +338,11 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                 className="mono text-xs px-2 py-0.5 rounded"
                 style={feature.plannedX != null ? { background: "#4338CA", color: "#FFFFFF" } : { background: "#EEF2FF", color: "#4338CA" }}
               >
-                📌 {feature.plannedX != null ? "baseline set" : "set plan"}
+                <Icon name="keep" size={13} /> {feature.plannedX != null ? "baseline set" : "set plan"}
               </button>
             ) : (
               feature.plannedX != null && (
-                <span className="mono text-xs px-2 py-0.5 rounded" title="A baseline plan has been set for this task" style={{ background: "#4338CA", color: "#FFFFFF" }}>📌 baseline set</span>
+                <span className="mono text-xs px-2 py-0.5 rounded" title="A baseline plan has been set for this task" style={{ background: "#4338CA", color: "#FFFFFF" }}><Icon name="keep" size={12} /> baseline set</span>
               )
             )}
           </div>
@@ -385,11 +386,11 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               {canEdit &&
                 (estFixed ? (
                   <button title="Reset to Graph Effort" onClick={() => void patchFeature(feature.id, { estEffort: null })}>
-                    <span style={{ fontSize: 10, color: "#D85A28" }}>↺</span>
+                    <Icon name="refresh" size={12} style={{ color: "#D85A28" }} />
                   </button>
                 ) : (
                   <button title="Fix this value" onClick={() => void patchFeature(feature.id, { estEffort: graph_ })}>
-                    <span style={{ fontSize: 10, color: "#94A3B8" }}>🔒</span>
+                    <Icon name="lock" size={11} style={{ color: "#94A3B8" }} />
                   </button>
                 ))}
             </div>
@@ -444,7 +445,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               <span className="mono text-xs" style={{ color: "#64748B" }}>PLAN (frozen)</span>
               {canEdit && (
                 <button onClick={() => void patchFeature(feature.id, { plannedX: null, plannedDuration: null })} title="Clear the frozen plan">
-                  <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
+                  <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
                 </button>
               )}
             </div>
@@ -491,7 +492,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             />
             {feature.finishedAt && canEditProp && (
               <button onClick={() => void patchFeature(feature.id, { finishedAt: null })} title="Clear finished date">
-                <span style={{ fontSize: 11, color: "#94A3B8" }}>✕</span>
+                <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
               </button>
             )}
           </div>
@@ -522,8 +523,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                   cursor: "pointer",
                 }}
               >
-                {!lc.color && <span style={{ fontSize: 11, color: "#64748B" }}>∅</span>}
-                {lc.color && active && <span style={{ fontSize: 12, color: "#fff" }}>✓</span>}
+                {!lc.color && <Icon name="block" size={12} style={{ color: "#64748B" }} />}
+                {lc.color && active && <Icon name="check" size={13} style={{ color: "#fff" }} />}
               </button>
             );
           })}
@@ -531,7 +532,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       </div>
 
       <label className="flex items-center gap-2 text-sm" style={{ color: "#334155" }}>
-        <input type="checkbox" disabled={!canEdit} checked={!!feature.ai} onChange={(e) => void patchFeature(feature.id, { ai: e.target.checked })} /> AI-assisted estimate <span style={{ fontSize: 13, color: "#8B5CF6" }}>✨</span>
+        <input type="checkbox" disabled={!canEdit} checked={!!feature.ai} onChange={(e) => void patchFeature(feature.id, { ai: e.target.checked })} /> AI-assisted estimate <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} />
       </label>
 
       <div>
@@ -596,11 +597,11 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
           ) : (
             <span className="text-xs" style={{ color: "#94A3B8" }}>Set responsible…</span>
           )}
-          <span style={{ marginLeft: "auto", fontSize: 9, color: "#94A3B8" }}>{open ? "▲" : "▼"}</span>
+          <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={13} style={{ marginLeft: "auto", color: "#94A3B8" }} />
         </button>
         {current && !disabled && (
           <button onClick={() => pick(null)} title="Remove responsible" className="flex-shrink-0 rounded" style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}>
-            <span style={{ fontSize: 11, color: "#9F1D23" }}>✕</span>
+            <Icon name="close" size={12} style={{ color: "#9F1D23" }} />
           </button>
         )}
       </div>

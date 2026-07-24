@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Icon } from "@/components/shared/Icon";
 
 interface RichTextEditorProps {
   value: string;
@@ -69,10 +70,10 @@ export function RichTextEditor({ value, disabled, placeholder, minHeight = 60, o
           <FmtBtn label="I" title="Italic" onClick={() => exec("italic")} style={{ fontStyle: "italic" }} />
           <FmtBtn label="U" title="Underline" onClick={() => exec("underline")} style={{ textDecoration: "underline" }} />
           <span style={{ width: 1, height: 14, background: "#E2DFD9", margin: "0 3px" }} />
-          <FmtBtn label="•" title="Bulleted list" onClick={() => exec("insertUnorderedList")} />
+          <FmtBtn label={<Icon name="format_list_bulleted" size={13} />} title="Bulleted list" onClick={() => exec("insertUnorderedList")} />
           <FmtBtn label="1." title="Numbered list" onClick={() => exec("insertOrderedList")} />
           <span style={{ width: 1, height: 14, background: "#E2DFD9", margin: "0 3px" }} />
-          <FmtBtn label="⌫" title="Clear formatting" onClick={() => exec("removeFormat")} />
+          <FmtBtn label={<Icon name="format_clear" size={13} />} title="Clear formatting" onClick={() => exec("removeFormat")} />
         </div>
       )}
       <div
@@ -89,7 +90,7 @@ export function RichTextEditor({ value, disabled, placeholder, minHeight = 60, o
   );
 }
 
-function FmtBtn({ label, title, onClick, style }: { label: string; title: string; onClick: () => void; style?: React.CSSProperties }) {
+function FmtBtn({ label, title, onClick, style }: { label: React.ReactNode; title: string; onClick: () => void; style?: React.CSSProperties }) {
   return (
     <button
       type="button"

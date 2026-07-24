@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, Resource } from "@/types";
 import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants";
 import { usePulseStore } from "@/stores/pulseStore";
@@ -48,10 +49,7 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
       {/* Search — sticky so it stays reachable while the list scrolls. */}
       <div className="sticky top-0 z-10 px-3 pt-3 pb-2" style={{ background: "#F7F6F2" }}>
         <div className="relative">
-          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#94A3B8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-            <circle cx={11} cy={11} r={7} />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <Icon name="search" size={16} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -66,7 +64,7 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
               className="no-press"
               style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", fontSize: 16, lineHeight: 1 }}
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
           )}
         </div>
@@ -95,7 +93,7 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
                     <div className="flex items-center gap-2">
                       <span style={{ width: 9, height: 9, borderRadius: "50%", background: meta.border, flexShrink: 0 }} />
                       <span className="text-sm font-medium flex-1 truncate" style={{ color: "#1F2330", textDecoration: f.status === "done" ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
-                      {f.status === "done" && <span style={{ fontSize: 12 }}>🔒</span>}
+                      {f.status === "done" && <Icon name="lock" size={13} />}
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 9, background: meta.bg, color: meta.text }}>{meta.label}</span>

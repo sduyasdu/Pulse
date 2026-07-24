@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { Link } from "react-router-dom";
 import type { MyPulseIndexEntry } from "@/types";
 import { PulseThumbnail } from "./PulseThumbnail";
@@ -48,7 +49,7 @@ export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, o
           title="More actions"
           aria-label="More actions"
         >
-          ⋯
+          <Icon name="more_horiz" size={18} />
         </button>
         {menuOpen && (
           <>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange, assignmentsFor, utilizationPct } from "@/domain/assignments";
 import { stackRows } from "@/domain/layout";
@@ -136,7 +137,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
         <div className="flex items-center gap-2">
           {onCollapse && (
             <button onClick={onCollapse} title="Collapse this panel to maximize the canvas" className="no-press" style={{ color: "#64748B", flexShrink: 0, display: "flex", alignItems: "center" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+              <Icon name="keyboard_arrow_down" size={18} />
             </button>
           )}
           <span className="text-xs font-semibold" style={{ color: "#123359" }}>
@@ -186,7 +187,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
             hide idle
           </button>
           <button onClick={() => setAssignCompact((v) => !v)} title="Show only % per resource (hide task bars)" className="mono text-xs px-2 py-1 rounded border" style={{ borderColor: assignCompact ? "#EE7240" : "#E2DFD9", background: assignCompact ? "#F7E8DA" : "#fff", color: assignCompact ? "#D85A28" : "#64748B" }}>
-            {assignCompact ? "▣ compact" : "▤ compact"}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><Icon name={assignCompact ? "check_box" : "check_box_outline_blank"} size={12} /> compact</span>
           </button>
           {(assignPeople.size > 0 || assignTypes.size > 0 || assignStatuses.size > 0 || assignHideIdle) && (
             <button
@@ -199,7 +200,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
               className="mono text-xs px-2 py-1 rounded"
               style={{ background: "#F1F5F9", color: "#64748B" }}
             >
-              clear ✕
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>clear <Icon name="close" size={11} /></span>
             </button>
           )}
         </div>

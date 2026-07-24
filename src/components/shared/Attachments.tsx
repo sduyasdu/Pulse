@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import type { Attachment } from "@/types";
 
 interface AttachmentsProps {
@@ -31,13 +32,13 @@ export function Attachments({ items, onAdd, onDelete, canEdit, compact }: Attach
       <div className={`flex flex-col gap-1 ${compact ? "" : "mt-1.5"}`}>
         {(items || []).map((a) => (
           <div key={a.id} className="flex items-center gap-1.5 rounded px-2 py-1" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
-            <span style={{ fontSize: 12, color: "#D85A28" }}>{a.isData ? "📄" : "🔗"}</span>
+            <Icon name={a.isData ? "description" : "link"} size={13} style={{ color: "#D85A28" }} />
             <a href={a.url} target="_blank" rel="noopener noreferrer" download={a.isData ? a.title : undefined} className="text-xs flex-1 truncate" style={{ color: "#123359", textDecoration: "none" }} title={a.title}>
               {a.title}
             </a>
             {canEdit && (
               <button onClick={() => onDelete(a.id)} title="Remove attachment">
-                <span style={{ fontSize: 11, color: "#64748B" }}>✕</span>
+                <Icon name="close" size={12} style={{ color: "#64748B" }} />
               </button>
             )}
           </div>
