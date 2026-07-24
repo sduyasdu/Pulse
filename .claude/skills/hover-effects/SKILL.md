@@ -16,6 +16,14 @@ tapping. So a `:hover` style on touch does one of two bad things:
 Because of this, **no hover effect ships without a decided touch behaviour.**
 This is a hard rule, not a nice-to-have.
 
+**Always use a defined custom hover — never the standard/default one.** Don't
+lean on the browser's default hover or the app's implicit global
+`button:hover` scale as *the* hover for an element. Apply an explicit, defined
+treatment: the **standard hover style** below (`.hoverable`), a documented
+variant, or a Tailwind `hover:` utility chosen on purpose. If none fits, define
+the new treatment **here in this skill first**, then use it — so hover stays
+consistent and intentional across the app instead of ad-hoc.
+
 ## The definitions this repo already uses (build on these — don't reinvent)
 
 - **`useIsMobile()`** — `src/hooks/useIsMobile.ts`, matches
@@ -78,6 +86,50 @@ thing is unreachable.
 - Any hover that animates `transform`/`opacity`/movement must honour
   `@media (prefers-reduced-motion: reduce)` (disable or reduce it).
 
+## Standard hover style (the default — reach for this first)
+
+The canonical hover treatment lives in `src/index.css` as **`.hoverable`**. It is
+already touch-safe (`@media (hover: hover)`) and motion-safe
+(`prefers-reduced-motion`), and it uses `filter` + `box-shadow` **only** (no
+`transform`), so it composes with the global button scale and `.no-press`
+without cascade fights.
+
+```css
+/* src/index.css — do not duplicate; extend here if a variant is needed. */
+.hoverable {
+  transition: filter 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+@media (hover: hover) {
+  .hoverable:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoverable { transition: none; }
+}
+```
+
+Use it by adding the class:
+
+```tsx
+<div className="hoverable rounded-xl border p-4">…</div>
+<button className="hoverable">Save</button>   {/* baseline brightness+shadow, no ad-hoc :hover */}
+```
+
+Rules for the standard:
+- **Default to `.hoverable`.** Only depart from it when the effect genuinely
+  needs something else (e.g. a fan-out, a reveal), and then use a documented
+  variant or a deliberately chosen Tailwind `hover:` utility — never a bare,
+  ungated `:hover`.
+- **Need a new recurring treatment?** Add it as a variant **in `index.css` and
+  document it here** (e.g. `.hoverable--raise` for card lift, `.hoverable--underline`
+  for text links) rather than hand-rolling per component. Keep every variant
+  gated by `@media (hover: hover)` and guarded for reduced motion.
+- The global `button:hover` scale is a *baseline affordance*, not a substitute
+  for choosing a hover — it's the "standard/default" this skill tells you to
+  replace with an explicit one.
+
 ## Patterns (copy these)
 
 **Decorative — Tailwind (touch-safe automatically):**
@@ -122,6 +174,10 @@ const showActions = coarse || hovered;
 
 ## Checklist — before shipping any hover effect
 
+0. Are you using a **defined** hover (`.hoverable`, a documented variant, or a
+   deliberate Tailwind `hover:`) rather than relying on the browser/global
+   default? If it's a new recurring treatment, is it added to `index.css` and
+   documented here?
 1. Which class is it — **A decorative**, **B functional**, or **C JS**?
 2. **Web (fine pointer):** does it read as interactive and not janky?
 3. **Touch (coarse pointer, incl. iPad):** is the underlying control still fully

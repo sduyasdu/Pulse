@@ -107,6 +107,31 @@ button:disabled {
   transform: none;
 }
 
+/* ── Standard hover ─────────────────────────────────────────────────────────
+   THE canonical hover treatment. Always apply this (or a documented variant)
+   for hover feedback instead of relying on the browser/global default. It is
+   touch-safe (fires only where a real pointer can hover, so it never sticks on
+   touch) and motion-safe. Uses filter + box-shadow (no transform), so it
+   composes with the global button scale and .no-press without cascade fights.
+   See .claude/skills/hover-effects. */
+.hoverable {
+  transition:
+    filter 0.14s ease,
+    box-shadow 0.14s ease,
+    background-color 0.14s ease;
+}
+@media (hover: hover) {
+  .hoverable:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoverable {
+    transition: none;
+  }
+}
+
 /* Live-presence avatar stack (PresenceBar). Overlapped by default; on hover the
    avatars fan apart and lift so each is legible. Follows the hover-effects
    skill: the spread is decorative (who's viewing is also in the container
