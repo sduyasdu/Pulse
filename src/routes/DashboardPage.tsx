@@ -6,6 +6,7 @@ import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, 
 import { fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
+import { AccountMenu } from "@/components/account/AccountMenu";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
 import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
@@ -13,7 +14,7 @@ import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
 
 export function DashboardPage() {
-  const { firebaseUser, userDoc, signOutUser } = useAuthStore();
+  const { firebaseUser, userDoc } = useAuthStore();
   const navigate = useNavigate();
   const [pulses, setPulses] = useState<MyPulseIndexEntry[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -118,13 +119,10 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
+        <AccountMenu />
         <span className="font-display text-base font-semibold text-white">Pulse</span>
         <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">by Yasdu</span>
         <div className="flex-1" />
-        <span className="mono text-xs text-yasdu-primary">{firebaseUser.email}</span>
-        <button onClick={() => void signOutUser()} className="mono text-xs text-white/70 hover:text-white">
-          sign out
-        </button>
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">

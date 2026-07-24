@@ -11,7 +11,7 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import type { UserDoc } from "@/types";
-import { ensureUserDoc, resolvePendingInvites } from "@/services/firestore/users";
+import { ensureUserDoc, resolvePendingInvites, updateUserProfile } from "@/services/firestore/users";
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
@@ -27,6 +27,8 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
+  /** Save the current user's profile (name / avatar) and update local state. */
+  saveProfile: (patch: { displayName?: string | null; photoURL?: string | null }) => Promise<void>;
   signOutUser: () => Promise<void>;
 }
 
@@ -38,7 +40,7 @@ async function bootstrap(user: FirebaseUser): Promise<UserDoc | null> {
   return snap.exists() ? (snap.data() as UserDoc) : null;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   firebaseUser: null,
   userDoc: null,
   initializing: true,
@@ -93,6 +95,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ error: (err as Error).message });
       throw err;
     }
+  },
+
+  saveProfile: async (patch) => {
+    const { firebaseUser, userDoc } = get();
+    if (!firebaseUser) throw new Error("Not signed in.");
+    await updateUserProfile(firebaseUser.uid, patch);
+    if (userDoc) set({ userDoc: { ...userDoc, ...patch } });
   },
 
   signOutUser: async () => {

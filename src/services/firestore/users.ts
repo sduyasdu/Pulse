@@ -1,6 +1,11 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { MyPulseIndexEntry, PendingInviteEntry, PulseMember, UserDoc } from "@/types";
+
+/** Update the signed-in user's own profile fields (name / avatar). */
+export async function updateUserProfile(uid: string, patch: { displayName?: string | null; photoURL?: string | null }): Promise<void> {
+  await updateDoc(doc(db, "users", uid), patch);
+}
 import { createPersonalWorkspace } from "./workspaces";
 import { emailKey } from "./emailKey";
 
