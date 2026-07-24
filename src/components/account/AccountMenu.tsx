@@ -31,7 +31,7 @@ export function AccountMenu() {
       {open && (
         <>
           <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setOpen(false)} />
-          <div className="absolute rounded-xl border py-1" style={{ top: "100%", left: 0, marginTop: 8, zIndex: 61, width: 240, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 10px 28px rgba(15,23,42,0.16)" }}>
+          <div className="absolute rounded-xl border py-1" style={{ top: "100%", right: 0, marginTop: 8, zIndex: 61, width: 240, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 10px 28px rgba(15,23,42,0.16)" }}>
             {/* Identity header */}
             <div className="flex items-center gap-2.5 px-3 py-2.5 border-b" style={{ borderColor: "#F1F5F9" }}>
               <Avatar photoURL={userDoc?.photoURL} name={name || email} size={34} iconColor="#CBD5E1" />

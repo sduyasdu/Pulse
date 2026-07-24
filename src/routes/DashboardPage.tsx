@@ -119,10 +119,10 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
-        <AccountMenu />
         <span className="font-display text-base font-semibold text-white">Pulse</span>
         <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">by Yasdu</span>
         <div className="flex-1" />
+        <AccountMenu />
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
