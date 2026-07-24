@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, setMyPulseArchived, deletePulse, duplicatePulse, type DuplicateMode } from "@/services/firestore/pulses";
+import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseArchived, deletePulse, duplicatePulse, renamePulse, type DuplicateMode } from "@/services/firestore/pulses";
 import { fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
+import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
@@ -17,6 +18,7 @@ export function DashboardPage() {
   const [pulses, setPulses] = useState<MyPulseIndexEntry[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [invitingPulse, setInvitingPulse] = useState<MyPulseIndexEntry | null>(null);
+  const [renamingPulse, setRenamingPulse] = useState<MyPulseIndexEntry | null>(null);
   const [duplicatingPulse, setDuplicatingPulse] = useState<MyPulseIndexEntry | null>(null);
   const [query, setQuery] = useState("");
 
@@ -92,6 +94,7 @@ export function DashboardPage() {
         <PulseCard
           key={entry.pulseId}
           entry={entry}
+          onRenameClick={() => setRenamingPulse(entry)}
           onInviteClick={() => setInvitingPulse(entry)}
           onDuplicateClick={() => setDuplicatingPulse(entry)}
           onArchive={() => void setMyPulseArchived(uid, entry.pulseId, true)}
@@ -201,6 +204,20 @@ export function DashboardPage() {
           pulseId={invitingPulse.pulseId}
           canEdit={invitingPulse.role !== "viewer"}
           onClose={() => setInvitingPulse(null)}
+        />
+      )}
+
+      {renamingPulse && (
+        <RenamePulseDialog
+          currentName={renamingPulse.name}
+          onClose={() => setRenamingPulse(null)}
+          onRename={async (name: string) => {
+            await renamePulse(renamingPulse.pulseId, name);
+            // The dashboard card name is denormalized on the user's own index
+            // entry, so sync it too (the pulse doc drives it everywhere else).
+            await updateMyPulseName(uid, renamingPulse.pulseId, name);
+            setRenamingPulse(null);
+          }}
         />
       )}
 

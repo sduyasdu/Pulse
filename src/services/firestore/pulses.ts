@@ -169,6 +169,12 @@ export async function updateMyPulseRole(uid: string, pulseId: string, role: Puls
   await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { role }).catch(() => {});
 }
 
+/** Keep this user's own denormalized dashboard name in sync (self-write only) —
+ * e.g. after renaming a Pulse from the dashboard card menu. */
+export async function updateMyPulseName(uid: string, pulseId: string, name: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { name }).catch(() => {});
+}
+
 export function subscribePulse(pulseId: string, cb: (pulse: Pulse | null) => void): () => void {
   return onSnapshot(doc(db, "pulses", pulseId), (snap) => cb(snap.exists() ? (snap.data() as Pulse) : null));
 }

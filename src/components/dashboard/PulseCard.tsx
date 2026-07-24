@@ -13,6 +13,7 @@ const ROLE_LABEL: Record<MyPulseIndexEntry["role"], string> = {
 
 interface PulseCardProps {
   entry: MyPulseIndexEntry;
+  onRenameClick: () => void;
   onInviteClick: () => void;
   onDuplicateClick: () => void;
   onArchive: () => void;
@@ -21,7 +22,7 @@ interface PulseCardProps {
   onLeave: (pt: { clientX: number; clientY: number }) => void;
 }
 
-export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, onUnarchive, onDelete, onLeave }: PulseCardProps) {
+export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClick, onArchive, onUnarchive, onDelete, onLeave }: PulseCardProps) {
   const canInvite = entry.role === "owner" || entry.role === "editor";
   const isOwner = entry.role === "owner";
   const archived = !!entry.archived;
@@ -58,6 +59,9 @@ export function PulseCard({ entry, onInviteClick, onDuplicateClick, onArchive, o
               className="absolute right-0 mb-1 rounded-lg border py-1"
               style={{ bottom: "100%", zIndex: 30, minWidth: 168, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
             >
+              {canInvite && (
+                <MenuItem label="Rename…" icon="edit" onClick={(e) => { stop(e); setMenuOpen(false); onRenameClick(); }} />
+              )}
               {canInvite && !archived && (
                 <MenuItem label="Invite collaborator" icon="person_add" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
               )}
