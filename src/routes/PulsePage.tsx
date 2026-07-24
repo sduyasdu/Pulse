@@ -394,22 +394,6 @@ export function PulsePage() {
               onTimelineBoundsChange={setTimelineBounds}
             />
           )}
-
-          {/* Comments drawer — overlays the right of the canvas so toggling it
-              doesn't reflow the board/timeline. Hidden by default. */}
-          {commentsOpen && (
-            <div className="absolute flex flex-col" style={{ right: 0, top: 0, bottom: 0, width: 360, maxWidth: "92%", background: "#FFFFFF", borderLeft: "1px solid #E2DFD9", boxShadow: "-10px 0 28px rgba(15,23,42,0.10)", zIndex: 30 }}>
-              <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>
-                <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Comments</span>
-                <button onClick={() => setCommentsOpen(false)} className="no-press" style={{ color: "#94A3B8", display: "flex" }} title="Hide comments">
-                  <Icon name="close" size={18} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <AllCommentsPanel pulseId={pulseId} onSelectTask={handleSelect} />
-              </div>
-            </div>
-          )}
         </div>
 
         {viewMode === "canvas" && (assignPanelOpen ? (
@@ -484,6 +468,23 @@ export function PulsePage() {
             labelWidth={sidebarOpen ? 320 : 30}
           />
         </div>
+        )}
+
+        {/* Comments drawer — overlays the right edge of the whole content area
+            (canvas + assignment-by-resource panel) so toggling it doesn't
+            reflow anything. Hidden by default. */}
+        {commentsOpen && (
+          <div className="absolute flex flex-col" style={{ right: 0, top: 0, bottom: 0, width: 360, maxWidth: "92%", background: "#FFFFFF", borderLeft: "1px solid #E2DFD9", boxShadow: "-10px 0 28px rgba(15,23,42,0.10)", zIndex: 40 }}>
+            <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>
+              <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Comments</span>
+              <button onClick={() => setCommentsOpen(false)} className="no-press" style={{ color: "#94A3B8", display: "flex" }} title="Hide comments">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <AllCommentsPanel pulseId={pulseId} onSelectTask={handleSelect} />
+            </div>
+          </div>
         )}
       </div>
     </div>
