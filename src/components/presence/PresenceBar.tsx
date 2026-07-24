@@ -55,19 +55,19 @@ export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; u
   const shown = others.slice(0, 4);
   const ring = dark ? "#123359" : "#FFFFFF";
   return (
-    <div className="flex items-center" title={`${others.length} other${others.length === 1 ? "" : "s"} viewing`}>
-      {shown.map((p, i) => (
+    <div className="presence-stack flex items-center" title={`${others.length} other${others.length === 1 ? "" : "s"} viewing`}>
+      {shown.map((p) => (
         <span
           key={p.uid}
           title={p.email}
-          className="mono flex items-center justify-center"
-          style={{ width: 22, height: 22, borderRadius: "50%", background: colorForName(p.uid), color: "#fff", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, marginLeft: i === 0 ? 0 : -7, flexShrink: 0 }}
+          className="presence-avatar mono flex items-center justify-center"
+          style={{ width: 22, height: 22, borderRadius: "50%", background: colorForName(p.uid), color: "#fff", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, flexShrink: 0 }}
         >
           {initials(p.email)}
         </span>
       ))}
       {others.length > shown.length && (
-        <span className="mono flex items-center justify-center" style={{ width: 22, height: 22, borderRadius: "50%", background: dark ? "#1B3A63" : "#E2E8F0", color: dark ? "#F0A875" : "#475569", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, marginLeft: -7 }}>
+        <span className="presence-avatar mono flex items-center justify-center" style={{ width: 22, height: 22, borderRadius: "50%", background: dark ? "#1B3A63" : "#E2E8F0", color: dark ? "#F0A875" : "#475569", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, flexShrink: 0 }}>
           +{others.length - shown.length}
         </span>
       )}

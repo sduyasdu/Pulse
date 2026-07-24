@@ -107,6 +107,36 @@ button:disabled {
   transform: none;
 }
 
+/* Live-presence avatar stack (PresenceBar). Overlapped by default; on hover the
+   avatars fan apart and lift so each is legible. Follows the hover-effects
+   skill: the spread is decorative (who's viewing is also in the container
+   title), so it's gated behind (hover: hover) — it never fires or sticks on
+   touch, where the stack simply stays overlapped — and motion is disabled under
+   reduced-motion. */
+.presence-avatar {
+  margin-left: -7px;
+  transition:
+    margin-left 0.16s ease,
+    transform 0.16s ease;
+}
+.presence-avatar:first-child {
+  margin-left: 0;
+}
+@media (hover: hover) {
+  .presence-stack:hover .presence-avatar {
+    margin-left: 2px;
+    transform: translateY(-2px);
+  }
+  .presence-stack:hover .presence-avatar:first-child {
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .presence-avatar {
+    transition: none;
+  }
+}
+
 /* Suppress the browser's long-press text-selection / iOS image callout on the
    interactive canvas and resource panel (long-press is our select gesture).
    Inputs/textareas stay selectable so editing still works. */
