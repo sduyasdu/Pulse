@@ -22,10 +22,10 @@ export function ResourceBadge({ resourceId, size = 16, title, ring, style }: { r
   };
 
   if (linkedPhoto) {
-    return <img src={linkedPhoto} alt={tip} title={tip} style={{ ...base, objectFit: "cover", display: "block" }} />;
+    return <img src={linkedPhoto} alt={tip} title={tip} className="hoverable--enlarge" style={{ ...base, objectFit: "cover", display: "block" }} />;
   }
   return (
-    <span className="mono flex items-center justify-center" title={tip} style={{ ...base, background: colorForName(resourceId), color: "#fff", fontWeight: 700, fontSize: Math.max(7, Math.round(size * 0.44)) }}>
+    <span className="hoverable--enlarge mono flex items-center justify-center" title={tip} style={{ ...base, background: colorForName(resourceId), color: "#fff", fontWeight: 700, fontSize: Math.max(7, Math.round(size * 0.44)) }}>
       {initials}
     </span>
   );

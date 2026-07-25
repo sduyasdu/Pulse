@@ -151,6 +151,26 @@ button:disabled {
   }
 }
 
+/* Variant: enlarge on hover — grows the element 50% (used for the small
+   resource avatar badges so the picture/initials are readable on hover).
+   Positioned so it lifts above its neighbours while enlarged. Touch-safe and
+   motion-safe. */
+.hoverable--enlarge {
+  position: relative;
+  transition: transform 0.14s ease;
+}
+@media (hover: hover) {
+  .hoverable--enlarge:hover {
+    transform: scale(1.5);
+    z-index: 5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoverable--enlarge {
+    transition: none;
+  }
+}
+
 /* Live-presence avatar stack (PresenceBar): the avatars overlap. Its hover
    highlight is the canvas-task ring (.hoverable--ring on the container), so the
    badge reacts like a task box. Rounded so the ring hugs the circular cluster. */

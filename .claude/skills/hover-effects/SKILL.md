@@ -135,6 +135,14 @@ Defined variants:
   ```tsx
   <div className="hoverable--ring rounded-full …">…</div>
   ```
+- **`.hoverable--enlarge`** — grows the element 50% (`transform: scale(1.5)`)
+  and lifts it above neighbours (`position: relative; z-index`). Used on the
+  small resource avatar badges (`ResourceBadge`) so the picture/initials become
+  readable on hover. Note it can clip inside `overflow: hidden` containers
+  (e.g. canvas/Kanban cards).
+  ```tsx
+  <span className="hoverable--enlarge …">…</span>
+  ```
 - The global `button:hover` scale is a *baseline affordance*, not a substitute
   for choosing a hover — it's the "standard/default" this skill tells you to
   replace with an explicit one.
