@@ -1,8 +1,10 @@
 # Pulse — Granular Permissions Specification
 
-Status: **Proposal — role set fixed by product owner; decisions open (P1–P12)** ·
+Status: **Proposal — role set fixed by product owner; P11 & P12 resolved; P1–P10 open** ·
 Scope: designs a **more granular per-Pulse permissions system** on top of today's
 coarse owner/editor/viewer model. Spec/design only — no application code changes.
+Related: `Collaboration-Spec.md`, `Server-Functions-Spec.md` (SF1 — the denorm
+maintainer this spec's scoped roles rely on).
 
 The product owner has fixed the shipped per-Pulse role presets. In addition to
 **owner** (unchanged: full control + manage members + delete), there are four presets:
@@ -17,9 +19,10 @@ The product owner has fixed the shipped per-Pulse role presets. In addition to
 The capability/permission-set model in §3.2 is the **underlying** engine; the five
 presets above are the only things the everyday UI exposes. Everything is grounded in
 what `firestore.rules` can enforce and is backward-compatible (existing viewer →
-Full Viewer, existing editor → Editor, no migration write). Builds on and does not
-contradict `Collaboration-Spec.md` (Teams, copy-link joins, D1–D14; notably **D11b**:
-a per-Pulse grant can only *raise* capability above the team floor).
+Full Viewer, existing editor → Editor, no migration write). Builds on
+`Collaboration-Spec.md` (Teams, copy-link joins, D1–D14) but **supersedes D11b**: a
+per-Pulse grant is now **authoritative for that Pulse and may narrow *or* raise** the
+team-role floor (product owner: raise-only removed — see §6, P11).
 
 ---
 
@@ -111,8 +114,9 @@ Scenarios the three flat roles can't express — now realized by the four preset
 - Preserve every current invariant: self-owned `users/{uid}/myPulses` index; a member
   may only self-write their own membership `photoURL` (and one new hint field, §7);
   **no role/scope self-escalation**; ≥1 owner always (`CollaboratorsDialog.tsx:39-40`).
-- Compose with Teams (Collaboration-Spec §3.2): team role is a **floor**; per-Pulse
-  grants only **raise** (D11b).
+- Compose with Teams (Collaboration-Spec §3.2): a per-Pulse grant is **authoritative for
+  that Pulse — it overrides the team role, narrowing or raising** (supersedes D11b; §6,
+  P11). The team role applies only where the member has no per-Pulse grant.
 
 **Non-goals (this round)**
 
@@ -277,11 +281,12 @@ leadUid?: string | null;   // linkedUid of the resource in `feature.lead`. Enabl
   assignments live in `Feature.children[].resources` (array-of-objects), which rules
   can't iterate — the denorm flattens both into one scalar array.
 - `leadUid` mirrors `feature.lead` (a resource id) as the lead's account uid.
-- **Maintainer:** client-maintained in v1 (the write path already has the full
-  resource roster in `pulseStore`); a Cloud Function is the later hardening (P12).
-  When a `Resource.linkedUid` changes, every referencing feature's `assignedUids`/
-  `leadUid` must be updated — a bounded fan-out the linking client already performs
-  for `myResourceIds`.
+- **Maintainer: client-maintained now (P12 resolved).** The write path already has the
+  full resource roster in `pulseStore`, so the client writes both denorms on every
+  feature write and performs the `linkedUid`-change fan-out (updating every referencing
+  feature — a bounded loop it already runs for `myResourceIds`). The server hardening is
+  **not** an open decision — it's tracked as **`Server-Functions-Spec.md` SF1** (Feature
+  denormalization maintainer), which becomes authoritative when it ships.
 
 ### 4.3 My-Beat Viewer — restricted **read** (the query-shape crux)
 
@@ -409,7 +414,7 @@ index. The clean case.
 |---|---|---|
 | My-Beat Viewer must issue the `array-contains` query | Firestore lists gate on the query, not results | Client owns the query shape; a wrong query fails *closed* (rejected), never leaks. |
 | Field narrowing within a Task-Lead's led task | Brittle field allow-list | Blast radius = tasks the lead already owns; rules still enforce *which* tasks. |
-| `assignedUids`/`leadUid` integrity | Client maintains the denorm | Written only by editors (`editScope:'all'`); scoped roles can't write features, so can't forge their own inclusion/lead. |
+| `assignedUids`/`leadUid` integrity | Client maintains the denorm (now); `Server-Functions-Spec.md` SF1 later | Written only by editors (`editScope:'all'`); scoped roles can't write features, so can't forge their own inclusion/lead. A stale denorm fails **closed** (fewer tasks, never more). |
 | "≥1 owner always" | No count/query in rules | Existing client guard; self-write can't drop own owner caps. |
 
 None of these lets a user reach **another member's data** beyond their scope or touch
@@ -450,22 +455,26 @@ the Pulse lifecycle — the acceptable v1 line.
 
 ## 6. Interaction with the Teams / workspace layer
 
-Reuses Collaboration-Spec §3.2 (union-cascade) and **D11b** (team role is a floor;
-per-Pulse grants only raise):
+Supersedes Collaboration-Spec **D11b** (raise-only). **A per-Pulse grant overrides the
+team role for that Pulse — it can narrow as well as raise** (product owner decision,
+P11 resolved):
 
 - **Team roles stay owner/editor/viewer** (Collaboration-Spec §3.2), mapping to the
-  Owner/Editor/Full-Viewer bundles. My-Beat Viewer and Task Lead are **per-Pulse-only**
-  presets this round (team-level scoping deferred, P11).
-- **Effective capability = union.** Each boolean OR-ed; `readScope` takes the broader
-  (`all` > `beat`); `editScope` takes the broader (`all` > `lead` > `none`). So a team
-  Full Viewer granted Task Lead on one Pulse gets lead-edit there but never drops below
-  full read; a team member can never be *narrowed* to a beat by a per-Pulse grant
-  (D11b). Note: this means **My-Beat Viewer cannot restrict a team member who already
-  has a full-read team floor** — beat restriction only bites for guests (no team
-  membership) or team viewers-and-below. Flag in P11.
-- **Rule shape.** The cascade already `get()`s the pulse doc for `workspaceId`
-  (Collaboration-Spec §4); `myCaps` gains an OR arm folding the workspace-role bundle.
-  Reads stay `isPulseMember || isWorkspaceMember`.
+  Owner/Editor/Full-Viewer bundles. They are the **default/floor only when the member
+  has no per-Pulse membership doc** on that Pulse.
+- **Per-Pulse membership is authoritative.** If a `pulseMembers/{uid}` doc exists for
+  the Pulse, **its `caps` fully replace** the team-role bundle — higher *or* lower. So a
+  team Editor can be set to **My-Beat Viewer** or **Task Lead** on one Pulse and is
+  genuinely restricted there; scoped roles now bite team members too, not just guests.
+- **Effective capability (no union):** `caps = pulseMembersDoc ? caps(pulseMembersDoc)
+  : bundle(workspaceRole)`. Precedence is *presence of the per-Pulse doc*, not
+  max-of-the-two.
+- **Rule shape (changes from the old OR-cascade).** Reads/writes can **no longer** be a
+  simple `isPulseMember || isWorkspaceMember` OR — that would re-grant the team floor and
+  defeat a narrowing grant. Instead: `myCaps(pulseId)` = if the caller's
+  `pulseMembers/{uid}` doc `exists()`, use its materialized `caps`; **else** `get()` the
+  pulse doc for `workspaceId` and use the workspace-role bundle. Every gate (read, edit,
+  beat, lead, manage) evaluates against that single resolved `caps`.
 
 ---
 
@@ -566,13 +575,13 @@ docs working. No destructive migration.
 10. **P10 — Materialized caps vs derive-in-rules.** *Recommend:* materialize on the
     member doc (rules read values; one `get()`), legacy fallback, no backfill.
     *Confirm the client↔rules preset table sync is acceptable.*
-11. **P11 — Teams composition.** *Recommend:* teams stay owner/editor/viewer; My-Beat/
-    Task-Lead are per-Pulse grants that only *raise* the team floor (D11b) — which
-    means a beat restriction **cannot narrow** a member who already has a full-read
-    team floor (bites only guests/team-viewers). *Confirm this is the intended
-    interaction.*
-12. **P12 — `assignedUids`/`leadUid` maintainer.** *Recommend:* client-maintained in
-    v1 (serverless; the write path has the roster), server-maintained later alongside
-    the assignment-notification function (Collaboration-Spec §3.6). *Confirm
-    client-first is acceptable, including the `linkedUid`-change fan-out.*
+11. **P11 — Teams composition. ✅ RESOLVED (raise-only removed).** A per-Pulse grant is
+    **authoritative for that Pulse and may narrow *or* raise** the team floor (§6);
+    presence of a `pulseMembers` doc replaces the team role. So My-Beat Viewer / Task
+    Lead now restrict team members too. Supersedes Collaboration-Spec D11b; rules resolve
+    a single `caps` (per-Pulse doc if present, else workspace role) — **no** OR-cascade.
+12. **P12 — `assignedUids`/`leadUid` maintainer. ✅ RESOLVED (client-maintained now).**
+    The client maintains both denorms and the `linkedUid`-change fan-out in v1. Server
+    hardening is tracked as **`Server-Functions-Spec.md` SF1** (not a loose open
+    decision); it becomes authoritative when it ships.
 ```
