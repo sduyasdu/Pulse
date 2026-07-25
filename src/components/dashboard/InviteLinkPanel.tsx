@@ -3,7 +3,7 @@ import type { InviteLink, PulseRole } from "@/types";
 import { getPulseInviteLink, setPulseInviteLink, clearPulseInviteLink } from "@/services/firestore/joinLinks";
 
 const ROLES: { value: PulseRole; label: string; hint: string }[] = [
-  { value: "viewer", label: "Viewer", hint: "Read-only" },
+  { value: "viewer", label: "Full Viewer", hint: "Reads & comments" },
   { value: "editor", label: "Editor", hint: "Can edit everything" },
 ];
 

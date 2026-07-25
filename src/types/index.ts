@@ -70,16 +70,44 @@ export interface GraphConfig {
 
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = { stepPx: 16, workPerStep: 1 };
 
-/** owner: full control incl. delete Pulse, manage members.
- *  editor: can edit everything §3–§6 covers.
- *  viewer: read-only. */
-export type PulseRole = "owner" | "editor" | "viewer";
+/** Per-Pulse role (Permissions-Spec §3.3).
+ *  owner: full control incl. delete Pulse, manage members.
+ *  editor: edits everything §3–§6 covers.
+ *  fullViewer: read-only on the whole Pulse (may comment).
+ *  myBeatViewer: read-only, only tasks their linked resource is on.
+ *  taskLead: edits only the tasks they lead; reads the rest.
+ *  custom: capabilities set explicitly (see `PulseMember.caps`).
+ *  "viewer" is the LEGACY value for fullViewer — read as fullViewer everywhere
+ *  (see domain/permissions `canonicalRole`); still the stored value until the
+ *  enforcement phase migrates it. */
+export type PulseRole = "owner" | "editor" | "fullViewer" | "myBeatViewer" | "taskLead" | "custom" | "viewer";
+
+export type ReadScope = "all" | "beat"; // "beat" = only features where the member's linked uid ∈ assignedUids
+export type EditScope = "none" | "lead" | "all"; // "lead" = only features where leadUid == the member's uid
+
+/** A member's materialized permission bundle (Permissions-Spec §3.2). Firestore
+ * rules read these values directly once enforcement ships. Absent on legacy
+ * docs → derived from `role` via the preset (see domain/permissions `capsOf`). */
+export interface Capabilities {
+  readScope: ReadScope;
+  editScope: EditScope;
+  editEpics: boolean;
+  editResources: boolean;
+  editConfig: boolean;
+  comment: boolean;
+  invite: boolean;
+  manageMembers: boolean;
+  deletePulse: boolean;
+}
 
 export interface PulseMember {
   uid: string;
   email: string;
   role: PulseRole;
   joinedAt: Timestamp;
+  /** Materialized capability bundle for `role` (Permissions-Spec §4.1). Absent
+   * on legacy docs — resolved from `role` by the preset fallback. */
+  caps?: Capabilities;
   /** Present when the member joined via a copy-link; the security rule checks
    * it matches the Pulse's active invite token. */
   joinToken?: string;

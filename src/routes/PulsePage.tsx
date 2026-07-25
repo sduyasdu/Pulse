@@ -11,7 +11,7 @@ import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
-import type { PulseRole } from "@/types";
+import { roleMeta } from "@/domain/permissions";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { KanbanView } from "@/components/kanban/KanbanView";
@@ -23,8 +23,6 @@ import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
-
-const ROLE_LABEL: Record<PulseRole, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer · read-only" };
 
 type RightTab = "details" | "team" | "capacity";
 
@@ -340,7 +338,7 @@ export function PulsePage() {
         graph={graph}
         onSetGraphConfig={(stepPx, workPerStep) => void setGraphConfig(stepPx, workPerStep)}
         canEdit={canEdit}
-        roleLabel={ROLE_LABEL[myRole]}
+        roleLabel={roleMeta(myRole).label}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden relative">

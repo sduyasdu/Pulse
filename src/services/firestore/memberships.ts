@@ -1,6 +1,7 @@
 import { collection, deleteDoc, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { PulseMember, PulseRole } from "@/types";
+import { capsForRole } from "@/domain/permissions";
 
 export function subscribePulseMembers(pulseId: string, cb: (members: PulseMember[]) => void): () => void {
   return onSnapshot(collection(db, "pulses", pulseId, "pulseMembers"), (snap) =>
@@ -25,9 +26,11 @@ export async function syncMyMemberPhoto(pulseId: string, uid: string, photoURL: 
   await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { photoURL }).catch(() => {});
 }
 
-/** Owner-only (enforced by firestore.rules). */
+/** Owner-only (enforced by firestore.rules). Materializes the role's capability
+ * bundle alongside the role (Permissions-Spec §4.1) so it's ready for rules
+ * enforcement; the caps are inert until that phase lands. */
 export async function setMemberRole(pulseId: string, uid: string, role: PulseRole): Promise<void> {
-  await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { role });
+  await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { role, caps: capsForRole(role) });
 }
 
 /** Owner-only (enforced by firestore.rules). */

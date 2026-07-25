@@ -2,14 +2,9 @@ import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { Link } from "react-router-dom";
 import type { MyPulseIndexEntry } from "@/types";
+import { roleMeta } from "@/domain/permissions";
 import { PulseThumbnail } from "./PulseThumbnail";
 import { usePulseSummary } from "./usePulseSummary";
-
-const ROLE_LABEL: Record<MyPulseIndexEntry["role"], string> = {
-  owner: "Owner",
-  editor: "Editor",
-  viewer: "Viewer",
-};
 
 interface PulseCardProps {
   entry: MyPulseIndexEntry;
@@ -114,7 +109,7 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
           <div className="mt-1.5 flex items-center gap-1.5">
             {!isOwner && (
               <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#F7E8DA", color: "#D85A28" }}>
-                {ROLE_LABEL[entry.role]}
+                {roleMeta(entry.role).label}
               </span>
             )}
             {archived && (

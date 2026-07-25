@@ -3,6 +3,7 @@ import type { Invite, PulseMember, PulseRole } from "@/types";
 import { fetchInvites, revokeInvite } from "@/services/firestore/invites";
 import { removeMember, setMemberRole, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
+import { roleMeta, ASSIGNABLE_ROLES } from "@/domain/permissions";
 import { InviteLinkPanel } from "./InviteLinkPanel";
 
 interface CollaboratorsDialogProps {
@@ -16,17 +17,11 @@ interface CollaboratorsDialogProps {
   onLeave?: () => void;
 }
 
-const ROLE_BADGE: Record<PulseRole, { label: string; bg: string; fg: string }> = {
-  owner: { label: "Owner", bg: "#FEF0E7", fg: "#C2410C" },
-  editor: { label: "Editor", bg: "#EAF1FB", fg: "#1D4ED8" },
-  viewer: { label: "Viewer", bg: "#F1F5F9", fg: "#475569" },
-};
-
 function RoleBadge({ role }: { role: PulseRole }) {
-  const b = ROLE_BADGE[role];
+  const m = roleMeta(role);
   return (
-    <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 10, background: b.bg, color: b.fg, textTransform: "uppercase" }}>
-      {b.label}
+    <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 10, background: m.badgeBg, color: m.badgeFg, textTransform: "uppercase" }}>
+      {m.label}
     </span>
   );
 }
@@ -122,14 +117,15 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
                   {editable ? (
                     <>
                       <select
-                        value={m.role}
+                        value={m.role === "fullViewer" ? "viewer" : m.role}
                         onChange={(e) => void handleSetRole(m, e.target.value as PulseRole)}
                         className="mono rounded border px-1.5 py-1 text-[11px]"
                         style={{ borderColor: "#E2DFD9", color: "#334155" }}
                         title="Change this collaborator's permission"
                       >
-                        <option value="editor">Editor</option>
-                        <option value="viewer">Viewer</option>
+                        {ASSIGNABLE_ROLES.map((r) => (
+                          <option key={r.value} value={r.value} title={r.hint}>{r.label}</option>
+                        ))}
                       </select>
                       <button
                         onClick={(e) => void handleMakeOwner(m, e)}
