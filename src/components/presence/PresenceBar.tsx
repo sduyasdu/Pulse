@@ -65,7 +65,7 @@ function PresenceAvatar({ p, photo, size, ring, className }: { p: PresenceEntry;
 /** Avatar stack of who else is viewing this Pulse right now. Hovering (pointer
  * devices) highlights it; clicking toggles a list of names — the tap-reachable
  * equivalent of the hover, so who's present is available on touch too. */
-export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; uid?: string; email: string; dark?: boolean }) {
+export function PresenceBar({ pulseId, uid, email, dark, size = 22 }: { pulseId?: string; uid?: string; email: string; dark?: boolean; size?: number }) {
   const entries = usePresence(pulseId, uid, email);
   const members = usePulseStore((s) => s.members);
   const others = entries.filter((p) => p.uid !== uid);
@@ -85,10 +85,10 @@ export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; u
         aria-label={`${others.length} other${others.length === 1 ? "" : "s"} viewing`}
       >
         {shown.map((p) => (
-          <PresenceAvatar key={p.uid} p={p} photo={photoOf(p.uid)} size={22} ring={ring} className="presence-avatar" />
+          <PresenceAvatar key={p.uid} p={p} photo={photoOf(p.uid)} size={size} ring={ring} className="presence-avatar" />
         ))}
         {others.length > shown.length && (
-          <span className="presence-avatar mono flex items-center justify-center" style={{ width: 22, height: 22, borderRadius: "50%", background: dark ? "#1B3A63" : "#E2E8F0", color: dark ? "#F0A875" : "#475569", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, flexShrink: 0 }}>
+          <span className="presence-avatar mono flex items-center justify-center" style={{ width: size, height: size, borderRadius: "50%", background: dark ? "#1B3A63" : "#E2E8F0", color: dark ? "#F0A875" : "#475569", fontSize: Math.max(8, Math.round(size * 0.36)), fontWeight: 700, border: `2px solid ${ring}`, flexShrink: 0 }}>
             +{others.length - shown.length}
           </span>
         )}

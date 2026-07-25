@@ -39,6 +39,7 @@ export interface CanvasViewHandle {
   zoomStep: (delta: number) => void;
   resetView: () => void;
   centerOnToday: () => void;
+  centerOnDay: (day: number) => void;
   addTaskAtCenter: () => Promise<string>;
   addEpicAtCenter: () => Promise<string>;
 }
@@ -66,6 +67,9 @@ interface CanvasViewProps {
   /** "My Pulse": when set, only tasks involving one of these resource ids (the
    * viewer's linked account) count as matching. Null = off. */
   myResourceIds: string[] | null;
+  /** Day-index the vertical marker line sits on (a selectable reference date;
+   * defaults to today). */
+  referenceDay: number;
   canEdit: boolean;
   onTimelineBoundsChange?: (bounds: { startDay: number; endDay: number; dayWidth: number }) => void;
 }
@@ -73,7 +77,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, canEdit, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, referenceDay, canEdit, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -670,6 +674,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     centerOnToday: () => {
       setOffsetX(TODAY_LEFT_MARGIN_PX / viewZoom - dayWidth * todayIndex());
     },
+    centerOnDay: (day: number) => {
+      setOffsetX(TODAY_LEFT_MARGIN_PX / viewZoom - dayWidth * day);
+    },
     addTaskAtCenter: async () => {
       const cont = containerRef.current;
       const scrollTop = cont ? cont.scrollTop : 0;
@@ -746,8 +753,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
             {timeline.secondary.map((t) => (
               <div key={t.day} style={{ position: "absolute", left: xForDay(t.day), top: 0, height: contentHeight, width: 1, background: "#F1F3F5", pointerEvents: "none" }} />
             ))}
-            <div style={{ position: "absolute", left: xForDay(todayIndex()), top: 0, height: contentHeight, width: 2, background: "#EE7240", opacity: 0.7, pointerEvents: "none" }}>
-              <span className="mono" style={{ position: "absolute", top: 4, left: 6, fontSize: 10, color: "#D85A28", background: "#F7E8DA", padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap" }}>today</span>
+            <div style={{ position: "absolute", left: xForDay(referenceDay), top: 0, height: contentHeight, width: 2, background: "#EE7240", opacity: 0.7, pointerEvents: "none" }}>
+              <span className="mono" style={{ position: "absolute", top: 4, left: 6, fontSize: 10, color: "#D85A28", background: "#F7E8DA", padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap" }}>
+                {referenceDay === todayIndex() ? "today" : dateForDay(referenceDay).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+              </span>
             </div>
 
             {panArmed && (

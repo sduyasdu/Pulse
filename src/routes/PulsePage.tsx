@@ -156,6 +156,9 @@ export function PulsePage() {
   const scale = 1;
   const [viewZoom, setViewZoom] = useState(1);
   const [viewMode, setViewMode] = useState<"canvas" | "board">("canvas");
+  // The selectable reference date the canvas marker line sits on (defaults to
+  // today); picking a date moves the line and centers the view on it.
+  const [referenceDay, setReferenceDay] = useState(() => todayIndex());
   const [density, setDensity] = useState<Density>("week");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<RightTab>("team");
@@ -175,6 +178,10 @@ export function PulsePage() {
   const [timelineBounds, setTimelineBounds] = useState({ startDay: 0, endDay: 0, dayWidth: BASE_DAY_WIDTH });
 
   const canvasRef = useRef<CanvasViewHandle>(null);
+  const onReferenceDayChange = useCallback((day: number) => {
+    setReferenceDay(day);
+    canvasRef.current?.centerOnDay(day);
+  }, []);
   const preShrinkRef = useRef<{ epics: { id: string; y0: number; y1: number; manualY0?: number | null; manualY1?: number | null }[]; features: { id: string; y: number }[] } | null>(null);
 
   // Drop any filtered epics that get deleted, so the canvas doesn't silently
@@ -293,8 +300,8 @@ export function PulsePage() {
         onInvite={() => setShowInvite(true)}
         commentsOpen={commentsOpen}
         onToggleComments={() => setCommentsOpen((v) => !v)}
-        presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark />}
-        notifications={<NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark />}
+        presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark size={28} />}
+        notifications={<NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark size={32} />}
         viewMode={viewMode}
         setViewMode={setViewMode}
         viewZoom={viewZoom}
@@ -304,7 +311,8 @@ export function PulsePage() {
         setDensity={setDensity}
         onResetView={() => canvasRef.current?.resetView()}
         onFitRoadmap={() => canvasRef.current?.fitRoadmap()}
-        onJumpToToday={() => canvasRef.current?.centerOnToday()}
+        referenceDay={referenceDay}
+        onReferenceDayChange={onReferenceDayChange}
         onUndo={() => void undo()}
         onRedo={() => void redo()}
         canUndo={canUndo}
@@ -413,6 +421,7 @@ export function PulsePage() {
               epicFilter={epicFilter}
               compactFilter={compactFilter}
               myResourceIds={myResourceFilter}
+              referenceDay={referenceDay}
               canEdit={canEdit}
               onTimelineBoundsChange={setTimelineBounds}
             />

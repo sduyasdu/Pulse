@@ -15,7 +15,7 @@ function when(ms: number): string {
 
 /** Bell with a live unread count and a dropdown of this Pulse's notifications
  * for the current user. Clicking one opens its task. */
-export function NotificationsBell({ pulseId, uid, onOpenTask, dark }: { pulseId?: string; uid?: string; onOpenTask: (featureId: string) => void; dark?: boolean }) {
+export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }: { pulseId?: string; uid?: string; onOpenTask: (featureId: string) => void; dark?: boolean; size?: number }) {
   const [items, setItems] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -37,12 +37,12 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark }: { pulseId?
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative flex items-center justify-center rounded"
-        style={{ width: 26, height: 26, background: dark ? "#1B3A63" : "#F1EFE8", color: dark ? "#EE7240" : "#64748B", fontSize: 14 }}
+        className="relative flex items-center justify-center rounded-lg"
+        style={{ width: size, height: size, background: dark ? "#1B3A63" : "#F1EFE8", color: dark ? "#EE7240" : "#64748B", fontSize: 14 }}
         title="Notifications"
         aria-label="Notifications"
       >
-        <Icon name="notifications" size={15} />
+        <Icon name="notifications" size={Math.round(size * 0.58)} />
         {unread > 0 && (
           <span className="mono" style={{ position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, borderRadius: 8, background: "#E5484D", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
             {unread > 9 ? "9+" : unread}

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { GraphConfig } from "@/types";
 import type { Density } from "@/domain/constants";
 import { DENSITY_HINT, clamp } from "@/domain/constants";
-import { dateForDay, todayIndex } from "@/domain/dateUtils";
+import { toDateInputValue, dayIndexFromDateInputValue } from "@/domain/dateUtils";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
 import { Icon } from "@/components/shared/Icon";
@@ -25,7 +25,8 @@ interface ToolbarProps {
   setDensity: (d: Density) => void;
   onResetView: () => void;
   onFitRoadmap: () => void;
-  onJumpToToday: () => void;
+  referenceDay: number;
+  onReferenceDayChange: (day: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -73,7 +74,8 @@ export function Toolbar({
   setDensity,
   onResetView,
   onFitRoadmap,
-  onJumpToToday,
+  referenceDay,
+  onReferenceDayChange,
   onUndo,
   onRedo,
   canUndo,
@@ -136,14 +138,21 @@ export function Toolbar({
             <Icon name="add" size={12} /> Invite
           </button>
         )}
-        <button
-          onClick={onJumpToToday}
-          className="mono px-2 py-0.5 rounded transition-colors hover:brightness-125"
-          style={{ fontSize: 9, background: "#1B3A63", color: "#EE7240" }}
-          title="Jump the canvas back to today"
-        >
-          Today · {dateForDay(todayIndex()).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
-        </button>
+        <input
+          type="date"
+          value={toDateInputValue(referenceDay)}
+          onChange={(e) => { const d = dayIndexFromDateInputValue(e.target.value); if (Number.isFinite(d)) onReferenceDayChange(d); }}
+          title="Marker date — pick a date to move the canvas line there and center on it"
+          className="mono rounded px-2 py-0.5"
+          style={{ colorScheme: "dark", fontSize: 10, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B", outline: "none" }}
+        />
+        <div className="flex rounded overflow-hidden" style={{ background: "#1B3A63" }} title="Switch between the timeline canvas and the Kanban board">
+          {(["canvas", "board"] as const).map((m) => (
+            <button key={m} onClick={() => setViewMode(m)} className="px-2.5 py-1 text-xs capitalize" style={{ background: viewMode === m ? "#EE7240" : "transparent", color: viewMode === m ? "#0A1428" : "#EE7240", fontWeight: 600 }}>
+              {m}
+            </button>
+          ))}
+        </div>
         <div className="flex-1" />
         <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{DENSITY_HINT[density]}</span>
         {canEdit && (
@@ -203,13 +212,6 @@ export function Toolbar({
             </button>
           </div>
         )}
-        <div className="flex rounded overflow-hidden" style={{ background: "#1B3A63" }} title="Switch between the timeline canvas and the Kanban board">
-          {(["canvas", "board"] as const).map((m) => (
-            <button key={m} onClick={() => setViewMode(m)} className="px-2.5 py-1.5 text-xs capitalize" style={{ background: viewMode === m ? "#EE7240" : "transparent", color: viewMode === m ? "#0A1428" : "#EE7240", fontWeight: 600 }}>
-              {m}
-            </button>
-          ))}
-        </div>
 
         {/* My Beat — only tasks involving my linked account. */}
         <button
@@ -288,7 +290,7 @@ export function Toolbar({
         </div>
         {viewMode === "canvas" && (
           <>
-            <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: compactFilter ? "#123359" : "#1B3A63", color: "#EE7240", border: compactFilter ? "1px solid #EE7240" : "1px solid #24406B" }}>
+            <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: compactFilter ? "#EE7240" : "#1B3A63", color: compactFilter ? "#0A1428" : "#EE7240", border: "1px solid " + (compactFilter ? "#EE7240" : "#24406B") }}>
               <Icon name={compactFilter ? "check_box" : "check_box_outline_blank"} size={13} /> Compact filter
             </button>
             <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
@@ -308,15 +310,15 @@ export function Toolbar({
 
         {/* Collaboration cluster — pinned to the far right of the row, in order:
             presence badges, comments toggle, notifications bell. */}
-        <div className="flex items-center gap-2 flex-shrink-0" style={{ borderLeft: "1px solid #24406B", paddingLeft: 8 }}>
+        <div className="flex items-center gap-2.5 flex-shrink-0" style={{ borderLeft: "1px solid #24406B", paddingLeft: 10 }}>
           {presence}
           <button
             onClick={onToggleComments}
             title="Comments"
-            className="flex items-center justify-center rounded"
-            style={{ width: 26, height: 26, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
+            className="flex items-center justify-center rounded-lg"
+            style={{ width: 32, height: 32, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
           >
-            <Icon name="forum" size={15} />
+            <Icon name="forum" size={19} />
           </button>
           {notifications}
         </div>
