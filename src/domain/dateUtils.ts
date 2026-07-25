@@ -32,6 +32,38 @@ export function dayOfWeek(day: number): number {
   return dateForDay(day).getUTCDay();
 }
 
+// ---------------------------------------------------------------------------
+// Date-period filtering (Kanban): today / this week / this month / all.
+// ---------------------------------------------------------------------------
+
+export type DatePeriod = "all" | "today" | "week" | "month";
+
+/** Inclusive [start, end] day-index range for a period, or null for "all".
+ * Week = the Monday–Sunday containing today; Month = the current calendar
+ * month. */
+export function periodDayRange(period: DatePeriod, today: number = todayIndex()): { start: number; end: number } | null {
+  if (period === "all") return null;
+  if (period === "today") return { start: today, end: today };
+  if (period === "week") {
+    const monday = today - ((dayOfWeek(today) + 6) % 7); // shift Sun→6, Mon→0, …
+    return { start: monday, end: monday + 6 };
+  }
+  const d = dateForDay(today);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const first = Math.round((Date.UTC(y, m, 1) - EPOCH_MS) / DAY_MS);
+  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return { start: first, end: first + days - 1 };
+}
+
+/** A task is "active" during a period if its [x, x+duration-1] calendar span
+ * overlaps the period — regardless of whether it started within it. */
+export function taskActiveInPeriod(f: { x: number; duration: number }, period: DatePeriod): boolean {
+  const r = periodDayRange(period);
+  if (!r) return true;
+  return f.x <= r.end && f.x + Math.max(1, f.duration) - 1 >= r.start;
+}
+
 export function isWeekend(day: number): boolean {
   const w = dayOfWeek(day);
   return w === 0 || w === 6;

@@ -4,7 +4,8 @@ import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard, type StatusColumn } from "@/domain/kanban";
 import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants";
-import { fmtDate, todayIndex } from "@/domain/dateUtils";
+import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
+import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
 import { confirmAt } from "@/stores/confirmStore";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
@@ -52,6 +53,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
   const [draggingStatus, setDraggingStatus] = useState<FeatureStatus | null>(null);
   const [editStatuses, setEditStatuses] = useState(false);
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
   // columns (D7). Matching mirrors the canvas so the two views agree.
@@ -62,14 +64,15 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
         const matchesQuery = !q || (f.title || "").toLowerCase().includes(q) || (f.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
         const matchesEpic = epicFilter.size === 0 || (f.epicId != null && epicFilter.has(f.epicId));
         const matchesRes = !filterResource || (f.resources || []).includes(filterResource) || (f.children || []).some((c) => (c.resources || []).includes(filterResource));
-        return matchesQuery && matchesEpic && matchesRes;
+        const matchesDate = taskActiveInPeriod(f, datePeriod);
+        return matchesQuery && matchesEpic && matchesRes && matchesDate;
       }),
-    [features, q, epicFilter, filterResource],
+    [features, q, epicFilter, filterResource, datePeriod],
   );
 
   // When a filter narrows the tasks, don't resurrect the hidden epics as empty
   // bands — only show the epics that actually have matching tasks.
-  const filtered = !!q || epicFilter.size > 0 || !!filterResource;
+  const filtered = !!q || epicFilter.size > 0 || !!filterResource || datePeriod !== "all";
   const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses, !filtered), [visibleFeatures, epics, statuses, filtered]);
   const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
 
@@ -114,6 +117,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #E2DFD9" }}>
         <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Board</span>
         <span className="mono text-xs" style={{ color: "#94A3B8" }}>{visibleFeatures.length} task{visibleFeatures.length === 1 ? "" : "s"}</span>
+        <DatePeriodFilter value={datePeriod} onChange={setDatePeriod} />
         <div className="flex-1" />
         {canEdit && (
           <>

@@ -4,8 +4,9 @@ import type { Epic, Feature, Resource } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard } from "@/domain/kanban";
 import { statusesOf, statusMetaOf, colorForName, hexA } from "@/domain/constants";
-import { dateForDay } from "@/domain/dateUtils";
+import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { staffingColor } from "@/domain/graphEffort";
+import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
 
 interface MobileBoardProps {
   features: Feature[];
@@ -25,26 +26,28 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
   const byId = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
 
   const [query, setQuery] = useState("");
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
   const q = query.trim().toLowerCase();
   // Match on task title, its epic's name, and any assigned resource's name or
-  // initials — same handles as the list view's search.
+  // initials — same handles as the list view's search — plus the date period.
   const filtered = useMemo(
     () =>
-      q
-        ? features.filter((f) => {
-            if ((f.title || "").toLowerCase().includes(q)) return true;
-            const ep = epics.find((e) => e.id === f.epicId);
-            if (ep && ep.name.toLowerCase().includes(q)) return true;
-            return (f.resources || []).some((rid) => {
-              const r = byId[rid];
-              return r && (r.name.toLowerCase().includes(q) || r.initials.toLowerCase().includes(q));
-            });
-          })
-        : features,
-    [features, epics, byId, q],
+      features.filter((f) => {
+        if (!taskActiveInPeriod(f, datePeriod)) return false;
+        if (!q) return true;
+        if ((f.title || "").toLowerCase().includes(q)) return true;
+        const ep = epics.find((e) => e.id === f.epicId);
+        if (ep && ep.name.toLowerCase().includes(q)) return true;
+        return (f.resources || []).some((rid) => {
+          const r = byId[rid];
+          return r && (r.name.toLowerCase().includes(q) || r.initials.toLowerCase().includes(q));
+        });
+      }),
+    [features, epics, byId, q, datePeriod],
   );
 
-  const columns = useMemo(() => buildBoard(filtered, epics, statuses, !q), [filtered, epics, statuses, q]);
+  const narrowed = !!q || datePeriod !== "all";
+  const columns = useMemo(() => buildBoard(filtered, epics, statuses, !narrowed), [filtered, epics, statuses, narrowed]);
   const [active, setActive] = useState<string | null>(null);
   const col = columns.find((c) => c.status === active) ?? columns[0];
 
@@ -70,6 +73,10 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
               </button>
             )}
           </div>
+        </div>
+        {/* Date-period filter — tasks active in the period. */}
+        <div className="px-3 pb-2">
+          <DatePeriodFilter value={datePeriod} onChange={setDatePeriod} />
         </div>
         {/* Status picker — one column at a time. */}
         <div className="flex gap-1.5 overflow-x-auto px-3 pb-2">
