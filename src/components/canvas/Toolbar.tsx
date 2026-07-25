@@ -291,7 +291,7 @@ export function Toolbar({
         {viewMode === "canvas" && (
           <>
             <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: compactFilter ? "#EE7240" : "#1B3A63", color: compactFilter ? "#0A1428" : "#EE7240", border: "1px solid " + (compactFilter ? "#EE7240" : "#24406B") }}>
-              <Icon name={compactFilter ? "check_box" : "check_box_outline_blank"} size={13} /> Compact filter
+              <Icon name={compactFilter ? "collapse_all" : "expand_all"} size={13} /> Compact filter
             </button>
             <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
               <Icon name="timeline" size={13} /> {showDelays ? "Delays on" : "Delays"}
