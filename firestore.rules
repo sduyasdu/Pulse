@@ -57,6 +57,14 @@ service cloud.firestore {
     function isPulseOwner(pulseId) {
       return isPulseMember(pulseId) && pulseRole(pulseId) == 'owner';
     }
+    // Granular edit scope (Permissions-Spec §4): 'all' (owner/editor), 'lead'
+    // (Task Lead — only tasks they lead), or 'none'. Prefer the materialized
+    // caps; fall back to the legacy role for docs written before caps existed.
+    // Callers MUST guard with isPulseMember first (get() on a missing doc fails).
+    function callerEditScope(pulseId) {
+      let m = get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data;
+      return ('caps' in m) ? m.caps.editScope : ((m.role in ['owner', 'editor']) ? 'all' : 'none');
+    }
     // A copy-link self-join is valid when the Pulse has an active `invite` and
     // the membership doc being written carries a joinToken + role matching it.
     // The token is an unguessable capability only reachable via the shared link.
@@ -145,7 +153,9 @@ service cloud.firestore {
               && request.resource.data.uid == resource.data.uid
               && request.resource.data.role == resource.data.role
               && request.resource.data.email == resource.data.email
-              && request.resource.data.joinedAt == resource.data.joinedAt);
+              && request.resource.data.joinedAt == resource.data.joinedAt
+              // Can't self-escalate: only the owner may change caps.
+              && request.resource.data.get('caps', null) == resource.data.get('caps', null));
         // The owner may remove anyone; anyone may remove THEMSELVES (leave).
         allow delete: if isPulseOwner(pulseId) || memberUid == request.auth.uid;
       }
@@ -195,7 +205,16 @@ service cloud.firestore {
 
       match /features/{featureId} {
         allow read: if isPulseMember(pulseId);
-        allow write: if canEditPulse(pulseId);
+        // Create/delete stay editor-scope. Update is allowed for editors, and
+        // for a Task Lead only on a task they currently lead — and they can't
+        // hand the lead off to escape scope (leadUid pinned). (Permissions-Spec §4.4)
+        allow create, delete: if isPulseMember(pulseId) && callerEditScope(pulseId) == 'all';
+        allow update: if isPulseMember(pulseId) && (
+          callerEditScope(pulseId) == 'all'
+          || (callerEditScope(pulseId) == 'lead'
+              && resource.data.get('leadUid', null) == request.auth.uid
+              && request.resource.data.get('leadUid', null) == resource.data.get('leadUid', null))
+        );
       }
 
       // Comments (task-level via targetId, Pulse-level when targetId is null,

@@ -158,6 +158,65 @@ describe("role enforcement within a Pulse", () => {
   });
 });
 
+describe("granular roles (Permissions-Spec §4)", () => {
+  const leadCaps = { readScope: "all", editScope: "lead", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false };
+
+  async function seedLeadFixture() {
+    await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "owner" } });
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "lee"), { uid: "lee", email: "lee@example.com", role: "taskLead", joinedAt: Date.now(), caps: leadCaps });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_led"), { title: "led", x: 0, y: 0, duration: 1, status: "planned", resources: [], leadUid: "lee", assignedUids: ["lee"] });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_other"), { title: "other", x: 0, y: 0, duration: 1, status: "planned", resources: [], leadUid: "zed", assignedUids: ["zed"] });
+    });
+  }
+
+  it("Task Lead may update a task they lead, but not one they don't", async () => {
+    await seedLeadFixture();
+    const lee = dbAs("lee", "lee@example.com");
+    await assertSucceeds(updateDoc(doc(lee, "pulses", "p1", "features", "f_led"), { title: "renamed" }));
+    await assertFails(updateDoc(doc(lee, "pulses", "p1", "features", "f_other"), { title: "sneaky" }));
+  });
+
+  it("Task Lead may not reassign the lead to escape scope", async () => {
+    await seedLeadFixture();
+    const lee = dbAs("lee", "lee@example.com");
+    await assertFails(updateDoc(doc(lee, "pulses", "p1", "features", "f_led"), { leadUid: "zed" }));
+  });
+
+  it("Task Lead may not create or delete features", async () => {
+    await seedLeadFixture();
+    const lee = dbAs("lee", "lee@example.com");
+    await assertFails(setDoc(doc(lee, "pulses", "p1", "features", "f_new"), { title: "x", x: 0, y: 0, duration: 1, status: "planned", resources: [] }));
+    await assertFails(deleteDoc(doc(lee, "pulses", "p1", "features", "f_led")));
+  });
+
+  it("Task Lead reads the whole Pulse (full read scope)", async () => {
+    await seedLeadFixture();
+    const lee = dbAs("lee", "lee@example.com");
+    await assertSucceeds(getDoc(doc(lee, "pulses", "p1", "features", "f_other")));
+  });
+
+  it("a caps editor (editScope 'all') can update any feature", async () => {
+    await seedLeadFixture();
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "ed"), { uid: "ed", email: "ed@example.com", role: "editor", joinedAt: Date.now(), caps: { ...leadCaps, editScope: "all" } });
+    });
+    const ed = dbAs("ed", "ed@example.com");
+    await assertSucceeds(updateDoc(doc(ed, "pulses", "p1", "features", "f_other"), { title: "ok" }));
+  });
+
+  it("a member cannot self-escalate caps (only photo self-write is allowed)", async () => {
+    await seedPulse("p1", "alice", {
+      alice: { email: "alice@example.com", role: "owner" },
+      bob: { email: "bob@example.com", role: "viewer" },
+    });
+    const bob = dbAs("bob", "bob@example.com");
+    await assertSucceeds(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { photoURL: "data:img" }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { caps: { ...leadCaps, editScope: "all" } }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { role: "editor" }));
+  });
+});
+
 describe("Pulse creation", () => {
   it("lets a signed-in user create a Pulse, grant themselves owner, and index it in their own dashboard list", async () => {
     const alice = dbAs("alice", "alice@example.com");

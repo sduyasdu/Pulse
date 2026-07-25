@@ -15,6 +15,9 @@ import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updat
 import { subscribePulseMembers } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
+import { featureDenorm, denormMatches } from "@/domain/denorm";
+import { capsOf } from "@/domain/permissions";
+import { useAuthStore } from "@/stores/authStore";
 
 /** Options accepted by the recording mutations. Pass { record: false } for
  * intermediate/streamed writes (canvas drags, bulk layout ops) that record a
@@ -80,6 +83,28 @@ function omit<K extends string>(obj: Record<K, number> | undefined, key: K): Rec
 // concerned; this cast keeps the op builders' `Record<string, unknown>` happy.
 const asDoc = (o: object): Record<string, unknown> => o as Record<string, unknown>;
 
+/**
+ * Client-maintained permission denorms (Permissions-Spec §4.2, P12 =
+ * client-first; the server hardening is Server-Functions-Spec SF1). Recomputes
+ * `assignedUids`/`leadUid` for every feature from the current features+resources
+ * and writes only the ones that drifted — a single self-healing loop that
+ * covers all write paths, the `linkedUid` fan-out, undo/redo, and backfill.
+ * Runs only for a full editor (rules reject others; a stale denorm fails
+ * closed), and converges (a correction re-triggers it, then matches → no write).
+ */
+function reconcileDenorms(get: () => PulseStoreState) {
+  const { pulseId, features, resources, members } = get();
+  if (!pulseId) return;
+  const uid = useAuthStore.getState().firebaseUser?.uid;
+  const me = uid ? members.find((m) => m.uid === uid) : undefined;
+  if (!me || capsOf(me).editScope !== "all") return;
+  const linkOf = (rid: string) => resources.find((r) => r.id === rid)?.linkedUid ?? null;
+  for (const f of features) {
+    const want = featureDenorm(f, linkOf);
+    if (!denormMatches(f, want)) void updateFeature(pulseId, f.id, want).catch(() => {});
+  }
+}
+
 export const usePulseStore = create<PulseStoreState>((set, get) => ({
   pulseId: null,
   pulse: null,
@@ -112,12 +137,13 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         maybeFinishLoading();
       }),
       subscribeEpics(pulseId, (epics) => set({ epics })),
-      subscribeFeatures(pulseId, (features) => set({ features })),
-      subscribeResources(pulseId, (resources) => set({ resources })),
+      subscribeFeatures(pulseId, (features) => { set({ features }); reconcileDenorms(get); }),
+      subscribeResources(pulseId, (resources) => { set({ resources }); reconcileDenorms(get); }),
       subscribePulseMembers(pulseId, (members) => {
         membersArrived = true;
         set({ members });
         maybeFinishLoading();
+        reconcileDenorms(get);
       }),
     ];
     return () => unsubs.forEach((u) => u());

@@ -289,6 +289,13 @@ export interface Feature {
   attachments?: Attachment[];
   children?: Subtask[];
   collapsed?: boolean;
+  // Permission denorms (Permissions-Spec §4.2 / Server-Functions-Spec SF1),
+  // client-maintained by the store's reconcile loop. `assignedUids` = the
+  // linked account uids of every resource on this task or its subtasks;
+  // `leadUid` = the linked uid of the `lead` resource. Rules use these to
+  // enforce the My-Beat (read) and Task Lead (write) scopes.
+  assignedUids?: string[];
+  leadUid?: string | null;
 }
 
 /**
