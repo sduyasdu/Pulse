@@ -297,7 +297,7 @@ export function Toolbar({
               <Icon name="timeline" size={13} /> {showDelays ? "Delays on" : "Delays"}
             </button>
             <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
-              <Icon name={epicsShrunk ? "check_box" : "check_box_outline_blank"} size={13} /> {epicsShrunk ? "Unshrink" : "Shrink epics"}
+              <Icon name="compress" size={13} /> {epicsShrunk ? "Unshrink" : "Shrink epics"}
             </button>
             {canEdit && (
               <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
