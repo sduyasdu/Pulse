@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { PresenceEntry } from "@/types";
 import { subscribePresence, heartbeatPresence, clearPresence } from "@/services/firestore/presence";
 import { colorForName } from "@/domain/constants";
+import { usePulseStore } from "@/stores/pulseStore";
 
 const STALE_MS = 45_000;
 const BEAT_MS = 25_000;
@@ -47,16 +48,33 @@ function usePresence(pulseId: string | undefined, uid: string | undefined, email
   return entries;
 }
 
+/** One viewer's avatar: their picture if they've set one, else initials on
+ * their colour. Optional `ring` draws the overlap border in the stack. */
+function PresenceAvatar({ p, photo, size, ring, className }: { p: PresenceEntry; photo: string | null; size: number; ring?: string; className?: string }) {
+  const base: React.CSSProperties = { width: size, height: size, borderRadius: "50%", flexShrink: 0, ...(ring ? { border: `2px solid ${ring}` } : {}) };
+  if (photo) {
+    return <img src={photo} alt={p.email} title={p.email} className={className} style={{ ...base, objectFit: "cover", display: "block" }} />;
+  }
+  return (
+    <span className={`mono flex items-center justify-center ${className ?? ""}`} title={p.email} style={{ ...base, background: colorForName(p.uid), color: "#fff", fontWeight: 700, fontSize: Math.max(7, Math.round(size * 0.36)) }}>
+      {initials(p.email)}
+    </span>
+  );
+}
+
 /** Avatar stack of who else is viewing this Pulse right now. Hovering (pointer
  * devices) highlights it; clicking toggles a list of names — the tap-reachable
  * equivalent of the hover, so who's present is available on touch too. */
 export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; uid?: string; email: string; dark?: boolean }) {
   const entries = usePresence(pulseId, uid, email);
+  const members = usePulseStore((s) => s.members);
   const others = entries.filter((p) => p.uid !== uid);
   const [open, setOpen] = useState(false);
   if (others.length === 0) return null;
   const shown = others.slice(0, 4);
   const ring = dark ? "#123359" : "#FFFFFF";
+  // A viewer's avatar (denormalized onto their membership doc), if they've set one.
+  const photoOf = (u: string) => members.find((m) => m.uid === u)?.photoURL ?? null;
   return (
     <div className="relative">
       <button
@@ -67,13 +85,7 @@ export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; u
         aria-label={`${others.length} other${others.length === 1 ? "" : "s"} viewing`}
       >
         {shown.map((p) => (
-          <span
-            key={p.uid}
-            className="presence-avatar mono flex items-center justify-center"
-            style={{ width: 22, height: 22, borderRadius: "50%", background: colorForName(p.uid), color: "#fff", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, flexShrink: 0 }}
-          >
-            {initials(p.email)}
-          </span>
+          <PresenceAvatar key={p.uid} p={p} photo={photoOf(p.uid)} size={22} ring={ring} className="presence-avatar" />
         ))}
         {others.length > shown.length && (
           <span className="presence-avatar mono flex items-center justify-center" style={{ width: 22, height: 22, borderRadius: "50%", background: dark ? "#1B3A63" : "#E2E8F0", color: dark ? "#F0A875" : "#475569", fontSize: 8, fontWeight: 700, border: `2px solid ${ring}`, flexShrink: 0 }}>
@@ -90,9 +102,7 @@ export function PresenceBar({ pulseId, uid, email, dark }: { pulseId?: string; u
             </div>
             {others.map((p) => (
               <div key={p.uid} className="flex items-center gap-2 px-3 py-1.5">
-                <span className="mono flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: "50%", background: colorForName(p.uid), color: "#fff", fontSize: 8, fontWeight: 700, flexShrink: 0 }}>
-                  {initials(p.email)}
-                </span>
+                <PresenceAvatar p={p} photo={photoOf(p.uid)} size={20} />
                 <span className="text-xs truncate" style={{ color: "#334155" }}>{p.email}</span>
               </div>
             ))}
