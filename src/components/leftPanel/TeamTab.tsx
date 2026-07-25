@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
+import { useAuthStore } from "@/stores/authStore";
 import { allocInRange } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
@@ -17,6 +18,8 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const members = usePulseStore((s) => s.members);
+  const myUid = useAuthStore((s) => s.firebaseUser?.uid);
+  const myEmail = useAuthStore((s) => s.firebaseUser?.email ?? "");
   const addResource = usePulseStore((s) => s.addResource);
   const removeResource = usePulseStore((s) => s.removeResource);
   const duplicateResource = usePulseStore((s) => s.duplicateResource);
@@ -169,7 +172,8 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                 title="Link this Resource to a real Pulse member's account"
               >
                 <option value="">not linked to an account</option>
-                {members.map((m) => (
+                {myUid && <option value={myUid}>🔗 My account{myEmail ? ` (${myEmail})` : ""}</option>}
+                {members.filter((m) => m.uid !== myUid).map((m) => (
                   <option key={m.uid} value={m.uid}>🔗 {m.email}</option>
                 ))}
               </select>
