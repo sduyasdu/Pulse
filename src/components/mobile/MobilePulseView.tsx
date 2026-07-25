@@ -94,16 +94,15 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
               {v}
             </button>
           ))}
-          {myResourceIds.length > 0 && (
-            <button
-              onClick={() => setMyTasksOnly((v) => !v)}
-              className="text-xs font-semibold rounded-full px-3 py-1 flex items-center gap-1 ml-auto"
-              style={{ background: myTasksOnly ? "#EE7240" : "#F4F2EC", color: myTasksOnly ? "#FFFFFF" : "#64748B" }}
-              title="Show only tasks I'm involved in"
-            >
-              <Icon name="person" size={13} /> My Pulse
-            </button>
-          )}
+          <button
+            onClick={() => setMyTasksOnly((v) => !v)}
+            disabled={myResourceIds.length === 0}
+            className="text-xs font-semibold rounded-full px-3 py-1 flex items-center gap-1 ml-auto"
+            style={{ background: myTasksOnly ? "#EE7240" : "#F4F2EC", color: myTasksOnly ? "#FFFFFF" : "#64748B", opacity: myResourceIds.length === 0 ? 0.45 : 1 }}
+            title={myResourceIds.length > 0 ? "Show only tasks I'm involved in" : "Link your account to a resource (Team tab) to use My Pulse"}
+          >
+            <Icon name="person" size={13} /> My Pulse
+          </button>
         </div>
       )}
 

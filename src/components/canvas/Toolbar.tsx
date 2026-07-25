@@ -275,11 +275,15 @@ export function Toolbar({
             </button>
           )}
         </div>
-        {canMyPulse && (
-          <button onClick={onToggleMyPulse} title="My Pulse — show only tasks I'm involved in (via my linked account)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: myPulse ? "#123359" : "#1B3A63", color: "#EE7240", border: myPulse ? "1px solid #EE7240" : "1px solid #24406B" }}>
-            <Icon name={myPulse ? "check_box" : "check_box_outline_blank"} size={13} /> My Pulse
-          </button>
-        )}
+        <button
+          onClick={onToggleMyPulse}
+          disabled={!canMyPulse}
+          title={canMyPulse ? "My Pulse — show only tasks I'm involved in (via my linked account)" : "Link your account to a resource in the Team tab to use My Pulse"}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold"
+          style={{ background: myPulse ? "#123359" : "#1B3A63", color: "#EE7240", border: myPulse ? "1px solid #EE7240" : "1px solid #24406B", opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
+        >
+          <Icon name={myPulse ? "check_box" : "check_box_outline_blank"} size={13} /> My Pulse
+        </button>
         {viewMode === "canvas" && (
           <>
             <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: compactFilter ? "#123359" : "#1B3A63", color: "#EE7240", border: compactFilter ? "1px solid #EE7240" : "1px solid #24406B" }}>
