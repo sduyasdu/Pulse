@@ -179,7 +179,10 @@ export function Toolbar({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>
+      <div className="flex items-center gap-2 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>
+        {/* Editing controls — wrap within their own flex-1 area so the
+            collaboration cluster can stay pinned to the far right. */}
+        <div className="flex flex-wrap items-center gap-1.5 flex-1" style={{ minWidth: 0 }}>
         {canEdit && viewMode === "canvas" && (
           <div className="flex items-center gap-1.5" style={{ borderRight: "1px solid #24406B", paddingRight: 6, marginRight: 2 }}>
             <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
@@ -272,10 +275,11 @@ export function Toolbar({
             )}
           </>
         )}
+        </div>
 
-        {/* Collaboration cluster — pushed to the right of the row, in order:
+        {/* Collaboration cluster — pinned to the far right of the row, in order:
             presence badges, comments toggle, notifications bell. */}
-        <div className="flex items-center gap-2 ml-auto" style={{ borderLeft: "1px solid #24406B", paddingLeft: 8, marginLeft: 2 }}>
+        <div className="flex items-center gap-2 flex-shrink-0" style={{ borderLeft: "1px solid #24406B", paddingLeft: 8 }}>
           {presence}
           <button
             onClick={onToggleComments}
