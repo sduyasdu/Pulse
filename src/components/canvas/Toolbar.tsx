@@ -211,18 +211,15 @@ export function Toolbar({
           ))}
         </div>
 
-        {/* My Pulse — switch toggle: only tasks involving my linked account. */}
+        {/* My Beat — only tasks involving my linked account. */}
         <button
           onClick={onToggleMyPulse}
           disabled={!canMyPulse}
-          title={canMyPulse ? "My Pulse — show only tasks I'm involved in (via my linked account)" : "Link your account to a resource in the Team tab to use My Pulse"}
-          className="no-press flex items-center gap-1.5 px-2 py-1 rounded"
-          style={{ background: "#1B3A63", border: "1px solid " + (myPulse ? "#EE7240" : "#24406B"), opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
+          title={canMyPulse ? "My Beat — show only tasks I'm involved in (via my linked account)" : "Link your account to a resource in the Team tab to use My Beat"}
+          className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+          style={{ background: myPulse ? "#EE7240" : "#1B3A63", color: myPulse ? "#0A1428" : "#EE7240", border: "1px solid " + (myPulse ? "#EE7240" : "#24406B"), opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
         >
-          <span className="text-xs font-semibold" style={{ color: "#EE7240" }}>My Pulse</span>
-          <span style={{ position: "relative", width: 26, height: 15, borderRadius: 999, flexShrink: 0, background: myPulse ? "#EE7240" : "#0E2748", transition: "background .15s ease" }}>
-            <span style={{ position: "absolute", top: 1.5, left: myPulse ? 12.5 : 1.5, width: 11, height: 11, borderRadius: "50%", background: "#FFFFFF", transition: "left .15s ease" }} />
-          </span>
+          <Icon name="person" size={13} /> My Beat
         </button>
         {viewMode === "canvas" && (
           <>

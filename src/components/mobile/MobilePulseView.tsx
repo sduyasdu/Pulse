@@ -99,9 +99,9 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
             disabled={myResourceIds.length === 0}
             className="text-xs font-semibold rounded-full px-3 py-1 flex items-center gap-1 ml-auto"
             style={{ background: myTasksOnly ? "#EE7240" : "#F4F2EC", color: myTasksOnly ? "#FFFFFF" : "#64748B", opacity: myResourceIds.length === 0 ? 0.45 : 1 }}
-            title={myResourceIds.length > 0 ? "Show only tasks I'm involved in" : "Link your account to a resource (Team tab) to use My Pulse"}
+            title={myResourceIds.length > 0 ? "Show only tasks I'm involved in" : "Link your account to a resource (Team tab) to use My Beat"}
           >
-            <Icon name="person" size={13} /> My Pulse
+            <Icon name="person" size={13} /> My Beat
           </button>
         </div>
       )}
