@@ -1,22 +1,32 @@
 # Pulse — Granular Permissions Specification
 
-Status: **Proposal — decisions open (P1–P12)** · Scope: documents today's coarse
-three-role model, then designs a **more granular permissions system** on top of it.
-This is a design/spec document only — no application code changes. Every proposal is
-grounded in what `firestore.rules` can actually enforce, is backward-compatible with
-today's owner/editor/viewer behaviour, and is phased so the shipped app keeps working
-at every step. It builds on and does **not** contradict `Collaboration-Spec.md`
-(Teams, copy-link joins, D1–D14); where the two touch, this doc reuses those decisions
-(notably D11b: *a per-Pulse grant can only raise capability above the team role, never
-lower it*).
+Status: **Proposal — role set fixed by product owner; decisions open (P1–P12)** ·
+Scope: designs a **more granular per-Pulse permissions system** on top of today's
+coarse owner/editor/viewer model. Spec/design only — no application code changes.
+
+The product owner has fixed the shipped per-Pulse role presets. In addition to
+**owner** (unchanged: full control + manage members + delete), there are four presets:
+
+1. **Editor** — edits everything (today's editor).
+2. **Full Viewer** — read-only, sees the entire Pulse (today's viewer).
+3. **My-Beat Viewer** — read-only, but can only **see** tasks where their linked
+   resource is assigned (a restricted-**read** role).
+4. **Task Lead** *(role #4 — recommended name; see §3.4)* — can only **edit** tasks
+   they lead (`feature.lead` is their linked resource); everything else read-only.
+
+The capability/permission-set model in §3.2 is the **underlying** engine; the five
+presets above are the only things the everyday UI exposes. Everything is grounded in
+what `firestore.rules` can enforce and is backward-compatible (existing viewer →
+Full Viewer, existing editor → Editor, no migration write). Builds on and does not
+contradict `Collaboration-Spec.md` (Teams, copy-link joins, D1–D14; notably **D11b**:
+a per-Pulse grant can only *raise* capability above the team floor).
 
 ---
 
 ## 1. Current state (what ships today)
 
-The authoritative record for "what can this user do in this Pulse" is
-`pulses/{pulseId}/pulseMembers/{uid}` (`PulseMember`, `src/types/index.ts:78-91`),
-whose single meaningful field is `role: PulseRole` where
+Authoritative record: `pulses/{pulseId}/pulseMembers/{uid}` (`PulseMember`,
+`src/types/index.ts:78-91`), whose one meaningful field is `role: PulseRole` where
 `PulseRole = "owner" | "editor" | "viewer"` (`types/index.ts:76`).
 
 ### 1.1 The three flat roles
@@ -24,81 +34,64 @@ whose single meaningful field is `role: PulseRole` where
 | Capability | Owner | Editor | Viewer |
 |---|---|---|---|
 | Read all Pulse data (epics/features/resources/comments) | ✅ | ✅ | ✅ |
-| Edit canvas/board/tasks (`features`) | ✅ | ✅ | ❌ |
-| Edit epics (`epics`) | ✅ | ✅ | ❌ |
-| Edit the team roster / resources (`resources`) | ✅ | ✅ | ❌ |
+| Edit tasks (`features`) / epics / resources | ✅ | ✅ | ❌ |
 | Edit Pulse config (statuses, resourceTypes, graphConfig, name, `invite`) | ✅ | ✅ | ❌ |
 | Comment (`comments`) | ✅ | ✅ | ✅ (any member) |
 | Generate / revoke a join link, invite | ✅ | ✅ | ❌ |
-| Change another member's role | ✅ | ❌ | ❌ |
-| Remove a member | ✅ | ❌ | ❌ |
+| Change roles / remove members | ✅ | ❌ | ❌ |
 | Delete the Pulse | ✅ | ❌ | ❌ |
 
 ### 1.2 How it's enforced today (the layer any proposal must fit)
 
-Enforcement is two-layer and the **rules layer is authoritative**
-(`firestore.rules`):
+Two-layer; **the rules layer is authoritative** (`firestore.rules`):
 
-- `isPulseMember(pulseId)` — a `pulseMembers/{uid}` doc exists (`:47-50`). Gates
-  every **read** under `pulses/{pulseId}/**` (`:112`, `:191-215`).
-- `pulseRole(pulseId)` — `get()`s the member doc and returns `.data.role` (`:51-53`).
-- `canEditPulse(pulseId)` — role in `['owner','editor']` (`:54-56`). Gates every
+- `isPulseMember(pulseId)` — a `pulseMembers/{uid}` doc exists (`:47-50`); gates every
+  **read** under `pulses/{pulseId}/**` (`:112`, `:191-215`).
+- `pulseRole(pulseId)` — `get()`s the member doc, returns `.data.role` (`:51-53`).
+- `canEditPulse(pulseId)` — role in `['owner','editor']` (`:54-56`); gates every
   `epics`/`features`/`resources` write (`:193,198,214`) and the `pulses` update
   (`:117`).
-- `isPulseOwner(pulseId)` — role `== 'owner'` (`:57-59`). Gates Pulse `delete`
-  (`:120`), and `pulseMembers` update/delete (`:143-150`) — i.e. role changes and
-  member removal.
-- `comments` create is gated by `isPulseMember` (`:206`), **not** `canEditPulse` —
-  so **viewers can already comment today**. `comments` delete is author-or-owner.
+- `isPulseOwner(pulseId)` — role `== 'owner'` (`:57-59`); gates Pulse `delete`
+  (`:120`) and `pulseMembers` update/delete (`:143-150`).
+- `comments` create is gated by `isPulseMember` (`:206`), **not** `canEditPulse` — so
+  **viewers already comment today**. Delete is author-or-owner.
 - Self-write carve-out: a member may update **their own** `pulseMembers` doc but the
-  rule pins `uid`/`role`/`email`/`joinedAt` (`:143-148`), so the only field they can
-  actually change is the denormalized `photoURL`. **No role self-escalation** is the
-  load-bearing invariant here.
+  rule pins `uid`/`role`/`email`/`joinedAt` (`:143-148`), so effectively only the
+  denormalized `photoURL` is self-writable. **No role self-escalation** — the
+  load-bearing invariant.
 
-Client mirror (advisory only, rules win): `usePulseStore.roleOf(uid)`
-(`pulseStore.ts:126`) → `canEdit = role in ('owner','editor')`
-(`PulsePage.tsx`), which gates the toolbar, mutations and undo; `CollaboratorsDialog`
-derives `canManage` (owner|editor) and `isOwner` (`CollaboratorsDialog.tsx:35-36`).
+Client mirror (advisory; rules win): `usePulseStore.roleOf` (`pulseStore.ts:126`) →
+`canEdit` gates the toolbar/mutations/undo; `CollaboratorsDialog` derives `canManage`
+/ `isOwner` (`CollaboratorsDialog.tsx:35-36`).
 
-### 1.3 The `linkedUid` / "My Beat" seam (the hook for scoped permissions)
+### 1.3 The `linkedUid` / "My Beat" seam (the hook for the two scoped roles)
 
 A `Resource` (canvas team-member row) can be linked 1:1 to a real account via
-`Resource.linkedUid` (`types/index.ts:281`). The write side ships in `TeamTab.tsx`
-(the per-resource "link to account" dropdown, `:186-200`). The **read/consume** side
-that already ships is **"My Beat"**: `PulsePage.tsx:103`,
-`MobilePulseView.tsx:50` and `Toolbar.tsx:216-224` compute
+`Resource.linkedUid` (`types/index.ts:281`). Write side ships in `TeamTab.tsx`
+(per-resource "link to account" dropdown, `:186-200`). The read/consume side that
+ships is **"My Beat"**: `PulsePage.tsx:103`, `MobilePulseView.tsx:50`,
+`Toolbar.tsx:216-224` compute
 `myResourceIds = resources.filter(r => r.linkedUid === uid).map(r => r.id)` and let a
-member filter the canvas to *only tasks their linked resource is on*. This is
-presentation-only today — it changes what you **see**, not what you **may edit**.
-§3.4 turns this same seam into a **scoped edit permission** ("edit only my own
-tasks").
+member filter the canvas to *only tasks their linked resource is on*. Today this is
+**presentation-only** — a client-side filter that changes what you *see*, not what
+you *may read or edit*, and the toggle is **disabled when the member is unlinked**
+(`Toolbar.tsx:220`, `MobilePulseView.tsx:102`). The two new scoped roles (§3.3–3.4)
+promote this same seam into an **enforced** read scope (My-Beat Viewer) and edit scope
+(Task Lead).
 
 ### 1.4 Why it's too coarse (motivation)
 
-Concrete scenarios the three flat roles cannot express:
+Scenarios the three flat roles can't express — now realized by the four presets:
 
-1. **Comment-only reviewer.** A stakeholder who should read and comment but never
-   touch data. Today a "viewer" *can* comment (§1.2), and there is no role that reads
-   but is barred from commenting — so "viewer" is really "commenter", and there is no
-   true read-only tier or, conversely, no way to invite a reviewer without also
-   handing them the same comment rights you'd give a teammate. The naming lies.
-2. **Contributor who edits only their own tasks.** A developer who should update
-   status/notes/dates on the tasks their linked resource is assigned to, but must not
-   restructure the plan, move other people's tasks, or edit epics. Today that's
-   "editor" (can edit *everything*) or "viewer" (can edit *nothing*).
-3. **Team lead / manager who can onboard people but not delete the Pulse.** Someone
-   who manages members and shares links but shouldn't hold the destructive
-   delete-the-Pulse / final-owner power. Today "manage members" and "delete Pulse"
-   are welded together into `owner`.
-4. **Roster steward.** Someone who curates the `resources` list and links accounts
-   but shouldn't rearrange the canvas. Today `resources` and `features` are both
-   just `canEditPulse` — one switch.
-5. **Config lock.** Prevent contributors from renaming statuses or the Pulse while
-   still letting them edit tasks. Today statuses/config and task edits are the same
-   `canEditPulse` grant on `features` + `pulses.update`.
-6. **Epic lead (per-epic scope).** "Manage only my epic." Called out as an explicit
-   **non-goal** below — see §3.5 for why per-epic ACLs are the one scope Firestore
-   rules can't do cheaply.
+1. **Stakeholder who reviews only their own slice.** A contractor or teammate who
+   should see *only the tasks their resource is on*, not the whole plan → **My-Beat
+   Viewer** (§3.3).
+2. **Lead who owns delivery of their tasks but must not restructure the plan.** Can
+   update the tasks they lead, read the rest for context, but can't move other
+   people's work or edit epics/config → **Task Lead** (§3.4).
+3. **True read-only vs. today's comment-capable viewer.** (Naming honesty; see P4.)
+4. **Owner powers unbundled from editing.** Owner keeps manage-members + delete; the
+   four presets never get those. (Confirmed: owner unchanged, P3.)
 
 ---
 
@@ -106,32 +99,27 @@ Concrete scenarios the three flat roles cannot express:
 
 **Goals**
 
-- Express scenarios 1–5 above with new **named presets** plus optional **per-capability
-  overrides**, all resolvable by a single `pulseMembers/{uid}` doc read.
-- Stay inside what `firestore.rules` can enforce: per-document/per-collection allow
-  rules, `get()`/`exists()` lookups by *known path*, and per-field diffing via
-  `request.resource.data.diff(resource.data).affectedKeys()` — **no queries, no array
-  iteration, no dynamic-path `get()` over a list**.
-- **Backward compatible by construction:** existing owner/editor/viewer members keep
-  their exact behaviour with **no migration write**; new capability fields are
-  additive and optional, defaulting to today's semantics.
-- Preserve every current security invariant: self-owned `users/{uid}/myPulses`
-  index; a member may only self-write their own membership `photoURL`; **no role /
-  capability self-escalation**; at least one owner always (`ownerCount` guard,
-  `CollaboratorsDialog.tsx:39-40`).
-- Compose cleanly with the Teams/workspace layer (Collaboration-Spec §3.2): team
-  role is a **floor**, per-Pulse grants only **raise** (D11b).
+- Ship the five presets (owner + four) as the only everyday UI, backed by a
+  capability/scope model (§3.2) resolvable from a single `pulseMembers/{uid}` read.
+- Stay inside what `firestore.rules` can enforce: per-document allow rules,
+  `get()`/`exists()` by **known path**, scalar-array membership (`x in array`), and
+  per-field diffing (`request.resource.data.diff(resource.data).affectedKeys()`).
+  **No queries, no array-of-objects iteration, no dynamic-path `get()` over a list.**
+- **Backward compatible:** existing `viewer` → **Full Viewer**, `editor` → **Editor**,
+  with **no migration write**; new fields are additive and default to today's
+  semantics.
+- Preserve every current invariant: self-owned `users/{uid}/myPulses` index; a member
+  may only self-write their own membership `photoURL` (and one new hint field, §7);
+  **no role/scope self-escalation**; ≥1 owner always (`CollaboratorsDialog.tsx:39-40`).
+- Compose with Teams (Collaboration-Spec §3.2): team role is a **floor**; per-Pulse
+  grants only **raise** (D11b).
 
 **Non-goals (this round)**
 
-- **Per-epic / per-field ACLs** (scenario 6). Enforcing "edit only features in epic
-  X" requires the rule to consult a per-epic ACL on every `features` write, and
-  "edit only field Y" requires per-field diffing against a per-member field
-  allow-list — both are large model changes for niche value. Deferred (P9).
-- **Object-level sharing** (share one task with an outsider). Membership stays
-  whole-Pulse; outsiders get in via a Pulse/Team join link (Collaboration-Spec §3.1).
-- **Attribute-based / row-level policies** beyond the single `linkedUid` "assigned"
-  scope of §3.4.
+- **Per-epic / per-field ACLs.** Enforcing "edit only epic X" or "edit only field Y"
+  needs a per-write ACL lookup / brittle field allow-list — deferred (P9).
+- **Object-level sharing with outsiders.** Membership stays whole-Pulse; outsiders
+  enter via a join link (Collaboration-Spec §3.1).
 
 ---
 
@@ -139,271 +127,266 @@ Concrete scenarios the three flat roles cannot express:
 
 ### 3.1 Recommendation in one line
 
-**Adopt a capability set as the enforcement primitive, bundled into named role
-presets for the UI, materialised onto each `pulseMembers` doc so rules read plain
-booleans.** Keep `owner`/`editor`/`viewer` as three of the presets (their capability
-bundles reproduce today's behaviour exactly), add `manager`, `contributor`, and
-`commenter` presets, and allow an **Advanced** mode that tweaks individual
-capabilities (surfacing the member as a `custom` preset). One scoped capability —
-`editTasksScope: "assigned"` — reuses the `linkedUid` seam for "edit only my own
-tasks".
+**Model each preset as a `(readScope, editScope, manage-bits)` capability bundle,
+materialize the bundle onto the `pulseMembers` doc, and enforce the two scoped roles
+with two denormalized fields on `Feature` (`assignedUids`, `leadUid`) so rules test a
+scalar `in` / `==` per document.** The two scoped roles differ fundamentally in
+enforceability, which drives the whole design:
 
-Why this over the alternatives:
+- **Task Lead is a restricted-WRITE role → cleanly, fully rule-enforceable.** Rules
+  evaluate a write against the one specific doc; `leadUid == request.auth.uid` is a
+  per-doc check. Reads stay unrestricted (full read), so no query constraints.
+- **My-Beat Viewer is a restricted-READ role → enforceable, but only if the client
+  cooperates on query shape.** Firestore evaluates a `list` against the *query*, not
+  post-filters results: the rule can only permit a list whose constraints guarantee
+  every returned doc satisfies it. So the client **must** issue
+  `where("assignedUids","array-contains", uid)`; a broad "read all features" query is
+  **rejected wholesale**, not silently trimmed. This is the crux of §4.3.
 
-| Option | Pros | Cons | Verdict |
-|---|---|---|---|
-| **A. More named roles only** (add commenter/contributor/manager as opaque tiers) | Simplest UI; tiny rule change (extend the role→gate lookups) | Rigid — every new "X but also Y" need is a new hard-coded tier; combinatorial blow-up; no way to say "editor who can't delete config" | Insufficient alone |
-| **B. Pure capability flags** (booleans per member, no roles) | Maximal flexibility; rules read one boolean each | Bad UX (10 toggles per person); easy to create nonsensical/insecure combos; no shared mental model | Too raw alone |
-| **C. Capabilities bundled into presets (recommended)** | One mental model (pick a role), power-user override (toggle a cap); rules read materialised booleans; presets guarantee sane defaults & trivial back-compat | Slightly larger member doc; must keep preset↔caps table in sync client & rules | **Recommended** |
-| **D. Scoped/relationship perms** (per-epic, per-resource ownership) | Matches "lead owns their epic" | Per-epic needs rule to read an ACL per write; array-of-resources can't be iterated in rules; expensive & complex | Only the single `linkedUid` "assigned" scope is in-scope (§3.4); the rest deferred |
-
-Option C is B's engine with A's ergonomics, and it degrades to today's system when
-`caps` is absent — which is what makes the migration a no-op.
-
-### 3.2 The capability set
-
-Eight capabilities, chosen so **each maps to exactly one rule gate** (a collection's
-`write`, or one branch of `pulses.update`, or `pulseMembers` writes):
+### 3.2 The underlying capability/scope model
 
 ```ts
 // src/types/index.ts (proposed)
-export type CapScope = "all" | "assigned" | "none";
+export type ReadScope = "all" | "beat"; // "beat" = only features where uid ∈ assignedUids
+export type EditScope = "none" | "lead" | "all"; // "lead" = only features where leadUid == uid
 
 export interface Capabilities {
-  /** Write pulses/{p}/features. "assigned" = only tasks my linked resource is on
-   *  (§3.4). "all" = any task. "none" = read-only for tasks. */
-  editTasksScope: CapScope;
-  /** Write pulses/{p}/epics (add/rename/recolor/move epics). */
-  editEpics: boolean;
-  /** Write pulses/{p}/resources (the team roster + account links). */
-  editResources: boolean;
-  /** Update Pulse config: name, statuses, resourceTypes, graphConfig. */
-  editConfig: boolean;
-  /** Create comments. (Read is always allowed to members.) */
-  comment: boolean;
-  /** Generate/revoke join links & invites (writes pulses.invite + joinLinks). */
-  invite: boolean;
-  /** Change other members' roles/caps; remove members. */
-  manageMembers: boolean;
-  /** Delete the whole Pulse. */
-  deletePulse: boolean;
+  readScope: ReadScope;
+  editScope: EditScope;        // applies to features; epics/resources gated separately
+  editEpics: boolean;          // write pulses/{p}/epics
+  editResources: boolean;      // write pulses/{p}/resources (roster + account links)
+  editConfig: boolean;         // update Pulse name/statuses/resourceTypes/graphConfig
+  comment: boolean;            // create comments (read of comments follows readScope)
+  invite: boolean;             // generate/revoke join links & invites
+  manageMembers: boolean;      // change roles/caps; remove members
+  deletePulse: boolean;        // delete the whole Pulse
 }
 ```
 
-Notes on granularity choices:
+`readScope`/`editScope` are enums (not booleans) because "see only my beat" and "edit
+only what I lead" are first-class. Everything else is a boolean gate that maps 1:1 to a
+collection write or a `pulses.update` branch. The bundle is **materialized** on the
+member doc as `PulseMember.caps` so rules read plain values (§4.1); legacy docs with no
+`caps` fall back to their old role (§4.1), which is why the migration is a no-op.
 
-- `editTasksScope` is a **scope enum**, not a boolean, because "edit only my own
-  tasks" is a first-class scenario (§1.4.2) and folding it into `editTasks: bool`
-  would lose it. `"none"` covers viewer/commenter, `"all"` covers editor, `"assigned"`
-  covers contributor.
-- `editEpics`, `editResources`, `editConfig` are split out from the monolithic
-  `canEditPulse` so the roster steward / config lock / structure-vs-content
-  distinctions (§1.4.4–5) become expressible. They collapse back together in the
-  `editor` preset, so nothing changes for editors.
-- `comment` exists so a **true read-only** tier is finally possible (viewer =
-  `comment:false`) and a **commenter** tier (`comment:true`, everything else off) is
-  distinct from it. See P4 for the back-compat wrinkle (today's viewers can comment).
-- `manageMembers` and `deletePulse` are split so `manager` (onboard people, no
-  delete) is expressible (§1.4.3). `owner` = both true.
+### 3.3 The five presets
 
-### 3.3 Role presets
+Each preset is a fixed `Capabilities` bundle. Owner/Editor/Full-Viewer reproduce
+today's behaviour exactly.
 
-Presets are the only thing the everyday UI shows. Each is a fixed `Capabilities`
-bundle. `owner`/`editor`/`viewer` reproduce today's behaviour **exactly** (see §1.1),
-which is what makes them safe defaults and the migration a no-op.
+| Capability | **Owner** | **Editor** | **Full Viewer** | **My-Beat Viewer** | **Task Lead** |
+|---|---|---|---|---|---|
+| `readScope` | all | all | all | **beat** | all *(rec.; P5)* |
+| `editScope` (features) | all | all | none | none | **lead** |
+| `editEpics` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `editResources` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `editConfig` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `comment` | ✅ | ✅ | ✅* | ✅ (on visible tasks) | ✅ |
+| `invite` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `manageMembers` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `deletePulse` | ✅ | ❌ | ❌ | ❌ | ❌ |
 
-| Capability | `owner` | `manager` | `editor` | `contributor` | `commenter` | `viewer` |
-|---|---|---|---|---|---|---|
-| `editTasksScope` | all | all | all | **assigned** | none | none |
-| `editEpics` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `editResources` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `editConfig` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `comment` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌* |
-| `invite` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `manageMembers` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `deletePulse` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+\* Today any member (viewers included) can comment (`firestore.rules:206`). Keeping
+`Full Viewer.comment = true` preserves that. Whether to also offer a *true* read-only
+tier (no comment) is P4; the four-role set the product owner fixed does **not** include
+one, so the recommendation is **keep Full Viewer comment-capable** and revisit later.
 
-\* **Back-compat wrinkle:** today any member (viewers included) can comment
-(`firestore.rules:206`). Making `viewer.comment = false` is a *reduction* for
-existing viewers. Two clean options in P4: (a) keep `viewer.comment = true` and drop
-the separate `commenter` preset (viewer *is* the comment-capable read tier); or (b)
-introduce true read-only `viewer` and **migrate existing viewers to `commenter`** so
-no one loses commenting. Recommendation: **(b)** — it's the honest naming and the
-migration is a label-only remap (§6).
-
-A member whose `caps` don't match any preset displays as **`custom`** (§5 UX).
-
-`PulseRole` widens to the preset labels:
+`PulseRole` widens to the preset labels (plus `custom` for advanced overrides, §5):
 
 ```ts
 export type PulseRole =
-  | "owner" | "manager" | "editor" | "contributor" | "commenter" | "viewer"
-  | "custom";
+  | "owner" | "editor" | "fullViewer" | "myBeatViewer" | "taskLead" | "custom";
+// Back-compat: legacy "viewer" is read as fullViewer; legacy "editor" unchanged.
 ```
 
-### 3.4 The one scoped capability: `editTasksScope: "assigned"` (contributor)
+Both scoped roles **depend on the member being linked to a Resource** (`linkedUid`):
 
-This is the "edit only tasks assigned to my linked resource" grant (§1.4.2), reusing
-the `linkedUid` / My Beat seam (§1.3). The enforcement problem: a `Feature` stores
-`resources: string[]` (resource **ids**), and to know whether *my account* is on a
-task the rule would have to resolve each id → its `Resource.linkedUid` — but rules
-**cannot iterate an array** nor `get()` a dynamic list of resource docs. So raw
-`linkedUid` is not rule-checkable on a feature write.
+- **My-Beat Viewer, unlinked** → `assignedUids` never contains their uid → they **see
+  no tasks** (empty beat). Epics/resources still readable for context (§4.3). UI warns
+  and offers to link (§5), mirroring how the My-Beat toggle is disabled when unlinked
+  (`Toolbar.tsx:220`).
+- **Task Lead, unlinked** → `leadUid` never equals their uid → they can **edit no
+  task** (read still full). UI warns and offers to link.
 
-**Fix — denormalise `assignedUids` onto each Feature.** Whenever a feature's
-`resources` change, the writer also maintains
-`Feature.assignedUids: string[]` = the `linkedUid`s of the assigned resources (the
-client already has the resource roster in `pulseStore`, so this is a cheap derived
-write; a maintenance Cloud Function is a later hardening option). Then a rule can do a
-**membership test on a scalar array**, which *is* supported:
+### 3.4 Role #4 name — recommendation
 
-```
-request.auth.uid in resource.data.get('assignedUids', [])
-```
+**Recommended: "Task Lead."** It reads naturally, binds directly to the existing
+`Feature.lead` field ("lead of this task"), and doesn't collide with "Editor" the way
+"Lead Editor" does. Alternatives considered:
 
-Enforcement per operation for an `editTasksScope == "assigned"` member:
+| Candidate | Note |
+|---|---|
+| **Task Lead** ✅ | Recommended — ties to `feature.lead`; clear scope; no clash with Editor. |
+| Lead | Too bare; reads as a noun/verb ambiguously. |
+| Lead Editor | Clear but visually collides with "Editor" in the picker/badges. |
+| Responsible Editor | Accurate ("responsible for") but wordy; "Editor" clash. |
+| Lead Contributor | "Contributor" implies broad edit; misleads on the narrow scope. |
+| Owner-editor | Actively confusing next to the real Owner role. |
 
-| Op on `features/{id}` | Rule condition | Enforceable in rules? |
-|---|---|---|
-| **update** | `uid in resource.data.assignedUids` (I'm on the task now) **and** `uid in request.resource.data.assignedUids` (I can't unassign myself off it to keep editing) | ✅ Yes |
-| **create** | `uid in request.resource.data.assignedUids` (the new task must include me) | ✅ Yes |
-| **delete** | choose: **deny** (recommended — contributors don't delete tasks), or allow only if `uid in resource.data.assignedUids` | ✅ Yes |
+Remaining references in this spec use **Task Lead**.
 
-What is **not** fully rule-enforceable, and is therefore **client-side-only**, called
-out honestly:
-
-- **Field-level narrowing within an assigned task** (e.g. "a contributor may change
-  `status`/`notes`/`finishedAt` but not `x`/`duration`/`epicId`"). Rules *could* do
-  this with `diff().affectedKeys().hasOnly([...])`, but the allow-list of "content"
-  vs "structure" fields is long and brittle. Recommendation: **enforce assignment
-  scope in rules, enforce field narrowing only in the client** for v1 (a contributor
-  who forges a raw write could still edit a structural field of a task they're
-  legitimately on). This is acceptable because the blast radius is limited to tasks
-  the user is *already* a legitimate participant on — they cannot touch anyone else's
-  work — and it avoids a fragile field allow-list. Revisit if a real "content-only"
-  requirement appears (P8).
-- **Integrity of `assignedUids` itself.** Since the client writes it, a malicious
-  contributor could set `assignedUids` on `create` to include themselves for a task
-  and thereby "self-assign". That's inherent to a client-maintained denormalisation;
-  it only lets them edit tasks they've inserted themselves into, not existing
-  tasks they weren't on (the **update** rule checks the *prior* `resource.data`).
-  Hardening (server-maintained `assignedUids`) is deferred with notifications
-  (Collaboration-Spec §3.6 already needs a function for the assignment→notify path).
+**Task Lead read scope (P5).** *Recommended:* **full read of the whole Pulse, edit
+only led tasks.** A lead needs surrounding context (dependencies, other epics) to do
+their job, and full read costs nothing in rules (no query constraints — the only
+gate is on writes). *Alternative:* restrict read to led tasks (like My-Beat but keyed
+on `leadUid`), which is enforceable the same way as §4.3 but hides context. Flagged
+as an open decision; recommendation is full-read.
 
 ---
 
 ## 4. Enforcement — mapping to `firestore.rules`
 
-### 4.1 Materialised caps + legacy fallback
+### 4.1 Materialized caps + legacy fallback
 
-Rules should never *derive* the preset→caps table (too much branching). Instead the
-**caps are materialised on the member doc** at write time (`setMemberRole` /
-`setMemberCaps` write both `role` and the resolved `caps`). Rules read booleans
-directly, with a **fallback for legacy docs** that have no `caps` field (existing
-members), so nothing needs a backfill:
+Rules never derive the preset→caps table. `setMemberRole` / a new `setMemberCaps`
+write both `role` (label) and the resolved `caps` bundle; rules read values directly.
+Legacy docs (no `caps`) fall back to their old role, so **no backfill**:
 
 ```
-// ---- capability resolution ----
 function memberDoc(pulseId) {
   return get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data;
 }
-// Legacy fallback: a doc written before this feature has no `caps`; interpret its
-// old role exactly as today. New/updated docs always carry `caps`.
-function legacyCan(role, cap) {
-  return role == 'owner' ? true
-       : role == 'editor' ? (cap in ['editTasks','editEpics','editResources','editConfig','comment','invite'])
-       : /* viewer */       (cap == 'comment');   // today viewers may comment
-}
-function cap(pulseId, capName) {
+function myCaps(pulseId) {
   let m = memberDoc(pulseId);
-  return ('caps' in m)
-    ? ( capName == 'editTasks'    ? m.caps.editTasksScope != 'none'
-      : capName == 'editEpics'    ? m.caps.editEpics
-      : capName == 'editResources'? m.caps.editResources
-      : capName == 'editConfig'   ? m.caps.editConfig
-      : capName == 'comment'      ? m.caps.comment
-      : capName == 'invite'       ? m.caps.invite
-      : capName == 'manageMembers'? m.caps.manageMembers
-      : capName == 'deletePulse'  ? m.caps.deletePulse
-      : false )
-    : legacyCan(m.role, capName);
+  // Legacy: owner→all, editor→edit-all, viewer→full-read+comment (today's behaviour).
+  return ('caps' in m) ? m.caps
+    : m.role == 'owner'  ? {readScope:'all', editScope:'all', editEpics:true,  editResources:true,  editConfig:true,  comment:true, invite:true, manageMembers:true,  deletePulse:true}
+    : m.role == 'editor' ? {readScope:'all', editScope:'all', editEpics:true,  editResources:true,  editConfig:true,  comment:true, invite:true, manageMembers:false, deletePulse:false}
+    :                      {readScope:'all', editScope:'none',editEpics:false, editResources:false, editConfig:false, comment:true, invite:false,manageMembers:false, deletePulse:false};
 }
-function isPulseOwner(pulseId) {                    // owner === can delete
-  return isPulseMember(pulseId) && cap(pulseId, 'deletePulse');
-}
+function isPulseOwner(pulseId) { return isPulseMember(pulseId) && myCaps(pulseId).deletePulse; }
 ```
 
-(Only one `get()` per evaluation, same cost as today's `pulseRole`.)
+One `get()` per evaluation — same cost as today's `pulseRole`.
 
-### 4.2 Per-collection / per-operation gates
+### 4.2 Two denormalized fields on `Feature`
 
-| Surface | Today | Proposed |
-|---|---|---|
-| `epics` write (`:193`) | `canEditPulse` | `isPulseMember(p) && cap(p,'editEpics')` |
-| `resources` write (`:214`) | `canEditPulse` | `isPulseMember(p) && cap(p,'editResources')` |
-| `features` write (`:198`) | `canEditPulse` | see §4.3 (scoped) |
-| `pulses.update` (`:117`) | `canEditPulse` (+ invite-role guard) | split by `affectedKeys()` — see §4.4 |
-| `comments` create (`:206`) | `isPulseMember` | `isPulseMember(p) && cap(p,'comment')` |
-| `comments` update/delete (`:207-209`) | author / owner | unchanged (author, or `cap(p,'deletePulse')` for owner-delete) |
-| `joinLinks`/`invites` create (Collab §3.1, `firestore.rules` invites `:164`) | `canEditPulse` | `cap(p,'invite')` |
-| `pulseMembers` update/delete (`:143-150`) | `isPulseOwner` | `cap(p,'manageMembers')` (+ self carve-outs, §4.5) |
-| `pulses` delete (`:120`) | `isPulseOwner` | `cap(p,'deletePulse')` |
-| all reads (`:112`, subcollections) | `isPulseMember` | **unchanged** — membership still gates every read |
+To make the scoped roles enforceable with scalar tests, maintain two derived fields on
+each `Feature` whenever assignments / lead / a resource's `linkedUid` change:
 
-### 4.3 Scoped `features` write
+```ts
+// src/types/index.ts — additions to Feature
+assignedUids?: string[];   // linkedUid of every resource assigned to this feature OR any
+                           // of its subtasks. Enables `uid in assignedUids` (My-Beat read).
+leadUid?: string | null;   // linkedUid of the resource in `feature.lead`. Enables
+                           // `uid == leadUid` (Task Lead write).
+```
+
+- `assignedUids` is needed (not raw `resources`) because (a) rules can't resolve a
+  resource id → its `linkedUid` for each element of an array, and (b) subtask
+  assignments live in `Feature.children[].resources` (array-of-objects), which rules
+  can't iterate — the denorm flattens both into one scalar array.
+- `leadUid` mirrors `feature.lead` (a resource id) as the lead's account uid.
+- **Maintainer:** client-maintained in v1 (the write path already has the full
+  resource roster in `pulseStore`); a Cloud Function is the later hardening (P12).
+  When a `Resource.linkedUid` changes, every referencing feature's `assignedUids`/
+  `leadUid` must be updated — a bounded fan-out the linking client already performs
+  for `myResourceIds`.
+
+### 4.3 My-Beat Viewer — restricted **read** (the query-shape crux)
+
+Read gate on features OR-s a beat arm:
 
 ```
 match /features/{featureId} {
-  allow read: if isPulseMember(pulseId) || /* team */ isWorkspaceMember(...);
-  allow create: if isPulseMember(pulseId) && (
-        capFeaturesAll(pulseId)
-     || (capFeaturesAssigned(pulseId)
-         && request.auth.uid in request.resource.data.get('assignedUids', [])));
-  allow update: if isPulseMember(pulseId) && (
-        capFeaturesAll(pulseId)
-     || (capFeaturesAssigned(pulseId)
-         && request.auth.uid in resource.data.get('assignedUids', [])
-         && request.auth.uid in request.resource.data.get('assignedUids', [])));
-  allow delete: if isPulseMember(pulseId) && capFeaturesAll(pulseId); // contributors don't delete
+  allow read: if isPulseMember(pulseId) && (
+       myCaps(pulseId).readScope == 'all'
+    || request.auth.uid in resource.data.get('assignedUids', []));
+  // writes: §4.5
 }
-// helpers read the scope enum:
-function capFeaturesAll(p)      { /* caps.editTasksScope=='all' | legacy owner/editor */ }
-function capFeaturesAssigned(p) { /* caps.editTasksScope=='assigned' */ }
 ```
 
-`assignedUids` is the scalar array from §3.4 (`in` is the one array test rules
-support). Field-level narrowing within an assigned task is **client-only** (§3.4).
+For a **single-doc `get`**, this is exact per-doc. For a **`list`**, Firestore requires
+the query itself to guarantee only-allowed docs, so the **client must query**:
 
-### 4.4 Splitting `pulses.update` by affected keys
-
-Today one gate (`canEditPulse`) covers *all* Pulse-doc mutations. To let `editConfig`
-govern name/statuses/etc. while `invite` governs the join-link field, route by which
-keys actually changed — `affectedKeys()` **is** supported in rules:
-
-```
-allow update: if isPulseMember(pulseId) && (
-  // pure invite/link change → needs invite cap (and keep the existing role guard)
-  ( request.resource.data.diff(resource.data).affectedKeys().hasOnly(['invite','updatedAt'])
-    && cap(pulseId,'invite')
-    && (request.resource.data.get('invite',null) == null
-        || request.resource.data.invite.role in ['viewer','editor','commenter','contributor']) )
-  ||
-  // any config field (name/statuses/resourceTypes/graphConfig/…) → needs editConfig
-  ( cap(pulseId,'editConfig') )
-);
+```ts
+// My-Beat Viewer's feature subscription:
+query(collection(db,'pulses',p,'features'), where('assignedUids','array-contains', uid))
 ```
 
-The invite-role allow-list is extended to the new non-privileged presets so a link
-can grant e.g. `commenter`/`contributor` but never `owner`/`manager` (mirrors the
-existing "links can't mint owners" rule, `:117-119`).
+Consequences to design around:
 
-### 4.5 Preserving the security invariants
+- A My-Beat Viewer's client **must not** issue an unconstrained `features` list — it
+  would be rejected entirely (not filtered). `pulseStore.subscribeFeatures` needs a
+  role-aware variant that adds the `array-contains` filter for `readScope == 'beat'`.
+- **Composite index:** a lone `array-contains` on `assignedUids` needs **no composite
+  index** (single-field). If the beat query is combined with an `orderBy` or another
+  `where`, add a composite index to `firestore.indexes.json`. Recommendation: keep the
+  beat query a bare `array-contains` (order client-side) to avoid the index.
+- **Other collections for a My-Beat Viewer:**
+  - `epics`, `resources` — **readable in full** (recommended): they're low-sensitivity
+    structural context needed to render the rows/badges of the visible tasks. (Flag
+    P6 if the roster must also be hidden.)
+  - `comments` — a comment is visible iff its target feature is in the beat. Per-doc
+    this is enforceable (`get()` the target feature, check `uid in assignedUids`); for
+    lists the client queries comments **per visible feature** (comments are already
+    fetched per-target in the DetailsTab flow). Pulse-level comments (`targetId==null`)
+    → treat as visible to beat viewers (recommend) or hide (P6).
+  - `pulse` doc, `presence`, own `notifications` — unchanged (membership-gated).
 
-- **No self-escalation.** The `pulseMembers` update rule keeps pinning identity/grant
-  fields for a self-write and now must also pin `caps`:
+**Enforceability verdict (My-Beat Viewer): enforceable in rules, conditionally.** The
+read *gate* is exact per document, but safe operation requires (i) the `assignedUids`
+denorm and (ii) the client issuing the matching `array-contains` query — an
+unconstrained list is refused wholesale. It is **not** "rules silently filter a broad
+read"; that's not how Firestore lists work.
+
+### 4.4 Task Lead — restricted **write** (clean)
+
+Full read (recommended §3.4) ⇒ no read/query constraints at all. The only change is the
+`features` **write** gate:
+
+```
+match /features/{featureId} {
+  allow read: if isPulseMember(pulseId) && (myCaps(pulseId).readScope == 'all'
+                 || request.auth.uid in resource.data.get('assignedUids', []));
+  allow create: if isPulseMember(pulseId) && myCaps(pulseId).editScope == 'all';   // leads don't create
+  allow update: if isPulseMember(pulseId) && (
+       myCaps(pulseId).editScope == 'all'
+    || (myCaps(pulseId).editScope == 'lead'
+        && resource.data.get('leadUid', null) == request.auth.uid       // I lead it now
+        && request.resource.data.get('leadUid', null) == request.auth.uid)); // can't hand off lead to escape scope
+  allow delete: if isPulseMember(pulseId) && myCaps(pulseId).editScope == 'all';   // leads don't delete
+}
+```
+
+- Pinning `leadUid` across the update stops a Task Lead reassigning `lead` away from
+  themselves mid-edit to keep write access; changing who leads a task is an
+  editor/owner action.
+- **Field-level narrowing within a led task** (e.g. "a lead may set `status`/`notes`
+  but not `duration`/`epicId`") is possible via `diff().affectedKeys().hasOnly([...])`
+  but the content-vs-structure allow-list is brittle; **recommend client-only field
+  narrowing for v1** (blast radius is limited to tasks the lead already legitimately
+  owns). See P8.
+
+**Enforceability verdict (Task Lead): fully enforceable in rules.** Per-doc `leadUid ==
+uid` write gate with a pinned `leadUid`; no query constraints (full read); no composite
+index. The clean case.
+
+### 4.5 The other gates
+
+| Surface | Today | Proposed |
+|---|---|---|
+| `epics` write (`:193`) | `canEditPulse` | `isPulseMember && myCaps(p).editEpics` |
+| `resources` write (`:214`) | `canEditPulse` | `isPulseMember && myCaps(p).editResources` |
+| `features` write | `canEditPulse` | §4.4 (scope-aware) |
+| `pulses.update` (`:117`) | `canEditPulse` (+invite guard) | split by `affectedKeys()`: pure `invite` change ⇒ `myCaps(p).invite`; else ⇒ `myCaps(p).editConfig` (keep the "links can't grant owner" role allow-list) |
+| `comments` create (`:206`) | `isPulseMember` | `isPulseMember && myCaps(p).comment` (+ read of a comment follows the feature's read gate, §4.3) |
+| `comments` update/delete | author / owner | unchanged (author, or `deletePulse` owner-delete) |
+| `joinLinks`/`invites` create | `canEditPulse` | `myCaps(p).invite` |
+| `pulseMembers` update/delete | `isPulseOwner` | `myCaps(p).manageMembers` (+ self carve-out, §4.6) |
+| `pulses` delete (`:120`) | `isPulseOwner` | `myCaps(p).deletePulse` |
+| all **reads** except features/comments | `isPulseMember` | unchanged |
+
+### 4.6 Preserving the invariants
+
+- **No self-escalation.** The `pulseMembers` self-update rule keeps pinning identity
+  and now also pins `caps`/`role`; add one self-writable hint field (`linkedResourceId`,
+  §7) that is **advisory only** (rules never trust it for access — the authority is
+  `Resource.linkedUid` and the feature denorms). So a My-Beat Viewer can't widen their
+  own `readScope`, and a Task Lead can't grant themselves `editScope:'all'`:
 
   ```
-  allow update: if cap(pulseId,'manageMembers')      // a manager/owner may re-grant
+  allow update: if myCaps(pulseId).manageMembers
     || (memberUid == request.auth.uid
         && request.resource.data.uid   == resource.data.uid
         && request.resource.data.role  == resource.data.role
@@ -411,219 +394,185 @@ existing "links can't mint owners" rule, `:117-119`).
         && request.resource.data.joinedAt == resource.data.joinedAt
         && request.resource.data.get('caps', null) == resource.data.get('caps', null));
   ```
+- **Only manage-members may re-grant** roles/caps (owner keeps this; the four presets
+  never get `manageMembers`).
+- **`deletePulse` is the true "owner" bit**; `isPulseOwner` = `myCaps.deletePulse`, so
+  delete and last-owner semantics are unchanged.
+- **Last-owner "≥1 owner"** stays client-enforced (rules can't count) — already the
+  case (`CollaboratorsDialog.tsx:39-40`).
+- **Self-owned `myPulses` index untouched**; caps live only on the Pulse-side member
+  doc. `MyPulseIndexEntry.role` stays a display cache.
 
-  So a member can still only self-write `photoURL`; `caps`/`role` are frozen for
-  self-writes — a viewer can't hand themselves `editConfig`.
-- **Only manage-members may re-grant.** Writing another member's `role`/`caps`
-  requires `cap(p,'manageMembers')` (was owner-only; `manager` now qualifies too).
-- **`deletePulse` stays the true "owner" bit.** `isPulseOwner` is redefined as
-  `cap(p,'deletePulse')`, so Pulse delete and last-owner logic are unchanged in
-  meaning.
-- **Last-owner / privilege floors.** Rules can't count owners (no queries), so the
-  "≥1 owner" and "a `manager` can't grant `owner`/`deletePulse` they don't hold"
-  guards remain **client-enforced** (as the last-owner guard already is,
-  `CollaboratorsDialog.tsx:39-40`) — plus a rule guard that a self-write can't add
-  `deletePulse`/`manageMembers` (covered by the pinned-`caps` self-write rule above).
-  Recommendation P6: **a `manager` may only grant presets at or below `manager`**
-  (no minting new owners) — enforceable as a rule check that
-  `!request.resource.data.caps.deletePulse` unless the writer themselves has
-  `deletePulse`.
-- **Self-owned `myPulses` index untouched** (`:78-80`) — capabilities live on the
-  Pulse-side member doc, never on the user's own index, so the "a client can never
-  write another user's index" invariant is unaffected. `MyPulseIndexEntry.role`
-  stays a display cache only.
+### 4.7 What is client-side-only, and why acceptable
 
-### 4.6 What is **not** enforceable in rules (client-only), and why it's acceptable
-
-| Concern | Why rules can't | Mitigation / acceptability |
+| Concern | Why not in rules | Acceptability |
 |---|---|---|
-| Field-level narrowing for contributors (content vs structure of an assigned task) | Fragile field allow-list; low value | Client-gated; blast radius limited to tasks the user legitimately participates in (§3.4). Rules still enforce *which* tasks. |
-| "≥1 owner always" | No count/query in rules | Client guard already exists; self-write can't drop own owner cap (pinned-caps rule). |
-| Manager can't exceed own grants when re-granting | Partially: rule can forbid granting `deletePulse` a non-owner writer lacks | Rule guard in §4.5 + client UI hides the option. |
-| `assignedUids` integrity (self-assign on create) | Client maintains the denorm | Only lets a user edit tasks they inserted themselves onto, never pre-existing others' tasks; server-maintained denorm is the later hardening. |
+| My-Beat Viewer must issue the `array-contains` query | Firestore lists gate on the query, not results | Client owns the query shape; a wrong query fails *closed* (rejected), never leaks. |
+| Field narrowing within a Task-Lead's led task | Brittle field allow-list | Blast radius = tasks the lead already owns; rules still enforce *which* tasks. |
+| `assignedUids`/`leadUid` integrity | Client maintains the denorm | Written only by editors (`editScope:'all'`); scoped roles can't write features, so can't forge their own inclusion/lead. |
+| "≥1 owner always" | No count/query in rules | Existing client guard; self-write can't drop own owner caps. |
 
-None of these can escalate a user's authority over **other members' data** or the
-Pulse lifecycle; they are all "a user being slightly too permissive with tasks they
-already legitimately touch," which is an acceptable v1 trade for avoiding brittle
-rules.
+None of these lets a user reach **another member's data** beyond their scope or touch
+the Pulse lifecycle — the acceptable v1 line.
 
 ---
 
-## 5. UX — assigning & displaying permissions
+## 5. UX — assigning & displaying (extend `CollaboratorsDialog.tsx`)
 
-Extend `CollaboratorsDialog.tsx` (the existing member-management surface) rather than
-build a new one.
-
-- **Preset picker (default view).** The current `<select>` of Editor/Viewer
-  (`:124-133`) widens to the ordered preset list **Owner · Manager · Editor ·
-  Contributor · Commenter · Viewer**, each with a one-line helper ("Contributor —
-  edits only their own tasks", "Commenter — reads & comments", "Manager — manages
-  members, can't delete"). "Make owner" stays the explicit transfer action already
-  shipped (`:134-141`). Only a member with `manageMembers` sees the picker
-  (`isOwner`/`canManage` derivations widen to `cap` checks).
-- **Advanced (per-capability) disclosure.** An "Advanced…" toggle under the picker
-  reveals the eight capability switches (with `editTasksScope` as a 3-way
-  All/Assigned/None control). Flipping any switch away from the selected preset flips
-  the member's label to **Custom**; a "Reset to preset" link restores a bundle. This
-  keeps the everyday path simple (pick a role) while exposing full granularity for
-  power users.
-- **Badges.** `ROLE_BADGE` (`:19-23`) gains entries so each preset reads at a glance:
-  Owner (orange), Manager (violet), Editor (blue), Contributor (teal — matches the
-  `linkedUid` link ring `#12A594`), Commenter (slate-blue), Viewer (grey), Custom
-  (dashed/neutral with a tooltip listing the enabled caps). Contributor's badge
-  tooltips "Edits only tasks their linked resource is on" and, if the member has **no**
-  `linkedUid` resource, warns "Not linked to a resource — can't edit any task yet" and
-  deep-links to the Team tab account-link dropdown (`TeamTab.tsx:186-200`).
-- **Self-view.** Non-managers see their own badge + a read-only capability summary
-  ("You can: edit your tasks, comment") so expectations are clear without granting the
-  management surface.
-- **Join-link role options.** The link role picker (`InviteLinkPanel`, per
-  Collaboration-Spec §3.1) offers Viewer/Commenter/Contributor/Editor (never
-  Owner/Manager) — matching the §4.4 invite-role allow-list.
+- **Preset picker.** The Editor/Viewer `<select>` (`:124-133`) widens to **Owner ·
+  Editor · Full Viewer · My-Beat Viewer · Task Lead**, each with a one-line helper:
+  - Full Viewer — "reads & comments on the whole Pulse."
+  - My-Beat Viewer — "sees only tasks their linked resource is on."
+  - Task Lead — "edits only the tasks they lead; reads the rest." ("Make owner" stays
+    the separate transfer action, `:134-141`.) Only a member with `manageMembers`
+    (owner) sees the picker.
+- **Linked-resource dependency surfaced inline.** For My-Beat Viewer and Task Lead,
+  the row shows the linked resource; if the member is **unlinked**, show an amber
+  "Not linked — sees nothing / can edit nothing until linked" warning with a deep-link
+  to the Team-tab account-link dropdown (`TeamTab.tsx:186-200`) — mirroring the
+  disabled-My-Beat-toggle affordance (`Toolbar.tsx:220`).
+- **Badges.** `ROLE_BADGE` (`:19-23`) gains: Owner (orange), Editor (blue), Full
+  Viewer (grey), My-Beat Viewer (teal, matching the link ring `#12A594`, tooltip "Sees
+  only their beat"), Task Lead (violet, tooltip "Edits only tasks they lead"), Custom
+  (dashed/neutral, tooltip lists enabled caps).
+- **Advanced (optional).** An "Advanced…" disclosure exposes the raw capability
+  toggles + the `readScope`/`editScope` selectors; any deviation from a preset flips
+  the label to **Custom** with a "Reset to preset" link. Keeps the everyday path to
+  "pick a role" while leaving full granularity available.
+- **Self-view.** Non-managers see their own badge + a plain-language summary ("You can:
+  see your beat, comment") so scoped members understand why parts of the Pulse are
+  hidden or read-only.
+- **Join-link roles.** The link role picker (Collaboration-Spec §3.1) may offer Full
+  Viewer / My-Beat Viewer / Task Lead / Editor, never Owner (extends the existing
+  "links can't mint owners" rule, `:117-119`). P7.
 
 ---
 
 ## 6. Interaction with the Teams / workspace layer
 
-Reuses Collaboration-Spec §3.2 (union-cascade) and **D11b** verbatim: *the team role
-is a floor; a per-Pulse grant can only raise capability, never lower it.*
+Reuses Collaboration-Spec §3.2 (union-cascade) and **D11b** (team role is a floor;
+per-Pulse grants only raise):
 
-- **Team roles map to the same presets.** Collaboration-Spec §3.2 unifies
-  `WorkspaceRole` to `owner`/`editor`/`viewer`; those map to the identical capability
-  bundles in §3.3. (Manager/contributor/commenter are **per-Pulse-only** presets for
-  now — team-level granularity is a later extension; a team stays owner/editor/viewer.)
-- **Effective capability = union.** For a user with both a team role and a per-Pulse
-  `pulseMembers` grant on a Pulse, each boolean is OR-ed and `editTasksScope` takes
-  the **broader** of the two (`all` > `assigned` > `none`). So a team `viewer` bumped
-  to `contributor` on one Pulse gets `assigned` there; a per-Pulse grant can never
-  drop them below their team floor. This is exactly D11b, expressed over capabilities
-  instead of the old three tiers.
+- **Team roles stay owner/editor/viewer** (Collaboration-Spec §3.2), mapping to the
+  Owner/Editor/Full-Viewer bundles. My-Beat Viewer and Task Lead are **per-Pulse-only**
+  presets this round (team-level scoping deferred, P11).
+- **Effective capability = union.** Each boolean OR-ed; `readScope` takes the broader
+  (`all` > `beat`); `editScope` takes the broader (`all` > `lead` > `none`). So a team
+  Full Viewer granted Task Lead on one Pulse gets lead-edit there but never drops below
+  full read; a team member can never be *narrowed* to a beat by a per-Pulse grant
+  (D11b). Note: this means **My-Beat Viewer cannot restrict a team member who already
+  has a full-read team floor** — beat restriction only bites for guests (no team
+  membership) or team viewers-and-below. Flag in P11.
 - **Rule shape.** The cascade already `get()`s the pulse doc for `workspaceId`
-  (Collaboration-Spec §4). Capability helpers gain an OR arm:
-  `cap(p, X) := perPulseCap(p, X) || teamCap(workspaceOf(p), X)`, where `teamCap`
-  maps the workspace role to the preset bundle. Reads stay
-  `isPulseMember || isWorkspaceMember` (unchanged).
-- **Guests** (per-Pulse `pulseMembers`, no team membership) work exactly as today —
-  they simply have no team floor, so their effective caps are their per-Pulse caps.
+  (Collaboration-Spec §4); `myCaps` gains an OR arm folding the workspace-role bundle.
+  Reads stay `isPulseMember || isWorkspaceMember`.
 
 ---
 
 ## 7. Data-model changes
 
-Additive; existing docs remain valid.
+Additive; existing docs stay valid.
 
-**`PulseMember` (`src/types/index.ts:78-91`) — add two optional fields:**
-
-```ts
-export interface PulseMember {
-  uid: string;
-  email: string;
-  role: PulseRole;          // widened enum (§3.3): +manager/contributor/commenter/custom
-  joinedAt: Timestamp;
-  joinToken?: string;
-  photoURL?: string | null;
-  // NEW — the materialised capability bundle the rules read (§4.1). Absent on
-  // legacy docs (interpreted via legacyCan()); always written going forward.
-  caps?: Capabilities;
-}
-```
-
-**New type (§3.2):** `Capabilities`, `CapScope`. **Widened:** `PulseRole` (§3.3).
-
-**`Feature` (`types/index.ts:237-264`) — add one denormalised field for scope (§3.4):**
+**`PulseMember` (`types/index.ts:78-91`) — add:**
 
 ```ts
-  assignedUids?: string[];  // linkedUid of each assigned resource; maintained on write.
-                            // Enables the rule's `uid in assignedUids` test.
+role: PulseRole;              // widened enum (§3.3): +fullViewer/myBeatViewer/taskLead/custom
+caps?: Capabilities;          // materialized bundle rules read (§4.1). Absent on legacy docs.
+linkedResourceId?: string|null; // ADVISORY hint of the member's linked resource; self-writable
+                                // like photoURL. Rules never trust it for access (authority is
+                                // Resource.linkedUid + the feature denorms) — UI convenience only.
 ```
 
-**`InviteLink` / `JoinLink` role** widens to the invite-eligible presets
-(`viewer|commenter|contributor|editor`) — never owner/manager (§4.4). No other
-entity changes; `Epic`/`Resource`/`Pulse`/`Workspace` are untouched.
+**New types:** `Capabilities`, `ReadScope`, `EditScope` (§3.2); widened `PulseRole`.
 
-**Defaults preserving current behaviour:** a member with **no `caps`** is read via
-`legacyCan()` (§4.1) — owner⇒all, editor⇒edit-everything, viewer⇒comment-only —
-i.e. exactly today. A feature with **no `assignedUids`** simply yields an empty array
-in the `in` test, so a contributor can't edit it until it's (re)written with the
-denorm; `editTasksScope:"all"` members ignore the field entirely.
+**`Feature` (`types/index.ts:237-264`) — add (§4.2):**
+
+```ts
+assignedUids?: string[];      // linkedUids of resources on this feature or any subtask (My-Beat read)
+leadUid?: string | null;      // linkedUid of feature.lead's resource (Task Lead write)
+```
+
+**`InviteLink`/`JoinLink.role`** widens to the link-grantable presets
+(`fullViewer|myBeatViewer|taskLead|editor`), never owner (P7). No changes to
+`Epic`/`Resource`/`Pulse`/`Workspace`.
+
+**Defaults preserve today's behaviour:** a member with no `caps` is read via the
+legacy fallback (§4.1) = owner/editor/viewer exactly as now. A feature with no
+`assignedUids`/`leadUid` yields empty/absent in the scoped tests, so a My-Beat Viewer
+sees it as *not* in their beat and a Task Lead as *not* led — until the denorm is
+(re)written; full-read/full-edit roles ignore both fields.
+
+**`firestore.indexes.json`:** no new index if the beat query is a bare
+`array-contains` (§4.3); add a composite index only if beat queries gain an `orderBy`/
+second `where`.
 
 ---
 
 ## 8. Migration & rollout
 
-Phased so each step is independently shippable and the app never breaks. Phases 1–2
-are behaviour-preserving; new powers arrive only in 3+.
+Each phase is independently shippable; 1–2 are behaviour-preserving.
 
-1. **Introduce caps plumbing, no behaviour change.** Add the `Capabilities` type, the
-   preset→caps table (a shared TS module reused by client + used to author the rule
-   helpers), and the `cap()` / `legacyCan()` rule helpers. Rules keep identical
-   outcomes because every existing member is legacy (no `caps`) and presets == old
-   roles. `setMemberRole` starts **materialising `caps`** alongside `role` for any
-   member it writes. **No backfill** — legacy docs resolve via fallback. Ship behind
-   no flag; it's a no-op.
-2. **Preset remap for honest naming (P4).** If choosing "true read-only viewer"
-   (recommended (b)): a one-time, per-member **label** remap on next write — existing
-   `viewer` → `commenter` when materialising caps, so no one loses commenting. Purely
-   additive; unremapped legacy viewers keep commenting via `legacyCan`.
-3. **Add `manager` + `commenter` presets and the split gates.** Ship the
-   `editConfig`/`invite`/`manageMembers` rule split (§4.2, §4.4) and the widened
-   preset picker + badges (§5). Managers/commenters become grantable. Editors/viewers
-   unaffected (their bundles are unchanged).
-4. **Add `contributor` + scoped `features` write (§3.4).** Introduce
-   `Feature.assignedUids` maintenance in the resource-assignment write path, then the
-   scoped `features` rules. Ship the contributor preset, its badge, and the
-   "not linked to a resource" warning. This is the most complex phase; sequence it
-   last and gate the rule change behind the denorm being live for one release so
-   in-flight features acquire `assignedUids` before the rule relies on it.
-5. **Advanced per-capability UI + `custom` preset (§5).** Optional power-user layer;
-   independent of the rule work (rules already read caps).
+1. **Caps plumbing, no behaviour change.** Add the `Capabilities` type, the
+   preset→caps table (shared TS module + used to author the rule helper `myCaps`), and
+   the legacy fallback. `setMemberRole` starts materializing `caps` alongside `role`.
+   No backfill — legacy docs resolve via fallback; presets == old roles ⇒ no-op.
+2. **Feature denorm groundwork.** Start maintaining `assignedUids`/`leadUid` on every
+   feature write and on `linkedUid` changes, for **one release**, so existing features
+   acquire the fields before any rule relies on them. Still no rule change.
+3. **Task Lead (restricted write).** Ship the `features` write gate (§4.4), the preset,
+   badge, and unlinked-warning. Cleanest scoped role; no client-query changes (full
+   read). Editors/viewers unaffected.
+4. **My-Beat Viewer (restricted read).** Ship the beat read gate (§4.3) **and** the
+   role-aware `subscribeFeatures`/comments queries that add `array-contains`. Gate the
+   rule behind the query change so a beat member's client never issues an
+   unconstrained (now-rejected) list. Most delicate phase — sequence last.
+5. **Split config/invite/manage gates + Advanced UI.** The `pulses.update`
+   `affectedKeys()` split (§4.5) and the optional per-capability/`custom` UI (§5).
 
-Rollback at any phase = stop writing the new field; `legacyCan()` fallback keeps
-older docs working. No destructive migration exists.
+Rollback at any phase = stop writing the new field; the legacy fallback keeps older
+docs working. No destructive migration.
 
 ---
 
 ## 9. Open decisions (P-list)
 
-1. **P1 — Adopt capabilities-bundled-into-presets (Option C).** *Recommend:* yes —
-   caps as the enforcement primitive, presets for UX, materialised on the member doc
-   with a legacy fallback. *Confirm this over "just add more roles" (A).*
-2. **P2 — The capability set (§3.2: 8 caps).** *Recommend:* the eight listed
-   (`editTasksScope`, `editEpics`, `editResources`, `editConfig`, `comment`, `invite`,
-   `manageMembers`, `deletePulse`). *Confirm the split points — especially separating
-   `editEpics`/`editResources`/`editConfig` out of one "edit" bit.*
-3. **P3 — The preset lineup.** *Recommend:* Owner · Manager · Editor · Contributor ·
-   Commenter · Viewer. *Confirm names and whether `manager` (members, no delete) is
-   wanted for v1 or deferred.*
-4. **P4 — Viewer vs commenter back-compat.** Today viewers can comment. *Recommend
-   (b):* make `viewer` truly read-only and **remap existing viewers → `commenter`** on
-   next write so no one loses commenting. Alternative (a): keep `viewer.comment=true`
-   and drop the `commenter` preset. *Decide (a) or (b).*
-5. **P5 — Contributor scope enforcement (§3.4).** *Recommend:* denormalise
-   `Feature.assignedUids` and enforce **which** tasks in rules; enforce **field-level**
-   narrowing client-only for v1; contributors can't delete tasks. *Confirm the
-   client-only field narrowing is acceptable, and create-time self-assign is
-   tolerated.*
-6. **P6 — Who may grant what.** *Recommend:* `manageMembers` (owner + manager) may
-   re-grant, but a `manager` may only grant presets **at or below manager** (can't
-   mint owners / `deletePulse`), enforced by rule guard + hidden UI. *Confirm managers
-   can't create owners.*
-7. **P7 — Join-link grantable roles.** *Recommend:* links may grant
-   viewer/commenter/contributor/editor, never owner/manager (extends the existing
-   "links can't mint owners" rule). *Confirm contributor/commenter are link-grantable.*
-8. **P8 — Field-level content-only editing.** Deferred. *Recommend:* revisit only if a
-   concrete "status/notes only" requirement appears; it's a `diff().affectedKeys()`
-   allow-list, enforceable but brittle. *Confirm deferral.*
-9. **P9 — Per-epic / per-field ACLs.** Explicit **non-goal** (§2) — per-write ACL
-   lookups are expensive and complex. *Confirm out of scope for this round.*
-10. **P10 — Materialised caps vs derive-in-rules.** *Recommend:* materialise `caps` on
-    the member doc (rules read booleans; one `get()`), with `legacyCan()` fallback for
-    old docs (no backfill). *Confirm the denormalisation (keeping the preset→caps table
-    in sync across client + rules) is acceptable.*
-11. **P11 — Team-level granularity.** *Recommend:* keep teams at owner/editor/viewer
-    (Collaboration-Spec §3.2) for now; manager/contributor/commenter are per-Pulse
-    grants that **raise** the team floor (D11b). *Confirm teams stay 3-tier this round.*
-12. **P12 — `assignedUids` maintainer.** *Recommend:* client-maintained in v1 (cheap,
-    serverless), server-maintained later alongside the assignment-notification
-    function (Collaboration-Spec §3.6). *Confirm client-first is acceptable.*
+1. **P1 — Capability/scope model behind fixed presets.** *Recommend:* yes —
+   `(readScope, editScope, bits)` materialized on the member doc, legacy fallback,
+   five presets as the only UI. *Confirm.*
+2. **P2 — The two `Feature` denorms (`assignedUids`, `leadUid`).** *Recommend:* adopt
+   both — they're what make the scoped roles rule-enforceable with scalar tests.
+   *Confirm the denormalization (and its maintenance cost, P12).*
+3. **P3 — Owner unchanged; four presets in addition.** *Recommend & confirm:* Owner
+   keeps full control + manage-members + delete; none of Editor/Full-Viewer/My-Beat-
+   Viewer/Task-Lead get manage/delete. **(Product owner already fixed this.)**
+4. **P4 — True read-only tier?** Today Full Viewer can comment (legacy behaviour). The
+   fixed four-role set has no no-comment tier. *Recommend:* keep Full Viewer
+   comment-capable; add a silent-viewer preset only if a real need appears.
+5. **P5 — Task Lead read scope + name.** *Recommend:* name **"Task Lead"**; read scope
+   **full Pulse, edit only led tasks** (context matters, costs nothing in rules).
+   *Alternative:* read only led tasks (enforceable like §4.3, hides context). *Confirm
+   name and full-read.*
+6. **P6 — My-Beat Viewer's non-feature reads.** *Recommend:* epics + resources readable
+   (context for the visible tasks); comments visible only on visible features
+   (per-doc enforced, client queries per-feature); Pulse-level comments visible.
+   *Confirm, or tighten to also hide the roster.*
+7. **P7 — Link-grantable roles.** *Recommend:* links may grant Full Viewer / My-Beat
+   Viewer / Task Lead / Editor, never Owner. *Confirm the scoped roles are
+   link-grantable.*
+8. **P8 — Field narrowing within a Task-Lead's led task.** *Recommend:* client-only
+   for v1 (rules enforce *which* tasks, not *which fields*). *Confirm client-only is
+   acceptable.*
+9. **P9 — Per-epic / per-field ACLs.** Explicit **non-goal** (§2). *Confirm deferral.*
+10. **P10 — Materialized caps vs derive-in-rules.** *Recommend:* materialize on the
+    member doc (rules read values; one `get()`), legacy fallback, no backfill.
+    *Confirm the client↔rules preset table sync is acceptable.*
+11. **P11 — Teams composition.** *Recommend:* teams stay owner/editor/viewer; My-Beat/
+    Task-Lead are per-Pulse grants that only *raise* the team floor (D11b) — which
+    means a beat restriction **cannot narrow** a member who already has a full-read
+    team floor (bites only guests/team-viewers). *Confirm this is the intended
+    interaction.*
+12. **P12 — `assignedUids`/`leadUid` maintainer.** *Recommend:* client-maintained in
+    v1 (serverless; the write path has the roster), server-maintained later alongside
+    the assignment-notification function (Collaboration-Spec §3.6). *Confirm
+    client-first is acceptable, including the `linkedUid`-change fan-out.*
 ```
