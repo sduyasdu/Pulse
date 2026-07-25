@@ -180,20 +180,6 @@ export function Toolbar({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4" style={{ minHeight: 44, paddingTop: 5, paddingBottom: 5 }}>
-        {/* Collaboration cluster — far left of the row, in order:
-            presence badges, comments toggle, notifications bell. */}
-        <div className="flex items-center gap-2" style={{ borderRight: "1px solid #24406B", paddingRight: 8, marginRight: 2 }}>
-          {presence}
-          <button
-            onClick={onToggleComments}
-            title="Comments"
-            className="flex items-center justify-center rounded"
-            style={{ width: 26, height: 26, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
-          >
-            <Icon name="forum" size={15} />
-          </button>
-          {notifications}
-        </div>
         {canEdit && viewMode === "canvas" && (
           <div className="flex items-center gap-1.5" style={{ borderRight: "1px solid #24406B", paddingRight: 6, marginRight: 2 }}>
             <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
@@ -287,6 +273,20 @@ export function Toolbar({
           </>
         )}
 
+        {/* Collaboration cluster — pushed to the right of the row, in order:
+            presence badges, comments toggle, notifications bell. */}
+        <div className="flex items-center gap-2 ml-auto" style={{ borderLeft: "1px solid #24406B", paddingLeft: 8, marginLeft: 2 }}>
+          {presence}
+          <button
+            onClick={onToggleComments}
+            title="Comments"
+            className="flex items-center justify-center rounded"
+            style={{ width: 26, height: 26, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
+          >
+            <Icon name="forum" size={15} />
+          </button>
+          {notifications}
+        </div>
       </div>
     </div>
   );
