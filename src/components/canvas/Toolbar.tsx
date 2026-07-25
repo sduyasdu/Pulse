@@ -210,6 +210,20 @@ export function Toolbar({
             </button>
           ))}
         </div>
+
+        {/* My Pulse — switch toggle: only tasks involving my linked account. */}
+        <button
+          onClick={onToggleMyPulse}
+          disabled={!canMyPulse}
+          title={canMyPulse ? "My Pulse — show only tasks I'm involved in (via my linked account)" : "Link your account to a resource in the Team tab to use My Pulse"}
+          className="no-press flex items-center gap-1.5 px-2 py-1 rounded"
+          style={{ background: "#1B3A63", border: "1px solid " + (myPulse ? "#EE7240" : "#24406B"), opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
+        >
+          <span className="text-xs font-semibold" style={{ color: "#EE7240" }}>My Pulse</span>
+          <span style={{ position: "relative", width: 26, height: 15, borderRadius: 999, flexShrink: 0, background: myPulse ? "#EE7240" : "#0E2748", transition: "background .15s ease" }}>
+            <span style={{ position: "absolute", top: 1.5, left: myPulse ? 12.5 : 1.5, width: 11, height: 11, borderRadius: "50%", background: "#FFFFFF", transition: "left .15s ease" }} />
+          </span>
+        </button>
         {viewMode === "canvas" && (
           <>
         <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
@@ -275,15 +289,6 @@ export function Toolbar({
             </button>
           )}
         </div>
-        <button
-          onClick={onToggleMyPulse}
-          disabled={!canMyPulse}
-          title={canMyPulse ? "My Pulse — show only tasks I'm involved in (via my linked account)" : "Link your account to a resource in the Team tab to use My Pulse"}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold"
-          style={{ background: myPulse ? "#123359" : "#1B3A63", color: "#EE7240", border: myPulse ? "1px solid #EE7240" : "1px solid #24406B", opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
-        >
-          <Icon name={myPulse ? "check_box" : "check_box_outline_blank"} size={13} /> My Pulse
-        </button>
         {viewMode === "canvas" && (
           <>
             <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: compactFilter ? "#123359" : "#1B3A63", color: "#EE7240", border: compactFilter ? "1px solid #EE7240" : "1px solid #24406B" }}>
