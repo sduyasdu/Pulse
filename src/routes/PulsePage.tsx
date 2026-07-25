@@ -147,7 +147,7 @@ export function PulsePage() {
   // Empty set = no filter ("all"). Multi-select, so a set of chosen values.
   const [featureStatusFilter, setFeatureStatusFilter] = useState<Set<string>>(new Set());
   const [epicFilter, setEpicFilter] = useState<Set<string>>(new Set());
-  const [compactFilter, setCompactFilter] = useState(false);
+  const [compactFilter, setCompactFilter] = useState(true);
   const [epicsShrunk, setEpicsShrunk] = useState(false);
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);

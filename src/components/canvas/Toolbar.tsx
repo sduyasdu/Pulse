@@ -235,6 +235,11 @@ export function Toolbar({
           <div className="flex items-center gap-1 rounded px-1.5" style={{ background: "#F4F7FB", border: "1px solid #24406B" }}>
             <Icon name="search" size={13} style={{ color: "#64748B" }} />
             <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#1F2330", outline: "none", width: 90 }} />
+            {featureQuery && (
+              <button onClick={() => setFeatureQuery("")} title="Clear task filter" aria-label="Clear task filter" className="no-press" style={{ color: "#64748B", display: "flex" }}>
+                <Icon name="close" size={13} />
+              </button>
+            )}
           </div>
           <MultiSelectFilter
             label="statuses"
