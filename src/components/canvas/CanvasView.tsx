@@ -63,6 +63,9 @@ interface CanvasViewProps {
    * matching ones are compacted (view-only); when false, non-matching tasks are
    * just dimmed in place. */
   compactFilter: boolean;
+  /** "My Pulse": when set, only tasks involving one of these resource ids (the
+   * viewer's linked account) count as matching. Null = off. */
+  myResourceIds: string[] | null;
   canEdit: boolean;
   onTimelineBoundsChange?: (bounds: { startDay: number; endDay: number; dayWidth: number }) => void;
 }
@@ -70,7 +73,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, canEdit, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, canEdit, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -201,16 +204,17 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
   // Does a task match the active filters? (Same rule the render uses to dim.)
   const qLower = featureQuery.trim().toLowerCase();
-  const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || !!filterResource;
+  const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || !!filterResource || !!myResourceIds;
   const matchOf = useCallback(
     (box: Feature) => {
       const mRes = !filterResource || (box.resources || []).includes(filterResource) || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
       const mQuery = !qLower || (box.title || "").toLowerCase().includes(qLower) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(qLower));
       const mStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
       const mEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
-      return mRes && mQuery && mStatus && mEpic;
+      const mMine = !myResourceIds || (box.resources || []).some((r) => myResourceIds.includes(r)) || (box.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
+      return mRes && mQuery && mStatus && mEpic && mMine;
     },
-    [filterResource, qLower, featureStatusFilter, epicFilter],
+    [filterResource, qLower, featureStatusFilter, epicFilter, myResourceIds],
   );
 
   // "Hide + compact" filter mode: keep only matching tasks and repack them
@@ -845,7 +849,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
               const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
               const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
-              const matches = matchesRes && matchesQuery && matchesStatus && matchesEpic;
+              const matchesMine = !myResourceIds || (box.resources || []).some((r) => myResourceIds.includes(r)) || (box.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
+              const matches = matchesRes && matchesQuery && matchesStatus && matchesEpic && matchesMine;
               const est = estimateEffort(box, graph);
               const assigned = assignedEffort(box);
               const coverage = Math.round((assigned / Math.max(0.1, est)) * 100);

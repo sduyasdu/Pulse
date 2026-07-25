@@ -15,11 +15,12 @@ interface MobileBoardProps {
   resources: Resource[];
   canEdit: boolean;
   onSelect: (id: string) => void;
+  myResourceIds?: string[] | null;
 }
 
 const fmt = (day: number) => dateForDay(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export function MobileBoard({ features, epics, resources, canEdit, onSelect }: MobileBoardProps) {
+export function MobileBoard({ features, epics, resources, canEdit, onSelect, myResourceIds }: MobileBoardProps) {
   const pulse = usePulseStore((s) => s.pulse);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const graph = graphConfigOf(pulse);
@@ -35,6 +36,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
     () =>
       features.filter((f) => {
         if (!taskActiveInPeriod(f, datePeriod)) return false;
+        if (myResourceIds && !((f.resources || []).some((r) => myResourceIds.includes(r)) || (f.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r))))) return false;
         if (!q) return true;
         if ((f.title || "").toLowerCase().includes(q)) return true;
         const ep = epics.find((e) => e.id === f.epicId);
@@ -44,10 +46,10 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
           return r && (r.name.toLowerCase().includes(q) || r.initials.toLowerCase().includes(q));
         });
       }),
-    [features, epics, byId, q, datePeriod],
+    [features, epics, byId, q, datePeriod, myResourceIds],
   );
 
-  const narrowed = !!q || datePeriod !== "all";
+  const narrowed = !!q || datePeriod !== "all" || !!myResourceIds;
   const columns = useMemo(() => buildBoard(filtered, epics, statuses, !narrowed), [filtered, epics, statuses, narrowed]);
   const [active, setActive] = useState<string | null>(null);
   const col = columns.find((c) => c.status === active) ?? columns[0];

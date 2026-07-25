@@ -11,11 +11,12 @@ interface MobileTaskListProps {
   epics: Epic[];
   resources: Resource[];
   onSelect: (id: string) => void;
+  myResourceIds?: string[] | null;
 }
 
 const fmt = (day: number) => dateForDay(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export function MobileTaskList({ features, epics, resources, onSelect }: MobileTaskListProps) {
+export function MobileTaskList({ features, epics, resources, onSelect, myResourceIds }: MobileTaskListProps) {
   const byId = Object.fromEntries(resources.map((r) => [r.id, r]));
   const statuses = statusesOf(usePulseStore((s) => s.pulse));
   const [query, setQuery] = useState("");
@@ -25,19 +26,19 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
   }
 
   // Match on task title, its epic's name, and any assigned resource's name or
-  // initials — the same handles you'd scan the list for.
+  // initials — the same handles you'd scan the list for — plus "My Pulse".
   const q = query.trim().toLowerCase();
-  const filtered = q
-    ? features.filter((f) => {
-        if ((f.title || "").toLowerCase().includes(q)) return true;
-        const ep = epics.find((e) => e.id === f.epicId);
-        if (ep && ep.name.toLowerCase().includes(q)) return true;
-        return (f.resources || []).some((rid) => {
-          const r = byId[rid];
-          return r && (r.name.toLowerCase().includes(q) || r.initials.toLowerCase().includes(q));
-        });
-      })
-    : features;
+  const filtered = features.filter((f) => {
+    if (myResourceIds && !((f.resources || []).some((r) => myResourceIds.includes(r)) || (f.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r))))) return false;
+    if (!q) return true;
+    if ((f.title || "").toLowerCase().includes(q)) return true;
+    const ep = epics.find((e) => e.id === f.epicId);
+    if (ep && ep.name.toLowerCase().includes(q)) return true;
+    return (f.resources || []).some((rid) => {
+      const r = byId[rid];
+      return r && (r.name.toLowerCase().includes(q) || r.initials.toLowerCase().includes(q));
+    });
+  });
 
   const groups: { epic: Epic | null; items: Feature[] }[] = epics
     .map((ep) => ({ epic: ep as Epic | null, items: filtered.filter((f) => f.epicId === ep.id) }))

@@ -38,6 +38,7 @@ export function PulsePage() {
   const pulse = usePulseStore((s) => s.pulse);
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
+  const resources = usePulseStore((s) => s.resources);
   const members = usePulseStore((s) => s.members);
   const loading = usePulseStore((s) => s.loading);
   const notFound = usePulseStore((s) => s.notFound);
@@ -95,6 +96,12 @@ export function PulsePage() {
   const uid = firebaseUser?.uid;
   const myRole = uid ? roleOf(uid) : null;
   const canEdit = myRole === "owner" || myRole === "editor";
+
+  // "My Pulse": the resource(s) linked to my account, and the active filter to
+  // only tasks I'm involved in (null when off or when I'm not linked).
+  const [myTasksOnly, setMyTasksOnly] = useState(false);
+  const myResourceIds = useMemo(() => (uid ? resources.filter((r) => r.linkedUid === uid).map((r) => r.id) : []), [resources, uid]);
+  const myResourceFilter = myTasksOnly && myResourceIds.length > 0 ? myResourceIds : null;
 
   // Keep my avatar denormalized onto my membership doc so other members can
   // render it (e.g. on a resource linked to my account). Writes only on a
@@ -310,6 +317,9 @@ export function PulsePage() {
         setEpicFilter={setEpicFilter}
         compactFilter={compactFilter}
         onToggleCompactFilter={() => setCompactFilter((v) => !v)}
+        myPulse={myTasksOnly}
+        onToggleMyPulse={() => setMyTasksOnly((v) => !v)}
+        canMyPulse={myResourceIds.length > 0}
         epicOptions={epics.map((e) => ({ id: e.id, name: e.name || "Untitled epic" }))}
         statusOptions={statusesOf(pulse).map((s) => ({ id: s.id, name: s.label }))}
         showDelays={showDelays}
@@ -381,6 +391,7 @@ export function PulsePage() {
               featureStatusFilter={featureStatusFilter}
               epicFilter={epicFilter}
               filterResource={filterResource}
+              myResourceIds={myResourceFilter}
             />
           ) : (
             <CanvasView
@@ -401,6 +412,7 @@ export function PulsePage() {
               featureStatusFilter={featureStatusFilter}
               epicFilter={epicFilter}
               compactFilter={compactFilter}
+              myResourceIds={myResourceFilter}
               canEdit={canEdit}
               onTimelineBoundsChange={setTimelineBounds}
             />

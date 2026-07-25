@@ -38,6 +38,9 @@ interface ToolbarProps {
   setEpicFilter: (v: Set<string>) => void;
   compactFilter: boolean;
   onToggleCompactFilter: () => void;
+  myPulse: boolean;
+  onToggleMyPulse: () => void;
+  canMyPulse: boolean;
   epicOptions: { id: string; name: string }[];
   statusOptions: { id: string; name: string }[];
   showDelays: boolean;
@@ -83,6 +86,9 @@ export function Toolbar({
   setEpicFilter,
   compactFilter,
   onToggleCompactFilter,
+  myPulse,
+  onToggleMyPulse,
+  canMyPulse,
   epicOptions,
   statusOptions,
   showDelays,
@@ -269,6 +275,11 @@ export function Toolbar({
             </button>
           )}
         </div>
+        {canMyPulse && (
+          <button onClick={onToggleMyPulse} title="My Pulse — show only tasks I'm involved in (via my linked account)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: myPulse ? "#123359" : "#1B3A63", color: "#EE7240", border: myPulse ? "1px solid #EE7240" : "1px solid #24406B" }}>
+            <Icon name={myPulse ? "check_box" : "check_box_outline_blank"} size={13} /> My Pulse
+          </button>
+        )}
         {viewMode === "canvas" && (
           <>
             <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: compactFilter ? "#123359" : "#1B3A63", color: "#EE7240", border: compactFilter ? "1px solid #EE7240" : "1px solid #24406B" }}>

@@ -20,9 +20,12 @@ interface KanbanViewProps {
   featureStatusFilter: Set<string>;
   epicFilter: Set<string>;
   filterResource: string | null;
+  /** "My Pulse": when set, only tasks involving one of these resource ids (the
+   * viewer's linked account) are shown. Null = off. */
+  myResourceIds: string[] | null;
 }
 
-export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featureStatusFilter, epicFilter, filterResource }: KanbanViewProps) {
+export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds }: KanbanViewProps) {
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
@@ -65,15 +68,16 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
         const matchesQuery = !q || (f.title || "").toLowerCase().includes(q) || (f.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
         const matchesEpic = epicFilter.size === 0 || (f.epicId != null && epicFilter.has(f.epicId));
         const matchesRes = !filterResource || (f.resources || []).includes(filterResource) || (f.children || []).some((c) => (c.resources || []).includes(filterResource));
+        const matchesMine = !myResourceIds || (f.resources || []).some((r) => myResourceIds.includes(r)) || (f.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
         const matchesDate = taskActiveInPeriod(f, datePeriod);
-        return matchesQuery && matchesEpic && matchesRes && matchesDate;
+        return matchesQuery && matchesEpic && matchesRes && matchesMine && matchesDate;
       }),
-    [features, q, epicFilter, filterResource, datePeriod],
+    [features, q, epicFilter, filterResource, myResourceIds, datePeriod],
   );
 
   // When a filter narrows the tasks, don't resurrect the hidden epics as empty
   // bands — only show the epics that actually have matching tasks.
-  const filtered = !!q || epicFilter.size > 0 || !!filterResource || datePeriod !== "all";
+  const filtered = !!q || epicFilter.size > 0 || !!filterResource || !!myResourceIds || datePeriod !== "all";
   const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses, !filtered), [visibleFeatures, epics, statuses, filtered]);
   const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
 

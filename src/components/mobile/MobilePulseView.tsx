@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
@@ -44,6 +44,11 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [myTasksOnly, setMyTasksOnly] = useState(false);
+
+  // "My Pulse": tasks involving a resource linked to my account.
+  const myResourceIds = useMemo(() => resources.filter((r) => r.linkedUid === uid).map((r) => r.id), [resources, uid]);
+  const myFilter = myTasksOnly && myResourceIds.length > 0 ? myResourceIds : null;
 
   const selected = features.find((f) => f.id === selectedId) ?? null;
 
@@ -78,7 +83,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
       {/* List/Board switch for the Tasks tab (kept out of the scroll area so it
           stays put above whichever view is scrolling). */}
       {tab === "tasks" && (
-        <div className="flex gap-1 px-3 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #E2DFD9", background: "#FFFFFF" }}>
+        <div className="flex items-center gap-1 px-3 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #E2DFD9", background: "#FFFFFF" }}>
           {(["list", "board"] as const).map((v) => (
             <button
               key={v}
@@ -89,6 +94,16 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
               {v}
             </button>
           ))}
+          {myResourceIds.length > 0 && (
+            <button
+              onClick={() => setMyTasksOnly((v) => !v)}
+              className="text-xs font-semibold rounded-full px-3 py-1 flex items-center gap-1 ml-auto"
+              style={{ background: myTasksOnly ? "#EE7240" : "#F4F2EC", color: myTasksOnly ? "#FFFFFF" : "#64748B" }}
+              title="Show only tasks I'm involved in"
+            >
+              <Icon name="person" size={13} /> My Pulse
+            </button>
+          )}
         </div>
       )}
 
@@ -96,9 +111,9 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
       <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
         {tab === "tasks" &&
           (taskView === "list" ? (
-            <MobileTaskList features={features} epics={epics} resources={resources} onSelect={setSelectedId} />
+            <MobileTaskList features={features} epics={epics} resources={resources} onSelect={setSelectedId} myResourceIds={myFilter} />
           ) : (
-            <MobileBoard features={features} epics={epics} resources={resources} canEdit={canEdit} onSelect={setSelectedId} />
+            <MobileBoard features={features} epics={epics} resources={resources} canEdit={canEdit} onSelect={setSelectedId} myResourceIds={myFilter} />
           ))}
         {tab === "team" && <TeamTab canEdit={canEdit} filterResource={null} setFilterResource={() => {}} />}
         {tab === "capacity" && <CapacityTab canEdit={canEdit} />}
