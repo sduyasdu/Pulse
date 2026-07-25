@@ -162,21 +162,24 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               })}
             </div>
             {canEdit && members.length > 0 && (
-              <select
-                value={r.linkedUid || ""}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => void patchResource(r.id, { linkedUid: e.target.value || null })}
-                className="mono mt-1.5 w-full text-[10px] border rounded px-1 py-0.5"
-                style={{ borderColor: "#E2DFD9", color: "#64748B" }}
-                title="Link this Resource to a real Pulse member's account"
-              >
-                <option value="">not linked to an account</option>
-                {myUid && <option value={myUid}>🔗 My account{myEmail ? ` (${myEmail})` : ""}</option>}
-                {members.filter((m) => m.uid !== myUid).map((m) => (
-                  <option key={m.uid} value={m.uid}>🔗 {m.email}</option>
-                ))}
-              </select>
+              <div className="relative mt-1.5">
+                <Icon name="link" size={12} style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
+                <select
+                  value={r.linkedUid || ""}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => void patchResource(r.id, { linkedUid: e.target.value || null })}
+                  className="mono w-full text-[10px] border rounded py-0.5"
+                  style={{ borderColor: "#E2DFD9", color: "#64748B", paddingLeft: 22, paddingRight: 4 }}
+                  title="Link this Resource to a real Pulse member's account"
+                >
+                  <option value="">not linked to an account</option>
+                  {myUid && <option value={myUid}>My account{myEmail ? ` (${myEmail})` : ""}</option>}
+                  {members.filter((m) => m.uid !== myUid).map((m) => (
+                    <option key={m.uid} value={m.uid}>{m.email}</option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
         );
