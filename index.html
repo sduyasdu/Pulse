@@ -4,10 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#123359" />
+    <meta name="color-scheme" content="light" />
+    <!-- Warm up the connections the app needs first (Auth + Firestore), so the
+         first request doesn't pay DNS/TLS setup — most noticeable on mobile. -->
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://securetoken.googleapis.com" />
+    <link rel="dns-prefetch" href="https://pulse-b9d96.firebaseapp.com" />
     <title>Pulse — Visual Project Planning</title>
+    <style>
+      /* Instant splash shown before the JS bundle boots (replaced by React on
+         mount). Inline + no assets so it paints on the very first frame — most
+         valuable on slow mobile connections. */
+      @keyframes pulse-boot-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#F7F6F2">
+        <div style="width:28px;height:28px;border:3px solid #E2DFD9;border-top-color:#123359;border-radius:50%;animation:pulse-boot-spin .7s linear infinite"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
