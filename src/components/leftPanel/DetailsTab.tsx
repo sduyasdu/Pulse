@@ -283,9 +283,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               <div key={r} className="rounded px-2 py-2" style={{ border: isLead ? "1px solid #F5A524" : "1px solid #E2DFD9", background: isLead ? "#FFFBEB" : "#fff" }}>
                 <div className="flex items-center gap-2">
                   <button disabled={!canEdit} title={isLead ? "Team leader — click to unset" : "Make team leader"} onClick={() => void patchFeature(feature.id, { lead: isLead ? null : r })} style={{ fontSize: 13, lineHeight: 1, color: isLead ? "#F5A524" : "#CBD5E1", flexShrink: 0 }}><Icon name="star" size={14} /></button>
-                  <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r), width: 18, height: 18, borderRadius: isLead ? 4 : "50%", border: isLead ? "2px solid #F5A524" : "none", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {resources.find((x) => x.id === r)?.initials || "?"}
-                  </span>
+                  <ResourceBadge resourceId={r} size={18} ring={isLead ? "#F5A524" : undefined} />
                   <span className="text-xs flex-1" style={{ color: "#334155" }}>
                     {resources.find((x) => x.id === r)?.name || r}
                     {isLead && <span className="mono ml-1" style={{ fontSize: 9, color: "#B45309" }}>lead</span>}
