@@ -26,6 +26,25 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   const patchResource = usePulseStore((s) => s.patchResource);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
+  // Pending link that would attach an account already linked to other
+  // resource(s) — resolved by the Cancel / Keep both / Replace dialog.
+  const [linkConflict, setLinkConflict] = useState<{ resourceId: string; uid: string; conflicts: { id: string; label: string }[] } | null>(null);
+
+  const accountLabel = (uid: string) => (uid === myUid ? `your account${myEmail ? ` (${myEmail})` : ""}` : members.find((m) => m.uid === uid)?.email ?? "that account");
+
+  const onLinkChange = (resourceId: string, value: string) => {
+    const uid = value || null;
+    if (!uid) {
+      void patchResource(resourceId, { linkedUid: null });
+      return;
+    }
+    const conflicts = resources.filter((x) => x.id !== resourceId && x.linkedUid === uid);
+    if (conflicts.length === 0) {
+      void patchResource(resourceId, { linkedUid: uid });
+      return;
+    }
+    setLinkConflict({ resourceId, uid, conflicts: conflicts.map((c) => ({ id: c.id, label: c.name?.trim() || c.initials })) });
+  };
 
   const q = query.trim().toLowerCase();
   const filtered = resources.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q));
@@ -168,7 +187,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                   value={r.linkedUid || ""}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => void patchResource(r.id, { linkedUid: e.target.value || null })}
+                  onChange={(e) => onLinkChange(r.id, e.target.value)}
                   className="mono w-full text-[10px] border rounded py-0.5"
                   style={{ borderColor: "#E2DFD9", color: "#64748B", paddingLeft: 22, paddingRight: 4 }}
                   title="Link this Resource to a real Pulse member's account"
@@ -184,6 +203,35 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
           </div>
         );
       })}
+
+      {linkConflict && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/30 px-4" style={{ zIndex: 300 }} onClick={() => setLinkConflict(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-display mb-2 text-base font-semibold text-yasdu-fg">Account already linked</h2>
+            <p className="text-xs leading-relaxed" style={{ color: "#64748B" }}>
+              {accountLabel(linkConflict.uid)} is already linked to {linkConflict.conflicts.map((c) => `“${c.label}”`).join(", ")}.
+              {" "}<b>Keep both</b> leaves every resource linked to it; <b>Replace</b> unlinks the {linkConflict.conflicts.length === 1 ? "other one" : "others"}.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setLinkConflict(null)} className="rounded-lg px-3 py-2 text-sm" style={{ color: "#64748B" }}>Cancel</button>
+              <button
+                onClick={() => { void patchResource(linkConflict.resourceId, { linkedUid: linkConflict.uid }); setLinkConflict(null); }}
+                className="rounded-lg px-3 py-2 text-sm font-semibold"
+                style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}
+              >
+                Keep both
+              </button>
+              <button
+                onClick={() => { linkConflict.conflicts.forEach((c) => void patchResource(c.id, { linkedUid: null })); void patchResource(linkConflict.resourceId, { linkedUid: linkConflict.uid }); setLinkConflict(null); }}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg"
+                style={{ background: "#D85A28" }}
+              >
+                Replace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
