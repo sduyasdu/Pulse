@@ -478,6 +478,26 @@ P11 resolved):
 
 ---
 
+## 6.5 Plan gating (subscription entitlements)
+
+Permissions are one of **two** axes; the other is the owner's **subscription plan**
+(`Plans-Spec.md`). They combine, neither overriding the other:
+
+> **effective permission = plan entitlement ∧ role capability**
+
+- A role capability still requires the owner's plan to include the feature — e.g.
+  **assigning the scoped roles (My-Beat Viewer / Task Lead) is gated behind the
+  `scopedRoles` plan flag**. On a plan without it, the collaborators UI offers only
+  Owner/Editor/Full-Viewer, and rules reject a write that sets a scoped role.
+- **Enforcement** mirrors §4: a gated write checks the caller's `caps` **and**
+  `entitlements(pulse.billingOwnerUid)` (rules `get()` the owner's `billing/{uid}` doc —
+  see Plans-Spec §4–§5). Plan absent ⇒ Free tier.
+- **Details live in `Plans-Spec.md`** (tiers, flags, quotas, storage, downgrade
+  behaviour); this section is only the seam. The plan layer never changes *who* a role
+  is — it changes *whether the owner's account can use it at all*.
+
+---
+
 ## 7. Data-model changes
 
 Additive; existing docs stay valid.

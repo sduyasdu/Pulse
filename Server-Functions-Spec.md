@@ -1,6 +1,6 @@
 # Pulse — Server Functions Spec
 
-Status: **Registry — open** · Owner: product + eng · Related: `Permissions-Spec.md`, `Collaboration-Spec.md`
+Status: **Registry — open** · Owner: product + eng · Related: `Permissions-Spec.md`, `Plans-Spec.md`, `Collaboration-Spec.md`
 
 ## 0. Purpose
 
@@ -39,6 +39,7 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 |---|---|---|---|---|---|
 | **SF1** | Feature denormalization maintainer | `Feature.assignedUids`, `Feature.leadUid` | write of features / resources / subtasks | `Permissions-Spec.md` §4.2, §7, P2/P12 | Deferred (client-maintained interim shipping) |
 | **SF2** | Assignment & comment notifications | server-authored `notifications/*` (dedupe, batching, email later) | write of features (assignment) / comments | `Collaboration-Spec.md` §3.6 | Deferred (client-created notifications interim) |
+| **SF3** | Billing / plan sync | `billing/{uid}` (tier, status, period) — the **only** writer | payment-provider webhook (HTTPS) | `Plans-Spec.md` §4, §8 (PL8) | Deferred (no billing yet; account menu stub) |
 
 ---
 
@@ -102,6 +103,32 @@ notification authoring server-side for reliability, de-duplication, batching, an
 (later) email/push. Captured here so it isn't a loose end; **not scheduled** — expand
 into a full SF spec when notifications move server-side. If SF1 and SF2 ship together,
 share the features-write trigger.
+
+### SF3 — Billing / plan sync
+
+**Owns:** the `billing/{ownerUid}` doc (`{ tier, status, currentPeriodEnd, seats?,
+source, updatedAt }`) that `Plans-Spec.md` reads to gate features/quotas. This is the
+**only writer** of that doc.
+
+**Why server-side (mandatory, not just hardening):** the plan is a **security boundary** —
+if the client could write it, any user would set themselves to Pro. So unlike SF1/SF2,
+there is **no acceptable client interim** for *writing* the plan. Until SF3 ships,
+everyone is effectively **Free** (absent `billing` doc = Free, per Plans-Spec §4); paid
+tiers simply don't exist yet. The account-menu "Billing & payment" entry stays a stub
+until then.
+
+**Trigger:** an HTTPS webhook endpoint the payment provider (Stripe / RevenueCat / …,
+PL8) calls on subscription create/update/cancel/renew. Verify the provider signature,
+map the event to `{ tier, status, currentPeriodEnd }`, and write `billing/{uid}` via the
+Admin SDK (bypasses rules). Idempotent: recompute the doc from the event's current
+subscription state; ignore out-of-order/duplicate deliveries by `updatedAt`/event id.
+
+**Rules interaction:** `billing/{uid}` is `read: if self; write: if false`; security
+rules `get()` it (bypassing the read rule) to gate Pulse actions on the Pulse's
+`billingOwnerUid`. See `Plans-Spec.md` §4–§5.
+
+**Related future functions (not yet SF-numbered):** collection-count quota counters
+(Plans-Spec PL5) if quotas need server-maintained counts.
 
 ---
 
