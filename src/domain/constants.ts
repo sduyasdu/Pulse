@@ -52,9 +52,20 @@ export function statusesOf(pulse: { statuses?: StatusDef[] } | null | undefined)
  * palette; a custom status derives bg/text from its colour; an unknown id
  * falls back to neutral grey — never undefined, so no call site can crash. */
 export function statusMetaOf(id: FeatureStatus, statuses?: StatusDef[]): StatusMeta {
-  const base = STATUS_META[id];
-  if (base) return base;
   const def = statuses?.find((s) => s.id === id);
+  const base = STATUS_META[id];
+  if (base) {
+    // Built-in statuses keep their hand-tuned palette, but must honour a
+    // renamed label and a recoloured swatch from the Pulse's status list —
+    // otherwise the board columns ignore edits made in the status editor.
+    if (!def) return base;
+    const recoloured = def.color && def.color !== base.border;
+    return {
+      ...base,
+      label: def.label || base.label,
+      ...(recoloured ? { border: def.color, bg: hexA(def.color, 0.14) } : {}),
+    };
+  }
   const color = def?.color || "#64748B";
   return { border: color, bg: hexA(color, 0.14), text: "#334155", label: def?.label || id };
 }

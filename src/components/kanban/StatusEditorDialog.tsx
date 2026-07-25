@@ -44,6 +44,18 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
       return done ? [...copy, done] : copy;
     });
   };
+  // Touch-friendly reorder (iPad has no HTML5 drag): swap with the neighbour
+  // within the non-done rows.
+  const move = (id: string, dir: -1 | 1) =>
+    setList((l) => {
+      const nd = l.filter((s) => s.id !== DONE_STATUS_ID);
+      const i = nd.findIndex((s) => s.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= nd.length) return l;
+      const copy = [...nd];
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+      return done ? [...copy, done] : copy;
+    });
   const add = () =>
     setList((l) => {
       const nd = l.filter((s) => s.id !== DONE_STATUS_ID);
@@ -68,15 +80,19 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
           <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Edit statuses</span>
           <button onClick={onClose} className="no-press" style={{ color: "#94A3B8", fontSize: 18, lineHeight: 1 }} aria-label="Close"><Icon name="close" size={18} /></button>
         </div>
-        <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>Columns on the board, left to right — drag to reorder. “Done” is reserved and always last.</p>
+        <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>Columns on the board, left to right — drag or use the arrows to reorder. “Done” is reserved and always last.</p>
 
         <div className="flex flex-col gap-2">
-          {nonDone.map((s) => (
+          {nonDone.map((s, i) => (
             <Row
               key={s.id}
               s={s}
               usage={usage[s.id] || 0}
               dragging={dragId === s.id}
+              canMoveUp={i > 0}
+              canMoveDown={i < nonDone.length - 1}
+              onMoveUp={() => move(s.id, -1)}
+              onMoveDown={() => move(s.id, 1)}
               onUpdate={update}
               onRemove={remove}
               onDragStart={() => setDragId(s.id)}
@@ -103,6 +119,10 @@ function Row({
   usage,
   reserved,
   dragging,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
   onUpdate,
   onRemove,
   onDragStart,
@@ -113,6 +133,10 @@ function Row({
   usage: number;
   reserved?: boolean;
   dragging?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   onUpdate: (id: string, patch: Partial<StatusDef>) => void;
   onRemove: (id: string) => void;
   onDragStart: () => void;
@@ -137,6 +161,17 @@ function Row({
       >
         <Icon name="drag_indicator" size={16} />
       </span>
+      {/* Up/down buttons — reorder without dragging (works on iPad/touch). */}
+      {!reserved && (
+        <div className="flex flex-col flex-shrink-0" style={{ lineHeight: 0 }}>
+          <button onClick={onMoveUp} disabled={!canMoveUp} className="no-press" title="Move up" aria-label="Move up" style={{ color: canMoveUp ? "#64748B" : "#D8DCE3", display: "flex", cursor: canMoveUp ? "pointer" : "default" }}>
+            <Icon name="keyboard_arrow_up" size={16} />
+          </button>
+          <button onClick={onMoveDown} disabled={!canMoveDown} className="no-press" title="Move down" aria-label="Move down" style={{ color: canMoveDown ? "#64748B" : "#D8DCE3", display: "flex", cursor: canMoveDown ? "pointer" : "default" }}>
+            <Icon name="keyboard_arrow_down" size={16} />
+          </button>
+        </div>
+      )}
       <input
         value={s.label}
         onChange={(e) => onUpdate(s.id, { label: e.target.value })}
