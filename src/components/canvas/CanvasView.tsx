@@ -8,6 +8,7 @@ import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } fro
 import { buildTimeline } from "@/domain/timeline";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
 import { recordSingle, patchOp } from "@/stores/undoStore";
 import { confirmAt } from "@/stores/confirmStore";
@@ -959,7 +960,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                             <span style={{ width: 7, height: 7, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
                             <span className="text-xs truncate flex-1" title={c.title} style={{ color: "#334155" }}>{c.title}</span>
                             {resp ? (
-                              <span className="mono" title={resp.name} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(resp.id), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{resp.initials}</span>
+                              <ResourceBadge resourceId={resp.id} size={16} title={resp.name} />
                             ) : (
                               <span className="mono" style={{ fontSize: 9, color: "#9F1D23", flexShrink: 0 }}>—</span>
                             )}

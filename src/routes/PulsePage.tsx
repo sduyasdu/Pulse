@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { removeMyPulseEntry } from "@/services/firestore/pulses";
+import { syncMyMemberPhoto } from "@/services/firestore/memberships";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
@@ -31,6 +32,7 @@ export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
   const navigate = useNavigate();
   const firebaseUser = useAuthStore((s) => s.firebaseUser);
+  const myPhotoURL = useAuthStore((s) => s.userDoc?.photoURL ?? null);
 
   const load = usePulseStore((s) => s.load);
   const pulse = usePulseStore((s) => s.pulse);
@@ -93,6 +95,15 @@ export function PulsePage() {
   const uid = firebaseUser?.uid;
   const myRole = uid ? roleOf(uid) : null;
   const canEdit = myRole === "owner" || myRole === "editor";
+
+  // Keep my avatar denormalized onto my membership doc so other members can
+  // render it (e.g. on a resource linked to my account). Writes only on a
+  // real difference, so it converges.
+  useEffect(() => {
+    if (!uid || !pulseId) return;
+    const me = members.find((m) => m.uid === uid);
+    if (me && (me.photoURL ?? null) !== myPhotoURL) void syncMyMemberPhoto(pulseId, uid, myPhotoURL);
+  }, [uid, pulseId, members, myPhotoURL]);
 
   // Keyboard: ⌘/Ctrl+Z = undo, ⇧⌘/Ctrl+Z (or Ctrl+Y) = redo. Ignored while a
   // text field owns the caret, and only for editors.

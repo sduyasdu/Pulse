@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, Resource } from "@/types";
-import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants";
+import { hexA, statusesOf, statusMetaOf } from "@/domain/constants";
 import { usePulseStore } from "@/stores/pulseStore";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { dateForDay } from "@/domain/dateUtils";
 
 interface MobileTaskListProps {
@@ -102,7 +103,7 @@ export function MobileTaskList({ features, epics, resources, onSelect }: MobileT
                         {(f.resources || []).slice(0, 4).map((rid) => {
                           const r = byId[rid];
                           return r ? (
-                            <span key={rid} className="mono" title={r.name} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+                            <ResourceBadge key={rid} resourceId={r.id} size={18} title={r.name} />
                           ) : null;
                         })}
                         {(f.resources || []).length > 4 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>+{f.resources.length - 4}</span>}

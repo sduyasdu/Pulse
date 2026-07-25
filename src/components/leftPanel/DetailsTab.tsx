@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import type { Feature, Resource, Subtask } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { confirmAt } from "@/stores/confirmStore";
@@ -201,7 +202,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                   />
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
                   <SubtaskTitleInput title={c.title} disabled={!canEdit} done={c.status === "done"} onCommit={(v) => void patchSubtask(feature.id, c.id, { title: v })} />
-                  {resp && <span className="mono" title={`Responsible: ${resp.name}`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(resp.id), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{resp.initials}</span>}
+                  {resp && <ResourceBadge resourceId={resp.id} size={16} title={`Responsible: ${resp.name}`} />}
                   {canEdit && (
                     <button onClick={async (e) => { if (await confirmAt(e, { message: `Delete subtask "${c.title}"?` })) void removeSubtask(feature.id, c.id); }} title="Delete subtask">
                       <Icon name="close" size={13} style={{ color: "#64748B" }} />
@@ -577,9 +578,7 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
     setOpen(false);
     setQ("");
   };
-  const badge = (r: Resource, size: number) => (
-    <span className="mono" style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: size, height: size, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
-  );
+  const badge = (r: Resource, size: number) => <ResourceBadge resourceId={r.id} size={size} />;
   return (
     <div>
       <div className="flex items-center gap-1">

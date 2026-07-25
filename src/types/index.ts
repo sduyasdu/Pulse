@@ -83,6 +83,11 @@ export interface PulseMember {
   /** Present when the member joined via a copy-link; the security rule checks
    * it matches the Pulse's active invite token. */
   joinToken?: string;
+  /** The member's avatar (a data-URI), self-synced from their user doc so
+   * other members can show it — e.g. on resources linked to this account.
+   * Members can only read each other's user docs is disallowed, hence this
+   * denormalized, member-readable copy. */
+  photoURL?: string | null;
 }
 
 /** An @-mention of a task or resource embedded in a comment. `label` is the

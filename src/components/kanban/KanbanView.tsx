@@ -3,12 +3,13 @@ import { Icon } from "@/components/shared/Icon";
 import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard, type StatusColumn } from "@/domain/kanban";
-import { colorForName, hexA, statusesOf, statusMetaOf } from "@/domain/constants";
+import { hexA, statusesOf, statusMetaOf } from "@/domain/constants";
 import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
 import { confirmAt } from "@/stores/confirmStore";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { StatusEditorDialog } from "./StatusEditorDialog";
 
 interface KanbanViewProps {
@@ -389,7 +390,7 @@ function Card({
           {(f.resources || []).slice(0, 4).map((rid) => {
             const r = resById[rid];
             return r ? (
-              <span key={rid} className="mono" title={r.name} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(rid), width: 16, height: 16, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+              <ResourceBadge key={rid} resourceId={rid} size={16} title={r.name} />
             ) : null;
           })}
           {(f.resources || []).length > 4 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>+{f.resources!.length - 4}</span>}

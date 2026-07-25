@@ -18,6 +18,13 @@ export async function fetchMembership(pulseId: string, uid: string): Promise<Pul
   return snap.exists() ? (snap.data() as PulseMember) : null;
 }
 
+/** Self-sync the caller's denormalized avatar onto their own membership doc so
+ * other members can render it (e.g. on a linked resource). Allowed by the
+ * pulseMembers update rule for `memberUid == request.auth.uid`. */
+export async function syncMyMemberPhoto(pulseId: string, uid: string, photoURL: string | null): Promise<void> {
+  await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { photoURL }).catch(() => {});
+}
+
 /** Owner-only (enforced by firestore.rules). */
 export async function setMemberRole(pulseId: string, uid: string, role: PulseRole): Promise<void> {
   await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { role });

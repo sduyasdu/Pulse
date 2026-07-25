@@ -3,10 +3,11 @@ import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, Resource } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard } from "@/domain/kanban";
-import { statusesOf, statusMetaOf, colorForName, hexA } from "@/domain/constants";
+import { statusesOf, statusMetaOf, hexA } from "@/domain/constants";
 import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { staffingColor } from "@/domain/graphEffort";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 
 interface MobileBoardProps {
   features: Feature[];
@@ -128,7 +129,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect }: M
                           {(f.resources || []).slice(0, 4).map((rid) => {
                             const r = byId[rid];
                             return r ? (
-                              <span key={rid} className="mono" title={r.name} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: colorForName(rid), width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+                              <ResourceBadge key={rid} resourceId={rid} size={18} title={r.name} />
                             ) : null;
                           })}
                         </div>

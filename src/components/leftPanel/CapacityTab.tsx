@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange, resourcePeakPct, utilizationPct } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
@@ -170,9 +171,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         return (
           <div key={r.id} className="rounded px-3 py-3" style={{ border: "1px solid #E2DFD9" }}>
             <div className="flex items-center gap-2">
-              <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#6366F1", width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {r.initials}
-              </span>
+              <ResourceBadge resourceId={r.id} size={24} />
               <div className="flex-1 overflow-hidden">
                 <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} />
                 <div className="mono text-xs" style={{ color: "#64748B" }}>peak {peak}% · limit {r.capacity}% · {pct}% used</div>

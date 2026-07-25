@@ -3,7 +3,8 @@ import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
-import { clamp, colorForName } from "@/domain/constants";
+import { clamp } from "@/domain/constants";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { confirmAt } from "@/stores/confirmStore";
 
 interface TeamTabProps {
@@ -100,26 +101,12 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
             style={{ background: active ? "#FFF7F1" : "#FFFFFF", border: active ? "1px solid #EE7240" : "1px solid #E2DFD9" }}
           >
             <div className="flex items-center gap-2">
-              <span
-                className="mono"
+              <ResourceBadge
+                resourceId={r.id}
+                size={22}
+                ring={r.linkedUid ? "#12A594" : undefined}
                 title={r.linkedUid ? "Linked to a real account" : "Freeform placeholder — not linked to an account"}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "#fff",
-                  background: colorForName(r.id),
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  boxShadow: r.linkedUid ? "0 0 0 2px #12A594" : "none",
-                }}
-              >
-                {r.initials}
-              </span>
+              />
               <div className="overflow-hidden flex-1">
                 <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
                 <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · limit {r.capacity}%</div>

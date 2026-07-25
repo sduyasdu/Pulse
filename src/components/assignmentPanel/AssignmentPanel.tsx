@@ -4,7 +4,8 @@ import { usePulseStore } from "@/stores/pulseStore";
 import { allocInRange, assignmentsFor, utilizationPct } from "@/domain/assignments";
 import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
-import { RES_LABEL_W, clamp, colorForName, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
+import { RES_LABEL_W, clamp, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
 import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
@@ -257,13 +258,12 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
                 style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", background: filterResource === r.id ? "#FFF7F1" : undefined, overflow: "hidden", paddingLeft: labelWidth < 100 ? 4 : 12, paddingRight: labelWidth < 100 ? 4 : 12 }}
               >
                 <span
-                  className="mono"
                   onPointerEnter={(e) => { if (!coarse && labelWidth < 100) setResCard({ x: e.clientX, y: e.clientY, r }); }}
                   onPointerLeave={() => { if (!coarse) setResCard((c) => (c && c.r.id === r.id ? null : c)); }}
                   onPointerDown={(e) => { if (coarse && labelWidth < 100) startBadgeGesture(r, e); }}
-                  style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                  style={{ display: "flex", flexShrink: 0 }}
                 >
-                  {r.initials}
+                  <ResourceBadge resourceId={r.id} size={22} />
                 </span>
                 <div className="flex-1 overflow-hidden">
                   <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
@@ -369,7 +369,7 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
         return (
           <div className="fixed pointer-events-none rounded-lg" style={{ left: Math.max(8, left), top: resCard.y - 12, transform: "translateY(-100%)", width: 200, background: "#123359", border: "1px solid #EE7240", padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 100 }}>
             <div className="flex items-center gap-1.5">
-              <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: colorForName(r.id), width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{r.initials}</span>
+              <ResourceBadge resourceId={r.id} size={18} />
               <span className="text-xs font-semibold truncate" style={{ color: "#F7F6F2" }}>{r.name}</span>
             </div>
             {r.type && <div className="mono" style={{ fontSize: 9, color: "#EE7240", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>{r.type}</div>}

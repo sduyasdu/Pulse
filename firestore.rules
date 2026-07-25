@@ -137,7 +137,15 @@ service cloud.firestore {
           // Pulse's active `invite`).
           joinLinkOk(pulseId, request.resource.data)
         );
-        allow update: if isPulseOwner(pulseId);
+        // The owner may change anything; a member may update their OWN doc but
+        // only fields that don't affect access — uid/role/email/joinedAt are
+        // pinned, so this effectively allows only the denormalized photoURL.
+        allow update: if isPulseOwner(pulseId)
+          || (memberUid == request.auth.uid
+              && request.resource.data.uid == resource.data.uid
+              && request.resource.data.role == resource.data.role
+              && request.resource.data.email == resource.data.email
+              && request.resource.data.joinedAt == resource.data.joinedAt);
         // The owner may remove anyone; anyone may remove THEMSELVES (leave).
         allow delete: if isPulseOwner(pulseId) || memberUid == request.auth.uid;
       }
