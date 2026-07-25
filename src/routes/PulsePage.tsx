@@ -147,6 +147,7 @@ export function PulsePage() {
   // Empty set = no filter ("all"). Multi-select, so a set of chosen values.
   const [featureStatusFilter, setFeatureStatusFilter] = useState<Set<string>>(new Set());
   const [epicFilter, setEpicFilter] = useState<Set<string>>(new Set());
+  const [compactFilter, setCompactFilter] = useState(false);
   const [epicsShrunk, setEpicsShrunk] = useState(false);
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -296,6 +297,8 @@ export function PulsePage() {
         setFeatureStatusFilter={setFeatureStatusFilter}
         epicFilter={epicFilter}
         setEpicFilter={setEpicFilter}
+        compactFilter={compactFilter}
+        onToggleCompactFilter={() => setCompactFilter((v) => !v)}
         epicOptions={epics.map((e) => ({ id: e.id, name: e.name || "Untitled epic" }))}
         statusOptions={statusesOf(pulse).map((s) => ({ id: s.id, name: s.label }))}
         showDelays={showDelays}
@@ -386,6 +389,7 @@ export function PulsePage() {
               featureQuery={featureQuery}
               featureStatusFilter={featureStatusFilter}
               epicFilter={epicFilter}
+              compactFilter={compactFilter}
               canEdit={canEdit}
               onTimelineBoundsChange={setTimelineBounds}
             />

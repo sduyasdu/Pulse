@@ -3,7 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
-import { epicAtBox, epicBandsFor } from "@/domain/layout";
+import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
@@ -58,6 +58,10 @@ interface CanvasViewProps {
   featureQuery: string;
   featureStatusFilter: Set<string>;
   epicFilter: Set<string>;
+  /** When true and a filter is active, non-matching tasks are hidden and the
+   * matching ones are compacted (view-only); when false, non-matching tasks are
+   * just dimmed in place. */
+  compactFilter: boolean;
   canEdit: boolean;
   onTimelineBoundsChange?: (bounds: { startDay: number; endDay: number; dayWidth: number }) => void;
 }
@@ -65,7 +69,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, canEdit, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, canEdit, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -194,13 +198,41 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
   const timeline = useMemo(() => buildTimeline(density, startDay, endDay), [density, startDay, endDay]);
 
+  // Does a task match the active filters? (Same rule the render uses to dim.)
+  const qLower = featureQuery.trim().toLowerCase();
+  const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || !!filterResource;
+  const matchOf = useCallback(
+    (box: Feature) => {
+      const mRes = !filterResource || (box.resources || []).includes(filterResource) || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
+      const mQuery = !qLower || (box.title || "").toLowerCase().includes(qLower) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(qLower));
+      const mStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
+      const mEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
+      return mRes && mQuery && mStatus && mEpic;
+    },
+    [filterResource, qLower, featureStatusFilter, epicFilter],
+  );
+
+  // "Hide + compact" filter mode: keep only matching tasks and repack them
+  // vertically (view-only — dates and the stored layout are untouched, so
+  // clearing the filter restores the full view). Off unless the toolbar toggle
+  // is on AND a filter is actually active.
+  const compactFilterActive = compactFilter && filterActive;
+  const compacted = useMemo(() => {
+    if (!compactFilterActive) return null;
+    const base = dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features;
+    const visible = base.filter(matchOf);
+    const epicsWithFeats = epics.filter((e) => visible.some((f) => f.epicId === e.id));
+    const { epics: cEpics, featureYById } = compactLayout(epicsWithFeats, visible, graph, { shrunk: epicsShrunk });
+    return { feats: visible.map((f) => ({ ...f, y: featureYById[f.id] ?? f.y })), eps: cEpics };
+  }, [compactFilterActive, features, dragOverlay, matchOf, epics, graph, epicsShrunk]);
+
   const displayFeatures = useMemo(
-    () => (dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features),
-    [features, dragOverlay],
+    () => (compacted ? compacted.feats : dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features),
+    [compacted, features, dragOverlay],
   );
   const displayEpics = useMemo(
-    () => (epicOverlay ? epics.map((e) => (e.id === epicOverlay.id ? { ...e, ...epicOverlay.patch } : e)) : epics),
-    [epics, epicOverlay],
+    () => (compacted ? compacted.eps : epicOverlay ? epics.map((e) => (e.id === epicOverlay.id ? { ...e, ...epicOverlay.patch } : e)) : epics),
+    [compacted, epics, epicOverlay],
   );
 
   const contentHeight = useMemo(
@@ -475,6 +507,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // selects it (opens the details panel), and a drag past a small threshold
   // moves it. On mouse, fall back to the normal press-to-select/drag.
   const startBoxInteraction = (box: Feature, e: React.PointerEvent) => {
+    // In compact-filter mode the layout is view-only and repacks on every
+    // change, so a drag would fight the reflow — allow selection only.
+    if (compactFilterActive) {
+      e.stopPropagation();
+      onSelect(box.id);
+      return;
+    }
     if (!coarse) {
       startDrag("move", box, e);
       return;
@@ -562,7 +601,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   }, [onEpicResizeMove, patchEpic]);
 
   const startEpicResize = (edge: string, band: { id: string; y0: number; y1: number; minX?: number; maxX?: number }, e: React.PointerEvent) => {
-    if (!canEdit) return;
+    // The compacted bands are view-only positions; resizing would persist the
+    // wrong geometry, so it's disabled while compact-filtering.
+    if (!canEdit || compactFilterActive) return;
     e.stopPropagation();
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);

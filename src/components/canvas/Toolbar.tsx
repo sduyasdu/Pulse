@@ -36,6 +36,8 @@ interface ToolbarProps {
   setFeatureStatusFilter: (v: Set<string>) => void;
   epicFilter: Set<string>;
   setEpicFilter: (v: Set<string>) => void;
+  compactFilter: boolean;
+  onToggleCompactFilter: () => void;
   epicOptions: { id: string; name: string }[];
   statusOptions: { id: string; name: string }[];
   showDelays: boolean;
@@ -79,6 +81,8 @@ export function Toolbar({
   setFeatureStatusFilter,
   epicFilter,
   setEpicFilter,
+  compactFilter,
+  onToggleCompactFilter,
   epicOptions,
   statusOptions,
   showDelays,
@@ -262,6 +266,9 @@ export function Toolbar({
         </div>
         {viewMode === "canvas" && (
           <>
+            <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: compactFilter ? "#123359" : "#1B3A63", color: "#EE7240", border: compactFilter ? "1px solid #EE7240" : "1px solid #24406B" }}>
+              <Icon name={compactFilter ? "check_box" : "check_box_outline_blank"} size={13} /> Compact filter
+            </button>
             <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
               <Icon name="timeline" size={13} /> {showDelays ? "Delays on" : "Delays"}
             </button>
