@@ -301,7 +301,7 @@ export function Toolbar({
             </button>
             {canEdit && (
               <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
-                <Icon name="compress" size={13} /> Compact
+                <Icon name="compress" size={13} /> Layout
               </button>
             )}
           </>
