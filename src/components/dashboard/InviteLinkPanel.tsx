@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import type { InviteLink, PulseRole } from "@/types";
 import { getPulseInviteLink, setPulseInviteLink, clearPulseInviteLink } from "@/services/firestore/joinLinks";
-
-const ROLES: { value: PulseRole; label: string; hint: string }[] = [
-  { value: "viewer", label: "Full Viewer", hint: "Reads & comments" },
-  { value: "editor", label: "Editor", hint: "Can edit everything" },
-];
+import { ASSIGNABLE_ROLES } from "@/domain/permissions";
 
 /** Copy-link invite control: pick a role, copy a shareable join link, and
  * revoke it. No email is sent — the user shares the link however they like. */
@@ -61,13 +57,13 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex gap-2">
-        {ROLES.map((r) => (
+      <div className="grid grid-cols-2 gap-2">
+        {ASSIGNABLE_ROLES.map((r) => (
           <button
             type="button"
             key={r.value}
             onClick={() => setRole(r.value)}
-            className="flex-1 rounded-lg border px-3 py-2 text-left text-xs"
+            className="rounded-lg border px-3 py-2 text-left text-xs"
             style={{ borderColor: role === r.value ? "#EE7240" : "#E2DFD9", background: role === r.value ? "#FFF7F1" : "#FFFFFF" }}
           >
             <div className="font-semibold text-yasdu-fg">{r.label}</div>

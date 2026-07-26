@@ -58,21 +58,27 @@ service cloud.firestore {
       return isPulseMember(pulseId) && pulseRole(pulseId) == 'owner';
     }
     // Granular edit scope (Permissions-Spec §4): 'all' (owner/editor), 'lead'
-    // (Task Lead — only tasks they lead), or 'none'. Prefer the materialized
-    // caps; fall back to the legacy role for docs written before caps existed.
-    // Callers MUST guard with isPulseMember first (get() on a missing doc fails).
+    // (Task Lead — only tasks they lead), or 'none'. Derived from the ROLE for
+    // the fixed presets (so a link-joiner can't self-set `caps` to escalate);
+    // the materialized `caps` are only consulted for a 'custom' role. Callers
+    // MUST guard with isPulseMember first (get() on a missing doc fails).
     function callerEditScope(pulseId) {
       let m = get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data;
-      return ('caps' in m) ? m.caps.editScope : ((m.role in ['owner', 'editor']) ? 'all' : 'none');
+      return (m.role in ['owner', 'editor']) ? 'all'
+        : (m.role == 'taskLead') ? 'lead'
+        : (m.role == 'custom' && 'caps' in m) ? m.caps.editScope
+        : 'none';
     }
-    // Read scope: 'all' (default / every legacy role) or 'beat' (My-Beat Viewer
-    // — only features where their uid is in assignedUids). Guard with
-    // isPulseMember first. NOTE: for a `list`, Firestore evaluates the query, so
-    // a 'beat' caller MUST query where('assignedUids','array-contains', uid);
-    // an unconstrained features list is rejected wholesale (Permissions-Spec §4.3).
+    // Read scope: 'all' (every role except My-Beat Viewer) or 'beat' (only
+    // features whose assignedUids include their uid). Role-derived (see above).
+    // NOTE: for a `list`, Firestore evaluates the query, so a 'beat' caller MUST
+    // query where('assignedUids','array-contains', uid); an unconstrained
+    // features list is rejected wholesale (Permissions-Spec §4.3).
     function callerReadScope(pulseId) {
       let m = get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data;
-      return ('caps' in m) ? m.caps.readScope : 'all';
+      return (m.role == 'myBeatViewer') ? 'beat'
+        : (m.role == 'custom' && 'caps' in m) ? m.caps.readScope
+        : 'all';
     }
     // A copy-link self-join is valid when the Pulse has an active `invite` and
     // the membership doc being written carries a joinToken + role matching it.
@@ -133,7 +139,7 @@ service cloud.firestore {
       // owner-only via setMemberRole).
       allow update: if canEditPulse(pulseId)
         && (request.resource.data.get('invite', null) == null
-            || request.resource.data.invite.role in ['viewer', 'editor']);
+            || request.resource.data.invite.role in ['viewer', 'editor', 'taskLead', 'myBeatViewer']);
       allow delete: if isPulseOwner(pulseId);
 
       match /pulseMembers/{memberUid} {

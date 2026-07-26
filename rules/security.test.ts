@@ -260,6 +260,33 @@ describe("granular roles (Permissions-Spec §4)", () => {
     const viv = dbAs("viv", "viv@example.com");
     await assertSucceeds(getDocs(collection(viv, "pulses", "p1", "features")));
   });
+
+  it("a join link may grant the scoped roles, but never owner", async () => {
+    await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "owner" } });
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(updateDoc(doc(alice, "pulses", "p1"), { invite: { token: "t1", role: "taskLead" } }));
+    await assertSucceeds(updateDoc(doc(alice, "pulses", "p1"), { invite: { token: "t2", role: "myBeatViewer" } }));
+    await assertFails(updateDoc(doc(alice, "pulses", "p1"), { invite: { token: "t3", role: "owner" } }));
+  });
+
+  it("scope is role-derived: no-caps and forged-caps scoped members are still enforced", async () => {
+    await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "owner" } });
+    await seed(async (db) => {
+      // As a link-join creates it: role only, no caps.
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "mo"), { uid: "mo", email: "mo@example.com", role: "myBeatViewer", joinedAt: Date.now() });
+      // Forged escalated caps — must be IGNORED (scope comes from the role).
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "hax"), { uid: "hax", email: "hax@example.com", role: "myBeatViewer", joinedAt: Date.now(), caps: { readScope: "all", editScope: "all" } });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_mine"), { title: "m", x: 0, y: 0, duration: 1, status: "planned", resources: [], assignedUids: ["mo"] });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_theirs"), { title: "t", x: 0, y: 0, duration: 1, status: "planned", resources: [], assignedUids: ["zed"] });
+    });
+    const mo = dbAs("mo", "mo@example.com");
+    await assertSucceeds(getDoc(doc(mo, "pulses", "p1", "features", "f_mine")));
+    await assertFails(getDocs(collection(mo, "pulses", "p1", "features")));
+    const hax = dbAs("hax", "hax@example.com");
+    await assertFails(getDocs(collection(hax, "pulses", "p1", "features"))); // caps ignored → still beat-scoped
+    await assertFails(getDoc(doc(hax, "pulses", "p1", "features", "f_theirs")));
+    await assertFails(updateDoc(doc(hax, "pulses", "p1", "features", "f_theirs"), { title: "x" })); // caps ignored → no edit
+  });
 });
 
 describe("Pulse creation", () => {
