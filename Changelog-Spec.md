@@ -1,8 +1,8 @@
 # Pulse — Change-Log / Activity-Log Specification
 
-Status: **Proposal — decisions open (CL1–CL12)** · Owner: product + eng · Scope:
-designs a **durable, shared, per-Pulse change log** (activity trail) — *who changed
-what, when*. Spec/design only, no application code changes.
+Status: **Proposal — CL1/CL4/CL5 resolved; CL6 approach fixed (numbers TBD); CL2–3/7–12 open** ·
+Owner: product + eng · Scope: designs a **durable, shared, per-Pulse activity log**
+(`pulses/{id}/activity`) — *who changed what, when*. Spec/design only, no application code changes.
 Related: `Collaboration-Spec.md` (§3.6 notifications, **§3.7** which sketched this as
 the `activity` placeholder — this spec supersedes and renames it), `Permissions-Spec.md`
 (caps, `callerReadScope`, My-Beat), `Plans-Spec.md` (retention/history gating),
@@ -12,7 +12,7 @@ capture (`src/stores/pulseStore.ts`).
 
 > **Naming note.** `Collaboration-Spec.md` §3.7 / D7 introduced an `Activity` type at
 > `pulses/{pulseId}/activity/{id}` as a placeholder. This spec is the full design and
-> **renames that collection to `changeLog`** (§3) — "change log" reads as the durable
+> **renames that collection to `activity`** (§3) — "change log" reads as the durable
 > record of edits, and avoids collision with the ambient use of "activity" for presence
 > (`presence/*`, `Collaboration-Spec` §3.4, shipped). Where this spec and
 > Collaboration-Spec disagree, **this spec wins** for the log; the D7 row should be
@@ -58,7 +58,7 @@ boundary (§4.1) but are three separate stores.
   "restore to this version" — undo already covers reversal for the actor, and a general
   restore is a much larger feature (CL9).
 - **Not a cross-Pulse / global activity feed.** The log is strictly per-Pulse
-  (`pulses/{id}/changeLog/**`), mirroring how every other Pulse subcollection is scoped.
+  (`pulses/{id}/activity/**`), mirroring how every other Pulse subcollection is scoped.
   A workspace-wide "everything across my Teams" roll-up is a possible later feature
   (CL10), out of scope now.
 - **Not a security/compliance-grade tamper-proof audit** in v1. The v1 client-emitted
@@ -138,7 +138,7 @@ intent); the server path (SF4) re-derives it from before/after.
 A per-Pulse append-only subcollection, mirroring every other Pulse-scoped collection:
 
 ```
-pulses/{pulseId}/changeLog/{entryId}
+pulses/{pulseId}/activity/{entryId}
 ```
 
 `entryId` is a Firestore auto-id for the client-emitted v1; for SF4 it is a
@@ -168,7 +168,7 @@ export interface ChangeFieldDelta {
   after: string | null;       // display string, null when cleared/removed
 }
 
-/** pulses/{pulseId}/changeLog/{entryId} — durable, shared, append-only. */
+/** pulses/{pulseId}/activity/{entryId} — durable, shared, append-only. */
 export interface ChangeEntry {
   id: string;
   actorUid: string;
@@ -257,13 +257,13 @@ one entry per gesture and automatic exclusion of system writes, for free.
 ### 4.2 v1 — client-emitted (interim), with an honest trust model
 
 **Recommendation for v1: client-emitted, create-only, immutable.** The client that made
-the change also writes the `changeLog/{entryId}` doc, in the same batch where possible.
+the change also writes the `activity/{entryId}` doc, in the same batch where possible.
 
 Rules make it **append-only and self-attributed** but cannot make it
 **complete or truthful**:
 
 ```
-match /changeLog/{entryId} {
+match /activity/{entryId} {
   allow read:   if isPulseMember(pulseId) && (
                    callerReadScope(pulseId) == 'all'
                 || (callerReadScope(pulseId) == 'beat'
@@ -361,15 +361,15 @@ entries whose `scopeUids` contains their uid — mirroring how they only see the
 - The rule gates `beat` readers on `request.auth.uid in resource.data.get('scopeUids', [])`
   (§4.2). For a single `get` this is exact; for a **`list`** the client **must** issue
   `where("scopeUids","array-contains", uid)` — an unconstrained log list from a beat
-  reader is rejected wholesale, not filtered. `subscribeChangeLog` therefore needs a
+  reader is rejected wholesale, not filtered. `subscribeActivity` therefore needs a
   beat-aware variant exactly like `subscribeFeatures(..., beatUid)`
   (`features.ts:15-18`).
 - **`scopeUids` is set only for feature-derived entries** (copied from the feature's
   `assignedUids`). For non-feature entries (member/invite/pulse/resource-roster changes),
-  a My-Beat Viewer has no "beat" relationship, so the recommendation is those entries are
-  **not** in a beat reader's timeline at all (they're structural/administrative and
-  arguably above a beat viewer's need-to-know). Alternative: surface pulse-level
-  entries to everyone (CL5).
+  a My-Beat Viewer has no "beat" relationship, so those entries are **not** in a beat
+  reader's timeline at all (they're structural/administrative and above a beat viewer's
+  need-to-know). **✅ RESOLVED (CL5): admin/member/invite/pulse entries are hidden from
+  beat viewers** (not surfaced to everyone).
 - **Snapshot semantics (accepted):** `scopeUids` is name-at-time, so if a task is later
   reassigned, the *old* entries keep their original audience. This is correct for an
   audit ("who could see this when it happened") and needs no maintenance (§3.3). Flagged
@@ -392,7 +392,7 @@ plan-gated** (`entitlement ∧ capability`, Plans-Spec). Concretely:
 
 This ties the log's *value* to the paid tiers without ever hiding *that a change
 happened* from a collaborator on the free tier. Gating is read-time: the client requests
-only the window it's entitled to; a stored `plan` entitlement flag (`changeLogHistory`)
+only the window it's entitled to; a stored `plan` entitlement flag (`activityHistory`)
 is checked the same way `scopedRoles` is (Plans-Spec §3.1, §5). Because rules can't do
 time-window range checks cheaply against the owner's plan without an extra `get`, the
 depth limit is **client-enforced UX** (over-window entries simply aren't queried), with
@@ -483,9 +483,9 @@ Phased, each independently shippable, no history backfill (a log starts the day 
 there's nothing to backfill and we explicitly don't invent past entries).
 
 1. **Phase 1 — client-emitted log + read UI.** Add the `ChangeEntry` type, the
-   `changeLog` rules block (§4.2, create-only/append-only, beat-scoped read), the
+   `activity` rules block (§4.2, create-only/append-only, beat-scoped read), the
    `logChange` recorder wired at the `recordSingle`/`recordMany` sites, the
-   `subscribeChangeLog` (full + beat-aware) service, and the Activity panel (§6.1) +
+   `subscribeActivity` (full + beat-aware) service, and the Activity panel (§6.1) +
    per-task section (§6.2). Entirely serverless (rules + client), consistent with the
    shipped notifications posture. Log begins accumulating from deploy.
 2. **Phase 2 — retention.** Add `expireAt` at write time + a Firestore TTL policy (§7.2).
@@ -497,32 +497,39 @@ there's nothing to backfill and we explicitly don't invent past entries).
 
 Rollback at any phase: stop writing new entries; the collection is inert and readable.
 No destructive migration; no change to any existing type or collection (the whole feature
-is additive under `pulses/{id}/changeLog/**` plus optional `Feature`-adjacent reads).
+is additive under `pulses/{id}/activity/**` plus optional `Feature`-adjacent reads).
 
 ---
 
 ## 9. Open decisions (CL-list)
 
-1. **CL1 — Collection name & superseding the `activity` placeholder.** *Recommend:*
-   `pulses/{id}/changeLog/{entryId}`; update Collaboration-Spec §3.7 / D7 to point here
-   and drop the `activity` name (avoids collision with presence). *Confirm.*
+1. **CL1 — Collection name. ✅ RESOLVED: `activity`.** The subcollection is
+   `pulses/{id}/activity/{entryId}` and the feature is surfaced as **"Activity"**
+   (product owner: keep the `activity` name). Update Collaboration-Spec §3.7 / D7 to
+   point here.
 2. **CL2 — Granularity = one entry per logical action** at the
    `recordSingle`/`recordMany` boundary, streamed/`{record:false}` writes excluded.
    *Recommend & confirm.*
 3. **CL3 — Curated before/after, not full diffs.** *Recommend:* `summary` + `changedKeys`
    always; `deltas` (before→after as display strings) only for the high-signal allow-list
    (§2.3). *Confirm the allow-list.*
-4. **CL4 — v1 authoring = client-emitted, create-only, immutable**, same trust posture as
-   shipped notifications; **SF4 is the authoritative target** (registered in
-   Server-Functions-Spec). *Confirm client-first, server-hardened-later.*
-5. **CL5 — My-Beat Viewer log scope.** *Recommend:* beat readers see only feature entries
-   in their beat (via `scopeUids` array-contains, snapshot-at-time); non-feature
-   (member/invite/pulse) entries are hidden from them. *Confirm, or elect to surface
-   pulse-level entries to everyone.*
-6. **CL6 — Plan gating: history depth + retention numbers.** *Recommend:* log on every
-   tier; Free = recent window, Pro/Team = full history + filters; retention cap
-   plan-tiered via `expireAt` + TTL. *Product to set the window/retention numbers and the
-   `changeLogHistory` flag (Plans-Spec).*
+4. **CL4 — Authoring. ✅ RESOLVED: client-first.** v1 is client-emitted, create-only,
+   immutable (`actorUid` pinned by rules), same trust posture as shipped notifications;
+   **SF4 is the authoritative server-hardened target** (registered in
+   Server-Functions-Spec). Ship client, harden with SF4 later.
+5. **CL5 — My-Beat Viewer log scope. ✅ RESOLVED: admin/member entries hidden.** A beat
+   reader sees **only feature entries in their beat** (via `scopeUids` array-contains,
+   snapshot-at-time); administrative entries (member/invite/pulse) are **hidden from
+   them** entirely (rules gate: a beat reader may read an activity entry only when its
+   `scopeUids` contains their uid, and non-feature entries carry a `scopeUids` that never
+   includes beat viewers).
+6. **CL6 — Plan gating: history depth + retention. Approach fixed; numbers pending
+   product.** The log is on **every tier** (a free collaborator always sees *that* a
+   change happened); **history depth is plan-gated and client-enforced** (query only the
+   entitled window), with a Firestore TTL `expireAt` as the real data-lifetime cap.
+   *Recommended defaults (product to confirm):* **Free = last 30 days / 200 entries**,
+   **Pro = 1 year + filters + per-task activity**, **Team = 2 years (or unlimited)**.
+   Gated via a `activityHistory` plan flag (Plans-Spec §3.1, §5).
 7. **CL7 — Comment edit/delete & other low-value events.** *Recommend:* log comment
    `post` only; don't log comment edits/deletes, presence, or read events. *Confirm the
    catalogue in §2.1.*

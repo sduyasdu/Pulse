@@ -40,7 +40,7 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 | **SF1** | Feature denormalization maintainer | `Feature.assignedUids`, `Feature.leadUid` | write of features / resources / subtasks | `Permissions-Spec.md` §4.2, §7, P2/P12 | Deferred (client-maintained interim shipping) |
 | **SF2** | Assignment & comment notifications | server-authored `notifications/*` (dedupe, batching, email later) | write of features (assignment) / comments | `Collaboration-Spec.md` §3.6 | Deferred (client-created notifications interim) |
 | **SF3** | Billing / plan sync | `billing/{uid}` (tier, status, period) — the **only** writer | payment-provider webhook (HTTPS) | `Plans-Spec.md` §4, §8 (PL8) | Deferred (no billing yet; account menu stub) |
-| **SF4** | Change-log authoring (authoritative) | `pulses/{p}/changeLog/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc / comments | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted change-log interim) |
+| **SF4** | Change-log authoring (authoritative) | `pulses/{p}/activity/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc / comments | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted change-log interim) |
 
 ---
 
@@ -133,7 +133,7 @@ rules `get()` it (bypassing the read rule) to gate Pulse actions on the Pulse's
 
 ### SF4 — Change-log authoring (authoritative)
 
-**Owns:** the durable per-Pulse change log `pulses/{p}/changeLog/{entryId}`
+**Owns:** the durable per-Pulse change log `pulses/{p}/activity/{entryId}`
 (`ChangeEntry`, `Changelog-Spec.md` §3). When SF4 ships it is the **only** trusted writer;
 rules reject client-authored (`source:'client'`) creates and the log becomes genuinely
 append-only-by-the-server.
@@ -165,7 +165,7 @@ with the authoritative `source:'server'` entry so the timeline never double-show
 during the overlap window.
 
 **Interim (ships now — Changelog-Spec CL4 = client-emitted):** the client that made the
-change writes the `changeLog` entry at the same logical-action boundary the undo engine
+change writes the `activity` entry at the same logical-action boundary the undo engine
 records at (`recordSingle`/`recordMany`), create-only and immutable via rules
 (`actorUid` pinned to the caller; `update`/`delete` = `false`). This is the **same trust
 posture as the already-shipped client-authored notifications** (`notify.ts`) and is
