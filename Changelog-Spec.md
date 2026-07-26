@@ -1,6 +1,6 @@
 # Pulse — Change-Log / Activity-Log Specification
 
-Status: **Proposal — CL1/CL4/CL5 resolved; CL6 approach fixed (numbers TBD); CL2–3/7–12 open** ·
+Status: **Proposal — CL1/CL4/CL5/CL6 resolved; CL2–3, CL7–12 open** ·
 Owner: product + eng · Scope: designs a **durable, shared, per-Pulse activity log**
 (`pulses/{id}/activity`) — *who changed what, when*. Spec/design only, no application code changes.
 Related: `Collaboration-Spec.md` (§3.6 notifications, **§3.7** which sketched this as
@@ -385,10 +385,10 @@ entries whose `scopeUids` contains their uid — mirroring how they only see the
 **Recommendation: the log itself is available on every tier, but *history depth* is
 plan-gated** (`entitlement ∧ capability`, Plans-Spec). Concretely:
 
-- **Free:** a **recent window** (e.g. last 14 days / last 100 entries) — enough for
-  "what changed lately".
-- **Pro / Team:** **full retained history** (up to the retention cap, §7.2), plus filters
-  (by actor, by entity, by verb) and per-task activity (§6.2).
+- **Free:** last **30 days AND ≤ 200 entries** (whichever is smaller) — enough for
+  "what changed lately". (Locked, CL6.)
+- **Pro:** **1 year** of history + filters (by actor, entity, verb) + per-task activity (§6.2).
+- **Team:** **2 years** of history + everything Pro has.
 
 This ties the log's *value* to the paid tiers without ever hiding *that a change
 happened* from a collaborator on the free tier. Gating is read-time: the client requests
@@ -461,14 +461,14 @@ The single biggest risk is high-frequency writes flooding the log. Mitigations, 
 
 An append-only log grows without bound; it needs a lifetime policy.
 
-- **Recommendation: a retention cap, plan-tiered** — e.g. **Free 30 days, Pro 1 year,
-  Team 2 years** (numbers are product's, CL6). Older entries are pruned.
+- **Retention cap, plan-tiered (locked, CL6): Free 30 days, Pro 1 year, Team 2 years.**
+  Older entries are pruned.
 - **Mechanism:** Firestore **TTL policy** on a `expireAt` field (set at write time =
   `at + retentionForPlan`) is the cheapest — Firestore auto-deletes expired docs with no
   function needed. If the retention window must change with the owner's plan *after*
   write, a scheduled pruning function (register alongside SF4) recomputes/deletes; but for
   v1 a fixed `expireAt` at write time (using the plan at that moment) is simplest and
-  recommended. Flagged CL6.
+  recommended. Resolved (CL6).
 - Retention is **not** the free/paid *read* gate (§5.3) — it's the data-lifetime control.
   The two compose: Free users read a recent window of a 30-day-retained log.
 - **Cost note:** entries are small (§2.3) and low-frequency (one per gesture); even a busy
@@ -523,13 +523,14 @@ is additive under `pulses/{id}/activity/**` plus optional `Feature`-adjacent rea
    them** entirely (rules gate: a beat reader may read an activity entry only when its
    `scopeUids` contains their uid, and non-feature entries carry a `scopeUids` that never
    includes beat viewers).
-6. **CL6 — Plan gating: history depth + retention. Approach fixed; numbers pending
-   product.** The log is on **every tier** (a free collaborator always sees *that* a
-   change happened); **history depth is plan-gated and client-enforced** (query only the
-   entitled window), with a Firestore TTL `expireAt` as the real data-lifetime cap.
-   *Recommended defaults (product to confirm):* **Free = last 30 days / 200 entries**,
-   **Pro = 1 year + filters + per-task activity**, **Team = 2 years (or unlimited)**.
-   Gated via a `activityHistory` plan flag (Plans-Spec §3.1, §5).
+6. **CL6 — Plan gating: history depth + retention. ✅ RESOLVED.** The log is on **every
+   tier** (a free collaborator always sees *that* a change happened); **history depth is
+   plan-gated and client-enforced** (query only the entitled window), with a Firestore
+   TTL `expireAt` as the real data-lifetime cap. **Locked numbers:**
+   **Free = last 30 days AND ≤ 200 entries** (whichever is smaller),
+   **Pro = 1 year + filters + per-task activity**, **Team = 2 years**.
+   Gated via a `activityHistory` plan flag (Plans-Spec §3.1, §5); `expireAt` is stamped
+   per the owner's tier and the TTL policy prunes past it.
 7. **CL7 — Comment edit/delete & other low-value events.** *Recommend:* log comment
    `post` only; don't log comment edits/deletes, presence, or read events. *Confirm the
    catalogue in §2.1.*
