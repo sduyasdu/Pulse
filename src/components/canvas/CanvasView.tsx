@@ -29,6 +29,15 @@ function EpicNameInput({ name, color, disabled, onCommit }: { name: string; colo
 
 const clamp = clampEffort;
 
+// The team leader's badge is squared off with an amber border (spec §3's
+// "★ … rendered with a square badge"). Overrides ResourceBadge's circle for
+// both of its branches — the linked-account photo and the initials fallback.
+const LEAD_BADGE_STYLE: React.CSSProperties = {
+  borderRadius: 4,
+  border: "2px solid #F5A524",
+  boxSizing: "border-box",
+};
+
 // Screen-space (post-viewZoom) distance from the left edge where "today"
 // lands when opening a Pulse or jumping back to today — near the left
 // rather than dead-center, so there's room to see what's coming up.
@@ -950,19 +959,15 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                           detail via the hover card (see hoverCard render below). */}
                       <div className="flex items-center justify-between gap-1" style={{ position: "relative", zIndex: 1 }}>
                         <div className="flex items-center gap-1" style={{ overflow: "hidden", minWidth: 0 }}>
-                          {(box.resources || []).map((r) => {
-                            const lead = box.lead === r;
-                            return (
-                              <span
-                                key={r}
-                                title={resourceById[r]?.name}
-                                className="mono"
-                                style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: colorForName(r), width: 17, height: 17, borderRadius: lead ? 4 : "50%", border: lead ? "2px solid #F5A524" : "none", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                              >
-                                {resourceById[r]?.initials ?? r}
-                              </span>
-                            );
-                          })}
+                          {(box.resources || []).map((r) => (
+                            <ResourceBadge
+                              key={r}
+                              resourceId={r}
+                              size={17}
+                              title={resourceById[r]?.name}
+                              style={box.lead === r ? LEAD_BADGE_STYLE : undefined}
+                            />
+                          ))}
                         </div>
                         <span className="mono flex-shrink-0" title={`${assigned}md assigned of ${est}md estimated`} style={{ fontSize: 9, fontWeight: 700, color: meta.text, opacity: 0.8 }}>{coverage}%</span>
                       </div>
@@ -1030,9 +1035,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   const lead = hb.lead === r;
                   return (
                     <div key={r} className="flex items-center gap-1.5">
-                      <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: colorForName(r), width: 16, height: 16, borderRadius: lead ? 4 : "50%", border: lead ? "2px solid #F5A524" : "none", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {resourceById[r]?.initials ?? r}
-                      </span>
+                      <ResourceBadge resourceId={r} size={16} title={resourceById[r]?.name} style={lead ? LEAD_BADGE_STYLE : undefined} />
                       <span className="text-xs" style={{ color: "#E2E8F0" }}>{resourceById[r]?.name ?? r}</span>
                       <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#94A3B8", marginLeft: "auto" }}>{allocOf(hb.alloc, r)}%</span>
                       {lead && <span className="mono flex-shrink-0" style={{ fontSize: 8, color: "#F5A524" }}>lead</span>}
