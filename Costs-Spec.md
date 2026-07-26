@@ -1,7 +1,8 @@
 # Pulse — Costs Spec (cost types, AI tokens & pricing)
 
 Status: **Ready to build — all product decisions resolved; CO1/3/6/12 open (implementation-level)** · Owner: product + eng ·
-Related: `Pulse-Product-Spec.md` (§3 Core entities, §6 Resource & assignment views),
+Related: **`Costs-Build-Plan.md`** (phased implementation plan),
+`Pulse-Product-Spec.md` (§3 Core entities, §6 Resource & assignment views),
 `Permissions-Spec.md` (capabilities), `Plans-Spec.md` (entitlement gating),
 `Changelog-Spec.md` (activity entries), `Server-Functions-Spec.md` (future rollups)
 
