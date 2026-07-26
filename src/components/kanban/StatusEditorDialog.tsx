@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { usePulseStore } from "@/stores/pulseStore";
 import { statusesOf, statusMetaOf, STATUS_COLORS, DONE_STATUS_ID } from "@/domain/constants";
+import { useT } from "@/i18n";
 import type { StatusDef } from "@/types";
 
 /** Per-Pulse status manager: add / rename / recolour / reorder columns. "Done"
  * is reserved — always present, pinned last, never deletable. Any status still
  * used by a task can't be deleted (the user must move those tasks first). */
 export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const pulse = usePulseStore((s) => s.pulse);
   const features = usePulseStore((s) => s.features);
   const setStatuses = usePulseStore((s) => s.setStatuses);
@@ -77,10 +79,10 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 300, background: "rgba(15,23,42,0.4)" }} onClick={onClose}>
       <div className="rounded-xl" style={{ width: 480, maxWidth: "92vw", maxHeight: "85vh", overflow: "auto", background: "#FFFFFF", padding: 18 }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
-          <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Edit statuses</span>
-          <button onClick={onClose} className="no-press" style={{ color: "#94A3B8", fontSize: 18, lineHeight: 1 }} aria-label="Close"><Icon name="close" size={18} /></button>
+          <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{t("status.edit")}</span>
+          <button onClick={onClose} className="no-press" style={{ color: "#94A3B8", fontSize: 18, lineHeight: 1 }} aria-label={t("common.close")}><Icon name="close" size={18} /></button>
         </div>
-        <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>Columns on the board, left to right — drag or use the arrows to reorder. “Done” is reserved and always last.</p>
+        <p className="mono mb-3" style={{ fontSize: 10, color: "#94A3B8" }}>{t("status.hint")}</p>
 
         <div className="flex flex-col gap-2">
           {nonDone.map((s, i) => (
@@ -103,11 +105,11 @@ export function StatusEditorDialog({ onClose }: { onClose: () => void }) {
           {done && <Row s={done} usage={usage[done.id] || 0} reserved onUpdate={update} onRemove={remove} onDragStart={() => {}} onDragOver={(e) => e.preventDefault()} onDragEnd={() => {}} />}
         </div>
 
-        <button onClick={add} className="mono text-xs mt-3" style={{ color: "#0F766E" }}>+ add status</button>
+        <button onClick={add} className="mono text-xs mt-3" style={{ color: "#0F766E" }}>{t("status.addStatus")}</button>
 
         <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="text-xs px-3 py-1.5 rounded" style={{ color: "#64748B" }}>Cancel</button>
-          <button onClick={() => void save()} disabled={saving} className="text-xs px-3 py-1.5 rounded font-semibold" style={{ background: "#D85A28", color: "#FFFFFF", opacity: saving ? 0.6 : 1 }}>Save</button>
+          <button onClick={onClose} className="text-xs px-3 py-1.5 rounded" style={{ color: "#64748B" }}>{t("common.cancel")}</button>
+          <button onClick={() => void save()} disabled={saving} className="text-xs px-3 py-1.5 rounded font-semibold" style={{ background: "#D85A28", color: "#FFFFFF", opacity: saving ? 0.6 : 1 }}>{t("common.save")}</button>
         </div>
       </div>
     </div>
@@ -143,6 +145,7 @@ function Row({
   onDragOver: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }) {
+  const t = useT();
   const meta = statusMetaOf(s.id, [s]);
   const canDelete = !reserved && usage === 0;
   return (
@@ -156,7 +159,7 @@ function Row({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         className="flex-shrink-0"
-        title={reserved ? "" : "Drag to reorder"}
+        title={reserved ? "" : t("status.dragReorder")}
         style={{ color: reserved ? "#CBD5E1" : "#94A3B8", fontSize: 13, lineHeight: 1, cursor: reserved ? "default" : "grab" }}
       >
         <Icon name="drag_indicator" size={16} />
@@ -164,10 +167,10 @@ function Row({
       {/* Up/down buttons — reorder without dragging (works on iPad/touch). */}
       {!reserved && (
         <div className="flex flex-col flex-shrink-0" style={{ lineHeight: 0 }}>
-          <button onClick={onMoveUp} disabled={!canMoveUp} className="no-press" title="Move up" aria-label="Move up" style={{ color: canMoveUp ? "#64748B" : "#D8DCE3", display: "flex", cursor: canMoveUp ? "pointer" : "default" }}>
+          <button onClick={onMoveUp} disabled={!canMoveUp} className="no-press" title={t("status.moveUp")} aria-label={t("status.moveUp")} style={{ color: canMoveUp ? "#64748B" : "#D8DCE3", display: "flex", cursor: canMoveUp ? "pointer" : "default" }}>
             <Icon name="keyboard_arrow_up" size={16} />
           </button>
-          <button onClick={onMoveDown} disabled={!canMoveDown} className="no-press" title="Move down" aria-label="Move down" style={{ color: canMoveDown ? "#64748B" : "#D8DCE3", display: "flex", cursor: canMoveDown ? "pointer" : "default" }}>
+          <button onClick={onMoveDown} disabled={!canMoveDown} className="no-press" title={t("status.moveDown")} aria-label={t("status.moveDown")} style={{ color: canMoveDown ? "#64748B" : "#D8DCE3", display: "flex", cursor: canMoveDown ? "pointer" : "default" }}>
             <Icon name="keyboard_arrow_down" size={16} />
           </button>
         </div>
@@ -190,16 +193,16 @@ function Row({
         ))}
       </div>
       {reserved ? (
-        <span className="mono flex-shrink-0" style={{ fontSize: 8, color: "#94A3B8", textTransform: "uppercase", width: 54, textAlign: "right" }}>reserved</span>
+        <span className="mono flex-shrink-0" style={{ fontSize: 8, color: "#94A3B8", textTransform: "uppercase", width: 54, textAlign: "right" }}>{t("status.reserved")}</span>
       ) : (
         <button
           onClick={() => canDelete && onRemove(s.id)}
           disabled={!canDelete}
-          title={usage > 0 ? `In use by ${usage} — move those tasks first` : "Delete status"}
+          title={usage > 0 ? t("status.inUse", { n: usage }) : t("status.deleteStatus")}
           className="no-press flex-shrink-0"
           style={{ color: canDelete ? "#DC2626" : "#CBD5E1", fontSize: 13, width: 54, textAlign: "right", cursor: canDelete ? "pointer" : "not-allowed" }}
         >
-          {usage > 0 ? <span className="mono" style={{ fontSize: 9 }}>in use {usage}</span> : <Icon name="delete" size={13} />}
+          {usage > 0 ? <span className="mono" style={{ fontSize: 9 }}>{t("status.inUseShort", { n: usage })}</span> : <Icon name="delete" size={13} />}
         </button>
       )}
     </div>

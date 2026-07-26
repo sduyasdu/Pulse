@@ -2,8 +2,9 @@ import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc, writeBa
 import { db } from "@/lib/firebase";
 import type { MyPulseIndexEntry, PendingInviteEntry, PulseMember, UserDoc } from "@/types";
 
-/** Update the signed-in user's own profile fields (name / avatar). */
-export async function updateUserProfile(uid: string, patch: { displayName?: string | null; photoURL?: string | null }): Promise<void> {
+/** Update the signed-in user's own profile fields (name / avatar / language).
+ * `language: null` clears the stored override (revert to browser detection). */
+export async function updateUserProfile(uid: string, patch: { displayName?: string | null; photoURL?: string | null; language?: string | null }): Promise<void> {
   await updateDoc(doc(db, "users", uid), patch);
 }
 import { createPersonalWorkspace } from "./workspaces";

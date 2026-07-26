@@ -4,6 +4,8 @@ import { fetchInvites, revokeInvite } from "@/services/firestore/invites";
 import { removeMember, setMemberRole, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import { roleMeta, ASSIGNABLE_ROLES } from "@/domain/permissions";
+import { logDirectActivity } from "@/domain/activityRecorder";
+import { useT } from "@/i18n";
 import { InviteLinkPanel } from "./InviteLinkPanel";
 
 interface CollaboratorsDialogProps {
@@ -27,6 +29,7 @@ function RoleBadge({ role }: { role: PulseRole }) {
 }
 
 export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, myRole, onClose, onLeave }: CollaboratorsDialogProps) {
+  const t = useT();
   const canManage = myRole === "owner" || myRole === "editor"; // may invite / revoke
   const isOwner = myRole === "owner"; // may remove members
   // The sole owner can't leave (would orphan the Pulse) — they transfer/grant
@@ -47,11 +50,11 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
       setInvites(await fetchInvites(pulseId));
       setInvitesError(null);
     } catch (err) {
-      setInvitesError((err as Error).message || "Couldn't load pending invitations.");
+      setInvitesError((err as Error).message || t("collab.loadInvitesError"));
     } finally {
       setLoadingInvites(false);
     }
-  }, [pulseId, canManage]);
+  }, [pulseId, canManage, t]);
 
   useEffect(() => {
     void reloadInvites();
@@ -67,19 +70,26 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
   };
 
   const handleRemoveMember = async (m: PulseMember, e: { clientX: number; clientY: number }) => {
-    if (!(await confirmAt(e, { message: `Remove ${m.email}?`, detail: `They'll lose access to “${pulseName}” immediately.`, confirmLabel: "Remove" }))) return;
+    if (!(await confirmAt(e, { message: t("collab.removeMemberMsg", { email: m.email }), detail: t("collab.removeMemberDetail", { name: pulseName }), confirmLabel: t("collab.remove") }))) return;
     // The member's own users/{uid}/myPulses entry isn't ours to delete; their
     // dashboard self-heals it on next load (see DashboardPage's self-heal).
     await removeMember(pulseId, m.uid).catch(() => {});
+    logDirectActivity(pulseId, { entityKind: "member", entityId: m.uid, entityName: m.email, verb: "remove", summary: `removed ${m.email}` });
   };
 
   const handleMakeOwner = async (m: PulseMember, e: { clientX: number; clientY: number }) => {
-    if (!(await confirmAt(e, { message: `Make ${m.email} an owner?`, detail: "Owners can manage members, permissions and delete the Pulse. You stay an owner too — after this you can leave to fully hand off.", confirmLabel: "Make owner" }))) return;
+    if (!(await confirmAt(e, { message: t("collab.makeOwnerMsg", { email: m.email }), detail: t("collab.makeOwnerDetail"), confirmLabel: t("collab.makeOwner") }))) return;
     await setMemberRole(pulseId, m.uid, "owner").catch(() => {});
+    logDirectActivity(pulseId, {
+      entityKind: "member", entityId: m.uid, entityName: m.email, verb: "role-change",
+      summary: `made ${m.email} an owner`,
+      deltas: [{ key: "role", before: roleMeta(m.role).label, after: roleMeta("owner").label }],
+    });
   };
 
   const handleLeave = async (e: { clientX: number; clientY: number }) => {
-    if (!(await confirmAt(e, { message: `Leave “${pulseName}”?`, detail: "You'll lose access until someone shares a new invite link with you.", confirmLabel: "Leave" }))) return;
+    if (!(await confirmAt(e, { message: t("collab.leaveMsg", { name: pulseName }), detail: t("dashboard.leaveDetail"), confirmLabel: t("dashboard.leaveConfirm") }))) return;
+    logDirectActivity(pulseId, { entityKind: "member", entityId: currentUid, entityName: members.find((m) => m.uid === currentUid)?.email ?? "You", verb: "leave", summary: `left the Pulse` });
     await leavePulse(pulseId, currentUid).catch(() => {});
     (onLeave ?? onClose)();
   };
@@ -90,17 +100,22 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
     // this takes effect for permissions immediately. The member's cached
     // dashboard label reconciles on their next load (DashboardPage self-heal).
     await setMemberRole(pulseId, m.uid, next).catch(() => {});
+    logDirectActivity(pulseId, {
+      entityKind: "member", entityId: m.uid, entityName: m.email, verb: "role-change",
+      summary: `changed ${m.email}'s role to ${roleMeta(next).label}`,
+      deltas: [{ key: "role", before: roleMeta(m.role).label, after: roleMeta(next).label }],
+    });
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
       <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display mb-4 text-base font-semibold text-yasdu-fg">Collaborators · “{pulseName}”</h2>
+        <h2 className="font-display mb-4 text-base font-semibold text-yasdu-fg">{t("collab.title", { name: pulseName })}</h2>
 
         <div className="flex-1 overflow-y-auto">
           {/* Members */}
           <div className="mono mb-2 text-[11px] uppercase tracking-wide text-yasdu-muted">
-            Members ({members.length})
+            {t("collab.members", { count: members.length })}
           </div>
           <div className="mb-5 flex flex-col gap-1.5">
             {members.map((m) => {
@@ -112,7 +127,7 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
                 <div key={m.uid} className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: "#E2DFD9" }}>
                   <span className="flex-1 truncate text-sm text-yasdu-fg" title={m.email}>
                     {m.email}
-                    {m.uid === currentUid && <span className="text-yasdu-muted"> (you)</span>}
+                    {m.uid === currentUid && <span className="text-yasdu-muted">{t("collab.you")}</span>}
                   </span>
                   {editable ? (
                     <>
@@ -121,7 +136,7 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
                         onChange={(e) => void handleSetRole(m, e.target.value as PulseRole)}
                         className="mono rounded border px-1.5 py-1 text-[11px]"
                         style={{ borderColor: "#E2DFD9", color: "#334155" }}
-                        title="Change this collaborator's permission"
+                        title={t("collab.changeRole")}
                       >
                         {ASSIGNABLE_ROLES.map((r) => (
                           <option key={r.value} value={r.value} title={r.hint}>{r.label}</option>
@@ -131,16 +146,16 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
                         onClick={(e) => void handleMakeOwner(m, e)}
                         className="text-xs hover:underline"
                         style={{ color: "#0F766E" }}
-                        title="Grant ownership (transfer)"
+                        title={t("collab.makeOwnerTitle")}
                       >
-                        Make owner
+                        {t("collab.makeOwner")}
                       </button>
                       <button
                         onClick={(e) => void handleRemoveMember(m, e)}
                         className="text-xs text-red-600 hover:underline"
-                        title="Remove this collaborator"
+                        title={t("collab.removeTitle")}
                       >
-                        Remove
+                        {t("collab.remove")}
                       </button>
                     </>
                   ) : (
@@ -155,22 +170,22 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
           {canManage && (
             <>
               <div className="mono mb-2 text-[11px] uppercase tracking-wide text-yasdu-muted">
-                Pending invitations{!loadingInvites && ` (${invites.length})`}
+                {t("collab.pending")}{!loadingInvites && ` (${invites.length})`}
               </div>
               <div className="mb-5 flex flex-col gap-1.5">
                 {loadingInvites ? (
-                  <span className="text-xs text-yasdu-muted">Loading…</span>
+                  <span className="text-xs text-yasdu-muted">{t("common.loading")}</span>
                 ) : invitesError ? (
                   <span className="text-xs text-red-600">{invitesError}</span>
                 ) : invites.length === 0 ? (
-                  <span className="text-xs text-yasdu-muted">No pending invitations. Invited people appear here until they sign in with that email.</span>
+                  <span className="text-xs text-yasdu-muted">{t("collab.noPending")}</span>
                 ) : (
                   invites.map((inv) => (
                     <div key={inv.email} className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2" style={{ borderColor: "#E2DFD9" }}>
                       <span className="flex-1 truncate text-sm text-yasdu-fg" title={inv.email}>{inv.email}</span>
                       <RoleBadge role={inv.role} />
-                      <button onClick={() => void handleRevoke(inv.email)} className="text-xs text-red-600 hover:underline" title="Cancel this invitation">
-                        Revoke
+                      <button onClick={() => void handleRevoke(inv.email)} className="text-xs text-red-600 hover:underline" title={t("collab.cancelInvite")}>
+                        {t("common.revoke")}
                       </button>
                     </div>
                   ))
@@ -183,18 +198,18 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
         {/* Invite by link */}
         {canManage && (
           <div className="mt-1 flex flex-col gap-2 border-t pt-4" style={{ borderColor: "#E2DFD9" }}>
-            <div className="mono text-[11px] uppercase tracking-wide text-yasdu-muted">Invite by link</div>
+            <div className="mono text-[11px] uppercase tracking-wide text-yasdu-muted">{t("collab.inviteByLink")}</div>
             <InviteLinkPanel pulseId={pulseId} canEdit={canManage} />
           </div>
         )}
 
         <div className="mt-4 flex items-center justify-between">
           {canLeave ? (
-            <button onClick={(e) => void handleLeave(e)} className="text-sm text-red-600 hover:underline" title="Remove yourself from this Pulse">Leave Pulse</button>
+            <button onClick={(e) => void handleLeave(e)} className="text-sm text-red-600 hover:underline" title={t("collab.leaveTitle")}>{t("collab.leavePulse")}</button>
           ) : (
-            <span className="text-xs text-yasdu-muted" title="Transfer ownership or delete the Pulse to leave">Sole owner — transfer to leave</span>
+            <span className="text-xs text-yasdu-muted" title={t("collab.soleOwnerTitle")}>{t("collab.soleOwner")}</span>
           )}
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg" style={{ background: "#D85A28" }}>Close</button>
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg" style={{ background: "#D85A28" }}>{t("common.close")}</button>
         </div>
       </div>
     </div>

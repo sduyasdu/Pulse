@@ -12,6 +12,7 @@ import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { roleMeta, capsOf } from "@/domain/permissions";
+import { useT } from "@/i18n";
 import type { Feature } from "@/types";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
@@ -24,11 +25,13 @@ import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
+import { ActivityTab } from "@/components/leftPanel/ActivityTab";
 
-type RightTab = "details" | "team" | "capacity";
+type RightTab = "details" | "team" | "capacity" | "activity";
 
 export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
+  const t = useT();
   const navigate = useNavigate();
   const firebaseUser = useAuthStore((s) => s.firebaseUser);
   const myPhotoURL = useAuthStore((s) => s.userDoc?.photoURL ?? null);
@@ -290,7 +293,7 @@ export function PulsePage() {
   if (loading || myRole === null) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg">
-        <span className="font-display text-sm text-yasdu-muted">Loading Pulse…</span>
+        <span className="font-display text-sm text-yasdu-muted">{t("pulse.loading")}</span>
       </div>
     );
   }
@@ -336,7 +339,7 @@ export function PulsePage() {
         myPulse={myTasksOnly}
         onToggleMyPulse={() => setMyTasksOnly((v) => !v)}
         canMyPulse={myResourceIds.length > 0}
-        epicOptions={epics.map((e) => ({ id: e.id, name: e.name || "Untitled epic" }))}
+        epicOptions={epics.map((e) => ({ id: e.id, name: e.name || t("pulse.untitledEpic") }))}
         statusOptions={statusesOf(pulse).map((s) => ({ id: s.id, name: s.label }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
@@ -355,24 +358,24 @@ export function PulsePage() {
         <div className="flex overflow-hidden relative" style={{ flex: 1, minHeight: 0 }}>
           {!sidebarOpen && (
             <div style={{ width: 30, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 8 }}>
-              <button onClick={toggleSidebar} title="Show panel" className="no-press" style={{ color: "#64748B", display: "flex", alignItems: "center" }}>
+              <button onClick={toggleSidebar} title={t("panel.showPanel")} className="no-press" style={{ color: "#64748B", display: "flex", alignItems: "center" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
               </button>
             </div>
           )}
           <div style={{ width: 320, flexShrink: 0, borderRight: "1px solid #E2DFD9", background: "#FFFFFF", display: sidebarOpen ? "flex" : "none", flexDirection: "column", overflow: "hidden" }}>
             <div className="flex items-center border-b" style={{ borderColor: "#E2DFD9" }}>
-              <button onClick={toggleSidebar} title="Collapse panel to maximize the canvas" className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
+              <button onClick={toggleSidebar} title={t("panel.collapsePanel")} className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              {(["details", "team", "capacity"] as RightTab[]).map((t) => (
+              {(["details", "team", "capacity", "activity"] as RightTab[]).map((tab) => (
                 <button
-                  key={t}
-                  onClick={() => setRightTab(t)}
+                  key={tab}
+                  onClick={() => setRightTab(tab)}
                   className="flex-1 text-xs font-semibold py-2.5 capitalize"
-                  style={{ color: rightTab === t ? "#123359" : "#64748B", borderBottom: rightTab === t ? "2px solid #EE7240" : "2px solid transparent" }}
+                  style={{ color: rightTab === tab ? "#123359" : "#64748B", borderBottom: rightTab === tab ? "2px solid #EE7240" : "2px solid transparent" }}
                 >
-                  {t}
+                  {t(`tab.${tab}`)}
                 </button>
               ))}
             </div>
@@ -381,8 +384,10 @@ export function PulsePage() {
                 <TeamTab canEdit={canEdit} filterResource={filterResource} setFilterResource={setFilterResource} />
               ) : rightTab === "capacity" ? (
                 <CapacityTab canEdit={canEdit} />
+              ) : rightTab === "activity" ? (
+                <ActivityTab />
               ) : !selectedFeature ? (
-                <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>Select a box on the canvas to see and edit its details here.</div>
+                <div className="p-6 text-center text-sm" style={{ color: "#64748B" }}>{t("panel.selectBox")}</div>
               ) : (
                 <DetailsTab
                   feature={selectedFeature}
@@ -456,7 +461,7 @@ export function PulsePage() {
               window.addEventListener("pointermove", mv);
               window.addEventListener("pointerup", up);
             }}
-            title="Drag to resize the resource panel"
+            title={t("panel.dragResize")}
             style={{ height: coarsePointer ? 20 : 10, background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", cursor: "ns-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none" }}
           >
             <div style={{ width: coarsePointer ? 56 : 44, height: coarsePointer ? 4 : 3, borderRadius: 2, background: "#B4BECC" }} />
@@ -464,11 +469,11 @@ export function PulsePage() {
         ) : (
           <button
             onClick={() => setAssignPanelOpen(true)}
-            title="Show the assignment-by-resource panel"
+            title={t("panel.showAssignment")}
             className="mono no-press"
             style={{ height: 30, width: "100%", background: "#EEF2F7", borderTop: "1px solid #E2DFD9", borderBottom: "1px solid #E2DFD9", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingLeft: 10, fontSize: 11, color: "#64748B" }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg> Assignment by resource
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg> {t("panel.assignmentByResource")}
           </button>
         ))}
 
@@ -484,7 +489,7 @@ export function PulsePage() {
         {showInvite && uid && myRole && (
           <CollaboratorsDialog
             pulseId={pulseId}
-            pulseName={pulse?.name?.trim() || "this Pulse"}
+            pulseName={pulse?.name?.trim() || t("common.thisPulse")}
             members={members}
             currentUid={uid}
             myRole={myRole}
@@ -518,8 +523,8 @@ export function PulsePage() {
         {commentsOpen && (
           <div className="absolute flex flex-col" style={{ right: 0, top: 0, bottom: 0, width: 360, maxWidth: "92%", background: "#FFFFFF", borderLeft: "1px solid #E2DFD9", boxShadow: "-10px 0 28px rgba(15,23,42,0.10)", zIndex: 40 }}>
             <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>
-              <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Comments</span>
-              <button onClick={() => setCommentsOpen(false)} className="no-press" style={{ color: "#94A3B8", display: "flex" }} title="Hide comments">
+              <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{t("pulse.comments")}</span>
+              <button onClick={() => setCommentsOpen(false)} className="no-press" style={{ color: "#94A3B8", display: "flex" }} title={t("pulse.hideComments")}>
                 <Icon name="close" size={18} />
               </button>
             </div>

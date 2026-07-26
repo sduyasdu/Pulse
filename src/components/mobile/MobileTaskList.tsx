@@ -4,7 +4,9 @@ import type { Epic, Feature, Resource } from "@/types";
 import { hexA, statusesOf, statusMetaOf } from "@/domain/constants";
 import { usePulseStore } from "@/stores/pulseStore";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
-import { dateForDay } from "@/domain/dateUtils";
+import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
+import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
+import { useT } from "@/i18n";
 
 interface MobileTaskListProps {
   features: Feature[];
@@ -17,18 +19,22 @@ interface MobileTaskListProps {
 const fmt = (day: number) => dateForDay(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 export function MobileTaskList({ features, epics, resources, onSelect, myResourceIds }: MobileTaskListProps) {
+  const t = useT();
   const byId = Object.fromEntries(resources.map((r) => [r.id, r]));
   const statuses = statusesOf(usePulseStore((s) => s.pulse));
   const [query, setQuery] = useState("");
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
 
   if (features.length === 0) {
-    return <div className="p-8 text-center text-sm" style={{ color: "#64748B" }}>No tasks yet. Tap the + button to add one.</div>;
+    return <div className="p-8 text-center text-sm" style={{ color: "#64748B" }}>{t("mobile.noTasks")}</div>;
   }
 
   // Match on task title, its epic's name, and any assigned resource's name or
-  // initials — the same handles you'd scan the list for — plus "My Pulse".
+  // initials — the same handles you'd scan the list for — plus "My Pulse" and
+  // the date period (same predicate the board view uses).
   const q = query.trim().toLowerCase();
   const filtered = features.filter((f) => {
+    if (!taskActiveInPeriod(f, datePeriod)) return false;
     if (myResourceIds && !((f.resources || []).some((r) => myResourceIds.includes(r)) || (f.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r))))) return false;
     if (!q) return true;
     if ((f.title || "").toLowerCase().includes(q)) return true;
@@ -48,21 +54,22 @@ export function MobileTaskList({ features, epics, resources, onSelect, myResourc
 
   return (
     <div>
-      {/* Search — sticky so it stays reachable while the list scrolls. */}
+      {/* Search + date period — sticky so they stay reachable while the list
+          scrolls. */}
       <div className="sticky top-0 z-10 px-3 pt-3 pb-2" style={{ background: "#F7F6F2" }}>
         <div className="relative">
           <Icon name="search" size={16} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tasks, epics, people"
+            placeholder={t("mobile.searchPlaceholder")}
             className="w-full rounded-lg border text-sm"
             style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "9px 34px 9px 34px", outline: "none" }}
           />
           {query && (
             <button
               onClick={() => setQuery("")}
-              aria-label="Clear search"
+              aria-label={t("dashboard.clearSearch")}
               className="no-press"
               style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", fontSize: 16, lineHeight: 1 }}
             >
@@ -70,16 +77,22 @@ export function MobileTaskList({ features, epics, resources, onSelect, myResourc
             </button>
           )}
         </div>
+        {/* Date-period filter — tasks active in the period. */}
+        <div className="mt-2">
+          <DatePeriodFilter value={datePeriod} onChange={setDatePeriod} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 px-3 pb-3">
         {groups.length === 0 && (
-          <div className="p-8 text-center text-sm" style={{ color: "#64748B" }}>No tasks match “{query.trim()}”.</div>
+          <div className="p-8 text-center text-sm" style={{ color: "#64748B" }}>
+            {q ? t("mobile.noMatch", { query: query.trim() }) : t("mobile.noTasksInPeriod")}
+          </div>
         )}
         {groups.map((g, i) => (
           <div key={g.epic?.id ?? `loose-${i}`}>
             <div className="flex items-center gap-1.5 mb-1.5 rounded" style={{ background: hexA(g.epic?.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.epic?.color || "#94A3B8"}`, padding: "3px 8px" }}>
-              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.epic ? g.epic.name : "No epic"}</span>
+              <span className="mono text-xs uppercase tracking-wide truncate" style={{ color: "#334155", fontWeight: 600 }}>{g.epic ? g.epic.name : t("mobile.noEpic")}</span>
               <span className="mono text-xs" style={{ color: "#64748B", marginLeft: "auto" }}>{g.items.length}</span>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -94,7 +107,7 @@ export function MobileTaskList({ features, epics, resources, onSelect, myResourc
                   >
                     <div className="flex items-center gap-2">
                       <span style={{ width: 9, height: 9, borderRadius: "50%", background: meta.border, flexShrink: 0 }} />
-                      <span className="text-sm font-medium flex-1 truncate" style={{ color: "#1F2330", textDecoration: f.status === "done" ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
+                      <span className="text-sm font-medium flex-1 truncate" style={{ color: "#1F2330", textDecoration: f.status === "done" ? "line-through" : "none" }}>{f.title || t("common.untitledTask")}</span>
                       {f.status === "done" && <Icon name="lock" size={13} />}
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">

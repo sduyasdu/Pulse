@@ -2,9 +2,10 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { GraphConfig } from "@/types";
 import type { Density } from "@/domain/constants";
-import { DENSITY_HINT, clamp } from "@/domain/constants";
+import { clamp } from "@/domain/constants";
 import { toDateInputValue, dayIndexFromDateInputValue } from "@/domain/dateUtils";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { useT } from "@/i18n";
 import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
 import { Icon } from "@/components/shared/Icon";
 
@@ -105,15 +106,26 @@ export function Toolbar({
   canEdit,
   roleLabel,
 }: ToolbarProps) {
+  const t = useT();
   const [showGraphSettings, setShowGraphSettings] = useState(false);
   const [name, onNameChange] = useDebouncedText(pulseName, onRenamePulse, 600);
+  const densityHint: Record<Density, string> = {
+    day: t("toolbar.densityHintDay"),
+    week: t("toolbar.densityHintWeek"),
+    month: t("toolbar.densityHintMonth"),
+  };
+  const densityLabel: Record<Density, string> = {
+    day: t("toolbar.densityDay"),
+    week: t("toolbar.densityWeek"),
+    month: t("toolbar.densityMonth"),
+  };
 
   return (
     <div className="flex flex-col flex-shrink-0 border-b" style={{ background: "#123359", borderColor: "#24406B" }}>
       <div className="flex items-center gap-3 px-4" style={{ height: 34, borderBottom: "1px solid #24406B" }}>
-        <Link to="/" className="flex items-center gap-2" title="Back to dashboard">
+        <Link to="/" className="flex items-center gap-2" title={t("toolbar.backToDashboard")}>
           <span className="font-display text-white" style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.02em" }}>Pulse</span>
-          <span className="mono" style={{ fontSize: 8, color: "#EE7240", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>by Yasdu</span>
+          <span className="mono" style={{ fontSize: 8, color: "#EE7240", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>{t("auth.by")}</span>
         </Link>
         <div className="flex items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
           <span className="font-display" style={{ color: "#EE7240", fontSize: 14, fontWeight: 500 }}>›</span>
@@ -121,8 +133,8 @@ export function Toolbar({
             value={name}
             disabled={!canEdit}
             onChange={(e) => onNameChange(e.target.value)}
-            placeholder="Nombrá este Pulse…"
-            title="Name this Pulse"
+            placeholder={t("toolbar.namePlaceholder")}
+            title={t("toolbar.nameTitle")}
             className="font-display bg-transparent"
             style={{ color: "#F7F6F2", fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em", outline: "none", border: "none", width: Math.max(140, (name.length || 14) * 8.5), minWidth: 140 }}
           />
@@ -133,38 +145,38 @@ export function Toolbar({
             onClick={onInvite}
             className="flex items-center gap-1 px-2 py-0.5 rounded transition-colors hover:brightness-125"
             style={{ fontSize: 10, fontWeight: 600, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}
-            title="Invite a collaborator to this Pulse"
+            title={t("toolbar.inviteTitle")}
           >
-            <Icon name="add" size={12} /> Invite
+            <Icon name="add" size={12} /> {t("toolbar.invite")}
           </button>
         )}
         <input
           type="date"
           value={toDateInputValue(referenceDay)}
           onChange={(e) => { const d = dayIndexFromDateInputValue(e.target.value); if (Number.isFinite(d)) onReferenceDayChange(d); }}
-          title="Marker date — pick a date to move the canvas line there and center on it"
+          title={t("toolbar.markerDate")}
           className="mono rounded px-2 py-0.5"
           style={{ colorScheme: "dark", fontSize: 10, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B", outline: "none" }}
         />
-        <div className="flex rounded overflow-hidden" style={{ background: "#1B3A63" }} title="Switch between the timeline canvas and the Kanban board">
+        <div className="flex rounded overflow-hidden" style={{ background: "#1B3A63" }} title={t("toolbar.switchView")}>
           {(["canvas", "board"] as const).map((m) => (
             <button key={m} onClick={() => setViewMode(m)} className="px-2.5 py-1 text-xs capitalize" style={{ background: viewMode === m ? "#EE7240" : "transparent", color: viewMode === m ? "#0A1428" : "#EE7240", fontWeight: 600 }}>
-              {m}
+              {m === "canvas" ? t("toolbar.viewCanvas") : t("toolbar.viewBoard")}
             </button>
           ))}
         </div>
         <div className="flex-1" />
-        <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{DENSITY_HINT[density]}</span>
+        <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{densityHint[density]}</span>
         {canEdit && (
           <div className="relative" style={{ flexShrink: 0 }}>
-            <button onClick={() => setShowGraphSettings((v) => !v)} title="Graph Effort scale settings" className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>
-              <Icon name="settings" size={13} /> Effort scale
+            <button onClick={() => setShowGraphSettings((v) => !v)} title={t("toolbar.effortScaleTitle")} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>
+              <Icon name="settings" size={13} /> {t("toolbar.effortScale")}
             </button>
             {showGraphSettings && (
               <div className="absolute z-50 mt-1 rounded-lg p-3" style={{ top: "100%", right: 0, width: 230, background: "#FFFFFF", border: "1px solid #E2DFD9", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
-                <div className="mono text-xs font-semibold mb-2" style={{ color: "#1F2330" }}>GRAPH EFFORT SCALE</div>
+                <div className="mono text-xs font-semibold mb-2" style={{ color: "#1F2330" }}>{t("toolbar.effortScaleHeading")}</div>
                 <label className="block mb-2">
-                  <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>pixels per step</span>
+                  <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{t("toolbar.pixelsPerStep")}</span>
                   <input
                     type="number"
                     min="6"
@@ -177,7 +189,7 @@ export function Toolbar({
                   />
                 </label>
                 <label className="block">
-                  <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>work units per step</span>
+                  <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{t("toolbar.workUnitsPerStep")}</span>
                   <input
                     type="number"
                     min="1"
@@ -190,7 +202,7 @@ export function Toolbar({
                   />
                 </label>
                 <div className="mono mt-2" style={{ fontSize: 9, color: "#94A3B8" }}>
-                  Each {graph.stepPx}px of box height = {graph.workPerStep} work unit{graph.workPerStep > 1 ? "s" : ""}. Height is discrete (whole steps).
+                  {t(graph.workPerStep > 1 ? "toolbar.effortScaleNoteOther" : "toolbar.effortScaleNoteOne", { px: graph.stepPx, n: graph.workPerStep })}
                 </div>
               </div>
             )}
@@ -205,10 +217,10 @@ export function Toolbar({
         {canEdit && viewMode === "canvas" && (
           <div className="flex items-center gap-1.5" style={{ borderRight: "1px solid #24406B", paddingRight: 6, marginRight: 2 }}>
             <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
-              <Icon name="view_agenda" size={14} /> Add epic
+              <Icon name="view_agenda" size={14} /> {t("toolbar.addEpic")}
             </button>
             <button onClick={onAddTask} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold" style={{ background: "#EE7240", color: "#FDFDFD" }}>
-              + Add task
+              {t("toolbar.addTask")}
             </button>
           </div>
         )}
@@ -217,58 +229,58 @@ export function Toolbar({
         <button
           onClick={onToggleMyPulse}
           disabled={!canMyPulse}
-          title={canMyPulse ? "My Beat — show only tasks I'm involved in (via my linked account)" : "Link your account to a resource in the Team tab to use My Beat"}
+          title={canMyPulse ? t("toolbar.myBeatOn") : t("toolbar.myBeatOff")}
           className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
           style={{ background: myPulse ? "#EE7240" : "#1B3A63", color: myPulse ? "#0A1428" : "#EE7240", border: "1px solid " + (myPulse ? "#EE7240" : "#24406B"), opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
         >
-          <Icon name="person" size={13} /> My Beat
+          <Icon name="person" size={13} /> {t("toolbar.myBeat")}
         </button>
         {viewMode === "canvas" && (
           <>
-        <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title="Zoom the whole canvas image in/out (day width unchanged)">
+        <div className="flex items-center gap-1 rounded px-1" style={{ background: "#1B3A63" }} title={t("toolbar.zoomTitle")}>
           <button onClick={onZoomOut} className="p-1.5 rounded"><Icon name="zoom_out" size={16} style={{ color: "#EE7240" }} /></button>
           <span className="mono text-xs w-9 text-center" style={{ color: "#EE7240" }}>{Math.round(viewZoom * 100)}%</span>
           <button onClick={onZoomIn} className="p-1.5 rounded"><Icon name="zoom_in" size={16} style={{ color: "#EE7240" }} /></button>
-          <button onClick={onFitRoadmap} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#EE7240" }} title="Fit the whole roadmap on screen">fit</button>
+          <button onClick={onFitRoadmap} className="px-1.5 py-1 rounded mono text-xs" style={{ color: "#EE7240" }} title={t("toolbar.fitTitle")}>{t("toolbar.fit")}</button>
         </div>
 
         <div className="flex rounded overflow-hidden ml-1" style={{ background: "#1B3A63" }}>
           {(["day", "week", "month"] as Density[]).map((d) => (
             <button key={d} onClick={() => setDensity(d)} className="px-2.5 py-1.5 text-xs capitalize" style={{ background: density === d ? "#EE7240" : "transparent", color: density === d ? "#0A1428" : "#EE7240", fontWeight: 600 }}>
-              {d}
+              {densityLabel[d]}
             </button>
           ))}
         </div>
-        <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title="Reset view"><Icon name="refresh" size={16} style={{ color: "#EE7240" }} /></button>
+        <button onClick={onResetView} className="p-1.5 rounded ml-1" style={{ background: "#1B3A63" }} title={t("toolbar.resetView")}><Icon name="refresh" size={16} style={{ color: "#EE7240" }} /></button>
           </>
         )}
 
         {canEdit && (
-          <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title="Undo / redo (⌘Z · ⇧⌘Z)">
-            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title="Undo (⌘Z)" style={{ opacity: canUndo ? 1 : 0.5, cursor: canUndo ? "pointer" : "default" }}><Icon name="undo" size={16} style={{ color: "#EE7240" }} /></button>
-            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title="Redo (⇧⌘Z)" style={{ opacity: canRedo ? 1 : 0.5, cursor: canRedo ? "pointer" : "default" }}><Icon name="redo" size={16} style={{ color: "#EE7240" }} /></button>
+          <div className="flex items-center gap-1 rounded px-1 ml-1" style={{ background: "#1B3A63" }} title={t("toolbar.undoRedo")}>
+            <button onClick={onUndo} disabled={!canUndo} className="p-1.5 rounded" title={t("toolbar.undo")} style={{ opacity: canUndo ? 1 : 0.5, cursor: canUndo ? "pointer" : "default" }}><Icon name="undo" size={16} style={{ color: "#EE7240" }} /></button>
+            <button onClick={onRedo} disabled={!canRedo} className="p-1.5 rounded" title={t("toolbar.redo")} style={{ opacity: canRedo ? 1 : 0.5, cursor: canRedo ? "pointer" : "default" }}><Icon name="redo" size={16} style={{ color: "#EE7240" }} /></button>
           </div>
         )}
 
         <div className="flex items-center gap-1.5 ml-1">
           <div className="flex items-center gap-1 rounded px-1.5" style={{ background: "#F4F7FB", border: "1px solid #24406B" }}>
             <Icon name="search" size={13} style={{ color: "#64748B" }} />
-            <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder="filter features…" className="bg-transparent text-xs py-1.5" style={{ color: "#1F2330", outline: "none", width: 90 }} />
+            <input value={featureQuery} onChange={(e) => setFeatureQuery(e.target.value)} placeholder={t("toolbar.filterFeatures")} className="bg-transparent text-xs py-1.5" style={{ color: "#1F2330", outline: "none", width: 90 }} />
             {featureQuery && (
-              <button onClick={() => setFeatureQuery("")} title="Clear task filter" aria-label="Clear task filter" className="no-press" style={{ color: "#64748B", display: "flex" }}>
+              <button onClick={() => setFeatureQuery("")} title={t("toolbar.clearTaskFilter")} aria-label={t("toolbar.clearTaskFilter")} className="no-press" style={{ color: "#64748B", display: "flex" }}>
                 <Icon name="close" size={13} />
               </button>
             )}
           </div>
           <MultiSelectFilter
-            label="statuses"
+            label={t("toolbar.statuses")}
             dark
             options={statusOptions}
             selected={featureStatusFilter}
             onChange={setFeatureStatusFilter}
           />
           <MultiSelectFilter
-            label="epics"
+            label={t("toolbar.epics")}
             searchable
             dark
             options={epicOptions}
@@ -282,7 +294,7 @@ export function Toolbar({
                 setFeatureStatusFilter(new Set());
                 setEpicFilter(new Set());
               }}
-              title="Clear feature filter"
+              title={t("toolbar.clearFeatureFilter")}
             >
               <Icon name="close" size={13} style={{ color: "#94A3B8" }} />
             </button>
@@ -290,18 +302,18 @@ export function Toolbar({
         </div>
         {viewMode === "canvas" && (
           <>
-            <button onClick={onToggleCompactFilter} title="When filtering, hide non-matching tasks and compact the rest (otherwise they're dimmed in place)" className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: compactFilter ? "#EE7240" : "#1B3A63", color: compactFilter ? "#0A1428" : "#EE7240", border: "1px solid " + (compactFilter ? "#EE7240" : "#24406B") }}>
-              <Icon name={compactFilter ? "collapse_all" : "expand_all"} size={13} /> Compact filter
+            <button onClick={onToggleCompactFilter} title={t("toolbar.compactFilterTitle")} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: compactFilter ? "#EE7240" : "#1B3A63", color: compactFilter ? "#0A1428" : "#EE7240", border: "1px solid " + (compactFilter ? "#EE7240" : "#24406B") }}>
+              <Icon name={compactFilter ? "collapse_all" : "expand_all"} size={13} /> {t("toolbar.compactFilter")}
             </button>
-            <button onClick={() => setShowDelays(!showDelays)} title="Show delay lines: planned start → actual start" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
-              <Icon name="timeline" size={13} /> {showDelays ? "Delays on" : "Delays"}
+            <button onClick={() => setShowDelays(!showDelays)} title={t("toolbar.delaysTitle")} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: showDelays ? "#3A0E12" : "#1B3A63", color: showDelays ? "#FCA5A5" : "#EE7240", border: showDelays ? "1px solid #E5484D" : "1px solid #24406B" }}>
+              <Icon name="timeline" size={13} /> {showDelays ? t("toolbar.delaysOn") : t("toolbar.delays")}
             </button>
-            <button onClick={onToggleShrinkEpics} title="Shrink epics to title-only boxes and compact their height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
-              <Icon name="compress" size={13} /> {epicsShrunk ? "Unshrink" : "Shrink epics"}
+            <button onClick={onToggleShrinkEpics} title={t("toolbar.shrinkTitle")} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: epicsShrunk ? "#123359" : "#1B3A63", color: "#EE7240", border: epicsShrunk ? "1px solid #EE7240" : "1px solid #24406B" }}>
+              <Icon name="compress" size={13} /> {epicsShrunk ? t("toolbar.unshrink") : t("toolbar.shrinkEpics")}
             </button>
             {canEdit && (
-              <button onClick={onCompact} title="Compact everything vertically to minimum height" className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
-                <Icon name="auto_awesome_mosaic" size={13} /> Layout
+              <button onClick={onCompact} title={t("toolbar.layoutTitle")} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
+                <Icon name="auto_awesome_mosaic" size={13} /> {t("toolbar.layout")}
               </button>
             )}
           </>
@@ -314,7 +326,7 @@ export function Toolbar({
           {presence}
           <button
             onClick={onToggleComments}
-            title="Comments"
+            title={t("toolbar.comments")}
             className="flex items-center justify-center rounded-lg"
             style={{ width: 32, height: 32, background: commentsOpen ? "#EE7240" : "#1B3A63", color: commentsOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (commentsOpen ? "#EE7240" : "#24406B") }}
           >

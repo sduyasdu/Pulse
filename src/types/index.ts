@@ -14,6 +14,11 @@ export interface UserDoc {
   photoURL: string | null;
   personalWorkspaceId: string;
   createdAt: Timestamp;
+  /** The user's preferred UI language override (a supported `Lang` code).
+   * Absent/null = follow browser detection (null is the "cleared override"
+   * written when reverting to Auto). Synced across devices; also mirrored to
+   * localStorage for instant application on reload (see i18nStore). */
+  language?: string | null;
 }
 
 export interface Workspace {
@@ -116,6 +121,50 @@ export interface PulseMember {
    * Members can only read each other's user docs is disallowed, hence this
    * denormalized, member-readable copy. */
   photoURL?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Activity log (Changelog-Spec.md) — durable, shared, per-Pulse "who changed
+// what, when", at pulses/{id}/activity/{entryId}. Append-only; client-emitted
+// in v1 (server-authoritative later, Server-Functions-Spec SF4).
+// ---------------------------------------------------------------------------
+
+export type ActivityEntityKind = "feature" | "epic" | "resource" | "member" | "invite" | "pulse";
+
+export type ActivityVerb =
+  | "create" | "delete" | "edit"
+  | "status" | "assign" | "unassign" | "lead" | "move-epic" | "subtask" // feature
+  | "link" | "unlink" // resource
+  | "add" | "remove" | "role-change" | "leave" // member
+  | "link-created" | "link-revoked" // invite
+  | "rename" | "config" | "transfer"; // pulse
+
+/** A curated before→after for a high-signal field, as display strings. */
+export interface ActivityDelta {
+  key: string;
+  before: string | null;
+  after: string | null;
+}
+
+export interface ActivityEntry {
+  id: string;
+  actorUid: string;
+  actorEmail: string;
+  actorName?: string | null;
+  at: Timestamp;
+  entityKind: ActivityEntityKind;
+  entityId: string;
+  entityName: string; // name-at-time (rename/delete-proof)
+  verb: ActivityVerb;
+  summary: string; // pre-rendered human line
+  changedKeys?: string[];
+  deltas?: ActivityDelta[];
+  /** For feature entries = the feature's `assignedUids` at write time; drives
+   * the My-Beat Viewer read scope. Absent on non-feature entries (hidden from
+   * beat viewers). */
+  scopeUids?: string[];
+  source: "client" | "server";
+  clientKey?: string;
 }
 
 /** An @-mention of a task or resource embedded in a comment. `label` is the

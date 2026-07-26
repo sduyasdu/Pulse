@@ -8,6 +8,7 @@ import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUt
 import { staffingColor } from "@/domain/graphEffort";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
+import { useT } from "@/i18n";
 
 interface MobileBoardProps {
   features: Feature[];
@@ -21,6 +22,7 @@ interface MobileBoardProps {
 const fmt = (day: number) => dateForDay(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 export function MobileBoard({ features, epics, resources, canEdit, onSelect, myResourceIds }: MobileBoardProps) {
+  const t = useT();
   const pulse = usePulseStore((s) => s.pulse);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const graph = graphConfigOf(pulse);
@@ -66,12 +68,12 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search tasks, epics, people"
+              placeholder={t("mobile.searchPlaceholder")}
               className="w-full rounded-lg border text-sm"
               style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "9px 34px 9px 34px", outline: "none" }}
             />
             {query && (
-              <button onClick={() => setQuery("")} aria-label="Clear search" className="no-press" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", fontSize: 16, lineHeight: 1 }}>
+              <button onClick={() => setQuery("")} aria-label={t("dashboard.clearSearch")} className="no-press" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", fontSize: 16, lineHeight: 1 }}>
                 <Icon name="close" size={16} />
               </button>
             )}
@@ -103,7 +105,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
       </div>
 
       <div className="flex flex-col gap-4 p-3">
-        {col.groups.length === 0 && <div className="p-8 text-center text-sm" style={{ color: "#94A3B8" }}>No tasks in “{statusMetaOf(col.status, statuses).label}”.</div>}
+        {col.groups.length === 0 && <div className="p-8 text-center text-sm" style={{ color: "#94A3B8" }}>{t("mobile.noTasksInStatus", { status: statusMetaOf(col.status, statuses).label })}</div>}
         {col.groups.map((g) => (
           <div key={g.epicId ?? "none"}>
             <div className="flex items-center gap-1.5 mb-1.5 rounded" style={{ background: hexA(g.color || "#94A3B8", 0.16), borderLeft: `3px solid ${g.color || "#94A3B8"}`, padding: "3px 8px" }}>
@@ -120,7 +122,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
                     <button onClick={() => onSelect(f.id)} className="w-full text-left px-3 py-2.5 active:brightness-95">
                       <div className="flex items-center gap-2">
                         <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(f, graph), flexShrink: 0 }} />
-                        <span className="text-sm font-medium flex-1 truncate" style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
+                        <span className="text-sm font-medium flex-1 truncate" style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || t("common.untitledTask")}</span>
                         {f.plannedX != null && <Icon name="keep" size={12} />}
                         {done && <Icon name="lock" size={13} />}
                       </div>

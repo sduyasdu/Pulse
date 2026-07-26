@@ -3,6 +3,11 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { RequireAuth } from "@/routes/RequireAuth";
 import { ConfirmPopover } from "@/components/shared/ConfirmPopover";
+import { installActivityRecorder } from "@/domain/activityRecorder";
+
+// Register the activity-log recorder as the undo engine's sink (Changelog-Spec).
+// Module-level: runs once, independent of React's mount/StrictMode double-invoke.
+installActivityRecorder();
 
 // Route-level code splitting: the heavy Pulse view (canvas, panels, mobile UI)
 // loads only when a Pulse is opened, keeping the initial download — the part

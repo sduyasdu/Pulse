@@ -3,6 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import { Link } from "react-router-dom";
 import type { MyPulseIndexEntry } from "@/types";
 import { roleMeta } from "@/domain/permissions";
+import { useT, type TranslationKey } from "@/i18n";
 import { PulseThumbnail } from "./PulseThumbnail";
 import { usePulseSummary } from "./usePulseSummary";
 
@@ -18,6 +19,7 @@ interface PulseCardProps {
 }
 
 export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClick, onArchive, onUnarchive, onDelete, onLeave }: PulseCardProps) {
+  const t = useT();
   const canInvite = entry.role === "owner" || entry.role === "editor";
   const isOwner = entry.role === "owner";
   const archived = !!entry.archived;
@@ -42,8 +44,8 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
           onClick={(e) => { stop(e); setMenuOpen((o) => !o); }}
           className="flex items-center justify-center rounded"
           style={{ width: 26, height: 26, background: "#F1EFE8", color: "#64748B", fontSize: 18, lineHeight: 1, border: "1px solid #E2DFD9" }}
-          title="More actions"
-          aria-label="More actions"
+          title={t("card.moreActions")}
+          aria-label={t("card.moreActions")}
         >
           <Icon name="more_horiz" size={18} />
         </button>
@@ -55,20 +57,20 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
               style={{ bottom: "100%", zIndex: 30, minWidth: 168, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
             >
               {canInvite && (
-                <MenuItem label="Rename…" icon="edit" onClick={(e) => { stop(e); setMenuOpen(false); onRenameClick(); }} />
+                <MenuItem label={t("card.rename")} icon="edit" onClick={(e) => { stop(e); setMenuOpen(false); onRenameClick(); }} />
               )}
               {canInvite && !archived && (
-                <MenuItem label="Invite collaborator" icon="person_add" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
+                <MenuItem label={t("card.inviteCollaborator")} icon="person_add" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
               )}
-              <MenuItem label="Duplicate…" icon="content_copy" onClick={(e) => { stop(e); setMenuOpen(false); onDuplicateClick(); }} />
+              <MenuItem label={t("card.duplicate")} icon="content_copy" onClick={(e) => { stop(e); setMenuOpen(false); onDuplicateClick(); }} />
               {archived ? (
-                <MenuItem label="Unarchive" icon="unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
+                <MenuItem label={t("card.unarchive")} icon="unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
               ) : (
-                <MenuItem label="Archive" icon="archive" onClick={(e) => { stop(e); setMenuOpen(false); onArchive(); }} />
+                <MenuItem label={t("card.archive")} icon="archive" onClick={(e) => { stop(e); setMenuOpen(false); onArchive(); }} />
               )}
               {isOwner ? (
                 <MenuItem
-                  label="Delete…"
+                  label={t("card.delete")}
                   icon="delete"
                   danger
                   onClick={(e) => {
@@ -80,7 +82,7 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
                 />
               ) : (
                 <MenuItem
-                  label="Leave Pulse"
+                  label={t("card.leavePulse")}
                   icon="logout"
                   danger
                   onClick={(e) => {
@@ -102,7 +104,7 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
         ) : (
           <div style={{ height: 56, background: "#FDFCF8", border: "1px solid #EEF1F4", borderRadius: 6 }} />
         )}
-        <div className="font-display mt-2.5 text-sm font-medium text-yasdu-fg">{entry.name || "Untitled Pulse"}</div>
+        <div className="font-display mt-2.5 text-sm font-medium text-yasdu-fg">{entry.name || t("common.untitledPulse")}</div>
         {/* The section already conveys ownership, so the "Owner" badge is
             redundant — only show Editor/Viewer (and the archived tag). */}
         {(!isOwner || archived) && (
@@ -114,17 +116,17 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
             )}
             {archived && (
               <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#64748B" }}>
-                Archived
+                {t("card.archivedTag")}
               </span>
             )}
           </div>
         )}
         {summary && (
           <div className="mt-2 flex flex-wrap items-center gap-1" style={{ paddingRight: 30 }}>
-            <StatBadge n={summary.epics.length} label="epic" bg="#EAF0FA" color="#1B3A63" />
-            <StatBadge n={summary.features.length} label="task" bg="#FCEEE4" color="#C2410C" />
-            <StatBadge n={subtaskCount} label="subtask" bg="#F1F5F9" color="#475569" />
-            <StatBadge n={summary.resources.length} label="resource" bg="#E7F6F1" color="#0F766E" />
+            <StatBadge n={summary.epics.length} text={countLabel(t, "card.epicOne", "card.epicOther", summary.epics.length)} bg="#EAF0FA" color="#1B3A63" />
+            <StatBadge n={summary.features.length} text={countLabel(t, "card.taskOne", "card.taskOther", summary.features.length)} bg="#FCEEE4" color="#C2410C" />
+            <StatBadge n={subtaskCount} text={countLabel(t, "card.subtaskOne", "card.subtaskOther", subtaskCount)} bg="#F1F5F9" color="#475569" />
+            <StatBadge n={summary.resources.length} text={countLabel(t, "card.resourceOne", "card.resourceOther", summary.resources.length)} bg="#E7F6F1" color="#0F766E" />
           </div>
         )}
       </Link>
@@ -132,10 +134,17 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
   );
 }
 
-function StatBadge({ n, label, bg, color }: { n: number; label: string; bg: string; color: string }) {
+// Picks the singular/plural key for a count and interpolates {n}. The badge
+// renders the number in bold, so we strip the leading "{n} " the key produces.
+function countLabel(t: (k: TranslationKey, p?: { n: number }) => string, one: TranslationKey, other: TranslationKey, n: number): string {
+  const full = t(n === 1 ? one : other, { n });
+  return full.replace(/^\s*\d+\s*/, "");
+}
+
+function StatBadge({ n, text, bg, color }: { n: number; text: string; bg: string; color: string }) {
   return (
     <span className="mono inline-block rounded px-1.5 py-0.5 text-[10px]" style={{ background: bg, color }}>
-      <span style={{ fontWeight: 700 }}>{n}</span> {label}{n === 1 ? "" : "s"}
+      <span style={{ fontWeight: 700 }}>{n}</span> {text}
     </span>
   );
 }

@@ -28,6 +28,17 @@ export interface UndoCommand {
 
 const MAX_HISTORY = 50; // D2
 
+// Activity-log sink (Changelog-Spec.md). undoStore is the one choke point every
+// first-hand user action flows through (undo/redo re-issue writes without going
+// back through `record`, so they never re-log). A sink is registered lazily by
+// the activity recorder to avoid an import cycle (recorder → pulseStore/authStore
+// → …). Absent sink = no-op, so the undo engine works with the log disabled.
+let activitySink: ((cmd: UndoCommand) => void) | null = null;
+
+export function setActivitySink(fn: ((cmd: UndoCommand) => void) | null): void {
+  activitySink = fn;
+}
+
 // ---- op builders ---------------------------------------------------------
 
 /** Reads `keys` off a source doc. A key the source lacks maps to `null`, not
@@ -135,6 +146,7 @@ export const useUndoStore = create<UndoState>((set, get) => ({
     // Any new action clears the redo stack. Switching Pulse drops history.
     const base = pulseId === cmd.pulseId ? past : [];
     set({ pulseId: cmd.pulseId, past: [...base, cmd].slice(-MAX_HISTORY), future: [] });
+    activitySink?.(cmd); // fire-and-forget activity log (never blocks the action)
   },
 
   undo: async () => {

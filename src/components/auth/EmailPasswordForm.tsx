@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useT } from "@/i18n";
 
 interface EmailPasswordFormProps {
   mode: "signin" | "register";
@@ -6,6 +7,7 @@ interface EmailPasswordFormProps {
 }
 
 export function EmailPasswordForm({ mode, onSubmit }: EmailPasswordFormProps) {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -31,7 +33,7 @@ export function EmailPasswordForm({ mode, onSubmit }: EmailPasswordFormProps) {
         <input
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Your name"
+          placeholder={t("auth.yourName")}
           className="rounded-lg border px-3 py-2.5 text-sm outline-none"
           style={{ borderColor: "#E2DFD9" }}
         />
@@ -41,7 +43,7 @@ export function EmailPasswordForm({ mode, onSubmit }: EmailPasswordFormProps) {
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
+        placeholder={t("auth.email")}
         className="rounded-lg border px-3 py-2.5 text-sm outline-none"
         style={{ borderColor: "#E2DFD9" }}
       />
@@ -51,7 +53,7 @@ export function EmailPasswordForm({ mode, onSubmit }: EmailPasswordFormProps) {
         minLength={6}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
+        placeholder={t("auth.password")}
         className="rounded-lg border px-3 py-2.5 text-sm outline-none"
         style={{ borderColor: "#E2DFD9" }}
       />
@@ -62,7 +64,7 @@ export function EmailPasswordForm({ mode, onSubmit }: EmailPasswordFormProps) {
         className="mt-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-yasdu-primary-fg transition-opacity disabled:opacity-50"
         style={{ background: "#D85A28" }}
       >
-        {mode === "register" ? "Create account" : "Sign in"}
+        {mode === "register" ? t("auth.createAccount") : t("auth.signIn")}
       </button>
     </form>
   );

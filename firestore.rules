@@ -253,6 +253,22 @@ service cloud.firestore {
         allow read: if isPulseMember(pulseId);
         allow write: if canEditPulse(pulseId);
       }
+
+      // Activity log (Changelog-Spec.md) — append-only. Any member may create an
+      // entry about their OWN action (v1 client-emitted; `actorUid` pinned to the
+      // writer). Entries are immutable. Reads follow the caps model: full readers
+      // see all; a My-Beat Viewer sees only entries whose `scopeUids` include them
+      // (feature entries in their beat), and must query array-contains (§4.3).
+      match /activity/{entryId} {
+        allow read: if isPulseMember(pulseId) && (
+          callerReadScope(pulseId) == 'all'
+          || (callerReadScope(pulseId) == 'beat' && request.auth.uid in resource.data.get('scopeUids', []))
+        );
+        allow create: if isPulseMember(pulseId)
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.source == 'client';
+        allow update, delete: if false;
+      }
     }
   }
 }

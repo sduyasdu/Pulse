@@ -7,6 +7,7 @@ import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { confirmAt } from "@/stores/confirmStore";
+import { useT } from "@/i18n";
 
 interface CapacityTabProps {
   canEdit: boolean;
@@ -16,14 +17,14 @@ interface CapacityTabProps {
 // Absent key = collapsed, so it starts closed the first time.
 const OVERVIEW_KEY = "pulse.capacity.overviewOpen";
 
-function ResourceNameInput({ name, disabled, onCommit }: { name: string; disabled: boolean; onCommit: (name: string) => void }) {
+function ResourceNameInput({ name, disabled, onCommit, renameTitle }: { name: string; disabled: boolean; onCommit: (name: string) => void; renameTitle: string }) {
   const [local, onChange] = useDebouncedText(name, onCommit);
   return (
     <input
       value={local}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      title={disabled ? undefined : "Click to rename"}
+      title={disabled ? undefined : renameTitle}
       className="text-sm font-medium w-full rounded px-1.5 py-0.5"
       style={{
         color: "#1F2330",
@@ -36,6 +37,7 @@ function ResourceNameInput({ name, disabled, onCommit }: { name: string; disable
 }
 
 export function CapacityTab({ canEdit }: CapacityTabProps) {
+  const t = useT();
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const pulse = usePulseStore((s) => s.pulse);
@@ -77,18 +79,18 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
   ];
 
   const addType = () => {
-    const n = window.prompt("New resource type:");
+    const n = window.prompt(t("capacity.newTypePrompt"));
     if (n && n.trim() && !resourceTypes.includes(n.trim())) void setResourceTypes([...resourceTypes, n.trim()]);
   };
-  const renameType = (t: string) => {
-    const nn = window.prompt("Rename type:", t);
-    if (!nn || !nn.trim() || nn.trim() === t) return;
-    void setResourceTypes(resourceTypes.map((x) => (x === t ? nn.trim() : x)));
-    resources.filter((r) => r.type === t).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
+  const renameType = (type: string) => {
+    const nn = window.prompt(t("capacity.renameTypePrompt"), type);
+    if (!nn || !nn.trim() || nn.trim() === type) return;
+    void setResourceTypes(resourceTypes.map((x) => (x === type ? nn.trim() : x)));
+    resources.filter((r) => r.type === type).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
   };
-  const deleteType = async (t: string, e: { clientX: number; clientY: number }) => {
-    if (await confirmAt(e, { message: `Delete type "${t}"?`, detail: "Resources keep the label but it leaves the list." })) {
-      void setResourceTypes(resourceTypes.filter((x) => x !== t));
+  const deleteType = async (type: string, e: { clientX: number; clientY: number }) => {
+    if (await confirmAt(e, { message: t("capacity.deleteTypeMsg", { type }), detail: t("capacity.deleteTypeDetail") })) {
+      void setResourceTypes(resourceTypes.filter((x) => x !== type));
     }
   };
 
@@ -98,11 +100,11 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         onClick={toggleOverview}
         className="flex items-center justify-between rounded px-3 py-2"
         style={{ border: "1px solid #E2DFD9", background: "#F8FAFC" }}
-        title={showOverview ? "Hide overview & resource types" : "Show overview & resource types"}
+        title={showOverview ? t("capacity.hideOverview") : t("capacity.showOverview")}
       >
-        <span className="mono text-xs" style={{ color: "#64748B" }}>OVERVIEW &amp; RESOURCE TYPES</span>
+        <span className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.overviewHeading")}</span>
         <span className="flex items-center gap-2">
-          {overLimit > 0 && <span className="mono text-xs font-semibold" style={{ color: "#E5484D" }}>{overLimit} over limit</span>}
+          {overLimit > 0 && <span className="mono text-xs font-semibold" style={{ color: "#E5484D" }}>{t("capacity.overLimit", { n: overLimit })}</span>}
           <Icon name={showOverview ? "keyboard_arrow_down" : "chevron_right"} size={14} style={{ color: "#64748B" }} />
         </span>
       </button>
@@ -111,32 +113,32 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         <>
           <div className="rounded px-3 py-2.5" style={{ background: "#F8FAFC", border: "1px solid #EEF1F4" }}>
             <div className="flex justify-between mb-1">
-              <span className="mono text-xs" style={{ color: "#64748B" }}>TEAM — PEAK vs LIMIT</span>
-              <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{overLimit} over limit</span>
+              <span className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.teamPeak")}</span>
+              <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{t("capacity.overLimit", { n: overLimit })}</span>
             </div>
-            <div className="mono text-xs" style={{ color: "#78859A" }}>per-person bars = avg load in weeks 1–4 · 5–8 · 9–12 ÷ occupation limit</div>
+            <div className="mono text-xs" style={{ color: "#78859A" }}>{t("capacity.peakNote")}</div>
           </div>
 
       <div className="rounded px-3 py-2.5" style={{ border: "1px solid #E2DFD9" }}>
         <div className="flex items-center justify-between">
-          <span className="mono text-xs" style={{ color: "#64748B" }}>RESOURCE TYPES</span>
+          <span className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.resourceTypes")}</span>
           {canEdit && (
-            <button onClick={addType} className="mono text-xs px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>+ add</button>
+            <button onClick={addType} className="mono text-xs px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>{t("capacity.add")}</button>
           )}
         </div>
         <div className="flex flex-wrap gap-1 mt-2">
-          {resourceTypes.map((t) => (
-            <span key={t} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style={{ background: "#F1F5F9", color: "#475569" }}>
-              {t}
+          {resourceTypes.map((rt) => (
+            <span key={rt} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style={{ background: "#F1F5F9", color: "#475569" }}>
+              {rt}
               {canEdit && (
                 <>
-                  <button onClick={() => renameType(t)} title="Rename"><Icon name="edit" size={12} style={{ color: "#64748B" }} /></button>
-                  <button onClick={(e) => void deleteType(t, e)} title="Delete"><Icon name="close" size={12} style={{ color: "#64748B" }} /></button>
+                  <button onClick={() => renameType(rt)} title={t("capacity.rename")}><Icon name="edit" size={12} style={{ color: "#64748B" }} /></button>
+                  <button onClick={(e) => void deleteType(rt, e)} title={t("common.delete")}><Icon name="close" size={12} style={{ color: "#64748B" }} /></button>
                 </>
               )}
             </span>
           ))}
-          {resourceTypes.length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>no types yet</span>}
+          {resourceTypes.length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>{t("capacity.noTypes")}</span>}
         </div>
       </div>
         </>
@@ -147,7 +149,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter by name or type…"
+          placeholder={t("capacity.filterPlaceholder")}
           className="bg-transparent text-xs flex-1"
           style={{ color: "#1F2330", outline: "none", minWidth: 0 }}
         />
@@ -160,7 +162,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
       </div>
 
       {filtered.length === 0 && resources.length > 0 && (
-        <p className="mono text-xs text-center py-2" style={{ color: "#94A3B8" }}>No people match “{query}”.</p>
+        <p className="mono text-xs text-center py-2" style={{ color: "#94A3B8" }}>{t("capacity.noMatch", { query })}</p>
       )}
 
       {filtered.map((r) => {
@@ -173,10 +175,10 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
             <div className="flex items-center gap-2">
               <ResourceBadge resourceId={r.id} size={24} />
               <div className="flex-1 overflow-hidden">
-                <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} />
-                <div className="mono text-xs" style={{ color: "#64748B" }}>peak {peak}% · limit {r.capacity}% · {pct}% used</div>
+                <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} renameTitle={t("capacity.clickToRename")} />
+                <div className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.peakLine", { peak, limit: r.capacity, used: pct })}</div>
               </div>
-              {rows.length === 0 && <span className="mono text-xs px-1.5 py-0.5 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>idle</span>}
+              {rows.length === 0 && <span className="mono text-xs px-1.5 py-0.5 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>{t("capacity.idle")}</span>}
             </div>
             <div className="mt-2 flex gap-1.5">
               {LOAD_WINDOWS.map((w) => {
@@ -197,7 +199,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
             </div>
             <div className="flex items-center gap-2 mt-2">
               <div className="flex-1">
-                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>TYPE</span>
+                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.type")}</span>
                 <select
                   value={r.type || ""}
                   disabled={!canEdit}
@@ -205,15 +207,15 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
                   className="mono text-xs border rounded px-1 py-0.5 w-full"
                   style={{ borderColor: "#E2DFD9" }}
                 >
-                  <option value="">— none —</option>
-                  {resourceTypes.map((t) => (
-                    <option key={t} value={t}>{t}</option>
+                  <option value="">{t("common.none")}</option>
+                  {resourceTypes.map((rt) => (
+                    <option key={rt} value={rt}>{rt}</option>
                   ))}
                   {r.type && !resourceTypes.includes(r.type) && <option value={r.type}>{r.type}</option>}
                 </select>
               </div>
               <div style={{ width: 112 }}>
-                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>LIMIT %</span>
+                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.limitPct")}</span>
                 <div className="flex items-center gap-1">
                   <input
                     type="range"
@@ -242,7 +244,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
           </div>
         );
       })}
-      <p className="text-xs leading-relaxed" style={{ color: "#64748B" }}>Limit is the max % a person may be assigned. Bars show their busiest-day load against that limit; red means over-allocated.</p>
+      <p className="text-xs leading-relaxed" style={{ color: "#64748B" }}>{t("capacity.limitNote")}</p>
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/i18n";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { EmailPasswordForm } from "@/components/auth/EmailPasswordForm";
 
 export function LoginPage() {
   const { firebaseUser, initializing, signInWithGoogle, signInWithEmail, registerWithEmail } = useAuthStore();
+  const t = useT();
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
@@ -17,19 +19,19 @@ export function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border bg-yasdu-card p-7 shadow-sm" style={{ borderColor: "#E2DFD9" }}>
         <div className="mb-6 flex items-center gap-2">
           <span className="font-display text-xl font-semibold text-yasdu-blue">Pulse</span>
-          <span className="mono text-[10px] uppercase tracking-wide text-yasdu-primary">by Yasdu</span>
+          <span className="mono text-[10px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         </div>
 
         <h1 className="font-display mb-1 text-lg font-medium text-yasdu-fg">
-          {mode === "signin" ? "Sign in" : "Create your account"}
+          {mode === "signin" ? t("auth.signIn") : t("auth.createAccountTitle")}
         </h1>
-        <p className="mb-5 text-sm text-yasdu-muted">Visual, graph-first project planning.</p>
+        <p className="mb-5 text-sm text-yasdu-muted">{t("auth.tagline")}</p>
 
-        <GoogleButton onClick={() => void signInWithGoogle()} />
+        <GoogleButton onClick={() => void signInWithGoogle()} label={t("auth.continueWithGoogle")} />
 
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1" style={{ background: "#E2DFD9" }} />
-          <span className="mono text-[10px] uppercase text-yasdu-muted">or</span>
+          <span className="mono text-[10px] uppercase text-yasdu-muted">{t("common.or")}</span>
           <div className="h-px flex-1" style={{ background: "#E2DFD9" }} />
         </div>
 
@@ -46,7 +48,7 @@ export function LoginPage() {
           onClick={() => setMode((m) => (m === "signin" ? "register" : "signin"))}
           className="mt-4 w-full text-center text-xs text-yasdu-muted underline-offset-2 hover:underline"
         >
-          {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+          {mode === "signin" ? t("auth.newHere") : t("auth.haveAccount")}
         </button>
       </div>
     </div>

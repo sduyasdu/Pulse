@@ -289,6 +289,40 @@ describe("granular roles (Permissions-Spec §4)", () => {
   });
 });
 
+describe("activity log (Changelog-Spec)", () => {
+  const entry = (actorUid: string, extra: Record<string, unknown> = {}) => ({
+    actorUid, actorEmail: `${actorUid}@example.com`, at: Date.now(),
+    entityKind: "feature", entityId: "f1", entityName: "Login", verb: "edit",
+    summary: "edited Login", source: "client", ...extra,
+  });
+
+  it("a member may append an entry about their own action, but not forge the actor or mutate it", async () => {
+    await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "editor" }, bob: { email: "bob@example.com", role: "editor" } });
+    const bob = dbAs("bob", "bob@example.com");
+    await assertSucceeds(setDoc(doc(bob, "pulses", "p1", "activity", "a1"), entry("bob", { scopeUids: ["bob"] })));
+    await assertFails(setDoc(doc(bob, "pulses", "p1", "activity", "a2"), entry("alice"))); // forged actor
+    await assertFails(setDoc(doc(bob, "pulses", "p1", "activity", "a3"), entry("bob", { source: "server" }))); // client can't claim server
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "activity", "a1"), { summary: "tampered" }));
+    await assertFails(deleteDoc(doc(bob, "pulses", "p1", "activity", "a1")));
+  });
+
+  it("full readers see all activity; a My-Beat Viewer sees only their-beat entries via array-contains", async () => {
+    await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "owner" } });
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "mo"), { uid: "mo", email: "mo@example.com", role: "myBeatViewer", joinedAt: Date.now() });
+      await setDoc(doc(db, "pulses", "p1", "activity", "a_mine"), { ...entry("alice", { scopeUids: ["mo"] }), entityId: "fm" });
+      await setDoc(doc(db, "pulses", "p1", "activity", "a_admin"), { ...entry("alice"), entityKind: "member", entityId: "x", verb: "role-change" }); // no scopeUids
+    });
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(getDocs(collection(alice, "pulses", "p1", "activity"))); // full read
+    const mo = dbAs("mo", "mo@example.com");
+    await assertSucceeds(getDoc(doc(mo, "pulses", "p1", "activity", "a_mine")));
+    await assertFails(getDoc(doc(mo, "pulses", "p1", "activity", "a_admin"))); // admin entry hidden
+    await assertSucceeds(getDocs(query(collection(mo, "pulses", "p1", "activity"), where("scopeUids", "array-contains", "mo"))));
+    await assertFails(getDocs(collection(mo, "pulses", "p1", "activity"))); // unconstrained rejected
+  });
+});
+
 describe("Pulse creation", () => {
   it("lets a signed-in user create a Pulse, grant themselves owner, and index it in their own dashboard list", async () => {
     const alice = dbAs("alice", "alice@example.com");

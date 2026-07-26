@@ -12,6 +12,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import type { UserDoc } from "@/types";
 import { ensureUserDoc, resolvePendingInvites, updateUserProfile } from "@/services/firestore/users";
+import { useI18nStore } from "@/stores/i18nStore";
+import { isLang } from "@/i18n/langs";
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
@@ -27,8 +29,9 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
-  /** Save the current user's profile (name / avatar) and update local state. */
-  saveProfile: (patch: { displayName?: string | null; photoURL?: string | null }) => Promise<void>;
+  /** Save the current user's profile (name / avatar / language) and update local
+   * state. `language: null` clears the override. */
+  saveProfile: (patch: { displayName?: string | null; photoURL?: string | null; language?: string | null }) => Promise<void>;
   signOutUser: () => Promise<void>;
 }
 
@@ -58,6 +61,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         const userDoc = await bootstrap(user);
         set({ userDoc, bootstrapping: false });
+        // Resolution order: localStorage override → userDoc.language → browser.
+        // syncFromUserDoc is a no-op if a local override is already set.
+        useI18nStore.getState().syncFromUserDoc(isLang(userDoc?.language) ? userDoc.language : null);
       } catch (err) {
         set({ error: (err as Error).message, bootstrapping: false });
       }

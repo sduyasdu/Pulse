@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { DuplicateMode } from "@/services/firestore/pulses";
+import { useT } from "@/i18n";
 
 interface DuplicatePulseDialogProps {
   pulseName: string;
@@ -7,14 +8,14 @@ interface DuplicatePulseDialogProps {
   onDuplicate: (name: string, mode: DuplicateMode) => Promise<void>;
 }
 
-const MODES: { id: DuplicateMode; label: string; detail: string }[] = [
-  { id: "full", label: "Copy tasks & resources", detail: "Epics, tasks and subtasks, plus the team and their assignments." },
-  { id: "noResources", label: "Copy tasks, no resources", detail: "Epics, tasks and subtasks, but no team — tasks are left unassigned." },
-  { id: "empty", label: "Empty Pulse", detail: "A blank Pulse — nothing is copied, just the name." },
-];
-
 export function DuplicatePulseDialog({ pulseName, onClose, onDuplicate }: DuplicatePulseDialogProps) {
-  const [name, setName] = useState(`${pulseName || "Untitled Pulse"} (copy)`);
+  const t = useT();
+  const MODES: { id: DuplicateMode; label: string; detail: string }[] = [
+    { id: "full", label: t("dialog.copyFull"), detail: t("dialog.copyFullDetail") },
+    { id: "noResources", label: t("dialog.copyNoResources"), detail: t("dialog.copyNoResourcesDetail") },
+    { id: "empty", label: t("dialog.copyEmpty"), detail: t("dialog.copyEmptyDetail") },
+  ];
+  const [name, setName] = useState(`${pulseName || t("common.untitledPulse")} ${t("card.copySuffix")}`);
   const [mode, setMode] = useState<DuplicateMode>("full");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export function DuplicatePulseDialog({ pulseName, onClose, onDuplicate }: Duplic
     try {
       await onDuplicate(name.trim(), mode);
     } catch (err) {
-      setError((err as Error).message || "Couldn't duplicate this Pulse — try again.");
+      setError((err as Error).message || t("dialog.duplicateError"));
       setSubmitting(false);
     }
   };
@@ -35,13 +36,13 @@ export function DuplicatePulseDialog({ pulseName, onClose, onDuplicate }: Duplic
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display mb-4 text-base font-semibold text-yasdu-fg">Duplicate Pulse</h2>
+        <h2 className="font-display mb-4 text-base font-semibold text-yasdu-fg">{t("dialog.duplicatePulse")}</h2>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <input
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="New Pulse name"
+            placeholder={t("dialog.newPulseNamePlaceholder")}
             className="rounded-lg border px-3 py-2.5 text-sm outline-none"
             style={{ borderColor: "#E2DFD9" }}
           />
@@ -67,14 +68,14 @@ export function DuplicatePulseDialog({ pulseName, onClose, onDuplicate }: Duplic
           </div>
           {error && <span className="text-xs text-red-600">{error}</span>}
           <div className="mt-1 flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-yasdu-muted">Cancel</button>
+            <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-yasdu-muted">{t("common.cancel")}</button>
             <button
               type="submit"
               disabled={!name.trim() || submitting}
               className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg disabled:opacity-50"
               style={{ background: "#D85A28" }}
             >
-              {submitting ? "Duplicating…" : "Duplicate"}
+              {submitting ? t("dialog.duplicating") : t("dialog.duplicate")}
             </button>
           </div>
         </form>

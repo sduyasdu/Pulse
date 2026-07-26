@@ -19,7 +19,9 @@ import { LABEL_COLORS, colorForName, statusesOf, statusMetaOf } from "@/domain/c
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { Comments } from "@/components/comments/Comments";
+import { FeatureActivity } from "./FeatureActivity";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { useT } from "@/i18n";
 
 interface DetailsTabProps {
   feature: Feature;
@@ -38,6 +40,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   // (so it can be reopened) and the duplicate/delete actions stay on the real
   // permission. Reusing the name `canEdit` means all field bindings below pick
   // up the lock automatically.
+  const t = useT();
   const locked = feature.status === "done";
   const canEdit = canEditProp && !locked;
   const epics = usePulseStore((s) => s.epics);
@@ -49,6 +52,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
   const removeFeature = usePulseStore((s) => s.removeFeature);
   const setAlloc = usePulseStore((s) => s.setAlloc);
+  const assignResource = usePulseStore((s) => s.assignResource);
   const unassignResource = usePulseStore((s) => s.unassignResource);
   const addSubtask = usePulseStore((s) => s.addSubtask);
   const patchSubtask = usePulseStore((s) => s.patchSubtask);
@@ -98,11 +102,11 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   return (
     <div className="p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>TASK DETAILS</span>
+        <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>{t("details.taskDetails")}</span>
         {canEditProp && (
           <div className="flex items-center gap-1.5">
             <button
-              title="Duplicate task"
+              title={t("details.duplicateTask")}
               onClick={onDuplicate}
               className="rounded"
               style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
@@ -110,9 +114,9 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               <Icon name="content_copy" size={13} style={{ color: "#64748B" }} />
             </button>
             <button
-              title="Delete task"
+              title={t("details.deleteTask")}
               onClick={async (e) => {
-                if (await confirmAt(e, { message: `Delete "${feature.title || "this task"}"?`, detail: "You can undo this (⌘Z).", confirmLabel: "Delete" })) {
+                if (await confirmAt(e, { message: t("details.deleteTaskMsg", { title: feature.title || t("details.thisTask") }), detail: t("details.deleteTaskDetail"), confirmLabel: t("common.delete") })) {
                   void removeFeature(feature.id);
                   onClose();
                 }
@@ -129,7 +133,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       {locked && (
         <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#E6F7F4", border: "1px solid #A7E3D8", color: "#0F6B5C" }}>
           <Icon name="lock" size={14} />
-          <span>Done — locked. Change its status below to edit this task.</span>
+          <span>{t("details.doneLocked")}</span>
         </div>
       )}
 
@@ -143,7 +147,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
 
       <div className="flex gap-2">
         <div className="flex-1">
-          <span className="mono text-xs" style={{ color: "#64748B" }}>EPIC</span>
+          <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.epic")}</span>
           <select
             value={feature.epicId || ""}
             disabled={!canEdit}
@@ -151,14 +155,14 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             className="mt-1 w-full text-sm border rounded px-2 py-1.5"
             style={{ borderColor: "#E2DFD9" }}
           >
-            <option value="">— none —</option>
+            <option value="">{t("common.none")}</option>
             {epics.map((ep) => (
               <option key={ep.id} value={ep.id}>{ep.name}</option>
             ))}
           </select>
         </div>
         <div className="flex-1">
-          <span className="mono text-xs" style={{ color: "#64748B" }}>TEAM LEADER</span>
+          <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.teamLeader")}</span>
           <select
             value={feature.lead || ""}
             disabled={!canEdit}
@@ -166,21 +170,21 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             className="mt-1 w-full text-sm border rounded px-2 py-1.5"
             style={{ borderColor: feature.lead ? "#F5A524" : "#E2DFD9" }}
           >
-            <option value="">— none —</option>
+            <option value="">{t("common.none")}</option>
             {(feature.resources || []).map((r) => (
               <option key={r} value={r}>★ {resources.find((x) => x.id === r)?.name || r}</option>
             ))}
           </select>
-          {(feature.resources || []).length === 0 && <div className="mono text-xs mt-1" style={{ color: "#78859A" }}>assign someone first</div>}
+          {(feature.resources || []).length === 0 && <div className="mono text-xs mt-1" style={{ color: "#78859A" }}>{t("details.assignFirst")}</div>}
         </div>
       </div>
 
       <div>
         <span className="mono text-xs" style={{ color: "#64748B" }}>
-          SUBTASKS {(feature.children || []).length > 0 && `(${feature.children!.length})`}
+          {t("details.subtasks")} {(feature.children || []).length > 0 && `(${feature.children!.length})`}
         </span>
         <div className="flex flex-col gap-1.5 mt-2">
-          {(feature.children || []).length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>No subtasks yet — break this feature into steps.</span>}
+          {(feature.children || []).length === 0 && <span className="mono text-xs" style={{ color: "#78859A" }}>{t("details.noSubtasks")}</span>}
           {(feature.children || []).map((c) => {
             const cm = statusMetaOf(c.status, statuses);
             const open = !!expandedSubs[c.id];
@@ -189,7 +193,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             return (
               <div key={c.id} className="rounded" style={{ border: "1px solid #E2DFD9" }}>
                 <div className="flex items-center gap-1.5 px-2 py-1.5">
-                  <button onClick={() => setExpandedSubs((s) => ({ ...s, [c.id]: !s[c.id] }))} title={open ? "Collapse" : "Expand"} className="flex items-center justify-center" style={{ flexShrink: 0, width: 22 }}>
+                  <button onClick={() => setExpandedSubs((s) => ({ ...s, [c.id]: !s[c.id] }))} title={open ? t("details.collapse") : t("details.expand")} className="flex items-center justify-center" style={{ flexShrink: 0, width: 22 }}>
                     <Icon name={open ? "keyboard_arrow_down" : "chevron_right"} size={22} style={{ color: "#475569" }} />
                   </button>
                   <input
@@ -197,14 +201,14 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                     disabled={!canEdit}
                     checked={c.status === "done"}
                     onChange={(e) => setSubtaskStatus(c, e.target.checked ? "done" : "planned")}
-                    title={c.status === "done" ? "Mark not done" : "Mark done"}
+                    title={c.status === "done" ? t("details.markNotDone") : t("details.markDone")}
                     style={{ flexShrink: 0, accentColor: "#12A594", cursor: canEdit ? "pointer" : "default" }}
                   />
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: cm.border, flexShrink: 0 }} />
                   <SubtaskTitleInput title={c.title} disabled={!canEdit} done={c.status === "done"} onCommit={(v) => void patchSubtask(feature.id, c.id, { title: v })} />
-                  {resp && <ResourceBadge resourceId={resp.id} size={16} title={`Responsible: ${resp.name}`} />}
+                  {resp && <ResourceBadge resourceId={resp.id} size={16} title={t("details.responsibleName", { name: resp.name })} />}
                   {canEdit && (
-                    <button onClick={async (e) => { if (await confirmAt(e, { message: `Delete subtask "${c.title}"?` })) void removeSubtask(feature.id, c.id); }} title="Delete subtask">
+                    <button onClick={async (e) => { if (await confirmAt(e, { message: t("details.deleteSubtaskMsg", { title: c.title }) })) void removeSubtask(feature.id, c.id); }} title={t("details.deleteSubtask")}>
                       <Icon name="close" size={13} style={{ color: "#64748B" }} />
                     </button>
                   )}
@@ -225,7 +229,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                       </select>
                     </div>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <span className="mono" style={{ fontSize: 9, color: "#64748B", flexShrink: 0 }}>finished:</span>
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B", flexShrink: 0 }}>{t("details.finished")}</span>
                       <input
                         type="date"
                         disabled={!canEdit}
@@ -242,7 +246,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                       )}
                     </div>
                     <div className="mt-1.5">
-                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>responsible:</span>
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("details.responsible")}</span>
                       <div className="mt-1">
                         <ResponsibleSelect
                           resources={resources}
@@ -253,8 +257,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                       </div>
                     </div>
                     <div className="mt-1.5">
-                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>notes:</span>
-                      <RichTextEditor value={c.notes || ""} disabled={!canEdit} placeholder="Add notes…" minHeight={44} onChange={(v) => void patchSubtask(feature.id, c.id, { notes: v })} />
+                      <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("details.notesLower")}</span>
+                      <RichTextEditor value={c.notes || ""} disabled={!canEdit} placeholder={t("details.addNotesShort")} minHeight={44} onChange={(v) => void patchSubtask(feature.id, c.id, { notes: v })} />
                     </div>
                   </div>
                 )}
@@ -264,18 +268,18 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         </div>
         {canEdit && (
           <button onClick={() => void addSubtask(feature.id)} className="mono text-xs flex items-center justify-center gap-1 w-full mt-2 py-1.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28", border: "1px dashed #F0A875" }}>
-            + add subtask
+            {t("details.addSubtask")}
           </button>
         )}
       </div>
 
       <div>
         <div className="flex items-center justify-between">
-          <span className="mono text-xs" style={{ color: "#64748B" }}>RESOURCES & % TIME</span>
-          <span className="mono text-xs" style={{ color: "#64748B", display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="star" size={11} /> = team leader</span>
+          <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.resourcesTime")}</span>
+          <span className="mono text-xs" style={{ color: "#64748B", display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="star" size={11} /> {t("details.teamLeaderLegend")}</span>
         </div>
         <div className="flex flex-col gap-2 mt-2">
-          {(feature.resources || []).length === 0 && <span className="text-xs" style={{ color: "#9F1D23" }}>No one assigned — drag someone from the Team tab onto this box</span>}
+          {(feature.resources || []).length === 0 && <span className="text-xs" style={{ color: "#9F1D23" }}>{t("details.noneAssigned")}</span>}
           {(feature.resources || []).map((r) => {
             const pctVal = feature.alloc?.[r] ?? 100;
             const isLead = feature.lead === r;
@@ -301,8 +305,13 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                   />
                   <span className="mono text-xs" style={{ color: "#64748B" }}>%</span>
                   {canEdit && (
-                    <button onClick={() => void unassignResource(feature.id, r)}>
-                      <Icon name="close" size={13} style={{ color: "#64748B" }} />
+                    <button
+                      onClick={() => void unassignResource(feature.id, r)}
+                      title={t("details.unassign")}
+                      className="flex items-center justify-center rounded"
+                      style={{ width: 24, height: 24, flexShrink: 0, background: "#FDEBEC" }}
+                    >
+                      <Icon name="close" size={13} style={{ color: "#9F1D23" }} />
                     </button>
                   )}
                 </div>
@@ -320,6 +329,13 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               </div>
             );
           })}
+          {canEdit && (
+            <AssignResourcePicker
+              resources={resources}
+              assignedIds={feature.resources || []}
+              onAssign={(id) => void assignResource(feature.id, id)}
+            />
+          )}
         </div>
       </div>
 
@@ -465,7 +481,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       </div>
 
       <div>
-        <span className="mono text-xs" style={{ color: "#64748B" }}>STATUS</span>
+        <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.status")}</span>
         <select
           value={feature.status}
           disabled={!canEditProp}
@@ -479,7 +495,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         </select>
         {(feature.status === "done" || feature.finishedAt) && (
           <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>finished:</span>
+            <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{t("details.finished")}</span>
             <input
               type="date"
               disabled={!canEditProp}
@@ -499,7 +515,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       </div>
 
       <div>
-        <span className="mono text-xs" style={{ color: "#64748B" }}>LABEL COLOR <span style={{ opacity: 0.7 }}>(group related tasks)</span></span>
+        <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.labelColor")} <span style={{ opacity: 0.7 }}>{t("details.groupRelated")}</span></span>
         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
           {LABEL_COLORS.map((lc) => {
             const active = (feature.labelColor || null) === lc.color;
@@ -531,12 +547,12 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       </div>
 
       <label className="flex items-center gap-2 text-sm" style={{ color: "#334155" }}>
-        <input type="checkbox" disabled={!canEdit} checked={!!feature.ai} onChange={(e) => void patchFeature(feature.id, { ai: e.target.checked })} /> AI-assisted estimate <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} />
+        <input type="checkbox" disabled={!canEdit} checked={!!feature.ai} onChange={(e) => void patchFeature(feature.id, { ai: e.target.checked })} /> {t("details.aiEstimate")} <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} />
       </label>
 
       <div>
-        <div className="mono mb-1" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Notes</div>
-        <RichTextEditor value={feature.notes || ""} disabled={!canEdit} placeholder="Add notes about this task…" minHeight={72} onChange={(v) => void patchFeature(feature.id, { notes: v })} />
+        <div className="mono mb-1" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("details.notes")}</div>
+        <RichTextEditor value={feature.notes || ""} disabled={!canEdit} placeholder={t("details.notesPlaceholder")} minHeight={72} onChange={(v) => void patchFeature(feature.id, { notes: v })} />
       </div>
 
       <Attachments
@@ -547,6 +563,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       />
 
       {!hideComments && pulse && <Comments pulseId={pulse.id} targetId={feature.id} />}
+
+      <FeatureActivity featureId={feature.id} />
 
     </div>
   );
@@ -566,6 +584,7 @@ function SubtaskTitleInput({ title, disabled, done, onCommit }: { title: string;
 }
 
 function ResponsibleSelect({ resources, value, disabled, onChange }: { resources: Resource[]; value: string | null; disabled: boolean; onChange: (id: string | null) => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const current = resources.find((r) => r.id === value) ?? null;
@@ -592,12 +611,12 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
               <span className="text-xs truncate" style={{ color: "#334155" }}>{current.name}</span>
             </>
           ) : (
-            <span className="text-xs" style={{ color: "#94A3B8" }}>Set responsible…</span>
+            <span className="text-xs" style={{ color: "#94A3B8" }}>{t("details.setResponsible")}</span>
           )}
           <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={13} style={{ marginLeft: "auto", color: "#94A3B8" }} />
         </button>
         {current && !disabled && (
-          <button onClick={() => pick(null)} title="Remove responsible" className="flex-shrink-0 rounded" style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}>
+          <button onClick={() => pick(null)} title={t("details.removeResponsible")} className="flex-shrink-0 rounded" style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}>
             <Icon name="close" size={12} style={{ color: "#9F1D23" }} />
           </button>
         )}
@@ -608,13 +627,13 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search…"
+            placeholder={t("filter.search")}
             className="text-xs w-full px-2 py-1 border-b"
             style={{ borderColor: "#F1F5F9", outline: "none" }}
           />
           <div style={{ maxHeight: 150, overflowY: "auto" }}>
             <button onClick={() => pick(null)} className="flex items-center gap-1.5 w-full px-2 py-1 text-left">
-              <span className="text-xs" style={{ color: "#94A3B8" }}>— None —</span>
+              <span className="text-xs" style={{ color: "#94A3B8" }}>{t("common.none")}</span>
             </button>
             {filtered.map((r) => (
               <button key={r.id} onClick={() => pick(r.id)} className="flex items-center gap-1.5 w-full px-2 py-1 text-left" style={{ background: r.id === value ? "#FFF7F1" : undefined }}>
@@ -623,7 +642,67 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
                 {r.type && <span className="mono" style={{ marginLeft: "auto", fontSize: 9, color: "#94A3B8" }}>{r.type}</span>}
               </button>
             ))}
-            {filtered.length === 0 && <div className="text-xs px-2 py-1.5" style={{ color: "#94A3B8" }}>No matches</div>}
+            {filtered.length === 0 && <div className="text-xs px-2 py-1.5" style={{ color: "#94A3B8" }}>{t("filter.noMatches")}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Adds resources to a task straight from the form — the keyboard/tap
+ * alternative to dragging someone from the Team tab onto the box. Lists only
+ * the not-yet-assigned resources and stays open after a pick so several can be
+ * added in a row. */
+function AssignResourcePicker({ resources, assignedIds, onAssign }: { resources: Resource[]; assignedIds: string[]; onAssign: (id: string) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const available = resources.filter((r) => !assignedIds.includes(r.id));
+  const filtered = available.filter((r) => !query || r.name.toLowerCase().includes(query) || (r.type || "").toLowerCase().includes(query));
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 w-full rounded-lg px-3 py-2.5 text-sm"
+        style={{ background: "#FFF1E9", color: "#C2410C", border: "1px solid #FBD3BE" }}
+      >
+        <Icon name="person_add" size={17} />
+        <span className="font-semibold">{t("details.assignResource")}</span>
+        <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={15} style={{ marginLeft: "auto" }} />
+      </button>
+      {open && (
+        <div className="mt-1 rounded border" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+          {available.length > 3 && (
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("filter.search")}
+              className="text-xs w-full px-2 py-1.5 border-b"
+              style={{ borderColor: "#F1F5F9", outline: "none" }}
+            />
+          )}
+          <div style={{ maxHeight: 180, overflowY: "auto" }}>
+            {filtered.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => { onAssign(r.id); setQ(""); }}
+                className="flex items-center gap-2 w-full px-2.5 py-2.5 text-left"
+                style={{ borderBottom: "1px solid #F5F3EF" }}
+              >
+                <ResourceBadge resourceId={r.id} size={18} />
+                <span className="text-xs truncate" style={{ color: "#334155" }}>{r.name}</span>
+                <Icon name="add" size={14} style={{ marginLeft: "auto", color: "#12A594" }} />
+                {r.type && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{r.type}</span>}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="text-xs px-2 py-1.5" style={{ color: "#94A3B8" }}>
+                {available.length === 0 ? t("details.allAssigned") : t("filter.noMatches")}
+              </div>
+            )}
           </div>
         </div>
       )}

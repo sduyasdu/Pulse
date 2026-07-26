@@ -7,6 +7,7 @@ import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { confirmAt } from "@/stores/confirmStore";
+import { useT } from "@/i18n";
 
 interface TeamTabProps {
   canEdit: boolean;
@@ -15,6 +16,7 @@ interface TeamTabProps {
 }
 
 export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabProps) {
+  const t = useT();
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const members = usePulseStore((s) => s.members);
@@ -30,7 +32,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   // resource(s) — resolved by the Cancel / Keep both / Replace dialog.
   const [linkConflict, setLinkConflict] = useState<{ resourceId: string; uid: string; conflicts: { id: string; label: string }[] } | null>(null);
 
-  const accountLabel = (uid: string) => (uid === myUid ? `your account${myEmail ? ` (${myEmail})` : ""}` : members.find((m) => m.uid === uid)?.email ?? "that account");
+  const accountLabel = (uid: string) => (uid === myUid ? `${t("team.yourAccount")}${myEmail ? ` (${myEmail})` : ""}` : members.find((m) => m.uid === uid)?.email ?? t("team.thatAccount"));
 
   const onLinkChange = (resourceId: string, value: string) => {
     const uid = value || null;
@@ -65,7 +67,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter by name or type…"
+          placeholder={t("team.filterPlaceholder")}
           className="bg-transparent text-xs flex-1"
           style={{ color: "#1F2330", outline: "none", minWidth: 0 }}
         />
@@ -76,17 +78,17 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
         )}
       </div>
       <div className="flex items-center justify-between">
-        <span className="mono text-xs" style={{ color: "#64748B" }}>{filtered.length} people</span>
+        <span className="mono text-xs" style={{ color: "#64748B" }}>{t("team.peopleCount", { n: filtered.length })}</span>
         {canEdit && (
           <button onClick={() => setAdding(true)} className="mono text-xs flex items-center gap-1 px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>
-            + add
+            {t("team.add")}
           </button>
         )}
       </div>
       {adding && (
         <input
           autoFocus
-          placeholder="Name, then Enter"
+          placeholder={t("team.addPlaceholder")}
           className="w-full text-xs rounded px-2 py-1.5"
           style={{ border: "1px solid #E2DFD9" }}
           onKeyDown={(e) => {
@@ -104,9 +106,9 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
       {filterResource && (
         <button onClick={() => setFilterResource(null)} className="w-full flex items-center justify-between px-2 py-1.5 rounded" style={{ background: "#F7E8DA", border: "1px solid #F0A875" }}>
           <span className="mono text-xs" style={{ color: "#D85A28" }}>
-            filtering canvas by: {resources.find((x) => x.id === filterResource)?.name ?? filterResource}
+            {t("team.filteringBy", { name: resources.find((x) => x.id === filterResource)?.name ?? filterResource })}
           </span>
-          <span className="mono text-xs" style={{ color: "#D85A28", display: "inline-flex", alignItems: "center", gap: 3 }}>clear <Icon name="close" size={11} /></span>
+          <span className="mono text-xs" style={{ color: "#D85A28", display: "inline-flex", alignItems: "center", gap: 3 }}>{t("team.clear")} <Icon name="close" size={11} /></span>
         </button>
       )}
       {filtered.map((r) => {
@@ -119,7 +121,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
             onDragStart={(e) => e.dataTransfer.setData("text/plain", r.id)}
             onClick={() => setFilterResource(active ? null : r.id)}
             className="rounded px-2.5 py-2 cursor-pointer"
-            title="Drag onto a box to assign · click to filter the canvas"
+            title={t("team.dragToAssign")}
             style={{ background: active ? "#FFF7F1" : "#FFFFFF", border: active ? "1px solid #EE7240" : "1px solid #E2DFD9" }}
           >
             <div className="flex items-center gap-2">
@@ -127,16 +129,16 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                 resourceId={r.id}
                 size={22}
                 ring={r.linkedUid ? "#12A594" : undefined}
-                title={r.linkedUid ? "Linked to a real account" : "Freeform placeholder — not linked to an account"}
+                title={r.linkedUid ? t("team.linkedAccount") : t("team.freeform")}
               />
               <div className="overflow-hidden flex-1">
                 <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
-                <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · limit {r.capacity}%</div>
+                <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · {t("team.limit", { n: r.capacity })}</div>
               </div>
               {active && <span className="mono text-xs" style={{ color: "#EE7240" }}>●</span>}
               {canEdit && (
                 <button
-                  title="Duplicate this resource"
+                  title={t("team.duplicateResource")}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -150,11 +152,11 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               )}
               {canEdit && (
                 <button
-                  title="Remove this resource"
+                  title={t("team.removeResource")}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    if (await confirmAt(e, { message: `Remove ${r.name}?`, detail: "They'll be unassigned from all tasks.", confirmLabel: "Remove" })) void removeResource(r.id);
+                    if (await confirmAt(e, { message: t("team.removeMsg", { name: r.name }), detail: t("team.removeDetail"), confirmLabel: t("common.remove") })) void removeResource(r.id);
                   }}
                   className="flex-shrink-0 rounded"
                   style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
@@ -190,10 +192,10 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                   onChange={(e) => onLinkChange(r.id, e.target.value)}
                   className="mono w-full text-[10px] border rounded py-0.5"
                   style={{ borderColor: "#E2DFD9", color: "#64748B", paddingLeft: 22, paddingRight: 4 }}
-                  title="Link this Resource to a real Pulse member's account"
+                  title={t("team.linkTitle")}
                 >
-                  <option value="">not linked to an account</option>
-                  {myUid && <option value={myUid}>My account{myEmail ? ` (${myEmail})` : ""}</option>}
+                  <option value="">{t("team.notLinked")}</option>
+                  {myUid && <option value={myUid}>{t("team.myAccount")}{myEmail ? ` (${myEmail})` : ""}</option>}
                   {members.filter((m) => m.uid !== myUid).map((m) => (
                     <option key={m.uid} value={m.uid}>{m.email}</option>
                   ))}
@@ -207,26 +209,26 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
       {linkConflict && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/30 px-4" style={{ zIndex: 300 }} onClick={() => setLinkConflict(null)}>
           <div className="w-full max-w-sm rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display mb-2 text-base font-semibold text-yasdu-fg">Account already linked</h2>
+            <h2 className="font-display mb-2 text-base font-semibold text-yasdu-fg">{t("team.accountLinked")}</h2>
             <p className="text-xs leading-relaxed" style={{ color: "#64748B" }}>
-              {accountLabel(linkConflict.uid)} is already linked to {linkConflict.conflicts.map((c) => `“${c.label}”`).join(", ")}.
-              {" "}<b>Keep both</b> leaves every resource linked to it; <b>Replace</b> unlinks the {linkConflict.conflicts.length === 1 ? "other one" : "others"}.
+              {t("team.linkConflictBody", { account: accountLabel(linkConflict.uid), resources: linkConflict.conflicts.map((c) => `“${c.label}”`).join(", ") })}
+              {" "}{linkConflict.conflicts.length === 1 ? t("team.linkConflictOne") : t("team.linkConflictMany")}
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setLinkConflict(null)} className="rounded-lg px-3 py-2 text-sm" style={{ color: "#64748B" }}>Cancel</button>
+              <button onClick={() => setLinkConflict(null)} className="rounded-lg px-3 py-2 text-sm" style={{ color: "#64748B" }}>{t("common.cancel")}</button>
               <button
                 onClick={() => { void patchResource(linkConflict.resourceId, { linkedUid: linkConflict.uid }); setLinkConflict(null); }}
                 className="rounded-lg px-3 py-2 text-sm font-semibold"
                 style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}
               >
-                Keep both
+                {t("team.keepBoth")}
               </button>
               <button
                 onClick={() => { linkConflict.conflicts.forEach((c) => void patchResource(c.id, { linkedUid: null })); void patchResource(linkConflict.resourceId, { linkedUid: linkConflict.uid }); setLinkConflict(null); }}
                 className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg"
                 style={{ background: "#D85A28" }}
               >
-                Replace
+                {t("team.replace")}
               </button>
             </div>
           </div>

@@ -10,10 +10,12 @@ import type { Feature, Pulse, PulseRole } from "@/types";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
+import { ActivityTab } from "@/components/leftPanel/ActivityTab";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { MobileTaskList } from "@/components/mobile/MobileTaskList";
 import { MobileBoard } from "@/components/mobile/MobileBoard";
+import { useT } from "@/i18n";
 
 interface MobilePulseViewProps {
   pulse: Pulse | null;
@@ -24,15 +26,16 @@ interface MobilePulseViewProps {
   uid: string;
 }
 
-type Tab = "tasks" | "team" | "capacity";
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "tasks", label: "Tasks", icon: "checklist" },
-  { id: "team", label: "Team", icon: "group" },
-  { id: "capacity", label: "Capacity", icon: "bar_chart" },
-];
+type Tab = "tasks" | "team" | "capacity" | "activity";
 
 export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }: MobilePulseViewProps) {
+  const t = useT();
+  const TABS: { id: Tab; label: string; icon: string }[] = [
+    { id: "tasks", label: t("mobile.tasks"), icon: "checklist" },
+    { id: "team", label: t("mobile.team"), icon: "group" },
+    { id: "capacity", label: t("mobile.capacity"), icon: "bar_chart" },
+    { id: "activity", label: t("mobile.activity"), icon: "timeline" },
+  ];
   const features = usePulseStore((s) => s.features);
   const epics = usePulseStore((s) => s.epics);
   const resources = usePulseStore((s) => s.resources);
@@ -63,21 +66,21 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
     <div className="flex flex-col" style={{ height: "100dvh", background: "#F7F6F2" }}>
       {/* Header */}
       <header className="flex items-center gap-2 px-3 flex-shrink-0" style={{ height: 52, background: "#123359" }}>
-        <Link to="/" className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240", fontSize: 20 }} title="Back to dashboard"><Icon name="chevron_left" size={24} /></Link>
+        <Link to="/" className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240", fontSize: 20 }} title={t("toolbar.backToDashboard")}><Icon name="chevron_left" size={24} /></Link>
         <div className="flex-1 overflow-hidden">
-          <div className="font-display text-white text-sm font-semibold truncate">{pulse?.name?.trim() || "Untitled Pulse"}</div>
+          <div className="font-display text-white text-sm font-semibold truncate">{pulse?.name?.trim() || t("common.untitledPulse")}</div>
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
         </div>
         <PresenceBar pulseId={pulse?.id} uid={uid} email={email} dark />
         {pulse && (
-          <button onClick={() => setShowComments(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240" }} title="Comments" aria-label="Comments">
+          <button onClick={() => setShowComments(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240" }} title={t("pulse.comments")} aria-label={t("pulse.comments")}>
             <Icon name="forum" size={20} />
           </button>
         )}
         <NotificationsBell pulseId={pulse?.id} uid={uid} onOpenTask={setSelectedId} dark />
         {canEdit && (
           <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#EE7240", fontSize: 12, fontWeight: 600 }}>
-            <Icon name="add" size={13} /> Invite
+            <Icon name="add" size={13} /> {t("toolbar.invite")}
           </button>
         )}
       </header>
@@ -93,7 +96,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
               className="text-xs font-semibold rounded-full px-3 py-1 capitalize"
               style={{ background: taskView === v ? "#123359" : "#F4F2EC", color: taskView === v ? "#FFFFFF" : "#64748B" }}
             >
-              {v}
+              {v === "list" ? t("mobile.list") : t("mobile.board")}
             </button>
           ))}
           <button
@@ -101,9 +104,9 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
             disabled={myResourceIds.length === 0}
             className="text-xs font-semibold rounded-full px-3 py-1 flex items-center gap-1 ml-auto"
             style={{ background: myTasksOnly ? "#EE7240" : "#F4F2EC", color: myTasksOnly ? "#FFFFFF" : "#64748B", opacity: myResourceIds.length === 0 ? 0.45 : 1 }}
-            title={myResourceIds.length > 0 ? "Show only tasks I'm involved in" : "Link your account to a resource (Team tab) to use My Beat"}
+            title={myResourceIds.length > 0 ? t("mobile.myBeatOn") : t("mobile.myBeatOff")}
           >
-            <Icon name="person" size={13} /> My Beat
+            <Icon name="person" size={13} /> {t("toolbar.myBeat")}
           </button>
         </div>
       )}
@@ -118,13 +121,14 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
           ))}
         {tab === "team" && <TeamTab canEdit={canEdit} filterResource={null} setFilterResource={() => {}} />}
         {tab === "capacity" && <CapacityTab canEdit={canEdit} />}
+        {tab === "activity" && <ActivityTab />}
       </div>
 
       {/* Floating add button (Tasks tab, editors only) */}
       {tab === "tasks" && canEdit && (
         <button
           onClick={() => void handleAdd()}
-          aria-label="Add task"
+          aria-label={t("toolbar.addTask")}
           className="fixed rounded-full flex items-center justify-center"
           style={{ right: 18, bottom: 74, width: 52, height: 52, background: "#EE7240", color: "#fff", fontSize: 28, lineHeight: 1, boxShadow: "0 6px 16px rgba(238,114,64,0.45)", zIndex: 20 }}
         >
@@ -147,7 +151,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
         <div className="fixed inset-0 flex flex-col" style={{ background: "#FFFFFF", zIndex: 50 }}>
           <header className="flex items-center gap-2 px-3 flex-shrink-0 border-b" style={{ height: 52, borderColor: "#E2DFD9", background: "#FFFFFF" }}>
             <button onClick={() => setSelectedId(null)} className="flex items-center gap-1" style={{ color: "#123359", fontSize: 14, fontWeight: 600 }}>
-              <Icon name="chevron_left" size={22} /> Tasks
+              <Icon name="chevron_left" size={22} /> {t("mobile.tasks")}
             </button>
           </header>
           <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
@@ -170,9 +174,9 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
         <div className="fixed inset-0 flex flex-col" style={{ background: "#FFFFFF", zIndex: 50 }}>
           <header className="flex items-center gap-2 px-3 flex-shrink-0 border-b" style={{ height: 52, borderColor: "#E2DFD9", background: "#FFFFFF" }}>
             <button onClick={() => setShowComments(false)} className="flex items-center gap-1" style={{ color: "#123359", fontSize: 14, fontWeight: 600 }}>
-              <Icon name="chevron_left" size={22} /> Back
+              <Icon name="chevron_left" size={22} /> {t("mobile.back")}
             </button>
-            <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Comments</span>
+            <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{t("pulse.comments")}</span>
           </header>
           <div className="flex-1" style={{ minHeight: 0 }}>
             <AllCommentsPanel
@@ -187,7 +191,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
       {showInvite && (
         <CollaboratorsDialog
           pulseId={pulse!.id}
-          pulseName={pulse?.name?.trim() || "this Pulse"}
+          pulseName={pulse?.name?.trim() || t("common.thisPulse")}
           members={usePulseStore.getState().members}
           currentUid={uid}
           myRole={myRole}

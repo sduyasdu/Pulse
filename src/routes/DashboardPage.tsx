@@ -6,6 +6,7 @@ import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, 
 import { fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
+import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
 import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
@@ -15,6 +16,7 @@ import { PulseCard } from "@/components/dashboard/PulseCard";
 
 export function DashboardPage() {
   const { firebaseUser, userDoc } = useAuthStore();
+  const t = useT();
   const navigate = useNavigate();
   const [pulses, setPulses] = useState<MyPulseIndexEntry[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -82,18 +84,18 @@ export function DashboardPage() {
 
   const del = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
     const ok = await confirmAt(pt, {
-      message: `Delete "${entry.name || "Untitled Pulse"}" permanently?`,
-      detail: "This erases the Pulse and all its data for everyone — it can't be undone. Archiving instead keeps everything and just hides it from your dashboard.",
-      confirmLabel: "Delete forever",
+      message: t("dashboard.deleteMessage", { name: entry.name || t("common.untitledPulse") }),
+      detail: t("dashboard.deleteDetail"),
+      confirmLabel: t("dashboard.deleteConfirm"),
     });
     if (ok) await deletePulse(entry.pulseId, uid);
   };
 
   const leave = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
     const ok = await confirmAt(pt, {
-      message: `Leave "${entry.name || "Untitled Pulse"}"?`,
-      detail: "You'll lose access until someone shares a new invite link with you.",
-      confirmLabel: "Leave",
+      message: t("dashboard.leaveMessage", { name: entry.name || t("common.untitledPulse") }),
+      detail: t("dashboard.leaveDetail"),
+      confirmLabel: t("dashboard.leaveConfirm"),
     });
     if (ok) await leavePulse(entry.pulseId, uid);
   };
@@ -120,7 +122,7 @@ export function DashboardPage() {
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
         <span className="font-display text-base font-semibold text-white">Pulse</span>
-        <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">by Yasdu</span>
+        <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         <div className="flex-1" />
         <AccountMenu />
       </header>
@@ -135,12 +137,12 @@ export function DashboardPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Pulses…"
+              placeholder={t("dashboard.searchPlaceholder")}
               className="w-full rounded-lg border text-sm"
               style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "11px 36px", outline: "none" }}
             />
             {query && (
-              <button onClick={() => setQuery("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}><Icon name="close" size={15} /></button>
+              <button onClick={() => setQuery("")} aria-label={t("dashboard.clearSearch")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}><Icon name="close" size={15} /></button>
             )}
           </div>
           <button
@@ -148,26 +150,26 @@ export function DashboardPage() {
             className="order-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-end sm:ml-auto sm:self-auto"
             style={{ background: "#D85A28" }}
           >
-            + New Pulse
+            {t("dashboard.newPulse")}
           </button>
         </div>
 
         {pulses === null ? (
-          <p className="text-sm text-yasdu-muted">Loading…</p>
+          <p className="text-sm text-yasdu-muted">{t("common.loading")}</p>
         ) : noResults ? (
           <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
-            <p className="text-sm text-yasdu-muted">No Pulses match “{query.trim()}”.</p>
+            <p className="text-sm text-yasdu-muted">{t("dashboard.noMatch", { query: query.trim() })}</p>
           </div>
         ) : (
           <>
             {(owned.length > 0 || !q) && (
               <>
-                <SectionHeading first count={owned.length}>Your Pulses</SectionHeading>
+                <SectionHeading first count={owned.length}>{t("dashboard.yourPulses")}</SectionHeading>
                 {owned.length > 0 ? (
                   grid(owned)
                 ) : (
                   <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
-                    <p className="text-sm text-yasdu-muted">No Pulses yet. Create one to start laying out your roadmap.</p>
+                    <p className="text-sm text-yasdu-muted">{t("dashboard.noPulsesYet")}</p>
                   </div>
                 )}
               </>
@@ -175,14 +177,14 @@ export function DashboardPage() {
 
             {shared.length > 0 && (
               <>
-                <SectionHeading count={shared.length}>Shared with me</SectionHeading>
+                <SectionHeading count={shared.length}>{t("dashboard.sharedWithMe")}</SectionHeading>
                 {grid(shared)}
               </>
             )}
 
             {archived.length > 0 && (
               <>
-                <SectionHeading count={archived.length}>Archived</SectionHeading>
+                <SectionHeading count={archived.length}>{t("dashboard.archived")}</SectionHeading>
                 {grid(archived)}
               </>
             )}
@@ -196,7 +198,7 @@ export function DashboardPage() {
           onCreate={async (name) => {
             const workspaceId = userDoc?.personalWorkspaceId;
             if (!workspaceId) {
-              throw new Error("Still setting up your workspace — wait a moment and try again.");
+              throw new Error(t("dashboard.workspaceNotReady"));
             }
             const pulseId = await createPulse(firebaseUser.uid, workspaceId, name);
             setCreating(false);
@@ -234,7 +236,7 @@ export function DashboardPage() {
           onClose={() => setDuplicatingPulse(null)}
           onDuplicate={async (name: string, mode: DuplicateMode) => {
             const workspaceId = userDoc?.personalWorkspaceId;
-            if (!workspaceId) throw new Error("Still setting up your workspace — wait a moment and try again.");
+            if (!workspaceId) throw new Error(t("dashboard.workspaceNotReady"));
             const newId = await duplicatePulse(firebaseUser.uid, workspaceId, duplicatingPulse.pulseId, name, mode);
             setDuplicatingPulse(null);
             navigate(`/p/${newId}`);

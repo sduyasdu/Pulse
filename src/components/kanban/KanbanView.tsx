@@ -10,6 +10,7 @@ import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEff
 import { confirmAt } from "@/stores/confirmStore";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
+import { useT } from "@/i18n";
 import { StatusEditorDialog } from "./StatusEditorDialog";
 
 interface KanbanViewProps {
@@ -28,6 +29,7 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds }: KanbanViewProps) {
+  const t = useT();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
@@ -44,14 +46,14 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const statuses = statusesOf(pulse);
 
   const renameStatus = (id: string, label: string) => {
-    const t = label.trim();
-    if (!t) return;
-    void setStatuses(statuses.map((s) => (s.id === id ? { ...s, label: t } : s)));
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    void setStatuses(statuses.map((s) => (s.id === id ? { ...s, label: trimmed } : s)));
   };
 
   const renameEpic = (id: string, name: string) => {
-    const t = name.trim();
-    if (t) void patchEpic(id, { name: t });
+    const trimmed = name.trim();
+    if (trimmed) void patchEpic(id, { name: trimmed });
   };
 
   const resById = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
@@ -94,7 +96,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   };
 
   const del = async (f: Feature, pt: { clientX: number; clientY: number }) => {
-    if (await confirmAt(pt, { message: `Delete "${f.title || "Untitled task"}"?`, confirmLabel: "Delete" })) void removeFeature(f.id);
+    if (await confirmAt(pt, { message: t("details.deleteTaskMsg", { title: f.title || t("common.untitledTask") }), confirmLabel: t("common.delete") })) void removeFeature(f.id);
   };
 
   // Drop rules:
@@ -122,17 +124,17 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   return (
     <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "#FDFCF8" }}>
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #E2DFD9" }}>
-        <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>Board</span>
-        <span className="mono text-xs" style={{ color: "#94A3B8" }}>{visibleFeatures.length} task{visibleFeatures.length === 1 ? "" : "s"}</span>
+        <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{t("kanban.board")}</span>
+        <span className="mono text-xs" style={{ color: "#94A3B8" }}>{t(visibleFeatures.length === 1 ? "card.taskOne" : "card.taskOther", { n: visibleFeatures.length })}</span>
         <DatePeriodFilter value={datePeriod} onChange={setDatePeriod} />
         <div className="flex-1" />
         {canEdit && (
           <>
             <button onClick={() => setEditStatuses(true)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              <Icon name="settings" size={13} /> Statuses
+              <Icon name="settings" size={13} /> {t("kanban.statuses")}
             </button>
             <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              <Icon name="view_agenda" size={13} /> Add epic
+              <Icon name="view_agenda" size={13} /> {t("toolbar.addEpic")}
             </button>
           </>
         )}
@@ -222,6 +224,7 @@ function Column({
   onDrop: (epicId: string | null | undefined, e: React.DragEvent) => void;
   onAddTask: (epicId: string | null) => void;
 }) {
+  const t = useT();
   const meta = statusMetaOf(col.status, statuses);
   const [labelDraft, onLabelChange] = useDebouncedText(meta.label, (v) => onRenameStatus(col.status, v));
   return (
@@ -239,7 +242,7 @@ function Column({
           <input
             value={labelDraft}
             onChange={(e) => onLabelChange(e.target.value)}
-            title="Rename this status"
+            title={t("kanban.renameStatus")}
             className="text-xs font-semibold bg-transparent flex-1"
             style={{ border: "none", outline: "none", color: "#1F2330", minWidth: 0 }}
           />
@@ -273,7 +276,7 @@ function Column({
                 <EpicBandName epicId={g.epicId} name={g.name} canEdit={canEdit} onRename={onRenameEpic} />
                 <span className="mono text-xs flex-shrink-0" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
                 {canEdit && (
-                  <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title="Add a task to this epic" className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}><Icon name="add" size={16} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title={t("kanban.addTaskToEpic")} className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}><Icon name="add" size={16} /></button>
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
@@ -288,7 +291,7 @@ function Column({
 
       {canEdit && (
         <button onClick={() => onAddTask(null)} className="mono text-xs px-3 py-2 text-left flex-shrink-0" style={{ color: "#78859A", borderTop: "1px solid #E2DFD9" }}>
-          + add task
+          {t("kanban.addTask")}
         </button>
       )}
     </div>
@@ -296,6 +299,7 @@ function Column({
 }
 
 function EpicBandName({ epicId, name, canEdit, onRename }: { epicId: string | null; name: string; canEdit: boolean; onRename: (id: string, name: string) => void }) {
+  const t = useT();
   const [draft, onChange] = useDebouncedText(name, (v) => { if (epicId != null) onRename(epicId, v); });
   // The "No epic" band and viewers aren't editable.
   if (!canEdit || epicId == null) {
@@ -305,7 +309,7 @@ function EpicBandName({ epicId, name, canEdit, onRename }: { epicId: string | nu
     <input
       value={draft}
       onChange={(e) => onChange(e.target.value)}
-      title="Rename epic"
+      title={t("kanban.renameEpic")}
       className="mono text-xs uppercase tracking-wide bg-transparent flex-1"
       style={{ border: "none", outline: "none", color: "#334155", fontWeight: 600, letterSpacing: "0.05em", minWidth: 0 }}
     />
@@ -337,6 +341,7 @@ function Card({
   onDragStartTask: (status: FeatureStatus) => void;
   onDragEndTask: () => void;
 }) {
+  const t = useT();
   const done = f.status === "done";
   const est = estimateEffort(f, graph);
   const coverage = Math.round((assignedEffort(f) / Math.max(0.1, est)) * 100);
@@ -369,8 +374,8 @@ function Card({
           onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right, y: r.bottom }); }}
           className="absolute opacity-0 group-hover:opacity-100 flex items-center justify-center rounded"
           style={{ top: 2, right: 2, width: 20, height: 18, background: "#F1EFE8", color: "#64748B", fontSize: 15, lineHeight: 1, zIndex: 3 }}
-          title="More actions"
-          aria-label="More actions"
+          title={t("card.moreActions")}
+          aria-label={t("card.moreActions")}
         >
           <Icon name="more_horiz" size={16} />
         </button>
@@ -379,18 +384,18 @@ function Card({
         <>
           <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={(e) => { e.stopPropagation(); setMenu(null); }} />
           <div className="fixed rounded-lg border py-1" style={{ left: menu.x - 150, top: menu.y + 2, zIndex: 61, minWidth: 150, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}>
-            <button onClick={(e) => { e.stopPropagation(); setMenu(null); onDuplicate(f.id); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: "#334155" }}>Duplicate</button>
-            <button onClick={(e) => { e.stopPropagation(); const pt = { clientX: menu.x, clientY: menu.y }; setMenu(null); onDelete(f, pt); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: "#DC2626" }}>Delete…</button>
+            <button onClick={(e) => { e.stopPropagation(); setMenu(null); onDuplicate(f.id); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: "#334155" }}>{t("dialog.duplicate")}</button>
+            <button onClick={(e) => { e.stopPropagation(); const pt = { clientX: menu.x, clientY: menu.y }; setMenu(null); onDelete(f, pt); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: "#DC2626" }}>{t("card.delete")}</button>
           </div>
         </>
       )}
       <div className="flex items-center gap-1.5">
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: staffingColor(f, graph), flexShrink: 0, border: "1px solid rgba(255,255,255,0.7)", boxShadow: "0 0 0 1px rgba(15,23,42,0.1)" }} />
-        <span className="text-xs font-semibold flex-1 truncate" title={f.title} style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || "Untitled task"}</span>
-        {f.plannedX != null && <Icon name="keep" size={12} title="Baseline plan set" />}
+        <span className="text-xs font-semibold flex-1 truncate" title={f.title} style={{ color: "#1F2330", textDecoration: done ? "line-through" : "none" }}>{f.title || t("common.untitledTask")}</span>
+        {f.plannedX != null && <Icon name="keep" size={12} title={t("kanban.baselineSet")} />}
         {(f.attachments || []).length > 0 && <span className="mono" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{f.attachments!.length}</span>}
         {f.ai && <Icon name="bolt" size={13} style={{ color: "#8B5CF6" }} />}
-        {done && <Icon name="lock" size={12} title="Done — locked" />}
+        {done && <Icon name="lock" size={12} title={t("kanban.doneLocked")} />}
       </div>
       <div className="flex items-center gap-2 mt-1.5">
         <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{fmtDate(f.x)} → {fmtDate(f.x + f.duration)}</span>
@@ -403,7 +408,7 @@ function Card({
             ) : null;
           })}
           {(f.resources || []).length > 4 && <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>+{f.resources!.length - 4}</span>}
-          {est > 0 && <span className="mono flex-shrink-0" title={`${Math.round(assignedEffort(f))}md assigned of ${Math.round(est)}md`} style={{ fontSize: 9, fontWeight: 700, color: statusMetaOf(f.status, statuses).text, opacity: 0.85, marginLeft: 2 }}>{coverage}%</span>}
+          {est > 0 && <span className="mono flex-shrink-0" title={t("kanban.coverage", { assigned: Math.round(assignedEffort(f)), est: Math.round(est) })} style={{ fontSize: 9, fontWeight: 700, color: statusMetaOf(f.status, statuses).text, opacity: 0.85, marginLeft: 2 }}>{coverage}%</span>}
         </div>
       </div>
     </div>
