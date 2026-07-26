@@ -129,7 +129,7 @@ export interface PulseMember {
 // in v1 (server-authoritative later, Server-Functions-Spec SF4).
 // ---------------------------------------------------------------------------
 
-export type ActivityEntityKind = "feature" | "epic" | "resource" | "member" | "invite" | "pulse";
+export type ActivityEntityKind = "feature" | "epic" | "resource" | "member" | "invite" | "pulse" | "cost";
 
 export type ActivityVerb =
   | "create" | "delete" | "edit"
@@ -345,6 +345,84 @@ export interface Feature {
   // enforce the My-Beat (read) and Task Lead (write) scopes.
   assignedUids?: string[];
   leadUid?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Costs (Costs-Spec.md) — what a task costs in money. Deliberately NOT a kind
+// of Resource: a Resource is a person with capacity and assignments, whereas a
+// cost is a separate typed entity, so "AI" is a *cost type*, not a teammate.
+// Entries live at pulses/{pulseId}/costs/{costId}.
+// ---------------------------------------------------------------------------
+
+/** "ai" is the only type built; "resource" (human hours) is reserved (spec §8). */
+export type CostTypeId = string;
+
+/** Which side of quantity × unit cost = amount is derived (spec §3).
+ *  amount: quantity + amount known, unit cost derived — every AI entry.
+ *  rate:   quantity + unit cost known, amount derived — the future human type. */
+export type CostBasis = "rate" | "amount";
+
+/** One thing a cost type counts. `priceScale` is how many units a unit cost is
+ * quoted over — 1 for hours ($/h), 1_000_000 for tokens ($/Mtok) — so the
+ * figure stays human-readable instead of $0.000332. */
+export interface CostMeasureDef {
+  id: string;
+  label: string; // i18n key
+  unit: string; // i18n key
+  priceScale: number;
+}
+
+/** A type-specific field on an entry. `inheritFrom` pulls the default off the
+ * referenced Resource master (reserved for the human type, spec §8). */
+export interface CostAttributeDef {
+  id: string;
+  label: string; // i18n key
+  kind: "enum" | "text" | "resourceRef";
+  options?: string[];
+  required?: boolean;
+  inheritFrom?: "type" | "capacity" | "hourlyRate";
+}
+
+export interface CostTypeDef {
+  id: CostTypeId;
+  label: string; // i18n key
+  measures: CostMeasureDef[];
+  attributes: CostAttributeDef[];
+  defaultBasis: CostBasis;
+  /** Ordered attribute ids the Cost view nests under the type row. AI:
+   * ["model", "resourceId"] → type › model › person. */
+  groupBy?: string[];
+  color: string;
+}
+
+/** One recorded cost. Money is integer micro-dollars (1e-6 USD): floats drift
+ * once a total is prorated across 23 working days and re-summed, and cents are
+ * too coarse for a per-token figure. Round only at render. */
+export interface CostEntry {
+  id: string;
+  typeId: CostTypeId;
+  /** The task this cost belongs to. Required (spec CO5) — it's what gives the
+   * entry a span to prorate over and a permission scope to inherit. */
+  featureId: string;
+  quantities: Record<string, number>; // measureId -> quantity
+  basis: CostBasis;
+  amountMicros: number;
+  /** Unit cost per measure, only when basis="rate". Absent on AI entries,
+   * where unit cost is derived from amount ÷ quantity. */
+  unitCosts?: Record<string, number> | null;
+  currency: "USD";
+  attrs: Record<string, string | null>; // brand/model/resourceId for ai
+  /** When it happened. Unset = spread across the parent task's span. */
+  at?: number | null; // day index
+  spanStart?: number | null;
+  spanEnd?: number | null;
+  note?: string | null;
+  createdBy: string;
+  createdAt: Timestamp;
+  /** Mirrors Feature.assignedUids at write time so My-Beat readers can be
+   * scoped in rules without a join (Permissions-Spec §4.2). Kept fresh by the
+   * store's reconcile loop when the parent task is reassigned. */
+  scopeUids?: string[];
 }
 
 /**

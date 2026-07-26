@@ -1,0 +1,307 @@
+// The Cost view — Costs-Spec §6. An alternate to the Assignment-by-resource
+// panel in the same bottom slot, so it takes the same geometry props and shares
+// the canvas ruler: rows nest cost type › model › person, columns are the
+// canvas's day/week/month periods, and a task's money is prorated across its
+// span so spend shows where the work is.
+import { useMemo, useState } from "react";
+import { Icon } from "@/components/shared/Icon";
+import { ResourceBadge } from "@/components/shared/ResourceBadge";
+import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
+import { usePulseStore } from "@/stores/pulseStore";
+import { buildPeriods, buildTimeline } from "@/domain/timeline";
+import { RES_LABEL_W, type Density } from "@/domain/constants";
+import { COST_TYPES, modelsUsed } from "@/domain/costTypes";
+import { buildCostTree, flattenTree, fmtMoney, type CostNode } from "@/domain/costs";
+import type { Feature } from "@/types";
+import { useT } from "@/i18n";
+
+interface CostPanelProps {
+  offsetX: number;
+  dayWidth: number;
+  viewZoom: number;
+  density: Density;
+  startDay: number;
+  endDay: number;
+  weekends: number[];
+  selectedFeature: Feature | null;
+  onCollapse?: () => void;
+  labelWidth?: number;
+  /** Rendered by the host so the two bottom-panel views share one switch. */
+  viewSwitch?: React.ReactNode;
+}
+
+/** Width of the all-time total, carved out of the label column so `labelWidth`
+ * stays the panel's single shared origin with the canvas (spec §6.1 / CO10). */
+const TOTAL_W = 92;
+/** Below this the label column can't hold a total at all — the collapsed
+ * sidebar passes 30px. Totals move into the row tooltip there (BQ1). */
+const TOTAL_MIN_LABEL_W = 180;
+
+export function CostPanel({
+  offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends,
+  selectedFeature, onCollapse, labelWidth = RES_LABEL_W, viewSwitch,
+}: CostPanelProps) {
+  const t = useT();
+  const costs = usePulseStore((s) => s.costs);
+  const features = usePulseStore((s) => s.features);
+  const resources = usePulseStore((s) => s.resources);
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["type:ai"]));
+  const [modelFilter, setModelFilter] = useState<Set<string>>(new Set());
+  const [peopleFilter, setPeopleFilter] = useState<Set<string>>(new Set());
+
+  const xForDay = (day: number) => offsetX + day * dayWidth;
+  const periods = useMemo(() => buildPeriods(density, startDay, endDay), [density, startDay, endDay]);
+  const secondaryTicks = useMemo(() => buildTimeline(density, startDay, endDay).secondary, [density, startDay, endDay]);
+  const showTotals = labelWidth >= TOTAL_MIN_LABEL_W;
+
+  const featureById = useMemo(() => Object.fromEntries(features.map((f) => [f.id, f])), [features]);
+  const models = useMemo(() => modelsUsed(costs), [costs]);
+
+  // Filters narrow the totals too — a total should reflect what you asked to
+  // see. Only the time window is ignored (CO11).
+  const visible = useMemo(
+    () =>
+      costs.filter((c) => {
+        if (selectedFeature && c.featureId !== selectedFeature.id) return false;
+        if (modelFilter.size > 0 && !modelFilter.has(c.attrs?.model ?? "")) return false;
+        if (peopleFilter.size > 0 && !peopleFilter.has(c.attrs?.resourceId ?? "")) return false;
+        return true;
+      }),
+    [costs, selectedFeature, modelFilter, peopleFilter],
+  );
+
+  const { roots, grand } = useMemo(
+    () =>
+      buildCostTree({
+        entries: visible,
+        featureById,
+        types: COST_TYPES,
+        periods,
+        labelFor: (attrId, value) => {
+          if (value == null) return t("cost.unattributed");
+          if (attrId === "resourceId") return resources.find((r) => r.id === value)?.name ?? value;
+          return value;
+        },
+        typeLabel: (type) => t(type.label as Parameters<typeof t>[0]),
+      }),
+    [visible, featureById, periods, resources, t],
+  );
+
+  const rows = useMemo(() => flattenTree(roots, expanded), [roots, expanded]);
+  const inView = grand.cells.reduce((a, b) => a + b, 0);
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const outsideTip = (node: CostNode) =>
+    t("cost.outside", {
+      before: fmtMoney(node.bucket.before),
+      inView: fmtMoney(node.bucket.cells.reduce((a, b) => a + b, 0)),
+      after: fmtMoney(node.bucket.after),
+    });
+
+  return (
+    <div className="no-select" style={{ height: "100%", background: "#FFFFFF", display: "flex", flexDirection: "column" }}>
+      <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0 flex-wrap gap-2" style={{ borderColor: "#EEF1F4" }}>
+        <div className="flex items-center gap-2">
+          {onCollapse && (
+            <button onClick={onCollapse} title={t("cost.view")} className="no-press" style={{ color: "#64748B", flexShrink: 0, display: "flex", alignItems: "center" }}>
+              <Icon name="keyboard_arrow_down" size={18} />
+            </button>
+          )}
+          {viewSwitch}
+          <span className="mono" style={{ fontSize: 10, color: "#78859A" }}>
+            {t("cost.headerTotal", { total: fmtMoney(grand.total), inView: fmtMoney(inView) })}
+          </span>
+          {selectedFeature && (
+            <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 600, background: "#F7E8DA", color: "#D85A28" }}>
+              {selectedFeature.title}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="mono text-xs" style={{ color: "#78859A" }}>filter:</span>
+          <MultiSelectFilter
+            label={t("cost.filterModels")}
+            searchable
+            openUp
+            options={models.map((m) => ({ id: m, name: m }))}
+            selected={modelFilter}
+            onChange={setModelFilter}
+          />
+          <MultiSelectFilter
+            label={t("cost.filterPeople")}
+            searchable
+            openUp
+            options={resources.map((r) => ({ id: r.id, name: r.name }))}
+            selected={peopleFilter}
+            onChange={setPeopleFilter}
+          />
+          {(modelFilter.size > 0 || peopleFilter.size > 0) && (
+            <button
+              onClick={() => { setModelFilter(new Set()); setPeopleFilter(new Set()); }}
+              className="mono text-xs px-2 py-1 rounded"
+              style={{ background: "#F1F5F9", color: "#64748B" }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>clear <Icon name="close" size={11} /></span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* mini ruler — same geometry as the assignment panel, so both stay
+          aligned with the canvas above */}
+      <div className="flex flex-shrink-0" style={{ borderBottom: "1px solid #F1F5F9" }}>
+        <div className="flex items-center justify-end" style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", paddingRight: 8 }}>
+          {showTotals && (
+            <span className="mono" style={{ fontSize: 8, color: "#94A3B8", letterSpacing: "0.04em", width: TOTAL_W, textAlign: "right" }}>{t("cost.total")}</span>
+          )}
+        </div>
+        <div style={{ position: "relative", height: 22, flex: 1, overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+            {weekends.map((d) => (
+              <div key={`wm${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, bottom: 0, width: dayWidth, background: "rgba(100,116,139,0.10)" }} />
+            ))}
+            {secondaryTicks.map((tick, i) => {
+              const nextDay = secondaryTicks[i + 1]?.day ?? tick.day + (density === "day" ? 1 : density === "week" ? 7 : 30);
+              return (
+                <div key={tick.day} style={{ position: "absolute", left: xForDay(tick.day), width: (nextDay - tick.day) * dayWidth, top: 0, bottom: 0, borderLeft: "1px solid #DDE2EA", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <span className="mono" style={{ fontSize: 9, color: "#78859A", transform: `scaleX(${1 / viewZoom})` }}>{tick.label}</span>
+                </div>
+              );
+            })}
+            <div style={{ position: "absolute", left: xForDay(0), top: 0, bottom: 0, width: 2, background: "#EE7240", opacity: 0.6 }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        {rows.length === 0 && (
+          <div className="flex items-center justify-center py-6">
+            <span className="mono text-xs" style={{ color: "#94A3B8" }}>
+              {costs.length === 0 ? t("cost.empty") : t("cost.emptyFiltered")}
+            </span>
+          </div>
+        )}
+        {rows.map((node) => {
+          const hasKids = node.children.length > 0;
+          const open = expanded.has(node.key);
+          const cellsTotal = node.bucket.cells.reduce((a, b) => a + b, 0);
+          const hasBefore = node.bucket.before > 0;
+          const hasAfter = node.bucket.after > 0;
+          return (
+            <div key={node.key} className="flex items-stretch border-b" style={{ borderColor: "#F5F6F8" }}>
+              <div
+                className="flex items-center gap-1.5 py-1.5"
+                title={hasBefore || hasAfter ? outsideTip(node) : undefined}
+                style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", overflow: "hidden", paddingLeft: 8 + node.level * 14, paddingRight: 8 }}
+              >
+                {hasKids ? (
+                  <button onClick={() => toggle(node.key)} className="no-press" style={{ color: "#94A3B8", display: "flex", flexShrink: 0 }} aria-label={node.label}>
+                    <Icon name={open ? "expand_more" : "chevron_right"} size={14} />
+                  </button>
+                ) : (
+                  <span style={{ width: node.level === 0 ? 14 : 8, flexShrink: 0 }} />
+                )}
+                {node.level === 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: node.color, flexShrink: 0 }} />}
+                {node.resourceId && <ResourceBadge resourceId={node.resourceId} size={16} />}
+                <span className={node.level === 0 ? "text-xs font-semibold truncate" : "text-xs truncate"} style={{ color: node.level === 0 ? "#1F2330" : "#334155", flex: 1 }}>
+                  {node.label}
+                </span>
+                {showTotals && (
+                  <span className="mono flex items-center justify-end gap-0.5" style={{ width: TOTAL_W, textAlign: "right", fontSize: 11, fontWeight: node.level === 0 ? 700 : 500, color: "#1F2330", flexShrink: 0 }}>
+                    {hasBefore && <span style={{ color: "#94A3B8" }}>‹</span>}
+                    {fmtMoney(node.bucket.total, { compact: true })}
+                    {hasAfter && <span style={{ color: "#94A3B8" }}>›</span>}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ position: "relative", flex: 1, overflow: "hidden", height: 30 }}>
+                <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+                  {weekends.map((d) => (
+                    <div key={`wb${d}`} style={{ position: "absolute", left: xForDay(d), top: 0, bottom: 0, width: dayWidth, background: "rgba(100,116,139,0.06)" }} />
+                  ))}
+                  {periods.map((p, i) => {
+                    const micros = node.bucket.cells[i] ?? 0;
+                    if (micros === 0) return null; // blank, not "$0" — a grid of zeros is noise
+                    const cellLeft = xForDay(p.start);
+                    const cellW = Math.max((p.end - p.start) * dayWidth - 2, 12);
+                    // Tint by share of this row's busiest period, so the
+                    // expensive stretches pop without reading digits.
+                    const peak = Math.max(...node.bucket.cells, 1);
+                    const intensity = Math.min(1, micros / peak);
+                    const label = fmtMoney(micros, { compact: true });
+                    const showNum = cellW * viewZoom >= label.length * 6.5 + 6;
+                    return (
+                      <div
+                        key={i}
+                        title={`${fmtMoney(micros)} · ${node.label}`}
+                        style={{
+                          position: "absolute", left: cellLeft + 1, top: 5, width: cellW, height: 20,
+                          background: `rgba(139,92,246,${0.10 + intensity * 0.28})`,
+                          borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                        }}
+                      >
+                        {showNum && (
+                          <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: "#4C1D95", transform: `scaleX(${1 / viewZoom})` }}>{label}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {cellsTotal === 0 && (
+                  <span className="mono" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "#CBD5E1" }}>
+                    {hasBefore || hasAfter ? "— outside view —" : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Sticky total row. Its period cells are per-period column sums; only the
+          left/corner figure is all-time (CO11). */}
+      {rows.length > 0 && (
+        <div className="flex items-stretch flex-shrink-0 border-t" style={{ borderColor: "#E2DFD9", background: "#FBFAF7" }}>
+          <div className="flex items-center gap-1.5 py-1.5" style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", paddingLeft: 8, paddingRight: 8 }}>
+            <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#123359", flex: 1, letterSpacing: "0.04em" }}>{t("cost.totalRow")}</span>
+            {showTotals && (
+              <span className="mono flex items-center justify-end gap-0.5" style={{ width: TOTAL_W, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#123359", flexShrink: 0 }}>
+                {grand.before > 0 && <span style={{ color: "#94A3B8" }}>‹</span>}
+                {fmtMoney(grand.total, { compact: true })}
+                {grand.after > 0 && <span style={{ color: "#94A3B8" }}>›</span>}
+              </span>
+            )}
+          </div>
+          <div style={{ position: "relative", flex: 1, overflow: "hidden", height: 26 }}>
+            <div style={{ position: "absolute", inset: 0, transform: `scaleX(${viewZoom})`, transformOrigin: "left top" }}>
+              {periods.map((p, i) => {
+                const micros = grand.cells[i] ?? 0;
+                if (micros === 0) return null;
+                const cellLeft = xForDay(p.start);
+                const cellW = Math.max((p.end - p.start) * dayWidth - 2, 12);
+                const label = fmtMoney(micros, { compact: true });
+                const showNum = cellW * viewZoom >= label.length * 6.5 + 6;
+                return (
+                  <div key={i} title={fmtMoney(micros)} style={{ position: "absolute", left: cellLeft + 1, top: 4, width: cellW, height: 18, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {showNum && (
+                      <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#123359", transform: `scaleX(${1 / viewZoom})` }}>{label}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

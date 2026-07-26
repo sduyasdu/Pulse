@@ -628,3 +628,92 @@ describe("workspaces", () => {
     );
   });
 });
+
+describe("costs (Costs-Spec §7)", () => {
+  const beatCaps = { readScope: "beat", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false };
+  const leadCaps = { readScope: "all", editScope: "lead", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false };
+
+  const costDoc = (over: Record<string, unknown> = {}) => ({
+    typeId: "ai",
+    featureId: "f_led",
+    quantities: { tokens: 1_000_000 },
+    basis: "amount",
+    amountMicros: 412_000_000,
+    currency: "USD",
+    attrs: { brand: "anthropic", model: "claude-opus-5", resourceId: null },
+    createdBy: "lee",
+    createdAt: Date.now(),
+    scopeUids: ["lee"],
+    ...over,
+  });
+
+  async function seedCostFixture() {
+    await seedPulse("p1", "alice", {
+      alice: { email: "alice@example.com", role: "owner" },
+      eve: { email: "eve@example.com", role: "editor" },
+    });
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "lee"), { uid: "lee", email: "lee@example.com", role: "taskLead", joinedAt: Date.now(), caps: leadCaps });
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "bea"), { uid: "bea", email: "bea@example.com", role: "myBeatViewer", joinedAt: Date.now(), caps: beatCaps });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_led"), { title: "led", x: 0, y: 0, duration: 1, status: "planned", resources: [], leadUid: "lee", assignedUids: ["lee", "bea"] });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_other"), { title: "other", x: 0, y: 0, duration: 1, status: "planned", resources: [], leadUid: "zed", assignedUids: ["zed"] });
+      await setDoc(doc(db, "pulses", "p1", "costs", "c_mine"), costDoc({ scopeUids: ["lee", "bea"] }));
+      await setDoc(doc(db, "pulses", "p1", "costs", "c_theirs"), costDoc({ featureId: "f_other", scopeUids: ["zed"] }));
+    });
+  }
+
+  it("denies a non-member reading or writing costs", async () => {
+    await seedCostFixture();
+    const mallory = dbAs("mallory", "mallory@example.com");
+    await assertFails(getDoc(doc(mallory, "pulses", "p1", "costs", "c_mine")));
+    await assertFails(setDoc(doc(mallory, "pulses", "p1", "costs", "c_evil"), costDoc()));
+  });
+
+  it("lets an editor create, update and delete a cost on any task", async () => {
+    await seedCostFixture();
+    const eve = dbAs("eve", "eve@example.com");
+    await assertSucceeds(setDoc(doc(eve, "pulses", "p1", "costs", "c_new"), costDoc({ createdBy: "eve" })));
+    await assertSucceeds(updateDoc(doc(eve, "pulses", "p1", "costs", "c_theirs"), { amountMicros: 1 }));
+    await assertSucceeds(deleteDoc(doc(eve, "pulses", "p1", "costs", "c_mine")));
+  });
+
+  it("rejects a cost with no featureId (CO5 — every cost hangs off a task)", async () => {
+    await seedCostFixture();
+    const eve = dbAs("eve", "eve@example.com");
+    await assertFails(setDoc(doc(eve, "pulses", "p1", "costs", "c_orphan"), costDoc({ featureId: null })));
+  });
+
+  it("lets a Task Lead write costs on a task they lead, but not on one they don't", async () => {
+    await seedCostFixture();
+    const lee = dbAs("lee", "lee@example.com");
+    await assertSucceeds(setDoc(doc(lee, "pulses", "p1", "costs", "c_lee"), costDoc()));
+    await assertSucceeds(updateDoc(doc(lee, "pulses", "p1", "costs", "c_mine"), { amountMicros: 5 }));
+    await assertSucceeds(deleteDoc(doc(lee, "pulses", "p1", "costs", "c_mine")));
+    await assertFails(setDoc(doc(lee, "pulses", "p1", "costs", "c_sneak"), costDoc({ featureId: "f_other" })));
+    await assertFails(updateDoc(doc(lee, "pulses", "p1", "costs", "c_theirs"), { amountMicros: 5 }));
+    await assertFails(deleteDoc(doc(lee, "pulses", "p1", "costs", "c_theirs")));
+  });
+
+  it("stops a Task Lead re-parenting a cost onto a task outside their scope", async () => {
+    await seedCostFixture();
+    const lee = dbAs("lee", "lee@example.com");
+    await assertFails(updateDoc(doc(lee, "pulses", "p1", "costs", "c_mine"), { featureId: "f_other" }));
+  });
+
+  it("scopes a My-Beat Viewer to costs on their own tasks", async () => {
+    await seedCostFixture();
+    const bea = dbAs("bea", "bea@example.com");
+    await assertSucceeds(getDoc(doc(bea, "pulses", "p1", "costs", "c_mine")));
+    await assertFails(getDoc(doc(bea, "pulses", "p1", "costs", "c_theirs")));
+    // The unconstrained list is rejected wholesale; the scoped query is required.
+    await assertFails(getDocs(collection(bea, "pulses", "p1", "costs")));
+    await assertSucceeds(getDocs(query(collection(bea, "pulses", "p1", "costs"), where("scopeUids", "array-contains", "bea"))));
+  });
+
+  it("denies a My-Beat Viewer writing costs at all (editScope none)", async () => {
+    await seedCostFixture();
+    const bea = dbAs("bea", "bea@example.com");
+    await assertFails(setDoc(doc(bea, "pulses", "p1", "costs", "c_bea"), costDoc({ createdBy: "bea" })));
+    await assertFails(deleteDoc(doc(bea, "pulses", "p1", "costs", "c_mine")));
+  });
+});

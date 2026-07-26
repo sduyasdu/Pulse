@@ -22,6 +22,7 @@ import { NotificationsBell } from "@/components/notifications/NotificationsBell"
 import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { Icon } from "@/components/shared/Icon";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
+import { CostPanel } from "@/components/costPanel/CostPanel";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
@@ -186,6 +187,8 @@ export function PulsePage() {
   const [assignPanelH, setAssignPanelH] = useState(280);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [assignPanelOpen, setAssignPanelOpen] = useState(true);
+  // Which view occupies the bottom panel — assignments or costs (Costs-Spec §6).
+  const [bottomPanel, setBottomPanel] = useState<"assign" | "cost">("assign");
   const [timelineBounds, setTimelineBounds] = useState({ startDay: 0, endDay: 0, dayWidth: BASE_DAY_WIDTH });
 
   const canvasRef = useRef<CanvasViewHandle>(null);
@@ -500,20 +503,37 @@ export function PulsePage() {
 
         {viewMode === "canvas" && assignPanelOpen && (
         <div style={{ height: assignPanelH, flexShrink: 0 }}>
-          <AssignmentPanel
-            offsetX={offsetX}
-            dayWidth={timelineBounds.dayWidth}
-            viewZoom={viewZoom}
-            density={density}
-            startDay={timelineBounds.startDay}
-            endDay={timelineBounds.endDay}
-            weekends={weekends}
-            filterResource={filterResource}
-            setFilterResource={setFilterResource}
-            selectedFeature={selectedFeature}
-            onCollapse={() => setAssignPanelOpen(false)}
-            labelWidth={sidebarOpen ? 320 : 30}
-          />
+          {bottomPanel === "assign" ? (
+            <AssignmentPanel
+              offsetX={offsetX}
+              dayWidth={timelineBounds.dayWidth}
+              viewZoom={viewZoom}
+              density={density}
+              startDay={timelineBounds.startDay}
+              endDay={timelineBounds.endDay}
+              weekends={weekends}
+              filterResource={filterResource}
+              setFilterResource={setFilterResource}
+              selectedFeature={selectedFeature}
+              onCollapse={() => setAssignPanelOpen(false)}
+              labelWidth={sidebarOpen ? 320 : 30}
+              viewSwitch={<BottomPanelSwitch value={bottomPanel} onChange={setBottomPanel} />}
+            />
+          ) : (
+            <CostPanel
+              offsetX={offsetX}
+              dayWidth={timelineBounds.dayWidth}
+              viewZoom={viewZoom}
+              density={density}
+              startDay={timelineBounds.startDay}
+              endDay={timelineBounds.endDay}
+              weekends={weekends}
+              selectedFeature={selectedFeature}
+              onCollapse={() => setAssignPanelOpen(false)}
+              labelWidth={sidebarOpen ? 320 : 30}
+              viewSwitch={<BottomPanelSwitch value={bottomPanel} onChange={setBottomPanel} />}
+            />
+          )}
         </div>
         )}
 
@@ -540,6 +560,31 @@ export function PulsePage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Switches the bottom panel between assignments and costs (Costs-Spec §6).
+ * Rendered by the page and handed to whichever panel is showing, so the two
+ * views share one control instead of each growing their own. */
+function BottomPanelSwitch({ value, onChange }: { value: "assign" | "cost"; onChange: (v: "assign" | "cost") => void }) {
+  const t = useT();
+  const options: { id: "assign" | "cost"; label: string }[] = [
+    { id: "assign", label: t("cost.viewAssign") },
+    { id: "cost", label: t("cost.view") },
+  ];
+  return (
+    <div className="flex rounded overflow-hidden flex-shrink-0" style={{ border: "1px solid #E2DFD9" }}>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className="text-xs font-semibold px-2.5 py-1"
+          style={{ background: value === o.id ? "#123359" : "#FFFFFF", color: value === o.id ? "#FFFFFF" : "#64748B" }}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

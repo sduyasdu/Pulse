@@ -27,6 +27,9 @@ interface AssignmentPanelProps {
    * timeline shares the canvas's left origin and the two calendars stay
    * aligned when the sidebar is collapsed. */
   labelWidth?: number;
+  /** Assignment/Cost switch, owned by the page so both bottom-panel views
+   * share one control (Costs-Spec §6). */
+  viewSwitch?: React.ReactNode;
 }
 
 type AllocFilter = "all" | "under" | "over";
@@ -40,7 +43,7 @@ function resourceIdsOn(feature: Feature): Set<string> {
   return ids;
 }
 
-export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, setFilterResource, selectedFeature, onCollapse, labelWidth = RES_LABEL_W }: AssignmentPanelProps) {
+export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay, endDay, weekends, filterResource, setFilterResource, selectedFeature, onCollapse, labelWidth = RES_LABEL_W, viewSwitch }: AssignmentPanelProps) {
   const resources = usePulseStore((s) => s.resources);
   const features = usePulseStore((s) => s.features);
   const pulse = usePulseStore((s) => s.pulse);
@@ -141,8 +144,9 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
               <Icon name="keyboard_arrow_down" size={18} />
             </button>
           )}
+          {viewSwitch}
           <span className="text-xs font-semibold" style={{ color: "#123359" }}>
-            Assignment by resource
+            {!viewSwitch && "Assignment by resource"}
             {selectedFeature && (
               <span className="mono ml-1.5 rounded px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 600, background: "#F7E8DA", color: "#D85A28" }}>
                 team on “{selectedFeature.title}”

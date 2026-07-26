@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore } from "@/stores/pulseStore";
 import { logActivity, newActivityId } from "@/services/firestore/activity";
 import { statusesOf } from "./constants";
+import { fmtMoney } from "./costs";
 
 // Translates an undo-engine command (Undo-Spec DocOp) into one durable activity
 // entry (Changelog-Spec.md §4.4) and appends it. Installed once at app start via
@@ -26,7 +27,7 @@ const DELTA_KEYS = new Set([
 ]);
 
 const KIND_TO_ENTITY: Record<DocKind, ActivityEntityKind> = {
-  feature: "feature", epic: "epic", resource: "resource", pulse: "pulse",
+  feature: "feature", epic: "epic", resource: "resource", pulse: "pulse", cost: "cost",
 };
 
 function isCosmetic(op: DocOp): boolean {
@@ -47,6 +48,14 @@ function entityNameOf(kind: DocKind, id: string, op: DocOp): string {
       return named(resources.find((r) => r.id === id)?.name ?? doc.name, "a resource");
     case "pulse":
       return named(pulse?.name ?? doc.name, "the Pulse");
+    case "cost": {
+      // "claude-opus-5 · $412" — the model and the money, both as they were at
+      // write time, so the line still reads after either is edited.
+      const attrs = (doc.attrs ?? {}) as Record<string, string | null>;
+      const micros = typeof doc.amountMicros === "number" ? doc.amountMicros : 0;
+      const model = named(attrs.model, "a cost");
+      return `${model} · ${fmtMoney(micros)}`;
+    }
   }
 }
 
@@ -129,6 +138,17 @@ function assignmentDeltas(ops: DocOp[]): ActivityDelta[] {
  * Only feature entries carry it (§5.2); absent elsewhere hides them from beat
  * viewers, which is the intended admin/whole-Pulse visibility rule (CL5). */
 function scopeUidsFor(kind: DocKind, id: string, op: DocOp): string[] | undefined {
+  // A cost entry is scoped by the task it hangs off, so its log line is visible
+  // to exactly the people who can see the cost itself (Costs-Spec §7).
+  if (kind === "cost") {
+    const doc = op.op === "patch" ? op.after : op.doc;
+    const featureId = typeof doc.featureId === "string" ? doc.featureId : null;
+    const fromFeature = featureId
+      ? usePulseStore.getState().features.find((f) => f.id === featureId)?.assignedUids
+      : undefined;
+    const fallback = Array.isArray(doc.scopeUids) ? (doc.scopeUids as string[]) : [];
+    return [...(fromFeature ?? fallback)];
+  }
   if (kind !== "feature") return undefined;
   const fromStore = usePulseStore.getState().features.find((f) => f.id === id)?.assignedUids;
   const doc = op.op === "patch" ? op.after : op.doc;

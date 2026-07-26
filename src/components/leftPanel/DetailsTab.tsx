@@ -20,6 +20,7 @@ import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { Comments } from "@/components/comments/Comments";
 import { FeatureActivity } from "./FeatureActivity";
+import { FeatureCosts } from "./FeatureCosts";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { useT } from "@/i18n";
 
@@ -554,6 +555,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
         <div className="mono mb-1" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("details.notes")}</div>
         <RichTextEditor value={feature.notes || ""} disabled={!canEdit} placeholder={t("details.notesPlaceholder")} minHeight={72} onChange={(v) => void patchFeature(feature.id, { notes: v })} />
       </div>
+
+      <FeatureCosts featureId={feature.id} canEdit={canEdit} />
 
       <Attachments
         canEdit={canEdit}

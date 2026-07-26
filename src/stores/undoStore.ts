@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import type { Epic, Feature, Resource } from "@/types";
+import type { CostEntry, Epic, Feature, Resource } from "@/types";
 import { createFeature, updateFeature, deleteFeature } from "@/services/firestore/features";
 import { createEpic, updateEpic, deleteEpic } from "@/services/firestore/epics";
 import { createResource, updateResource, deleteResource } from "@/services/firestore/resources";
+import { createCost, updateCost, deleteCost } from "@/services/firestore/costs";
 import { patchPulse } from "@/services/firestore/pulses";
 
 // See Undo-Spec.md. Undo is an inverse-command stack: each logical action
@@ -10,7 +11,7 @@ import { patchPulse } from "@/services/firestore/pulses";
 // re-issue writes through the normal Firestore path, which echo back via the
 // pulseStore's onSnapshot listeners exactly like a first-hand edit.
 
-export type DocKind = "feature" | "epic" | "resource" | "pulse";
+export type DocKind = "feature" | "epic" | "resource" | "pulse" | "cost";
 
 type Doc = Record<string, unknown>;
 
@@ -87,6 +88,10 @@ async function write(pulseId: string, kind: DocKind, action: "create" | "delete"
       if (action === "create") return createResource(pulseId, payload as unknown as Resource);
       if (action === "delete") return deleteResource(pulseId, id);
       return updateResource(pulseId, id, payload as Partial<Resource>);
+    case "cost":
+      if (action === "create") return createCost(pulseId, payload as unknown as CostEntry);
+      if (action === "delete") return deleteCost(pulseId, id);
+      return updateCost(pulseId, id, payload as Partial<CostEntry>);
     case "pulse":
       // The pulse doc is never created/deleted through undo — only patched.
       return patchPulse(pulseId, payload);

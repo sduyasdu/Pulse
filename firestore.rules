@@ -80,6 +80,14 @@ service cloud.firestore {
         : (m.role == 'custom' && 'caps' in m) ? m.caps.readScope
         : 'all';
     }
+    // Does the caller lead this task? Used by the costs block, where a Task
+    // Lead's write scope is defined by the parent feature rather than by the
+    // document being written (Costs-Spec §7). A missing feature reads as
+    // "not led", denying the write.
+    function leadsFeature(pulseId, featureId) {
+      return exists(/databases/$(database)/documents/pulses/$(pulseId)/features/$(featureId))
+        && get(/databases/$(database)/documents/pulses/$(pulseId)/features/$(featureId)).data.get('leadUid', null) == request.auth.uid;
+    }
     // A copy-link self-join is valid when the Pulse has an active `invite` and
     // the membership doc being written carries a joinToken + role matching it.
     // The token is an unguessable capability only reachable via the shared link.
@@ -252,6 +260,31 @@ service cloud.firestore {
       match /resources/{resourceId} {
         allow read: if isPulseMember(pulseId);
         allow write: if canEditPulse(pulseId);
+      }
+
+      // Costs (Costs-Spec.md §7). A cost has no capability of its own — it
+      // inherits the gates of the task it hangs off: reads follow the feature
+      // read scope via the `scopeUids` denorm, writes follow editScope, so a
+      // Task Lead can log spend on a task they lead. As with features, a
+      // 'beat' caller MUST issue the array-contains query on `scopeUids`.
+      match /costs/{costId} {
+        allow read: if isPulseMember(pulseId) && (
+          callerReadScope(pulseId) == 'all'
+          || (callerReadScope(pulseId) == 'beat' && request.auth.uid in resource.data.get('scopeUids', []))
+        );
+        // featureId is required (CO5) and pinned on update, so a Task Lead
+        // can't re-parent a cost onto a task outside their scope.
+        allow create: if isPulseMember(pulseId)
+          && request.resource.data.featureId is string
+          && (callerEditScope(pulseId) == 'all'
+              || (callerEditScope(pulseId) == 'lead' && leadsFeature(pulseId, request.resource.data.featureId)));
+        allow update: if isPulseMember(pulseId)
+          && request.resource.data.featureId == resource.data.featureId
+          && (callerEditScope(pulseId) == 'all'
+              || (callerEditScope(pulseId) == 'lead' && leadsFeature(pulseId, resource.data.featureId)));
+        allow delete: if isPulseMember(pulseId)
+          && (callerEditScope(pulseId) == 'all'
+              || (callerEditScope(pulseId) == 'lead' && leadsFeature(pulseId, resource.data.featureId)));
       }
 
       // Activity log (Changelog-Spec.md) — append-only. Any member may create an

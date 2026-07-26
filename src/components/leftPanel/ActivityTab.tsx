@@ -34,10 +34,10 @@ function timeLabel(ms: number): string {
 
 // A small glyph per entity kind, so the eye can scan the feed by "what".
 const KIND_ICON: Record<ActivityEntry["entityKind"], string> = {
-  feature: "◆", epic: "▮", resource: "◑", member: "◉", invite: "⇲", pulse: "✦",
+  feature: "◆", epic: "▮", resource: "◑", member: "◉", invite: "⇲", pulse: "✦", cost: "$",
 };
 const KIND_TINT: Record<ActivityEntry["entityKind"], string> = {
-  feature: "#123359", epic: "#7C3AED", resource: "#0E7490", member: "#B45309", invite: "#B45309", pulse: "#BE185D",
+  feature: "#123359", epic: "#7C3AED", resource: "#0E7490", member: "#B45309", invite: "#B45309", pulse: "#BE185D", cost: "#8B5CF6",
 };
 
 export function ActivityEntryRow({ e, meUid }: { e: ActivityEntry; meUid: string }) {

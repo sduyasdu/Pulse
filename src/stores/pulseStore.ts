@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { Attachment, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, StatusDef, Subtask } from "@/types";
+import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
+import { subscribeCosts, createCost, updateCost, deleteCost, newCostId } from "@/services/firestore/costs";
 import { subscribeEpics, createEpic, updateEpic, deleteEpic, newEpicId } from "@/services/firestore/epics";
 import { subscribeFeatures, createFeature, updateFeature, deleteFeature, newFeatureId } from "@/services/firestore/features";
 import {
@@ -32,6 +33,7 @@ interface PulseStoreState {
   epics: Epic[];
   features: Feature[];
   resources: Resource[];
+  costs: CostEntry[];
   members: PulseMember[];
   loading: boolean;
   notFound: boolean;
@@ -71,6 +73,10 @@ interface PulseStoreState {
 
   addAttachment: (featureId: string, title: string, url: string) => Promise<void>;
   removeAttachment: (featureId: string, attachmentId: string) => Promise<void>;
+
+  addCost: (featureId: string, patch: Partial<CostEntry> & Pick<CostEntry, "typeId">) => Promise<string | null>;
+  patchCost: (costId: string, patch: Partial<CostEntry>) => Promise<void>;
+  removeCost: (costId: string) => Promise<void>;
 }
 
 function omit<K extends string>(obj: Record<K, number> | undefined, key: K): Record<K, number> {
@@ -93,7 +99,7 @@ const asDoc = (o: object): Record<string, unknown> => o as Record<string, unknow
  * closed), and converges (a correction re-triggers it, then matches → no write).
  */
 function reconcileDenorms(get: () => PulseStoreState) {
-  const { pulseId, features, resources, members } = get();
+  const { pulseId, features, resources, costs, members } = get();
   if (!pulseId) return;
   const uid = useAuthStore.getState().firebaseUser?.uid;
   const me = uid ? members.find((m) => m.uid === uid) : undefined;
@@ -103,6 +109,18 @@ function reconcileDenorms(get: () => PulseStoreState) {
     const want = featureDenorm(f, linkOf);
     if (!denormMatches(f, want)) void updateFeature(pulseId, f.id, want).catch(() => {});
   }
+  // A cost copies its parent task's assignedUids at write time (Costs-Spec §7).
+  // Reassigning the task later would leave that copy stale, silently denying a
+  // My-Beat viewer the costs on their own task — so re-sync it here. These go
+  // straight to the service layer, bypassing recordSingle, so a reconcile never
+  // lands in undo history or the activity log.
+  for (const c of costs) {
+    const want = features.find((f) => f.id === c.featureId)?.assignedUids ?? [];
+    const have = c.scopeUids ?? [];
+    if (want.length !== have.length || want.some((u, i) => u !== have[i])) {
+      void updateCost(pulseId, c.id, { scopeUids: [...want] }).catch(() => {});
+    }
+  }
 }
 
 export const usePulseStore = create<PulseStoreState>((set, get) => ({
@@ -111,12 +129,13 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
   epics: [],
   features: [],
   resources: [],
+  costs: [],
   members: [],
   loading: true,
   notFound: false,
 
   load: (pulseId) => {
-    set({ pulseId, loading: true, notFound: false, epics: [], features: [], resources: [], members: [] });
+    set({ pulseId, loading: true, notFound: false, epics: [], features: [], resources: [], costs: [], members: [] });
     // `loading` must not go false until BOTH the pulse doc and the
     // pulseMembers roster have delivered their first snapshot — these are
     // two independent onSnapshot listeners with no ordering guarantee.
@@ -149,6 +168,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     // require the array-contains query, so resolve the caller's own read scope
     // (their membership doc is always self-readable) before subscribing.
     let featuresUnsub = () => {};
+    let costsUnsub = () => {};
     const uid = useAuthStore.getState().firebaseUser?.uid;
     void (async () => {
       let beatUid: string | undefined;
@@ -158,8 +178,11 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       }
       if (get().pulseId !== pulseId) return; // a newer load() superseded this one
       featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileDenorms(get); }, beatUid);
+      // Costs carry the same beat scoping as features (Costs-Spec §7), so they
+      // ride the same resolved read scope rather than resolving it twice.
+      costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileDenorms(get); }, beatUid);
     })();
-    return () => { unsubs.forEach((u) => u()); featuresUnsub(); };
+    return () => { unsubs.forEach((u) => u()); featuresUnsub(); costsUnsub(); };
   },
 
   roleOf: (uid) => get().members.find((m) => m.uid === uid)?.role ?? null,
@@ -273,11 +296,22 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
   },
 
   removeFeature: async (featureId) => {
-    const { pulseId, features } = get();
+    const { pulseId, features, costs } = get();
     if (!pulseId) return;
     const feature = features.find((f) => f.id === featureId);
+    // Costs cascade with their task (Costs-Spec §9): featureId is required, so
+    // an orphan couldn't exist, and it would have no span to prorate anyway.
+    // One undo op for the whole gesture, so restoring the task restores its spend.
+    const doomed = costs.filter((c) => c.featureId === featureId);
+    await Promise.all(doomed.map((c) => deleteCost(pulseId, c.id)));
     await deleteFeature(pulseId, featureId);
-    if (feature) recordSingle("Delete task", pulseId, deleteOp("feature", featureId, asDoc(feature)));
+    if (!feature) return;
+    const ops = [
+      deleteOp("feature", featureId, asDoc(feature)),
+      ...doomed.map((c) => deleteOp("cost", c.id, asDoc(c))),
+    ];
+    if (ops.length === 1) recordSingle("Delete task", pulseId, ops[0]);
+    else recordMany("Delete task", pulseId, ops);
   },
 
   duplicateFeature: async (featureId) => {
@@ -496,6 +530,48 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const patch: Partial<Feature> = { attachments: (feature.attachments || []).filter((a) => a.id !== attachmentId) };
     await updateFeature(pulseId, featureId, patch);
     recordSingle("Remove attachment", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
+  },
+
+  // ---- costs (Costs-Spec.md) ----------------------------------------------
+
+  addCost: async (featureId, patch) => {
+    const { pulseId, features } = get();
+    const uid = useAuthStore.getState().firebaseUser?.uid;
+    if (!pulseId || !uid) return null;
+    const id = newCostId(pulseId);
+    const cost: CostEntry = {
+      id,
+      featureId,
+      quantities: {},
+      basis: "amount",
+      amountMicros: 0,
+      currency: "USD",
+      attrs: {},
+      createdBy: uid,
+      createdAt: Date.now(),
+      // Scoped by the parent task, so a My-Beat viewer on that task can read it.
+      scopeUids: [...(features.find((f) => f.id === featureId)?.assignedUids ?? [])],
+      ...patch,
+    };
+    await createCost(pulseId, cost);
+    recordSingle("Add cost", pulseId, createOp("cost", id, asDoc(cost)));
+    return id;
+  },
+
+  patchCost: async (costId, patch) => {
+    const { pulseId, costs } = get();
+    if (!pulseId) return;
+    const before = costs.find((c) => c.id === costId);
+    await updateCost(pulseId, costId, patch);
+    if (before) recordSingle("Edit cost", pulseId, patchOp("cost", costId, asDoc(before), patch));
+  },
+
+  removeCost: async (costId) => {
+    const { pulseId, costs } = get();
+    if (!pulseId) return;
+    const cost = costs.find((c) => c.id === costId);
+    await deleteCost(pulseId, costId);
+    if (cost) recordSingle("Delete cost", pulseId, deleteOp("cost", costId, asDoc(cost)));
   },
 }));
 
