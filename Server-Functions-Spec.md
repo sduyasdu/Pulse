@@ -1,6 +1,6 @@
 # Pulse — Server Functions Spec
 
-Status: **Registry — open** · Owner: product + eng · Related: `Permissions-Spec.md`, `Plans-Spec.md`, `Collaboration-Spec.md`
+Status: **Registry — open** · Owner: product + eng · Related: `Permissions-Spec.md`, `Plans-Spec.md`, `Collaboration-Spec.md`, `Changelog-Spec.md`
 
 ## 0. Purpose
 
@@ -40,6 +40,7 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 | **SF1** | Feature denormalization maintainer | `Feature.assignedUids`, `Feature.leadUid` | write of features / resources / subtasks | `Permissions-Spec.md` §4.2, §7, P2/P12 | Deferred (client-maintained interim shipping) |
 | **SF2** | Assignment & comment notifications | server-authored `notifications/*` (dedupe, batching, email later) | write of features (assignment) / comments | `Collaboration-Spec.md` §3.6 | Deferred (client-created notifications interim) |
 | **SF3** | Billing / plan sync | `billing/{uid}` (tier, status, period) — the **only** writer | payment-provider webhook (HTTPS) | `Plans-Spec.md` §4, §8 (PL8) | Deferred (no billing yet; account menu stub) |
+| **SF4** | Change-log authoring (authoritative) | `pulses/{p}/changeLog/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc / comments | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted change-log interim) |
 
 ---
 
@@ -129,6 +130,58 @@ rules `get()` it (bypassing the read rule) to gate Pulse actions on the Pulse's
 
 **Related future functions (not yet SF-numbered):** collection-count quota counters
 (Plans-Spec PL5) if quotas need server-maintained counts.
+
+### SF4 — Change-log authoring (authoritative)
+
+**Owns:** the durable per-Pulse change log `pulses/{p}/changeLog/{entryId}`
+(`ChangeEntry`, `Changelog-Spec.md` §3). When SF4 ships it is the **only** trusted writer;
+rules reject client-authored (`source:'client'`) creates and the log becomes genuinely
+append-only-by-the-server.
+
+**Why server-side (target):** a change log a client can **omit** (do the mutation, skip
+the log write), **mis-summarize**, or **spam** is not an audit. Diffing before→after on
+the server removes the client from the trust path — completeness and truthfulness no
+longer depend on a cooperating client. Same reliability argument as SF2 (notifications);
+if both ship together they share the `features`/`comments` write triggers.
+
+**Triggers (onDocumentWritten):** `pulses/{p}/features/{f}`, `.../epics/{e}`,
+`.../resources/{r}`, `.../pulseMembers/{uid}`, the `pulses/{p}` doc itself
+(`invite`/`name`/statuses/resourceTypes/graphConfig), and `.../comments/{c}`. Map each
+before→after to a `ChangeEntry` (`entityKind`/`verb`/`summary`/curated `deltas`), stamp
+`source:'server'`, `at = serverTimestamp()`, and `scopeUids` (from the feature's
+`assignedUids`) for read-scoping (Changelog-Spec §5.2).
+
+**Must-skip writes (mirrors SF1's loop-avoidance):**
+- **Denorm-only reconcile writes** — skip any features write whose `affectedKeys()` ⊆
+  `{assignedUids, leadUid}` (the SF1/client denorm maintenance, not a user change);
+  otherwise every assignment double-logs (Changelog-Spec §4.4).
+- **No-op writes** where nothing meaningful changed, and SF4's own prior writes.
+
+**Idempotency:** Firestore delivers at-least-once, so derive `entryId` deterministically
+from the event (event id, or a hash of `pulseId+entityId+verb+beforeUpdateTime`) and write
+with a fixed doc id — re-delivery overwrites, never duplicates (§1). If a client draft
+(`source:'client'`) with a matching `clientKey` already exists, **replace it in place**
+with the authoritative `source:'server'` entry so the timeline never double-shows a change
+during the overlap window.
+
+**Interim (ships now — Changelog-Spec CL4 = client-emitted):** the client that made the
+change writes the `changeLog` entry at the same logical-action boundary the undo engine
+records at (`recordSingle`/`recordMany`), create-only and immutable via rules
+(`actorUid` pinned to the caller; `update`/`delete` = `false`). This is the **same trust
+posture as the already-shipped client-authored notifications** (`notify.ts`) and is
+acceptable for a collaboration/activity feed — the gap it leaves (a malicious client can
+omit or mis-summarize entries) is exactly what SF4 closes. Note the interim **fails open**
+(a dropped log write silently loses one entry), unlike the security-relevant SF1/SF3 which
+must fail closed — acceptable because the log grants no access and gates nothing.
+
+**Migration:** ship the client interim (Changelog-Spec phase 1). When SF4 deploys, flip
+the rules to reject `source:'client'` creates, let SF4 backfill from its triggers going
+forward (no historical backfill — the log starts when it starts), and dedupe/replace any
+client drafts during a short overlap.
+
+**Acceptance:** every logged mutation produces exactly one `ChangeEntry` within one
+function invocation; denorm-only reconcile writes and no-ops produce none; re-delivered
+events never duplicate an entry.
 
 ---
 
