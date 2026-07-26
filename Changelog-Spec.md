@@ -1,6 +1,6 @@
 # Pulse — Change-Log / Activity-Log Specification
 
-Status: **Proposal — CL1/CL4/CL5/CL6 resolved; CL2–3, CL7–12 open** ·
+Status: **Ready to build — all decisions (CL1–CL12) resolved** ·
 Owner: product + eng · Scope: designs a **durable, shared, per-Pulse activity log**
 (`pulses/{id}/activity`) — *who changed what, when*. Spec/design only, no application code changes.
 Related: `Collaboration-Spec.md` (§3.6 notifications, **§3.7** which sketched this as
@@ -86,7 +86,6 @@ Entries are grouped by `entityKind`. Each row is one `verb` (§3.2).
 | `member` | `add`, `remove`, `role-change`, `leave` | join-link self-join, `removeMember`, `setMemberRole`/`setMemberCaps`, self-delete | These are the security-relevant ones. `add` fires when a join-link self-join creates a `pulseMembers` doc; `leave` when a member self-deletes. |
 | `invite` | `link-created`, `link-revoked` | `setInviteLink`/clearing `Pulse.invite` | The copy-link (`Pulse.invite`) is created/revoked; no per-email invites (retired). |
 | `pulse` | `rename`, `config`, `transfer` | `renamePulse`/`setStatuses`·`setResourceTypes`·`setGraphConfig`/ownership transfer | `config` = statuses/resourceTypes/graphConfig; `transfer` = "Make owner". |
-| `comment` | `post` | `addComment` | One entry per top-level comment/reply. Edits/deletes of a comment are **not** logged (low value, high volume; CL7). |
 
 ### 2.2 Granularity — one entry per *logical action*, not per write
 
@@ -148,7 +147,7 @@ pulses/{pulseId}/activity/{entryId}
 // src/types/index.ts (proposed) — additive; nothing existing changes.
 
 export type ChangeEntityKind = "feature" | "epic" | "resource" | "member" | "invite"
-                             | "pulse" | "comment";
+                             | "pulse";  // no "comment" — comments are their own feed (CL7)
 
 export type ChangeVerb =
   | "create" | "delete" | "edit"
@@ -156,8 +155,7 @@ export type ChangeVerb =
   | "link" | "unlink"                                                     // resource
   | "add" | "remove" | "role-change" | "leave"                            // member
   | "link-created" | "link-revoked"                                       // invite
-  | "rename" | "config" | "transfer"                                      // pulse
-  | "post";                                                               // comment
+  | "rename" | "config" | "transfer";                                     // pulse
 
 /** One before/after pair for a curated high-signal field (§2.3). Values are
  * already display-projected (a resource id becomes its name-at-time), so the
@@ -292,9 +290,9 @@ security-grade audit; §4.3 closes that gap.
 convention (Server-Functions-Spec §4), a "do it on the server later" decision must become
 an `SF#`, not a loose TODO. SF4:
 
-- Triggers `onDocumentWritten` on `features`, `epics`, `resources`, `pulseMembers`, the
-  `pulses` doc (`invite`/`name`/config), and `comments` — the same mutation surface
-  (§2.1).
+- Triggers `onDocumentWritten` on `features`, `epics`, `resources`, `pulseMembers`, and
+  the `pulses` doc (`invite`/`name`/config) — the same mutation surface as §2.1 (no
+  `comments`; comments aren't logged, CL7).
 - Diffs before→after **server-side**, so completeness and truthfulness no longer depend
   on the client. Under SF4, rules flip to `create: if false` for `source=='server'`
   (Admin SDK bypasses rules), making the log genuinely append-only-by-the-server and
@@ -507,12 +505,13 @@ is additive under `pulses/{id}/activity/**` plus optional `Feature`-adjacent rea
    `pulses/{id}/activity/{entryId}` and the feature is surfaced as **"Activity"**
    (product owner: keep the `activity` name). Update Collaboration-Spec §3.7 / D7 to
    point here.
-2. **CL2 — Granularity = one entry per logical action** at the
-   `recordSingle`/`recordMany` boundary, streamed/`{record:false}` writes excluded.
-   *Recommend & confirm.*
-3. **CL3 — Curated before/after, not full diffs.** *Recommend:* `summary` + `changedKeys`
-   always; `deltas` (before→after as display strings) only for the high-signal allow-list
-   (§2.3). *Confirm the allow-list.*
+2. **CL2 — Granularity. ✅ RESOLVED: one entry per logical action** at the
+   `recordSingle`/`recordMany` boundary; streamed/`{record:false}` and reconcile-denorm
+   writes excluded.
+3. **CL3 — Curated before/after. ✅ RESOLVED:** `summary` + `changedKeys` always;
+   `deltas` (before→after as display strings) only for the high-signal allow-list in §2.3
+   (status, lead, epic, title, start `x`, duration, member role, assignment delta,
+   `linkedUid`) — everything else is changed-key-only.
 4. **CL4 — Authoring. ✅ RESOLVED: client-first.** v1 is client-emitted, create-only,
    immutable (`actorUid` pinned by rules), same trust posture as shipped notifications;
    **SF4 is the authoritative server-hardened target** (registered in
@@ -531,21 +530,20 @@ is additive under `pulses/{id}/activity/**` plus optional `Feature`-adjacent rea
    **Pro = 1 year + filters + per-task activity**, **Team = 2 years**.
    Gated via a `activityHistory` plan flag (Plans-Spec §3.1, §5); `expireAt` is stamped
    per the owner's tier and the TTL policy prunes past it.
-7. **CL7 — Comment edit/delete & other low-value events.** *Recommend:* log comment
-   `post` only; don't log comment edits/deletes, presence, or read events. *Confirm the
-   catalogue in §2.1.*
-8. **CL8 — Per-card activity badge.** *Recommend:* off by default (noisy); the per-task
-   Activity section (§6.2) is the primary surface. *Confirm.*
-9. **CL9 — Restore / time-travel is a non-goal.** Undo covers actor-side reversal; a
-   general "restore to this entry" is deferred. *Confirm deferral.*
-10. **CL10 — Cross-Pulse / workspace roll-up is a non-goal** this round (per-Pulse only).
-    *Confirm; revisit with Teams.*
-11. **CL11 — Idempotency keys.** *Recommend:* client stamps `clientKey`; SF4 uses a
-    deterministic `entryId` from the event and replaces matching client drafts. *Confirm
-    the dedupe strategy at SF4 build time.*
-12. **CL12 — Provenance UI.** *Recommend:* no scare-badge on v1 client entries (parity
-    with notifications); leave room for a subtle "verified" mark once SF4 is
-    authoritative. *Confirm.*
+7. **CL7 — Comments. ✅ RESOLVED: don't log comments at all.** No `comment` entityKind —
+   comment posts, edits, and deletes are all excluded from the activity log (comments are
+   their own feed). Presence and read events are likewise not logged.
+8. **CL8 — Per-card activity badge. ✅ RESOLVED: no badge on cards.** Cards are unchanged;
+   the per-task Activity section (§6.2) is the only per-task surface.
+9. **CL9 — Restore / time-travel. ✅ RESOLVED: deferred (non-goal).** Undo covers
+   actor-side reversal; a general "restore to this entry" is out of scope for now.
+10. **CL10 — Cross-Pulse / workspace roll-up. ✅ RESOLVED: per-Pulse only.** No global
+    feed this round; revisit with the Teams layer.
+11. **CL11 — Idempotency keys. ✅ RESOLVED (approach):** the client stamps `clientKey`;
+    SF4 uses a deterministic `entryId` from the event and replaces matching client drafts.
+    Exact dedupe details finalized at SF4 build time.
+12. **CL12 — Provenance UI. ✅ RESOLVED: no scare-badge** on v1 client entries (parity with
+    notifications); room left for a subtle "verified" mark once SF4 is authoritative.
 
 > **Cross-refs:** capture boundary & op shape — `src/stores/undoStore.ts`,
 > `src/stores/pulseStore.ts`; read-scope enforcement — `Permissions-Spec.md` §4.3 and

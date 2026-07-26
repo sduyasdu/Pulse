@@ -40,7 +40,7 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 | **SF1** | Feature denormalization maintainer | `Feature.assignedUids`, `Feature.leadUid` | write of features / resources / subtasks | `Permissions-Spec.md` §4.2, §7, P2/P12 | Deferred (client-maintained interim shipping) |
 | **SF2** | Assignment & comment notifications | server-authored `notifications/*` (dedupe, batching, email later) | write of features (assignment) / comments | `Collaboration-Spec.md` §3.6 | Deferred (client-created notifications interim) |
 | **SF3** | Billing / plan sync | `billing/{uid}` (tier, status, period) — the **only** writer | payment-provider webhook (HTTPS) | `Plans-Spec.md` §4, §8 (PL8) | Deferred (no billing yet; account menu stub) |
-| **SF4** | Change-log authoring (authoritative) | `pulses/{p}/activity/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc / comments | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted change-log interim) |
+| **SF4** | Activity-log authoring (authoritative) | `pulses/{p}/activity/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted activity-log interim) |
 
 ---
 
