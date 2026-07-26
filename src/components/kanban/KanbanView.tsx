@@ -16,6 +16,8 @@ interface KanbanViewProps {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   canEdit: boolean;
+  /** Per-feature edit gate (Task Lead edits only tasks they lead). */
+  canEditFeature: (f: Feature) => boolean;
   featureQuery: string;
   featureStatusFilter: Set<string>;
   epicFilter: Set<string>;
@@ -25,7 +27,7 @@ interface KanbanViewProps {
   myResourceIds: string[] | null;
 }
 
-export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds }: KanbanViewProps) {
+export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds }: KanbanViewProps) {
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
@@ -107,9 +109,9 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
     setDragOverGroup(null);
     setDraggingStatus(null);
     const id = e.dataTransfer.getData("text/plain");
-    if (!id || !canEdit) return;
+    if (!id) return;
     const f = features.find((x) => x.id === id);
-    if (!f) return;
+    if (!f || !canEditFeature(f)) return;
     if (f.status !== status) {
       void setFeatureStatus(id, status);
     } else if (epicId !== undefined && (f.epicId ?? null) !== epicId) {
@@ -145,6 +147,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
               key={col.status}
               col={col}
               canEdit={canEdit}
+              canEditFeature={canEditFeature}
               selectedId={selectedId}
               onSelect={onSelect}
               graph={graph}
@@ -175,6 +178,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, featureQuery, featur
 function Column({
   col,
   canEdit,
+  canEditFeature,
   selectedId,
   onSelect,
   graph,
@@ -197,6 +201,7 @@ function Column({
 }: {
   col: StatusColumn;
   canEdit: boolean;
+  canEditFeature: (f: Feature) => boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   graph: ReturnType<typeof graphConfigOf>;
@@ -273,7 +278,7 @@ function Column({
               </div>
               <div className="flex flex-col gap-1.5">
                 {g.tasks.map((f) => (
-                  <Card key={f.id} f={f} canEdit={canEdit} selected={selectedId === f.id} onSelect={onSelect} graph={graph} statuses={statuses} resById={resById} onDuplicate={onDuplicate} onDelete={onDelete} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
+                  <Card key={f.id} f={f} canEdit={canEditFeature(f)} selected={selectedId === f.id} onSelect={onSelect} graph={graph} statuses={statuses} resById={resById} onDuplicate={onDuplicate} onDelete={onDelete} onDragStartTask={onDragStartTask} onDragEndTask={onDragEndTask} />
                 ))}
               </div>
             </div>

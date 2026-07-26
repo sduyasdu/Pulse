@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { PresenceBar } from "@/components/presence/PresenceBar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { todayIndex } from "@/domain/dateUtils";
-import type { Pulse, PulseRole } from "@/types";
+import type { Feature, Pulse, PulseRole } from "@/types";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -18,6 +18,8 @@ import { MobileBoard } from "@/components/mobile/MobileBoard";
 interface MobilePulseViewProps {
   pulse: Pulse | null;
   canEdit: boolean;
+  /** Per-feature edit gate (Task Lead edits only tasks they lead). */
+  canEditFeature: (f: Feature) => boolean;
   myRole: PulseRole;
   uid: string;
 }
@@ -30,7 +32,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "capacity", label: "Capacity", icon: "bar_chart" },
 ];
 
-export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseViewProps) {
+export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }: MobilePulseViewProps) {
   const features = usePulseStore((s) => s.features);
   const epics = usePulseStore((s) => s.epics);
   const resources = usePulseStore((s) => s.resources);
@@ -151,7 +153,7 @@ export function MobilePulseView({ pulse, canEdit, myRole, uid }: MobilePulseView
           <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             <DetailsTab
               feature={selected}
-              canEdit={canEdit}
+              canEdit={canEditFeature(selected)}
               onClose={() => setSelectedId(null)}
               onDuplicate={async () => {
                 const newId = await duplicateFeature(selected.id);

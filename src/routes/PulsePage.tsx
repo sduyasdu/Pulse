@@ -11,7 +11,8 @@ import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
-import { roleMeta } from "@/domain/permissions";
+import { roleMeta, capsOf } from "@/domain/permissions";
+import type { Feature } from "@/types";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { KanbanView } from "@/components/kanban/KanbanView";
@@ -93,7 +94,16 @@ export function PulsePage() {
 
   const uid = firebaseUser?.uid;
   const myRole = uid ? roleOf(uid) : null;
-  const canEdit = myRole === "owner" || myRole === "editor";
+  // Capability-based editing: `canEdit` is Pulse-wide edit (editScope 'all' =
+  // owner/editor). A Task Lead (editScope 'lead') can't add/config, but can edit
+  // the tasks they lead — `canEditFeature` gates those per-feature.
+  const myMember = uid ? members.find((m) => m.uid === uid) : undefined;
+  const editScope = myMember ? capsOf(myMember).editScope : "none";
+  const canEdit = editScope === "all";
+  const canEditFeature = useCallback(
+    (f: Feature | null | undefined) => !!f && (editScope === "all" || (editScope === "lead" && !!uid && (f.leadUid ?? null) === uid)),
+    [editScope, uid],
+  );
 
   // "My Pulse": the resource(s) linked to my account, and the active filter to
   // only tasks I'm involved in (null when off or when I'm not linked).
@@ -287,7 +297,7 @@ export function PulsePage() {
 
   // Phones get the dedicated touch UI; the canvas layout below is desktop/tablet.
   if (isMobile) {
-    return <MobilePulseView pulse={pulse} canEdit={canEdit} myRole={myRole} uid={uid!} />;
+    return <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} />;
   }
 
   return (
@@ -376,7 +386,7 @@ export function PulsePage() {
               ) : (
                 <DetailsTab
                   feature={selectedFeature}
-                  canEdit={canEdit}
+                  canEdit={canEditFeature(selectedFeature)}
                   hideComments
                   onClose={() => handleSelect(null)}
                   onDuplicate={async () => {
@@ -393,6 +403,7 @@ export function PulsePage() {
               selectedId={selectedId}
               onSelect={handleSelect}
               canEdit={canEdit}
+              canEditFeature={canEditFeature}
               featureQuery={featureQuery}
               featureStatusFilter={featureStatusFilter}
               epicFilter={epicFilter}
@@ -421,6 +432,7 @@ export function PulsePage() {
               myResourceIds={myResourceFilter}
               referenceDay={referenceDay}
               canEdit={canEdit}
+              canEditFeature={canEditFeature}
               onTimelineBoundsChange={setTimelineBounds}
             />
           )}

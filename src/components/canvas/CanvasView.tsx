@@ -71,13 +71,16 @@ interface CanvasViewProps {
    * defaults to today). */
   referenceDay: number;
   canEdit: boolean;
+  /** Per-feature edit gate (Task Lead can edit only tasks they lead); `canEdit`
+   * stays the Pulse-wide gate for adding/epics. */
+  canEditFeature: (f: Feature) => boolean;
   onTimelineBoundsChange?: (bounds: { startDay: number; endDay: number; dayWidth: number }) => void;
 }
 
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, referenceDay, canEdit, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -505,7 +508,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     // (to inspect / reopen) but not moved or resized.
     e.stopPropagation();
     onSelect(box.id);
-    if (!canEdit || box.status === "done") return;
+    if (!canEditFeature(box) || box.status === "done") return;
     setDragId(box.id);
     dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
     window.addEventListener("pointermove", handleDragMove);
@@ -544,8 +547,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       resolved = true;
       remove();
       setHoverCard(null);
-      // Drag = move the task (locked/done tasks and viewers can't move).
-      if (canEdit && box.status !== "done") {
+      // Drag = move the task (locked/done tasks and non-editors can't move).
+      if (canEditFeature(box) && box.status !== "done") {
         onSelect(box.id);
         setDragId(box.id);
         dragRef.current = { kind: "move", id: box.id, startX, startY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
@@ -884,7 +887,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   onDrop={(e) => {
                     e.preventDefault();
                     const rid = e.dataTransfer.getData("text/plain");
-                    if (rid && canEdit && box.status !== "done") void usePulseStore.getState().assignResource(box.id, rid);
+                    if (rid && canEditFeature(box) && box.status !== "done") void usePulseStore.getState().assignResource(box.id, rid);
                     setDragOverBoxId(null);
                     // Deliberately doesn't call onSelect() here — assigning
                     // a resource by drag-and-drop shouldn't switch the left
@@ -983,7 +986,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       })}
                     </div>
                   )}
-                  {canEdit && box.status !== "done" && (
+                  {canEditFeature(box) && box.status !== "done" && (
                     <>
                       <div onPointerDown={(e) => startDrag("resize-left", box, e)} style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
                       <div onPointerDown={(e) => startDrag("resize-right", box, e)} style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
