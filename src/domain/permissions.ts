@@ -61,14 +61,14 @@ export function roleMeta(role: PulseRole): RoleMeta {
 }
 
 /**
- * Roles the assign-role / invite pickers offer. `taskLead` is enforced in
- * firestore.rules (Permissions-Spec §4.4) and offered here; `myBeatViewer` (a
- * read restriction) is added when its rules enforcement ships (phase 4). The
- * stored value for read-only stays the legacy `"viewer"` (rules-compatible) but
- * is labelled "Full Viewer".
+ * Roles the assign-role / invite pickers offer. `taskLead` and `myBeatViewer`
+ * are enforced in firestore.rules (Permissions-Spec §4.3–4.4). Both scoped roles
+ * need the member linked to a resource. The stored value for read-only stays the
+ * legacy `"viewer"` (rules-compatible) but is labelled "Full Viewer".
  */
 export const ASSIGNABLE_ROLES: { value: PulseRole; label: string; hint: string }[] = [
   { value: "editor", label: "Editor", hint: "Edits everything" },
   { value: "taskLead", label: "Task Lead", hint: "Edits only tasks they lead; needs a linked resource" },
+  { value: "myBeatViewer", label: "My-Beat Viewer", hint: "Sees only tasks their linked resource is on" },
   { value: "viewer", label: "Full Viewer", hint: "Reads & comments" },
 ];

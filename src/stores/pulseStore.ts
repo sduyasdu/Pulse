@@ -12,7 +12,7 @@ import {
   makeInitials,
 } from "@/services/firestore/resources";
 import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes, updatePulseStatuses } from "@/services/firestore/pulses";
-import { subscribePulseMembers } from "@/services/firestore/memberships";
+import { subscribePulseMembers, fetchMembership } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
 import { featureDenorm, denormMatches } from "@/domain/denorm";
@@ -137,7 +137,6 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         maybeFinishLoading();
       }),
       subscribeEpics(pulseId, (epics) => set({ epics })),
-      subscribeFeatures(pulseId, (features) => { set({ features }); reconcileDenorms(get); }),
       subscribeResources(pulseId, (resources) => { set({ resources }); reconcileDenorms(get); }),
       subscribePulseMembers(pulseId, (members) => {
         membersArrived = true;
@@ -146,7 +145,21 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         reconcileDenorms(get);
       }),
     ];
-    return () => unsubs.forEach((u) => u());
+    // Features are scoped for a My-Beat Viewer (Permissions-Spec §4.3): the rules
+    // require the array-contains query, so resolve the caller's own read scope
+    // (their membership doc is always self-readable) before subscribing.
+    let featuresUnsub = () => {};
+    const uid = useAuthStore.getState().firebaseUser?.uid;
+    void (async () => {
+      let beatUid: string | undefined;
+      if (uid) {
+        const me = await fetchMembership(pulseId, uid).catch(() => null);
+        if (me && capsOf(me).readScope === "beat") beatUid = uid;
+      }
+      if (get().pulseId !== pulseId) return; // a newer load() superseded this one
+      featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileDenorms(get); }, beatUid);
+    })();
+    return () => { unsubs.forEach((u) => u()); featuresUnsub(); };
   },
 
   roleOf: (uid) => get().members.find((m) => m.uid === uid)?.role ?? null,

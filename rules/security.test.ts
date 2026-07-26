@@ -16,8 +16,10 @@ import {
   type Firestore,
   getDoc,
   getDocs,
+  query,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 
@@ -214,6 +216,49 @@ describe("granular roles (Permissions-Spec §4)", () => {
     await assertSucceeds(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { photoURL: "data:img" }));
     await assertFails(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { caps: { ...leadCaps, editScope: "all" } }));
     await assertFails(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { role: "editor" }));
+  });
+
+  const beatCaps = { readScope: "beat", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false };
+
+  async function seedBeatFixture() {
+    await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "owner" } });
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "mo"), { uid: "mo", email: "mo@example.com", role: "myBeatViewer", joinedAt: Date.now(), caps: beatCaps });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_mine"), { title: "mine", x: 0, y: 0, duration: 1, status: "planned", resources: [], assignedUids: ["mo"], leadUid: null });
+      await setDoc(doc(db, "pulses", "p1", "features", "f_not"), { title: "not", x: 0, y: 0, duration: 1, status: "planned", resources: [], assignedUids: ["zed"], leadUid: null });
+    });
+  }
+
+  it("My-Beat Viewer reads a feature they're assigned to, not one they aren't", async () => {
+    await seedBeatFixture();
+    const mo = dbAs("mo", "mo@example.com");
+    await assertSucceeds(getDoc(doc(mo, "pulses", "p1", "features", "f_mine")));
+    await assertFails(getDoc(doc(mo, "pulses", "p1", "features", "f_not")));
+  });
+
+  it("My-Beat Viewer's array-contains query succeeds; an unconstrained list is rejected", async () => {
+    await seedBeatFixture();
+    const mo = dbAs("mo", "mo@example.com");
+    await assertSucceeds(getDocs(query(collection(mo, "pulses", "p1", "features"), where("assignedUids", "array-contains", "mo"))));
+    await assertFails(getDocs(collection(mo, "pulses", "p1", "features")));
+  });
+
+  it("My-Beat Viewer cannot write features", async () => {
+    await seedBeatFixture();
+    const mo = dbAs("mo", "mo@example.com");
+    await assertFails(updateDoc(doc(mo, "pulses", "p1", "features", "f_mine"), { title: "hax" }));
+  });
+
+  it("a full viewer (legacy, no caps) can list all features", async () => {
+    await seedPulse("p1", "alice", {
+      alice: { email: "alice@example.com", role: "owner" },
+      viv: { email: "viv@example.com", role: "viewer" },
+    });
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "features", "f1"), { title: "x", x: 0, y: 0, duration: 1, status: "planned", resources: [] });
+    });
+    const viv = dbAs("viv", "viv@example.com");
+    await assertSucceeds(getDocs(collection(viv, "pulses", "p1", "features")));
   });
 });
 
