@@ -109,11 +109,6 @@ export function Toolbar({
   const t = useT();
   const [showGraphSettings, setShowGraphSettings] = useState(false);
   const [name, onNameChange] = useDebouncedText(pulseName, onRenamePulse, 600);
-  const densityHint: Record<Density, string> = {
-    day: t("toolbar.densityHintDay"),
-    week: t("toolbar.densityHintWeek"),
-    month: t("toolbar.densityHintMonth"),
-  };
   const densityLabel: Record<Density, string> = {
     day: t("toolbar.densityDay"),
     week: t("toolbar.densityWeek"),
@@ -166,7 +161,6 @@ export function Toolbar({
           ))}
         </div>
         <div className="flex-1" />
-        <span className="mono px-2 py-0.5 rounded hidden md:inline" style={{ fontSize: 10, background: "#1B3A63", color: "#EE7240" }}>{densityHint[density]}</span>
         {canEdit && (
           <div className="relative" style={{ flexShrink: 0 }}>
             <button onClick={() => setShowGraphSettings((v) => !v)} title={t("toolbar.effortScaleTitle")} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>

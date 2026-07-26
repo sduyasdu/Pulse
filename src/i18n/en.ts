@@ -236,9 +236,6 @@ export const en = {
   "toolbar.layout": "Layout",
   "toolbar.layoutTitle": "Compact everything vertically to minimum height",
   "toolbar.comments": "Comments",
-  "toolbar.densityHintDay": "days shown; months banded above",
-  "toolbar.densityHintWeek": "ISO weeks shown; months banded above",
-  "toolbar.densityHintMonth": "months shown; years banded above",
 
   // ── shared filter dropdown ──────────────────────────────────────────────────
   "filter.all": "all {label}",

@@ -232,9 +232,6 @@ export const pt: Dict = {
   "toolbar.layout": "Organizar",
   "toolbar.layoutTitle": "Compactar tudo verticalmente até a altura mínima",
   "toolbar.comments": "Comentários",
-  "toolbar.densityHintDay": "dias exibidos; meses agrupados acima",
-  "toolbar.densityHintWeek": "semanas ISO exibidas; meses agrupados acima",
-  "toolbar.densityHintMonth": "meses exibidos; anos agrupados acima",
 
   // shared filter dropdown
   "filter.all": "todos: {label}",
