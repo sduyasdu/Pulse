@@ -43,6 +43,8 @@ A working HTML/React prototype exists (`Pulse-Prototype.html` in this delivery) 
 
 **Resource** — a team member: `id` (2-3 letter initials, auto-generated and de-duplicated), `name`, `capacity` (occupation limit %, default 100), `type` (freeform category like Dev, QA, Consulting, Devops, Producto — user-manageable list, addable/renameable/deletable).
 
+**Cost** *(planned — see `Costs-Spec.md`)* — what a task costs in money, recorded against the task it belongs to. Deliberately **not** a kind of Resource: a Resource is a person with capacity and assignments, whereas cost is a separate, typed entity, so "AI" is a *cost type* rather than a teammate. A cost type declares what it measures (tokens for AI, hours for people) and which type-specific attributes it carries (AI: brand, model, and the human who used it). Only the **AI** type is in scope for the first phase; costing human utilization from assignments is specified but deferred.
+
 ## 4. The Graph Effort model
 
 This is Pulse's key differentiator vs. a plain Gantt chart: box **height** is a first-class, editable unit of work, not styling.
@@ -75,6 +77,7 @@ This is Pulse's key differentiator vs. a plain Gantt chart: box **height** is a 
 - **Team tab** (left panel): searchable roster, drag-a-chip-onto-a-box to assign (defaults to 100% allocation), click a person to filter the whole canvas + assignment panel down to just their work, per-person utilization bar (peak daily load ÷ capacity limit).
 - **Capacity tab**: per-resource capacity slider/input (occupation limit %), resource-type management (add/rename/delete categories), peak/limit/used stats per person.
 - **Details tab**: full editor for the selected box — title, epic, team leader, subtasks (inline add/edit/delete/reassign/attach), resource list with per-person % allocation slider, the effort panel from §4, status, label color, AI flag, attachments, delete.
+- **Cost view** *(planned — see `Costs-Spec.md` §6)*: an alternate view in the same bottom panel, switched by a segmented control. Rows nest cost type › model › person; columns are day/week/month periods sharing the canvas ruler; a task's money is prorated across its span so spend appears where the work is. A total column sits on the left (all-time, so panning never changes it) and a sticky total row at the bottom.
 - **Assignment-by-resource panel** (bottom, full width, resizable via drag handle, time-aligned with the main canvas ruler): one row per person showing their assignment bars (stacked into lanes when overlapping) plus a per-period (day/week/month) allocation-% strip color-coded green/amber/red. Filters: by resource, by status, under-allocated (<70%) / over-allocated (>100%) toggle, hide-idle toggle, and a compact mode that collapses each row to just a % bar.
 
 ## 7. Branding

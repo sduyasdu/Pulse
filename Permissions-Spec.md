@@ -376,6 +376,7 @@ index. The clean case.
 | `features` write | `canEditPulse` | §4.4 (scope-aware) |
 | `pulses.update` (`:117`) | `canEditPulse` (+invite guard) | split by `affectedKeys()`: pure `invite` change ⇒ `myCaps(p).invite`; else ⇒ `myCaps(p).editConfig` (keep the "links can't grant owner" role allow-list) |
 | `comments` create (`:206`) | `isPulseMember` | `isPulseMember && myCaps(p).comment` (+ read of a comment follows the feature's read gate, §4.3) |
+| `costs` read/write (planned) | — | **inherits the parent feature's gates**, not its own capability: read follows §4.3 (via `scopeUids` on the cost doc), write follows §4.4 (`editScope`, so a Task Lead can log spend on a task they lead). Rate cards / type config follow `editConfig`. See `Costs-Spec.md` §7 — no `editCosts` flag is added to `Capabilities` (CO12). |
 | `comments` update/delete | author / owner | unchanged (author, or `deletePulse` owner-delete) |
 | `joinLinks`/`invites` create | `canEditPulse` | `myCaps(p).invite` |
 | `pulseMembers` update/delete | `isPulseOwner` | `myCaps(p).manageMembers` (+ self carve-out, §4.6) |

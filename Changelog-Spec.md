@@ -86,6 +86,7 @@ Entries are grouped by `entityKind`. Each row is one `verb` (§3.2).
 | `member` | `add`, `remove`, `role-change`, `leave` | join-link self-join, `removeMember`, `setMemberRole`/`setMemberCaps`, self-delete | These are the security-relevant ones. `add` fires when a join-link self-join creates a `pulseMembers` doc; `leave` when a member self-deletes. |
 | `invite` | `link-created`, `link-revoked` | `setInviteLink`/clearing `Pulse.invite` | The copy-link (`Pulse.invite`) is created/revoked; no per-email invites (retired). |
 | `pulse` | `rename`, `config`, `transfer` | `renamePulse`/`setStatuses`·`setResourceTypes`·`setGraphConfig`/ownership transfer | `config` = statuses/resourceTypes/graphConfig; `transfer` = "Make owner". |
+| `cost` | `create`, `delete`, `edit` | `addCost`/`removeCost`/`patchCost` (`Costs-Spec.md`) | **Planned, not built** — arrives with the cost layer. `entityName` is the name-at-time (`"claude-opus-5 · $412"`); `scopeUids` mirrors the parent feature's so beat viewers see only costs on their own tasks. Money changing on a task is exactly what people need to reconstruct later. |
 
 ### 2.2 Granularity — one entry per *logical action*, not per write
 

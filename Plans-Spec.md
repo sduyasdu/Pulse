@@ -61,9 +61,16 @@ Candidate gated features (PL2 — confirm the split):
 | `teams` — workspaces with >1 member | ✗ | ✗ | ✓ |
 | `advancedCaps` — custom capability toggles (Permissions §5 Advanced) | ✗ | ✓ | ✓ |
 | (future) integrations / export / API | ✗ | — | ✓ |
+| (candidate) `costs` — the cost layer (`Costs-Spec.md`) | ? | ? | ? |
 
 Coarse roles (owner/editor/full-viewer) and commenting stay on **every** tier so
 downgrades never lock people out of basic collaboration.
+
+**Cost tracking (`Costs-Spec.md`) is listed as a candidate, not a decision** — whether
+it's gated at all, and whether as a flag or a quota (entries per Pulse), is open and
+belongs to PL2/PL3. If it is gated, note that §5's downgrade rule matters more here
+than elsewhere: recorded spend is *history*, so a lapse must hide or freeze the view,
+never drop entries.
 
 ### 3.2 Quotas (numeric limits)
 
