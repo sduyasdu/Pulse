@@ -11,7 +11,7 @@ import { usePulseStore } from "@/stores/pulseStore";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { RES_LABEL_W, type Density } from "@/domain/constants";
 import { COST_TYPES, modelsUsed } from "@/domain/costTypes";
-import { buildCostTree, flattenTree, fmtMoney, type CostNode } from "@/domain/costs";
+import { buildCostTree, expandableKeys, flattenTree, fmtMoney, type CostNode } from "@/domain/costs";
 import type { Feature } from "@/types";
 import { useT } from "@/i18n";
 
@@ -46,9 +46,13 @@ export function CostPanel({
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["type:ai"]));
+  // Nothing is expanded to begin with: the panel opens on the top grouping
+  // (one row per cost type) and you drill down from there.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [modelFilter, setModelFilter] = useState<Set<string>>(new Set());
   const [peopleFilter, setPeopleFilter] = useState<Set<string>>(new Set());
+  /** Which dimension sits at level 2; the other one falls to level 3. */
+  const [dimension, setDimension] = useState<"model" | "resourceId">("model");
 
   const xForDay = (day: number) => offsetX + day * dayWidth;
   const periods = useMemo(() => buildPeriods(density, startDay, endDay), [density, startDay, endDay]);
@@ -84,12 +88,24 @@ export function CostPanel({
           return value;
         },
         typeLabel: (type) => t(type.label as Parameters<typeof t>[0]),
+        // Swap which dimension nests first; anything the type declares beyond
+        // these two keeps its declared position.
+        groupByFor: (type) => {
+          const declared = type.groupBy ?? [];
+          const swappable = declared.filter((a) => a === "model" || a === "resourceId");
+          if (swappable.length < 2) return declared;
+          const first = dimension;
+          const second = dimension === "model" ? "resourceId" : "model";
+          return [first, second, ...declared.filter((a) => a !== "model" && a !== "resourceId")];
+        },
       }),
-    [visible, featureById, periods, resources, t],
+    [visible, featureById, periods, resources, t, dimension],
   );
 
   const rows = useMemo(() => flattenTree(roots, expanded), [roots, expanded]);
   const inView = grand.cells.reduce((a, b) => a + b, 0);
+  const allKeys = useMemo(() => expandableKeys(roots), [roots]);
+  const allOpen = allKeys.length > 0 && allKeys.every((k) => expanded.has(k));
 
   const toggle = (key: string) =>
     setExpanded((prev) => {
@@ -126,6 +142,32 @@ export function CostPanel({
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Which dimension nests first — model › person, or person › model. */}
+          <div className="flex rounded overflow-hidden flex-shrink-0" style={{ border: "1px solid #E2DFD9" }} title={t("cost.groupByTitle")}>
+            {([
+              { id: "model" as const, label: t("cost.byModel") },
+              { id: "resourceId" as const, label: t("cost.byPerson") },
+            ]).map((o) => (
+              <button
+                key={o.id}
+                onClick={() => setDimension(o.id)}
+                className="mono text-xs px-2 py-1"
+                style={{ background: dimension === o.id ? "#123359" : "#FFFFFF", color: dimension === o.id ? "#FFFFFF" : "#64748B", fontWeight: 600 }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setExpanded(allOpen ? new Set() : new Set(allKeys))}
+            disabled={allKeys.length === 0}
+            className="mono text-xs px-2 py-1 rounded border flex items-center gap-1"
+            style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#64748B", opacity: allKeys.length === 0 ? 0.45 : 1 }}
+            title={allOpen ? t("cost.collapseAll") : t("cost.expandAll")}
+          >
+            <Icon name={allOpen ? "collapse_all" : "expand_all"} size={12} />
+            {allOpen ? t("cost.collapseAll") : t("cost.expandAll")}
+          </button>
           <span className="mono text-xs" style={{ color: "#78859A" }}>filter:</span>
           <MultiSelectFilter
             label={t("cost.filterModels")}
@@ -198,13 +240,25 @@ export function CostPanel({
           return (
             <div key={node.key} className="flex items-stretch border-b" style={{ borderColor: "#F5F6F8" }}>
               <div
+                onClick={hasKids ? () => toggle(node.key) : undefined}
                 className="flex items-center gap-1.5 py-1.5"
                 title={hasBefore || hasAfter ? outsideTip(node) : undefined}
-                style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", overflow: "hidden", paddingLeft: 8 + node.level * 14, paddingRight: 8 }}
+                style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #F1F5F9", overflow: "hidden", paddingLeft: 8 + node.level * 14, paddingRight: 8, cursor: hasKids ? "pointer" : undefined }}
               >
                 {hasKids ? (
-                  <button onClick={() => toggle(node.key)} className="no-press" style={{ color: "#94A3B8", display: "flex", flexShrink: 0 }} aria-label={node.label}>
-                    <Icon name={open ? "expand_more" : "chevron_right"} size={14} />
+                  // NB: "expand_more" is not in icons.ts and Icon renders null
+                  // for an unknown name — using it here left an empty, unclickable
+                  // button, so an expanded row could never be closed.
+                  <button
+                    // The whole label row toggles too, so stop the bubble —
+                    // otherwise a chevron click would fire twice and no-op.
+                    onClick={(e) => { e.stopPropagation(); toggle(node.key); }}
+                    className="no-press"
+                    style={{ color: "#94A3B8", display: "flex", flexShrink: 0 }}
+                    aria-label={node.label}
+                    aria-expanded={open}
+                  >
+                    <Icon name={open ? "keyboard_arrow_down" : "chevron_right"} size={14} />
                   </button>
                 ) : (
                   <span style={{ width: node.level === 0 ? 14 : 8, flexShrink: 0 }} />

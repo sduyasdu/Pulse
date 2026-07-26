@@ -79,6 +79,11 @@ export const it: Dict = {
   "cost.headerTotal": "{total} in totale · {inView} in vista",
   "cost.filterModels": "modelli",
   "cost.filterPeople": "persone",
+  "cost.byModel": "per modello",
+  "cost.byPerson": "per persona",
+  "cost.groupByTitle": "Scegli per quale dimensione suddividere i costi per prima",
+  "cost.expandAll": "espandi tutto",
+  "cost.collapseAll": "comprimi tutto",
 
   // mobile list / board
   "mobile.noTasks": "Ancora nessuna attività. Tocca il pulsante + per aggiungerne una.",

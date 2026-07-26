@@ -79,6 +79,11 @@ export const es: Dict = {
   "cost.headerTotal": "{total} en total · {inView} a la vista",
   "cost.filterModels": "modelos",
   "cost.filterPeople": "personas",
+  "cost.byModel": "por modelo",
+  "cost.byPerson": "por persona",
+  "cost.groupByTitle": "Elegí por qué dimensión desglosar los costos primero",
+  "cost.expandAll": "expandir todo",
+  "cost.collapseAll": "contraer todo",
 
   // mobile list / board
   "mobile.noTasks": "Todavía no hay tareas. Tocá el botón + para agregar una.",

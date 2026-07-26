@@ -83,6 +83,11 @@ export const en = {
   "cost.headerTotal": "{total} total · {inView} in view",
   "cost.filterModels": "models",
   "cost.filterPeople": "people",
+  "cost.byModel": "by model",
+  "cost.byPerson": "by person",
+  "cost.groupByTitle": "Choose which dimension to break costs down by first",
+  "cost.expandAll": "expand all",
+  "cost.collapseAll": "collapse all",
 
   // ── mobile list / board ─────────────────────────────────────────────────────
   "mobile.noTasks": "No tasks yet. Tap the + button to add one.",

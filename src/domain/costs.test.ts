@@ -5,6 +5,8 @@ import {
   bucketEntries,
   buildCostTree,
   dollarsToMicros,
+  expandableKeys,
+  flattenTree,
   fmtMoney,
   fmtQuantity,
   prorateToDays,
@@ -190,6 +192,36 @@ describe("row tree (spec §6)", () => {
     });
     expect(roots[0].children[0].children[0].label).toBe("unattributed");
     expect(roots[0].bucket.total).toBe(412 * MICROS);
+  });
+
+  it("swaps which dimension nests first when the view asks for it", () => {
+    const entries = [
+      entry({ id: "a", amountMicros: 100 * MICROS, attrs: { model: "opus", resourceId: "r1" } }),
+      entry({ id: "b", amountMicros: 300 * MICROS, attrs: { model: "gpt", resourceId: "r1" } }),
+    ];
+    const common = { entries, featureById: byId(f), types: [AI_COST_TYPE], periods, labelFor, typeLabel: () => "AI" };
+
+    const byModel = buildCostTree(common).roots[0];
+    expect(byModel.children.map((c) => c.label)).toEqual(["gpt", "opus"]);
+
+    // Person first: one person row, both models beneath it.
+    const byPerson = buildCostTree({ ...common, groupByFor: () => ["resourceId", "model"] }).roots[0];
+    expect(byPerson.children.map((c) => c.label)).toEqual(["res:r1"]);
+    expect(byPerson.children[0].children.map((c) => c.label)).toEqual(["gpt", "opus"]);
+    // Same money either way — only the nesting changed.
+    expect(byPerson.bucket.total).toBe(byModel.bucket.total);
+  });
+
+  it("lists every expandable key for expand-all, and no leaves", () => {
+    const entries = [entry({ attrs: { model: "opus", resourceId: "r1" } })];
+    const { roots } = buildCostTree({
+      entries, featureById: byId(f), types: [AI_COST_TYPE], periods, labelFor, typeLabel: () => "AI",
+    });
+    const keys = expandableKeys(roots);
+    // type row + model row; the person row is a leaf.
+    expect(keys).toEqual(["type:ai", "type:ai/model:opus"]);
+    expect(flattenTree(roots, new Set(keys))).toHaveLength(3);
+    expect(flattenTree(roots, new Set())).toHaveLength(1); // collapsed = top grouping only
   });
 
   it("omits a type with no spend", () => {

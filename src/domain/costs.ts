@@ -171,10 +171,14 @@ export interface BuildTreeOptions {
   labelFor: (attrId: string, value: string | null) => string;
   /** Display label for a cost type (i18n). */
   typeLabel: (type: CostTypeDef) => string;
+  /** Overrides the type's declared nesting order, so the view can swap which
+   * dimension is level 2 (model-first vs. person-first). Defaults to
+   * `type.groupBy`. */
+  groupByFor?: (type: CostTypeDef) => string[];
 }
 
 export function buildCostTree(opts: BuildTreeOptions): { roots: CostNode[]; grand: CostBucket } {
-  const { entries, featureById, types, periods, labelFor, typeLabel } = opts;
+  const { entries, featureById, types, periods, labelFor, typeLabel, groupByFor } = opts;
   const typeById = (id: string) => types.find((t) => t.id === id) ?? null;
 
   const build = (rows: CostEntry[], type: CostTypeDef, groupBy: string[], level: number, keyPrefix: string): CostNode[] => {
@@ -214,12 +218,28 @@ export function buildCostTree(opts: BuildTreeOptions): { roots: CostNode[]; gran
         label: typeLabel(type),
         color: type.color,
         bucket: bucketEntries(rows, featureById, typeById, periods),
-        children: build(rows, type, type.groupBy ?? [], 1, `type:${type.id}`),
+        children: build(rows, type, groupByFor?.(type) ?? type.groupBy ?? [], 1, `type:${type.id}`),
       } satisfies CostNode;
     })
     .filter((n) => n.bucket.total !== 0);
 
   return { roots, grand: bucketEntries(entries, featureById, typeById, periods) };
+}
+
+/** Every key that can be expanded — drives "expand all". Leaves are omitted,
+ * so expanding all and then collapsing all round-trips exactly. */
+export function expandableKeys(roots: CostNode[]): string[] {
+  const out: string[] = [];
+  const walk = (nodes: CostNode[]) => {
+    nodes.forEach((n) => {
+      if (n.children.length > 0) {
+        out.push(n.key);
+        walk(n.children);
+      }
+    });
+  };
+  walk(roots);
+  return out;
 }
 
 /** Flatten a tree for rendering, honouring which nodes are expanded. */
