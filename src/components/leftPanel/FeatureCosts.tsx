@@ -70,51 +70,64 @@ export function FeatureCosts({ featureId, canEdit }: { featureId: string; canEdi
 
   return (
     <div>
+      {/* The three amounts — grand total, AI subtotal, People subtotal — all sit
+          on the same right edge so they read as one column. The add button moves
+          left, next to the label, rather than competing for that edge. */}
       <div className="flex items-center gap-2 mb-1">
         <div className="mono" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("cost.section")}</div>
-        {total > 0 && (
-          <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#1F2330" }}>{fmtMoney(total)}</span>
-        )}
         {canEdit && (
           <button
             onClick={() => void handleAdd()}
-            className="mono flex items-center gap-1 rounded px-1.5 py-0.5 ml-auto"
+            className="mono flex items-center gap-1 rounded px-1.5 py-0.5"
             style={{ fontSize: 10, background: "#F4F2EC", color: "#64748B" }}
             title={t("cost.addTitle")}
           >
             <Icon name="add" size={12} /> {t("cost.add")}
           </button>
         )}
+        {total > 0 && (
+          <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#1F2330", marginLeft: "auto" }}>{fmtMoney(total)}</span>
+        )}
       </div>
 
-      {costs.length === 0 && people.length === 0 ? (
+      {costs.length === 0 && people.length === 0 && (
         <div className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>{t("cost.none")}</div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {costs.map((c) =>
-            editing === c.id && canEdit ? (
-              <CostForm
-                key={c.id}
-                cost={c}
-                models={models}
-                resources={resources.map((r) => ({ id: r.id, name: r.name }))}
-                onDone={() => setEditing(null)}
-                onChange={(patch) => void patchCost(c.id, patch)}
-              />
-            ) : (
-              <CostRow
-                key={c.id}
-                cost={c}
-                canEdit={canEdit}
-                onEdit={() => setEditing(c.id)}
-                onDelete={async (e) => {
-                  if (await confirmAt(e, { message: t("cost.deleteConfirm"), confirmLabel: t("common.delete") })) {
-                    void removeCost(c.id);
-                  }
-                }}
-              />
-            ),
-          )}
+      )}
+
+      {costs.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="mono" style={{ fontSize: 9, color: AI_COST_TYPE.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              {t("cost.type.ai")}
+            </span>
+            <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#1F2330", marginLeft: "auto" }}>{fmtMoney(aiTotal)}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {costs.map((c) =>
+              editing === c.id && canEdit ? (
+                <CostForm
+                  key={c.id}
+                  cost={c}
+                  models={models}
+                  resources={resources.map((r) => ({ id: r.id, name: r.name }))}
+                  onDone={() => setEditing(null)}
+                  onChange={(patch) => void patchCost(c.id, patch)}
+                />
+              ) : (
+                <CostRow
+                  key={c.id}
+                  cost={c}
+                  canEdit={canEdit}
+                  onEdit={() => setEditing(c.id)}
+                  onDelete={async (e) => {
+                    if (await confirmAt(e, { message: t("cost.deleteConfirm"), confirmLabel: t("common.delete") })) {
+                      void removeCost(c.id);
+                    }
+                  }}
+                />
+              ),
+            )}
+          </div>
         </div>
       )}
 
