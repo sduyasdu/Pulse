@@ -244,6 +244,31 @@ describe("row tree (spec §6)", () => {
     expect(tokens.bucket.cells.reduce((a, b) => a + b, 0) + tokens.bucket.before + tokens.bucket.after).toBe(600_000);
   });
 
+  it("groups by task, reading featureId off the entry rather than its attrs", () => {
+    const f2 = feature({ id: "f2", useWeekends: true });
+    const entries = [
+      entry({ id: "a", featureId: "f1", amountMicros: 100 * MICROS, attrs: { model: "opus" } }),
+      entry({ id: "b", featureId: "f2", amountMicros: 300 * MICROS, attrs: { model: "opus" } }),
+      entry({ id: "c", featureId: "f2", amountMicros: 50 * MICROS, attrs: { model: "gpt" } }),
+    ];
+    const { roots } = buildCostTree({
+      entries,
+      featureById: { f1: f, f2: f2 },
+      types: [AI_COST_TYPE],
+      periods,
+      labelFor: (attrId, value) => (value == null ? "unattributed" : attrId === "featureId" ? `task:${value}` : value),
+      typeLabel: () => "AI",
+      groupByFor: () => ["featureId", "model", "resourceId"],
+    });
+
+    // f2 ($350) outranks f1 ($100), and each task drills into its models.
+    expect(roots[0].children.map((c) => c.label)).toEqual(["task:f2", "task:f1"]);
+    expect(roots[0].children[0].children.map((c) => c.label)).toEqual(["opus", "gpt"]);
+    expect(roots[0].children[0].bucket.total).toBe(350 * MICROS);
+    // The pivot only regroups: the type total is the same whichever way you slice.
+    expect(roots[0].bucket.total).toBe(450 * MICROS);
+  });
+
   it("omits a type with no spend", () => {
     const { roots } = buildCostTree({
       entries: [],

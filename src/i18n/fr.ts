@@ -81,6 +81,7 @@ export const fr: Dict = {
   "cost.filterPeople": "personnes",
   "cost.byModel": "par modèle",
   "cost.byPerson": "par personne",
+  "cost.byTask": "par tâche",
   "cost.groupByTitle": "Choisir la dimension par laquelle ventiler les coûts en premier",
   "cost.expandAll": "tout déplier",
   "cost.collapseAll": "tout replier",

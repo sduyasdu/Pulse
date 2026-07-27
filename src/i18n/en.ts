@@ -85,6 +85,7 @@ export const en = {
   "cost.filterPeople": "people",
   "cost.byModel": "by model",
   "cost.byPerson": "by person",
+  "cost.byTask": "by task",
   "cost.groupByTitle": "Choose which dimension to break costs down by first",
   "cost.expandAll": "expand all",
   "cost.collapseAll": "collapse all",

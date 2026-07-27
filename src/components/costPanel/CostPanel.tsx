@@ -30,6 +30,13 @@ interface CostPanelProps {
   viewSwitch?: React.ReactNode;
 }
 
+/** The dimensions a cost can be broken down by, in canonical order. The toggle
+ * chooses which one sits directly under the cost type; the rest keep this
+ * order beneath it, so every pivot is predictable. `featureId` is a field on
+ * the entry rather than a type attribute (see buildCostTree). */
+type Dimension = "model" | "resourceId" | "featureId";
+const DIMENSIONS: Dimension[] = ["model", "resourceId", "featureId"];
+
 /** Width of the all-time total, carved out of the label column so `labelWidth`
  * stays the panel's single shared origin with the canvas (spec §6.1 / CO10). */
 const TOTAL_W = 92;
@@ -51,8 +58,9 @@ export function CostPanel({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [modelFilter, setModelFilter] = useState<Set<string>>(new Set());
   const [peopleFilter, setPeopleFilter] = useState<Set<string>>(new Set());
-  /** Which dimension sits at level 2; the other one falls to level 3. */
-  const [dimension, setDimension] = useState<"model" | "resourceId">("model");
+  /** Which dimension sits at level 2; the others follow beneath it in the
+   * canonical order below. */
+  const [dimension, setDimension] = useState<Dimension>("model");
   /** Read the same buckets as money or as raw quantity (tokens). */
   const [unit, setUnit] = useState<"usd" | "tokens">("usd");
 
@@ -87,18 +95,16 @@ export function CostPanel({
         labelFor: (attrId, value) => {
           if (value == null) return t("cost.unattributed");
           if (attrId === "resourceId") return resources.find((r) => r.id === value)?.name ?? value;
+          if (attrId === "featureId") return featureById[value]?.title?.trim() || t("common.untitledTask");
           return value;
         },
         typeLabel: (type) => t(type.label as Parameters<typeof t>[0]),
-        // Swap which dimension nests first; anything the type declares beyond
-        // these two keeps its declared position.
+        // The chosen dimension leads; the others follow in canonical order.
+        // Anything the type declares outside DIMENSIONS keeps its position.
         groupByFor: (type) => {
           const declared = type.groupBy ?? [];
-          const swappable = declared.filter((a) => a === "model" || a === "resourceId");
-          if (swappable.length < 2) return declared;
-          const first = dimension;
-          const second = dimension === "model" ? "resourceId" : "model";
-          return [first, second, ...declared.filter((a) => a !== "model" && a !== "resourceId")];
+          const extra = declared.filter((a) => !DIMENSIONS.includes(a as Dimension));
+          return [dimension, ...DIMENSIONS.filter((d) => d !== dimension), ...extra];
         },
         readValue: unit === "usd" ? amountOf : quantityOf,
       }),
@@ -172,6 +178,7 @@ export function CostPanel({
             {([
               { id: "model" as const, label: t("cost.byModel") },
               { id: "resourceId" as const, label: t("cost.byPerson") },
+              { id: "featureId" as const, label: t("cost.byTask") },
             ]).map((o) => (
               <button
                 key={o.id}

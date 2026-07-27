@@ -200,7 +200,10 @@ export function buildCostTree(opts: BuildTreeOptions): { roots: CostNode[]; gran
     const [attrId, ...rest] = groupBy;
     const groups = new Map<string, CostEntry[]>();
     rows.forEach((e) => {
-      const raw = e.attrs?.[attrId] ?? null;
+      // `featureId` is a first-class field on the entry, not a type attribute,
+      // but it is a legitimate dimension to group by — the view offers it
+      // alongside the type's own attributes.
+      const raw = attrId === "featureId" ? e.featureId : e.attrs?.[attrId] ?? null;
       const key = raw ?? "";
       const list = groups.get(key);
       if (list) list.push(e);
