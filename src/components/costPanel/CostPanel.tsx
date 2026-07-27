@@ -161,7 +161,7 @@ export function CostPanel({
                 key={o.id}
                 onClick={() => setUnit(o.id)}
                 className="mono text-xs px-2 py-1"
-                style={{ background: unit === o.id ? "#8B5CF6" : "#FFFFFF", color: unit === o.id ? "#FFFFFF" : "#64748B", fontWeight: 600 }}
+                style={{ background: unit === o.id ? "#123359" : "#FFFFFF", color: unit === o.id ? "#FFFFFF" : "#64748B", fontWeight: 600 }}
               >
                 {o.label}
               </button>
