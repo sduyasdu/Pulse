@@ -85,6 +85,8 @@ export const fr: Dict = {
   "cost.groupByTitle": "Choisir la dimension par laquelle ventiler les coûts en premier",
   "cost.expandAll": "tout déplier",
   "cost.collapseAll": "tout replier",
+  "cost.derived": "calculé",
+  "cost.peopleNote": "Depuis affectation × heures × taux. Modifiez l'affectation, ou le taux dans l'onglet Capacité.",
   "cost.type.people": "Personnes",
   "cost.measure.hours": "Heures",
   "cost.unit.hours": "h",

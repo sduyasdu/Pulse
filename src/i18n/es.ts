@@ -85,6 +85,8 @@ export const es: Dict = {
   "cost.groupByTitle": "Elegí por qué dimensión desglosar los costos primero",
   "cost.expandAll": "expandir todo",
   "cost.collapseAll": "contraer todo",
+  "cost.derived": "derivado",
+  "cost.peopleNote": "De asignación × horas × tarifa. Cambiá la asignación, o la tarifa en la pestaña Capacidad.",
   "cost.type.people": "Personas",
   "cost.measure.hours": "Horas",
   "cost.unit.hours": "h",

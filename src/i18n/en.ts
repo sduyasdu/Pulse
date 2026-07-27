@@ -89,6 +89,8 @@ export const en = {
   "cost.groupByTitle": "Choose which dimension to break costs down by first",
   "cost.expandAll": "expand all",
   "cost.collapseAll": "collapse all",
+  "cost.derived": "derived",
+  "cost.peopleNote": "From assignment × hours × rate. Change the assignment, or the rate in the Capacity tab.",
   "cost.type.people": "People",
   "cost.measure.hours": "Hours",
   "cost.unit.hours": "h",

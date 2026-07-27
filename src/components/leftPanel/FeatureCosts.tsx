@@ -6,8 +6,10 @@ import { Icon } from "@/components/shared/Icon";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { usePulseStore } from "@/stores/pulseStore";
 import { confirmAt } from "@/stores/confirmStore";
-import { AI_COST_TYPE, costTypeById, modelsUsed } from "@/domain/costTypes";
-import { amountOf, dollarsToMicros, fmtMoney, fmtQuantity, microsToDollars, unitCostOf } from "@/domain/costs";
+import { AI_COST_TYPE, DEFAULT_HOURS_PER_DAY, PEOPLE_COST_TYPE, costTypeById, modelsUsed } from "@/domain/costTypes";
+import { amountOf, dollarsToMicros, fmtMoney, fmtQuantity, microsToDollars, peopleCostRows, resourcesMissingRate, unitCostOf } from "@/domain/costs";
+import { canViewPeopleCost } from "@/domain/permissions";
+import { useAuthStore } from "@/stores/authStore";
 import type { CostEntry } from "@/types";
 import { useT } from "@/i18n";
 
@@ -27,7 +29,34 @@ export function FeatureCosts({ featureId, canEdit }: { featureId: string; canEdi
 
   const costs = useMemo(() => allCosts.filter((c) => c.featureId === featureId), [allCosts, featureId]);
   const models = useMemo(() => modelsUsed(allCosts), [allCosts]);
-  const total = costs.reduce((sum, c) => sum + amountOf(c, costTypeById(c.typeId)), 0);
+
+  // People cost for this task — derived from the assignment, never stored
+  // (Costs-Spec CO13), and admin-only: a non-admin holds no rates, so these lists
+  // come back empty rather than being hidden after the fact (§8.7).
+  const features = usePulseStore((s) => s.features);
+  const rates = usePulseStore((s) => s.rates);
+  const members = usePulseStore((s) => s.members);
+  const pulse = usePulseStore((s) => s.pulse);
+  const uid = useAuthStore((s) => s.firebaseUser?.uid);
+  const me = uid ? members.find((m) => m.uid === uid) : undefined;
+  const seesPeople = !!me && canViewPeopleCost(me);
+  const feature = features.find((f) => f.id === featureId);
+  // Memoized so the derivation below has a stable dependency (an inline closure
+  // would be rebuilt every render and defeat the memo).
+  const rateOf = useMemo(() => {
+    const byId = new Map(rates.map((r) => [r.resourceId, r.hourlyCost]));
+    return (rid: string) => byId.get(rid) ?? null;
+  }, [rates]);
+  const hoursPerDay = pulse?.hoursPerDay ?? DEFAULT_HOURS_PER_DAY;
+  const people = useMemo(
+    () => (seesPeople && feature ? peopleCostRows([feature], rateOf, hoursPerDay) : []),
+    [seesPeople, feature, rateOf, hoursPerDay],
+  );
+  const missingRates = seesPeople && feature ? resourcesMissingRate([feature], rateOf) : [];
+
+  const aiTotal = costs.reduce((sum, c) => sum + amountOf(c, costTypeById(c.typeId)), 0);
+  const peopleTotal = people.reduce((sum, c) => sum + amountOf(c, PEOPLE_COST_TYPE), 0);
+  const total = aiTotal + peopleTotal;
 
   const handleAdd = async () => {
     const id = await addCost(featureId, {
@@ -43,7 +72,7 @@ export function FeatureCosts({ featureId, canEdit }: { featureId: string; canEdi
     <div>
       <div className="flex items-center gap-2 mb-1">
         <div className="mono" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("cost.section")}</div>
-        {costs.length > 0 && (
+        {total > 0 && (
           <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#1F2330" }}>{fmtMoney(total)}</span>
         )}
         {canEdit && (
@@ -58,7 +87,7 @@ export function FeatureCosts({ featureId, canEdit }: { featureId: string; canEdi
         )}
       </div>
 
-      {costs.length === 0 ? (
+      {costs.length === 0 && people.length === 0 ? (
         <div className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>{t("cost.none")}</div>
       ) : (
         <div className="flex flex-col gap-1">
@@ -86,6 +115,49 @@ export function FeatureCosts({ featureId, canEdit }: { featureId: string; canEdi
               />
             ),
           )}
+        </div>
+      )}
+
+      {/* People cost — read-only here on purpose: it's derived from the
+          assignment and the rate, so it's changed by editing those, not this
+          list (Costs-Spec §8.5). Admins only. */}
+      {people.length > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="mono" style={{ fontSize: 9, color: PEOPLE_COST_TYPE.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              {t("cost.type.people")}
+            </span>
+            <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{t("cost.derived")}</span>
+            <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#1F2330", marginLeft: "auto" }}>{fmtMoney(peopleTotal)}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {people.map((p) => {
+              const rid = p.attrs.resourceId ?? "";
+              const hours = p.quantities.hours ?? 0;
+              const rate = p.unitCosts?.hours ?? 0;
+              return (
+                <div key={p.id} className="flex items-center gap-2 rounded px-2 py-1.5" style={{ background: "#F6FAFB", border: "1px solid #E3EEF1" }}>
+                  <ResourceBadge resourceId={rid} size={16} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs truncate" style={{ color: "#1F2330" }}>
+                      {resources.find((r) => r.id === rid)?.name ?? rid}
+                    </div>
+                    <div className="mono" style={{ fontSize: 9, color: "#64748B" }}>
+                      {fmtQuantity(hours)}{t("cost.unit.hours")} · ${rate}/{t("cost.unit.hours")}
+                    </div>
+                  </div>
+                  <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: "#1F2330" }}>{fmtMoney(p.amountMicros)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mono mt-1" style={{ fontSize: 9, color: "#94A3B8" }}>{t("cost.peopleNote")}</div>
+        </div>
+      )}
+
+      {missingRates.length > 0 && (
+        <div className="mono mt-1.5 rounded px-2 py-1" style={{ fontSize: 9, background: "#FEF3C7", color: "#92400E" }}>
+          {t("cost.missingRates", { count: String(missingRates.length) })}
         </div>
       )}
     </div>
