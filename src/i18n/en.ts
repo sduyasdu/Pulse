@@ -88,6 +88,9 @@ export const en = {
   "cost.groupByTitle": "Choose which dimension to break costs down by first",
   "cost.expandAll": "expand all",
   "cost.collapseAll": "collapse all",
+  "cost.inUsd": "$",
+  "cost.inTokens": "tokens",
+  "cost.unitTitle": "Show costs in dollars or in tokens",
 
   // ── mobile list / board ─────────────────────────────────────────────────────
   "mobile.noTasks": "No tasks yet. Tap the + button to add one.",

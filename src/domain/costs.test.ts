@@ -10,6 +10,7 @@ import {
   fmtMoney,
   fmtQuantity,
   prorateToDays,
+  quantityOf,
   spanOf,
   unitCostOf,
 } from "./costs";
@@ -222,6 +223,25 @@ describe("row tree (spec §6)", () => {
     expect(keys).toEqual(["type:ai", "type:ai/model:opus"]);
     expect(flattenTree(roots, new Set(keys))).toHaveLength(3);
     expect(flattenTree(roots, new Set())).toHaveLength(1); // collapsed = top grouping only
+  });
+
+  it("reads the same tree in tokens when the view asks for quantity", () => {
+    const entries = [
+      entry({ id: "a", amountMicros: 100 * MICROS, quantities: { tokens: 400_000 }, attrs: { model: "opus" } }),
+      entry({ id: "b", amountMicros: 300 * MICROS, quantities: { tokens: 200_000 }, attrs: { model: "gpt" } }),
+    ];
+    const common = { entries, featureById: byId(f), types: [AI_COST_TYPE], periods, labelFor, typeLabel: () => "AI" };
+
+    const money = buildCostTree(common).roots[0];
+    expect(money.bucket.total).toBe(400 * MICROS);
+    expect(money.children.map((c) => c.label)).toEqual(["gpt", "opus"]); // $300 > $100
+
+    const tokens = buildCostTree({ ...common, readValue: quantityOf }).roots[0];
+    expect(tokens.bucket.total).toBe(600_000);
+    // Sorting follows whatever is displayed — opus burned more tokens for less money.
+    expect(tokens.children.map((c) => c.label)).toEqual(["opus", "gpt"]);
+    // Tokens prorate through the same buckets, so cells still sum to the total.
+    expect(tokens.bucket.cells.reduce((a, b) => a + b, 0) + tokens.bucket.before + tokens.bucket.after).toBe(600_000);
   });
 
   it("omits a type with no spend", () => {

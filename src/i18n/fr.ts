@@ -84,6 +84,9 @@ export const fr: Dict = {
   "cost.groupByTitle": "Choisir la dimension par laquelle ventiler les coûts en premier",
   "cost.expandAll": "tout déplier",
   "cost.collapseAll": "tout replier",
+  "cost.inUsd": "$",
+  "cost.inTokens": "jetons",
+  "cost.unitTitle": "Afficher les coûts en dollars ou en jetons",
 
   // mobile list / board
   "mobile.noTasks": "Aucune tâche pour l'instant. Touchez le bouton + pour en ajouter une.",

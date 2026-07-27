@@ -55,6 +55,12 @@ export function spanOf(entry: CostEntry, feature: SpanFeature | null | undefined
   return null;
 }
 
+/** Total quantity on an entry, summed across the type's measures. For AI that's
+ * simply its token count — the view's $/tokens toggle reads this. */
+export function quantityOf(entry: CostEntry, type: CostTypeDef | null): number {
+  return (type?.measures ?? []).reduce((sum, m) => sum + (entry.quantities?.[m.id] ?? 0), 0);
+}
+
 /**
  * Spread an entry's money across the days it covers — Costs-Spec §5.2.
  *
@@ -70,6 +76,9 @@ export function prorateToDays(
   entry: CostEntry,
   feature: SpanFeature | null | undefined,
   type: CostTypeDef | null,
+  /** What to spread. Defaults to the entry's money; the view passes
+   * `quantityOf` when showing tokens instead of dollars. */
+  readValue: (entry: CostEntry, type: CostTypeDef | null) => number = amountOf,
 ): Map<number, number> {
   const out = new Map<number, number>();
   const span = spanOf(entry, feature);
@@ -84,7 +93,7 @@ export function prorateToDays(
   }
   if (days.length === 0) return out;
 
-  const amount = amountOf(entry, type);
+  const amount = readValue(entry, type);
   const base = Math.trunc(amount / days.length);
   let remainder = amount - base * days.length;
   days.forEach((d) => {
@@ -119,10 +128,12 @@ export function bucketEntries(
   featureById: Record<string, SpanFeature | undefined>,
   typeById: (id: string) => CostTypeDef | null,
   periods: Period[],
+  /** Money by default; `quantityOf` when the view is showing tokens. */
+  readValue: (entry: CostEntry, type: CostTypeDef | null) => number = amountOf,
 ): CostBucket {
   const bucket = emptyBucket(periods.length);
   if (periods.length === 0) {
-    bucket.total = entries.reduce((s, e) => s + amountOf(e, typeById(e.typeId)), 0);
+    bucket.total = entries.reduce((s, e) => s + readValue(e, typeById(e.typeId)), 0);
     return bucket;
   }
   const windowStart = periods[0].start;
@@ -130,8 +141,8 @@ export function bucketEntries(
 
   entries.forEach((entry) => {
     const type = typeById(entry.typeId);
-    bucket.total += amountOf(entry, type);
-    prorateToDays(entry, featureById[entry.featureId], type).forEach((micros, day) => {
+    bucket.total += readValue(entry, type);
+    prorateToDays(entry, featureById[entry.featureId], type, readValue).forEach((micros, day) => {
       if (day < windowStart) {
         bucket.before += micros;
         return;
@@ -175,10 +186,13 @@ export interface BuildTreeOptions {
    * dimension is level 2 (model-first vs. person-first). Defaults to
    * `type.groupBy`. */
   groupByFor?: (type: CostTypeDef) => string[];
+  /** What every bucket measures — money (default) or, for the view's toggle,
+   * quantity. Rows sort by whichever is showing. */
+  readValue?: (entry: CostEntry, type: CostTypeDef | null) => number;
 }
 
 export function buildCostTree(opts: BuildTreeOptions): { roots: CostNode[]; grand: CostBucket } {
-  const { entries, featureById, types, periods, labelFor, typeLabel, groupByFor } = opts;
+  const { entries, featureById, types, periods, labelFor, typeLabel, groupByFor, readValue } = opts;
   const typeById = (id: string) => types.find((t) => t.id === id) ?? null;
 
   const build = (rows: CostEntry[], type: CostTypeDef, groupBy: string[], level: number, keyPrefix: string): CostNode[] => {
@@ -201,7 +215,7 @@ export function buildCostTree(opts: BuildTreeOptions): { roots: CostNode[]; gran
           label: labelFor(attrId, value || null),
           resourceId: attr?.kind === "resourceRef" ? value || null : undefined,
           color: type.color,
-          bucket: bucketEntries(groupRows, featureById, typeById, periods),
+          bucket: bucketEntries(groupRows, featureById, typeById, periods, readValue),
           children: build(groupRows, type, rest, level + 1, `${keyPrefix}/${attrId}:${value}`),
         };
         return node;
@@ -217,13 +231,13 @@ export function buildCostTree(opts: BuildTreeOptions): { roots: CostNode[]; gran
         level: 0,
         label: typeLabel(type),
         color: type.color,
-        bucket: bucketEntries(rows, featureById, typeById, periods),
+        bucket: bucketEntries(rows, featureById, typeById, periods, readValue),
         children: build(rows, type, groupByFor?.(type) ?? type.groupBy ?? [], 1, `type:${type.id}`),
       } satisfies CostNode;
     })
     .filter((n) => n.bucket.total !== 0);
 
-  return { roots, grand: bucketEntries(entries, featureById, typeById, periods) };
+  return { roots, grand: bucketEntries(entries, featureById, typeById, periods, readValue) };
 }
 
 /** Every key that can be expanded — drives "expand all". Leaves are omitted,

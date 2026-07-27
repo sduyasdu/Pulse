@@ -62,6 +62,7 @@ Candidate gated features (PL2 — confirm the split):
 | `advancedCaps` — custom capability toggles (Permissions §5 Advanced) | ✗ | ✓ | ✓ |
 | (future) integrations / export / API | ✗ | — | ✓ |
 | (candidate) `costs` — the cost layer (`Costs-Spec.md`) | ? | ? | ? |
+| (candidate) `byos` — bring your own storage (`Storage-Spec.md`) | ? | ? | ? |
 
 Coarse roles (owner/editor/full-viewer) and commenting stay on **every** tier so
 downgrades never lock people out of basic collaboration.

@@ -84,6 +84,9 @@ export const pt: Dict = {
   "cost.groupByTitle": "Escolha por qual dimensão detalhar os custos primeiro",
   "cost.expandAll": "expandir tudo",
   "cost.collapseAll": "recolher tudo",
+  "cost.inUsd": "$",
+  "cost.inTokens": "tokens",
+  "cost.unitTitle": "Mostrar os custos em dólares ou em tokens",
 
   // mobile list / board
   "mobile.noTasks": "Ainda não há tarefas. Toque no botão + para adicionar uma.",

@@ -41,6 +41,9 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 | **SF2** | Assignment & comment notifications | server-authored `notifications/*` (dedupe, batching, email later) | write of features (assignment) / comments | `Collaboration-Spec.md` §3.6 | Deferred (client-created notifications interim) |
 | **SF3** | Billing / plan sync | `billing/{uid}` (tier, status, period) — the **only** writer | payment-provider webhook (HTTPS) | `Plans-Spec.md` §4, §8 (PL8) | Deferred (no billing yet; account menu stub) |
 | **SF4** | Activity-log authoring (authoritative) | `pulses/{p}/activity/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted activity-log interim) |
+| **SF5** | Storage OAuth broker | the provider refresh token (Secret Manager / `storageSecrets/{pulseId}`) + `storage/connection.status` — the **only** reader/writer of credentials | HTTPS (OAuth redirect, disconnect, token refresh) | `Storage-Spec.md` §4 | Deferred (**no client interim possible**) |
+| **SF6** | Storage folder-tree reconciler | `pulses/{p}/storageNodes/*` and the remote folder tree | write of features / epics / pulse doc; `storageJobs/*` | `Storage-Spec.md` §5, §6 | Deferred (**no client interim possible**) |
+| **SF7** | Attachment upload/download broker | issues per-file upload sessions; membership-checked downloads | HTTPS (callable) | `Storage-Spec.md` §7, §10 | Deferred (**no client interim possible**) |
 
 ---
 
@@ -182,6 +185,69 @@ client drafts during a short overlap.
 **Acceptance:** every logged mutation produces exactly one `ChangeEntry` within one
 function invocation; denorm-only reconcile writes and no-ops produce none; re-delivered
 events never duplicate an entry.
+
+### SF5 — Storage OAuth broker
+
+**Owns:** the customer's Google Drive / OneDrive **refresh token** and the derived
+`storage/connection.status`. It is the only component that ever holds a credential.
+
+**Why server-side (mandatory):** a refresh token is standing access to a customer's
+entire connected drive. It must never reach the browser and must not be readable through
+Firestore rules by anyone — including the Pulse owner who authorized it. **There is no
+acceptable client interim**: until SF5 ships, BYOS does not exist and attachments remain
+pasted links (`Storage-Spec.md` §1).
+
+**Trigger:** HTTPS. Handles the OAuth redirect (authorization code + PKCE), token
+exchange, refresh, and disconnect/revoke. Stores the refresh token in Secret Manager or
+an Admin-SDK-only `storageSecrets/{pulseId}` doc (`allow read, write: if false`). Mints
+short-lived access tokens for SF6/SF7 in-process; never returns one to a client.
+
+**Rules interaction:** `storage/connection` is member-readable (status only, no
+credentials) and function-written. `storageSecrets/*` is denied to every client.
+
+**Acceptance:** no code path returns a token or scope to the browser; a revoked grant
+flips the connection to `needs-reauth` rather than failing silently.
+
+### SF6 — Storage folder-tree reconciler
+
+**Owns:** `pulses/{p}/storageNodes/*` (entity id → provider folder id) and the remote
+folder tree that mirrors the Pulse (`Storage-Spec.md` §5).
+
+**Why server-side (mandatory):** it needs credentials (SF5), and it must keep running
+after the browser tab closes. **No client interim.**
+
+**Trigger:** writes to features / epics / the pulse doc, plus a per-Pulse
+`storageJobs/*` queue that coalesces by entity id.
+
+**Design — reconcile, never replay** (§1's "recompute from source"): compute the desired
+name/parent for an entity from Firestore, compare against `StorageNode` + the provider,
+and issue the minimum operation. Runs twice, late, or after a crash → same result. Folder
+**identity is the provider id**, never a path, so a failed or skipped rename can't break
+a single attachment link. Deletions **move to `_Archive/{YYYY-MM}/`** — the function must
+never hard-delete customer content. Folders are created lazily on first upload. Honour
+`Retry-After`; cap concurrency per connection.
+
+**Acceptance:** renaming a task 5× produces ≤1 remote rename; a manual rename in Drive is
+left alone; a folder deleted in Drive is re-created on next upload; a full re-sync from
+scratch converges to the same tree.
+
+### SF7 — Attachment upload/download broker
+
+**Owns:** issuing per-file upload sessions and serving membership-checked downloads.
+
+**Why server-side (mandatory):** it holds credentials and it is the **authorization
+boundary** for file access. **No client interim.**
+
+**Trigger:** HTTPS callable. On upload it verifies the caller's edit scope for the parent
+feature, resolves/creates the task folder via SF6, and returns a **single-file** upload
+session URL (Drive resumable / Graph `createUploadSession`) — deliberately not an access
+token, so a leak costs one file rather than a drive. Bytes go browser → provider
+directly. On download it verifies the caller's *read* scope for the parent feature, then
+redirects (OneDrive's short-lived `downloadUrl`) or proxies the bytes (Drive — see
+`Storage-Spec.md` ST7).
+
+**Acceptance:** a non-member, and a My-Beat viewer outside their beat, cannot fetch a
+file even with its id; an upload session URL cannot be reused for a second file.
 
 ---
 

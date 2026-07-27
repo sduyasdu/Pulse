@@ -11,7 +11,7 @@ import { usePulseStore } from "@/stores/pulseStore";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { RES_LABEL_W, type Density } from "@/domain/constants";
 import { COST_TYPES, modelsUsed } from "@/domain/costTypes";
-import { buildCostTree, expandableKeys, flattenTree, fmtMoney, type CostNode } from "@/domain/costs";
+import { amountOf, buildCostTree, expandableKeys, flattenTree, fmtMoney, fmtQuantity, quantityOf, type CostNode } from "@/domain/costs";
 import type { Feature } from "@/types";
 import { useT } from "@/i18n";
 
@@ -53,6 +53,8 @@ export function CostPanel({
   const [peopleFilter, setPeopleFilter] = useState<Set<string>>(new Set());
   /** Which dimension sits at level 2; the other one falls to level 3. */
   const [dimension, setDimension] = useState<"model" | "resourceId">("model");
+  /** Read the same buckets as money or as raw quantity (tokens). */
+  const [unit, setUnit] = useState<"usd" | "tokens">("usd");
 
   const xForDay = (day: number) => offsetX + day * dayWidth;
   const periods = useMemo(() => buildPeriods(density, startDay, endDay), [density, startDay, endDay]);
@@ -98,9 +100,15 @@ export function CostPanel({
           const second = dimension === "model" ? "resourceId" : "model";
           return [first, second, ...declared.filter((a) => a !== "model" && a !== "resourceId")];
         },
+        readValue: unit === "usd" ? amountOf : quantityOf,
       }),
-    [visible, featureById, periods, resources, t, dimension],
+    [visible, featureById, periods, resources, t, dimension, unit],
   );
+
+  /** Every figure in the panel goes through this, so the toggle can't leave a
+   * dollar sign on a token count anywhere. */
+  const fmtVal = (v: number, opts: { compact?: boolean } = {}) =>
+    unit === "usd" ? fmtMoney(v, opts) : fmtQuantity(v);
 
   const rows = useMemo(() => flattenTree(roots, expanded), [roots, expanded]);
   const inView = grand.cells.reduce((a, b) => a + b, 0);
@@ -117,9 +125,9 @@ export function CostPanel({
 
   const outsideTip = (node: CostNode) =>
     t("cost.outside", {
-      before: fmtMoney(node.bucket.before),
-      inView: fmtMoney(node.bucket.cells.reduce((a, b) => a + b, 0)),
-      after: fmtMoney(node.bucket.after),
+      before: fmtVal(node.bucket.before),
+      inView: fmtVal(node.bucket.cells.reduce((a, b) => a + b, 0)),
+      after: fmtVal(node.bucket.after),
     });
 
   return (
@@ -133,7 +141,7 @@ export function CostPanel({
           )}
           {viewSwitch}
           <span className="mono" style={{ fontSize: 10, color: "#78859A" }}>
-            {t("cost.headerTotal", { total: fmtMoney(grand.total), inView: fmtMoney(inView) })}
+            {t("cost.headerTotal", { total: fmtVal(grand.total), inView: fmtVal(inView) })}
           </span>
           {selectedFeature && (
             <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 600, background: "#F7E8DA", color: "#D85A28" }}>
@@ -142,6 +150,23 @@ export function CostPanel({
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Read the same tree as money or as tokens. Same buckets, same
+              proration — only what each bucket measures changes. */}
+          <div className="flex rounded overflow-hidden flex-shrink-0" style={{ border: "1px solid #E2DFD9" }} title={t("cost.unitTitle")}>
+            {([
+              { id: "usd" as const, label: t("cost.inUsd") },
+              { id: "tokens" as const, label: t("cost.inTokens") },
+            ]).map((o) => (
+              <button
+                key={o.id}
+                onClick={() => setUnit(o.id)}
+                className="mono text-xs px-2 py-1"
+                style={{ background: unit === o.id ? "#8B5CF6" : "#FFFFFF", color: unit === o.id ? "#FFFFFF" : "#64748B", fontWeight: 600 }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
           {/* Which dimension nests first — model › person, or person › model. */}
           <div className="flex rounded overflow-hidden flex-shrink-0" style={{ border: "1px solid #E2DFD9" }} title={t("cost.groupByTitle")}>
             {([
@@ -271,7 +296,7 @@ export function CostPanel({
                 {showTotals && (
                   <span className="mono flex items-center justify-end gap-0.5" style={{ width: TOTAL_W, textAlign: "right", fontSize: 11, fontWeight: node.level === 0 ? 700 : 500, color: "#1F2330", flexShrink: 0 }}>
                     {hasBefore && <span style={{ color: "#94A3B8" }}>‹</span>}
-                    {fmtMoney(node.bucket.total, { compact: true })}
+                    {fmtVal(node.bucket.total, { compact: true })}
                     {hasAfter && <span style={{ color: "#94A3B8" }}>›</span>}
                   </span>
                 )}
@@ -291,12 +316,12 @@ export function CostPanel({
                     // expensive stretches pop without reading digits.
                     const peak = Math.max(...node.bucket.cells, 1);
                     const intensity = Math.min(1, micros / peak);
-                    const label = fmtMoney(micros, { compact: true });
+                    const label = fmtVal(micros, { compact: true });
                     const showNum = cellW * viewZoom >= label.length * 6.5 + 6;
                     return (
                       <div
                         key={i}
-                        title={`${fmtMoney(micros)} · ${node.label}`}
+                        title={`${fmtVal(micros)} · ${node.label}`}
                         style={{
                           position: "absolute", left: cellLeft + 1, top: 5, width: cellW, height: 20,
                           background: `rgba(139,92,246,${0.10 + intensity * 0.28})`,
@@ -330,7 +355,7 @@ export function CostPanel({
             {showTotals && (
               <span className="mono flex items-center justify-end gap-0.5" style={{ width: TOTAL_W, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#123359", flexShrink: 0 }}>
                 {grand.before > 0 && <span style={{ color: "#94A3B8" }}>‹</span>}
-                {fmtMoney(grand.total, { compact: true })}
+                {fmtVal(grand.total, { compact: true })}
                 {grand.after > 0 && <span style={{ color: "#94A3B8" }}>›</span>}
               </span>
             )}
@@ -342,10 +367,10 @@ export function CostPanel({
                 if (micros === 0) return null;
                 const cellLeft = xForDay(p.start);
                 const cellW = Math.max((p.end - p.start) * dayWidth - 2, 12);
-                const label = fmtMoney(micros, { compact: true });
+                const label = fmtVal(micros, { compact: true });
                 const showNum = cellW * viewZoom >= label.length * 6.5 + 6;
                 return (
-                  <div key={i} title={fmtMoney(micros)} style={{ position: "absolute", left: cellLeft + 1, top: 4, width: cellW, height: 18, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <div key={i} title={fmtVal(micros)} style={{ position: "absolute", left: cellLeft + 1, top: 4, width: cellW, height: 18, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                     {showNum && (
                       <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: "#123359", transform: `scaleX(${1 / viewZoom})` }}>{label}</span>
                     )}
