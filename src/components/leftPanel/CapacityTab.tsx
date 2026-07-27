@@ -7,6 +7,8 @@ import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { confirmAt } from "@/stores/confirmStore";
+import { canViewPeopleCost } from "@/domain/permissions";
+import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
 
 interface CapacityTabProps {
@@ -16,6 +18,38 @@ interface CapacityTabProps {
 // Persisted (across reloads) collapse state for the overview + types boxes.
 // Absent key = collapsed, so it starts closed the first time.
 const OVERVIEW_KEY = "pulse.capacity.overviewOpen";
+
+/** $/h input. Local while typing, committed on blur or Enter — a rate write is a
+ * document write, not something to fire per keystroke. Empty clears the rate,
+ * which removes that person's labour rows rather than zeroing them (§8.8). */
+function RateInput({ value, onCommit, title }: { value: number | null; onCommit: (v: number | null) => void; title: string }) {
+  const [local, setLocal] = useState(value == null ? "" : String(value));
+  const [focused, setFocused] = useState(false);
+  const shown = focused ? local : value == null ? "" : String(value);
+  const commit = () => {
+    const n = Number(local);
+    onCommit(local.trim() === "" || !Number.isFinite(n) || n <= 0 ? null : n);
+  };
+  return (
+    <div className="flex items-center gap-0.5">
+      <span className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>$</span>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        value={shown}
+        title={title}
+        placeholder="—"
+        onFocus={() => { setLocal(value == null ? "" : String(value)); setFocused(true); }}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => { setFocused(false); commit(); }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        className="mono text-xs border rounded px-1 py-0.5 text-right"
+        style={{ borderColor: "#E2DFD9", width: 58, flexShrink: 0 }}
+      />
+    </div>
+  );
+}
 
 function ResourceNameInput({ name, disabled, onCommit, renameTitle }: { name: string; disabled: boolean; onCommit: (name: string) => void; renameTitle: string }) {
   const [local, onChange] = useDebouncedText(name, onCommit);
@@ -43,6 +77,15 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
   const pulse = usePulseStore((s) => s.pulse);
   const patchResource = usePulseStore((s) => s.patchResource);
   const setResourceTypes = usePulseStore((s) => s.setResourceTypes);
+  const rates = usePulseStore((s) => s.rates);
+  const members = usePulseStore((s) => s.members);
+  const setRate = usePulseStore((s) => s.setRate);
+  const uid = useAuthStore((s) => s.firebaseUser?.uid);
+
+  // Pay rates are admin-only (Costs-Spec §8.7 / CO15).
+  const me = uid ? members.find((m) => m.uid === uid) : undefined;
+  const seesPeopleCost = !!me && canViewPeopleCost(me);
+  const rateOf = (rid: string) => rates.find((x) => x.resourceId === rid)?.hourlyCost ?? null;
 
   const [query, setQuery] = useState("");
   const [showOverview, setShowOverview] = useState<boolean>(() => {
@@ -240,6 +283,19 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
                   />
                 </div>
               </div>
+              {/* Hourly cost — admins only (Costs-Spec §8.7). The control simply
+                  doesn't exist for anyone else, and the underlying document is
+                  unreadable to them, so hiding it isn't the security boundary. */}
+              {seesPeopleCost && (
+                <div style={{ width: 78 }}>
+                  <span className="mono" style={{ fontSize: 9, color: "#0E7490" }}>{t("capacity.hourlyCost")}</span>
+                  <RateInput
+                    value={rateOf(r.id)}
+                    onCommit={(v) => void setRate(r.id, v)}
+                    title={t("capacity.hourlyCostTitle")}
+                  />
+                </div>
+              )}
             </div>
           </div>
         );

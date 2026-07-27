@@ -10,8 +10,10 @@ import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
 import { usePulseStore } from "@/stores/pulseStore";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { RES_LABEL_W, type Density } from "@/domain/constants";
-import { COST_TYPES, modelsUsed } from "@/domain/costTypes";
-import { amountOf, buildCostTree, expandableKeys, flattenTree, fmtMoney, fmtQuantity, quantityOf, type CostNode } from "@/domain/costs";
+import { COST_TYPES, DEFAULT_HOURS_PER_DAY, modelsUsed } from "@/domain/costTypes";
+import { canViewPeopleCost } from "@/domain/permissions";
+import { useAuthStore } from "@/stores/authStore";
+import { amountOf, buildCostTree, expandableKeys, flattenTree, fmtMoney, fmtQuantity, peopleCostRows, quantityOf, resourcesMissingRate, type CostNode } from "@/domain/costs";
 import type { Feature } from "@/types";
 import { useT } from "@/i18n";
 
@@ -49,9 +51,32 @@ export function CostPanel({
   selectedFeature, onCollapse, labelWidth = RES_LABEL_W, viewSwitch,
 }: CostPanelProps) {
   const t = useT();
-  const costs = usePulseStore((s) => s.costs);
+  const storedCosts = usePulseStore((s) => s.costs);
   const features = usePulseStore((s) => s.features);
   const resources = usePulseStore((s) => s.resources);
+  const rates = usePulseStore((s) => s.rates);
+  const pulse = usePulseStore((s) => s.pulse);
+  const members = usePulseStore((s) => s.members);
+  const uid = useAuthStore((s) => s.firebaseUser?.uid);
+
+  // People cost is derived, never stored (Costs-Spec CO13). A non-admin holds no
+  // rates, so this yields nothing for them — the visibility rule enforces itself.
+  const me = uid ? members.find((m) => m.uid === uid) : undefined;
+  const seesPeople = !!me && canViewPeopleCost(me);
+  const hoursPerDay = pulse?.hoursPerDay ?? DEFAULT_HOURS_PER_DAY;
+  const rateOf = useMemo(() => {
+    const byId = new Map(rates.map((r) => [r.resourceId, r.hourlyCost]));
+    return (rid: string) => byId.get(rid) ?? null;
+  }, [rates]);
+  const peopleRows = useMemo(
+    () => (seesPeople ? peopleCostRows(features, rateOf, hoursPerDay) : []),
+    [seesPeople, features, rateOf, hoursPerDay],
+  );
+  const missingRates = useMemo(
+    () => (seesPeople ? resourcesMissingRate(features, rateOf) : []),
+    [seesPeople, features, rateOf],
+  );
+  const costs = useMemo(() => [...storedCosts, ...peopleRows], [storedCosts, peopleRows]);
 
   // Nothing is expanded to begin with: the panel opens on the top grouping
   // (one row per cost type) and you drill down from there.
@@ -101,10 +126,14 @@ export function CostPanel({
         typeLabel: (type) => t(type.label as Parameters<typeof t>[0]),
         // The chosen dimension leads; the others follow in canonical order.
         // Anything the type declares outside DIMENSIONS keeps its position.
+        // Intersect the requested order with what the type actually declares —
+        // otherwise a `people` row grows a spurious "unattributed model" level,
+        // since `model` means nothing for hours (Costs-Spec §9).
         groupByFor: (type) => {
           const declared = type.groupBy ?? [];
+          const ordered = [dimension, ...DIMENSIONS.filter((d) => d !== dimension)].filter((d) => declared.includes(d));
           const extra = declared.filter((a) => !DIMENSIONS.includes(a as Dimension));
-          return [dimension, ...DIMENSIONS.filter((d) => d !== dimension), ...extra];
+          return [...ordered, ...extra];
         },
         readValue: unit === "usd" ? amountOf : quantityOf,
       }),
@@ -149,6 +178,19 @@ export function CostPanel({
           <span className="mono" style={{ fontSize: 10, color: "#78859A" }}>
             {t("cost.headerTotal", { total: fmtVal(grand.total), inView: fmtVal(inView) })}
           </span>
+          {/* CO19: an admin and an editor see different totals, because one
+              includes labour. Say which, rather than hide the discrepancy. */}
+          {!seesPeople && (
+            <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 9, background: "#F1F5F9", color: "#64748B" }} title={t("cost.scopeAiOnlyTitle")}>
+              {t("cost.scopeAiOnly")}
+            </span>
+          )}
+          {/* §8.8: absence prompts a question, a zero doesn't. */}
+          {missingRates.length > 0 && (
+            <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 9, background: "#FEF3C7", color: "#92400E" }} title={t("cost.missingRatesTitle")}>
+              {t("cost.missingRates", { count: String(missingRates.length) })}
+            </span>
+          )}
           {selectedFeature && (
             <span className="mono rounded px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 600, background: "#F7E8DA", color: "#D85A28" }}>
               {selectedFeature.title}

@@ -717,3 +717,68 @@ describe("costs (Costs-Spec §7)", () => {
     await assertFails(deleteDoc(doc(bea, "pulses", "p1", "costs", "c_mine")));
   });
 });
+
+describe("hourly rates (Costs-Spec §8.7)", () => {
+  const adminCaps = { readScope: "all", editScope: "all", editEpics: true, editResources: true, editConfig: true, comment: true, invite: true, manageMembers: true, deletePulse: false, viewPeopleCost: true };
+  const editorCaps = { ...adminCaps, manageMembers: false, viewPeopleCost: false };
+
+  const rateDoc = (over: Record<string, unknown> = {}) => ({
+    resourceId: "res1",
+    hourlyCost: 95,
+    currency: "USD",
+    updatedAt: Date.now(),
+    updatedBy: "alice",
+    ...over,
+  });
+
+  async function seedRateFixture() {
+    await seedPulse("p1", "alice", {
+      alice: { email: "alice@example.com", role: "owner" },
+      eve: { email: "eve@example.com", role: "editor" },
+      viv: { email: "viv@example.com", role: "viewer" },
+    });
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "resources", "res1"), { id: "res1", initials: "AA", name: "Ana", capacity: 100, type: null });
+      await setDoc(doc(db, "pulses", "p1", "rates", "res1"), rateDoc());
+    });
+  }
+
+  it("lets an owner read and write a rate", async () => {
+    await seedRateFixture();
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(getDoc(doc(alice, "pulses", "p1", "rates", "res1")));
+    await assertSucceeds(setDoc(doc(alice, "pulses", "p1", "rates", "res2"), rateDoc({ resourceId: "res2" })));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "rates", "res1")));
+  });
+
+  it("denies an EDITOR — pay is narrower than editResources", async () => {
+    await seedRateFixture();
+    const eve = dbAs("eve", "eve@example.com");
+    await assertFails(getDoc(doc(eve, "pulses", "p1", "rates", "res1")));
+    await assertFails(getDocs(collection(eve, "pulses", "p1", "rates")));
+    await assertFails(setDoc(doc(eve, "pulses", "p1", "rates", "res1"), rateDoc({ hourlyCost: 1 })));
+    await assertFails(deleteDoc(doc(eve, "pulses", "p1", "rates", "res1")));
+  });
+
+  it("denies a viewer and a non-member", async () => {
+    await seedRateFixture();
+    await assertFails(getDoc(doc(dbAs("viv", "viv@example.com"), "pulses", "p1", "rates", "res1")));
+    await assertFails(getDoc(doc(dbAs("mallory", "m@example.com"), "pulses", "p1", "rates", "res1")));
+  });
+
+  it("still lets a non-admin read the resource itself — only the rate is protected", async () => {
+    await seedRateFixture();
+    const eve = dbAs("eve", "eve@example.com");
+    await assertSucceeds(getDoc(doc(eve, "pulses", "p1", "resources", "res1")));
+  });
+
+  it("grants a custom role only when viewPeopleCost is set", async () => {
+    await seedRateFixture();
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "cfo"), { uid: "cfo", email: "cfo@example.com", role: "custom", joinedAt: Date.now(), caps: adminCaps });
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "pm"), { uid: "pm", email: "pm@example.com", role: "custom", joinedAt: Date.now(), caps: editorCaps });
+    });
+    await assertSucceeds(getDoc(doc(dbAs("cfo", "cfo@example.com"), "pulses", "p1", "rates", "res1")));
+    await assertFails(getDoc(doc(dbAs("pm", "pm@example.com"), "pulses", "p1", "rates", "res1")));
+  });
+});

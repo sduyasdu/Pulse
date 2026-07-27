@@ -10,11 +10,13 @@ import {
   fmtMoney,
   fmtQuantity,
   prorateToDays,
+  peopleCostRows,
   quantityOf,
+  resourcesMissingRate,
   spanOf,
   unitCostOf,
 } from "./costs";
-import { AI_COST_TYPE } from "./costTypes";
+import { AI_COST_TYPE, PEOPLE_COST_TYPE } from "./costTypes";
 import { dayIndex, isWeekend } from "./dateUtils";
 import type { CostEntry, Feature } from "@/types";
 
@@ -279,6 +281,72 @@ describe("row tree (spec §6)", () => {
       typeLabel: () => "AI",
     });
     expect(roots).toEqual([]);
+  });
+});
+
+describe("people cost (spec §8)", () => {
+  const rate = (map: Record<string, number>) => (rid: string) => map[rid] ?? null;
+
+  it("charges 8 hours per weekday, weekends excluded", () => {
+    const f = feature({ x: MON, duration: 7, resources: ["r1"] }); // Mon–Sun
+    const [row] = peopleCostRows([f], rate({ r1: 100 }), 8);
+    expect(row.quantities.hours).toBe(40); // 5 weekdays x 8h
+    expect(row.amountMicros).toBe(4000 * MICROS);
+    expect(row.basis).toBe("rate");
+    expect(row.typeId).toBe("people");
+  });
+
+  it("includes weekends only when the task's flag is on", () => {
+    const f = feature({ x: MON, duration: 7, useWeekends: true, resources: ["r1"] });
+    expect(peopleCostRows([f], rate({ r1: 100 }), 8)[0].quantities.hours).toBe(56); // 7 x 8
+  });
+
+  it("respects allocation — 50% of a 5-day task is 20 hours", () => {
+    const f = feature({ x: MON, duration: 5, resources: ["r1"], alloc: { r1: 50 } });
+    expect(peopleCostRows([f], rate({ r1: 100 }), 8)[0].quantities.hours).toBe(20);
+  });
+
+  it("honours a Pulse's own hours-per-day", () => {
+    const f = feature({ x: MON, duration: 5, resources: ["r1"] });
+    expect(peopleCostRows([f], rate({ r1: 100 }), 7.5)[0].quantities.hours).toBe(37.5);
+  });
+
+  it("omits a resource with no rate rather than charging zero (§8.8)", () => {
+    const f = feature({ x: MON, duration: 5, resources: ["r1", "r2"] });
+    const rows = peopleCostRows([f], rate({ r1: 100 }), 8);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].attrs.resourceId).toBe("r1");
+    expect(resourcesMissingRate([f], rate({ r1: 100 }))).toEqual(["r2"]);
+  });
+
+  it("ignores subtask-only assignments, matching allocSum", () => {
+    const f = feature({
+      x: MON, duration: 5, resources: [],
+      children: [{ id: "s1", title: "sub", status: "planned", resources: ["r1"] }],
+    });
+    expect(peopleCostRows([f], rate({ r1: 100 }), 8)).toEqual([]);
+  });
+
+  it("derives nothing when the caller holds no rates — the visibility mechanism", () => {
+    const f = feature({ x: MON, duration: 5, resources: ["r1"] });
+    expect(peopleCostRows([f], () => null, 8)).toEqual([]);
+  });
+
+  it("flows through the existing pipeline: prorated, bucketed, totalled", () => {
+    const f = feature({ x: MON, duration: 5, useWeekends: true, resources: ["r1"] });
+    const rows = peopleCostRows([f], rate({ r1: 10 }), 8);
+    const periods = [{ start: MON, end: MON + 5 }];
+    const b = bucketEntries(rows, { f1: f }, () => PEOPLE_COST_TYPE, periods);
+    expect(b.total).toBe(400 * MICROS); // 5 days x 8h x $10
+    expect(b.cells[0]).toBe(400 * MICROS);
+    // Derived unit cost reads back as the rate.
+    expect(unitCostOf(rows[0], PEOPLE_COST_TYPE, "hours")).toBe(10);
+  });
+
+  it("prices hours, not dollars, under the quantity toggle", () => {
+    const f = feature({ x: MON, duration: 5, useWeekends: true, resources: ["r1"] });
+    const rows = peopleCostRows([f], rate({ r1: 10 }), 8);
+    expect(quantityOf(rows[0], PEOPLE_COST_TYPE)).toBe(40);
   });
 });
 

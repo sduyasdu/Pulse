@@ -1,6 +1,6 @@
 # Pulse — Costs Spec (cost types, AI tokens & pricing)
 
-Status: **Ready to build — all product decisions resolved; CO1/3/6/12 open (implementation-level)** · Owner: product + eng ·
+Status: **AI costing shipped. People costing (§8) ready to build — CO13/17/20 resolved; CO14–CO16, CO18, CO19 open; CO1/3/6/12 open (implementation-level)** · Owner: product + eng ·
 Related: **`Costs-Build-Plan.md`** (phased implementation plan),
 `Pulse-Product-Spec.md` (§3 Core entities, §6 Resource & assignment views),
 `Permissions-Spec.md` (capabilities), `Plans-Spec.md` (entitlement gating),
@@ -14,29 +14,52 @@ money is measured, and how it reads across time.
 The central decision: **cost is not a kind of Resource.** A Resource stays what §3
 of the product spec says it is — a person with capacity and assignments. Cost is a
 **separate, typed entity** that attaches to a task. "AI" is a *cost type*, not a
-teammate.
+teammate — and so is "People".
 
-That framing is what makes the layer extensible. Today only the **AI** cost type is
-supported. Later, human resource utilization becomes a second cost type
-(`resource`) that generates entries from assignments — the same view, the same
-totals, no rework. §8 reserves the shape for it; **it is not built in this phase.**
+That framing is what makes the layer extensible. **`ai` is built and shipped**;
+**`people` (§8) is specified here and not yet built.** People cost is derived from
+assignments rather than entered, and its rates are admin-only, but it reuses the same
+view, proration, totals and audit path — which is the claim the two-type design was
+making.
 
-What this spec does *not* cover: estimated/budgeted cost (see **CO9**), invoicing or
-billing the customer, multi-currency (**CO8**), and the Pulse's own subscription
-billing — that's `Plans-Spec.md`, a different axis entirely (what the *owner pays
-Pulse*, not what a *project costs*).
+### 0.1 The standard of accuracy — directional, not accounting-grade
+
+**The goal is to give a PM an idea of what a roadmap costs, not to produce figures
+anyone could invoice or audit against.** This is the spec's guiding constraint, and
+it is what makes several decisions below coherent instead of arbitrary:
+
+- **CO2** — one blended `tokens` measure, so the derived $/Mtok mixes input and
+  output rates. Fine: the money entered is real, only the per-unit figure is coarse.
+- **CO4** — no price table. Unit cost comes from what was actually spent.
+- **CO17** — labour is derived from the schedule, so a total may add AI *actuals* to
+  labour *plan*. Accepted; it answers "roughly what will this cost", which is the
+  question being asked.
+- **CO20** — one current rate per person, applied across all time. A raise moves
+  historical figures. Accepted.
+
+Anything that would require exactness — timesheets, effective-dated rates, closed
+periods, invoicing — is deliberately out of scope. If that need ever arrives it is a
+different feature with a different name, not a tightening of this one. §8.9 and §8.10
+record the specific inaccuracies this buys, so nobody has to rediscover them.
+
+What this spec also does *not* cover: budgeted/estimated cost (**CO9**), invoicing
+the customer, multi-currency (**CO8**), and the Pulse's own subscription billing —
+that's `Plans-Spec.md`, a different axis entirely (what the *owner pays Pulse*, not
+what a *project costs*).
 
 ## 1. Model at a glance
 
 ```
-CostTypeDef  (registry — "ai" today, "resource" later)
+CostTypeDef  (registry — "ai" and "people")
   ├─ measures[]    what quantity is counted, and at what price scale
-  │                  ai:       tokens  (unit cost quoted per 1M)
-  │                  resource: hours   (unit cost quoted per 1)
+  │                  ai:     tokens  (unit cost quoted per 1M)
+  │                  people: hours   (unit cost quoted per 1)
   ├─ attributes[]  type-specific fields
-  │                  ai:       brand, model, resource (who used it)
-  │                  resource: inherited from the Resource master
+  │                  ai:     brand, model, resource (who used it)
+  │                  people: resource (whose hours) — rate from rates/{id}
   └─ basis         how money and unit cost relate (§3)
+                     ai:     amount → unit cost derived
+                     people: rate   → amount derived
 
 CostEntry    (pulses/{id}/costs/{costId}) — one recorded cost
   ├─ typeId        → CostTypeDef
@@ -47,8 +70,13 @@ CostEntry    (pulses/{id}/costs/{costId}) — one recorded cost
   └─ attrs         brand: "anthropic", model: "claude-opus-5", resourceId: "…"
 
 Cost view    (§6) — bottom panel, alternate to Assignment by resource
-             rows = type › model › person (expandable), columns = day/week/month
-             periods, task money prorated across the task's span (§5)
+             rows = type › (pivot) › … expandable; columns = day/week/month
+             periods; money prorated across the task's span (§5)
+               ai:     model › person › task
+               people: person › task          (admins only — §8.7)
+
+ResourceRate (pulses/{id}/rates/{resourceId}) — $/h, admin-readable only.
+             NOT a field on Resource: rules are per-document (§8.3).
 ```
 
 ## 2. Cost types
@@ -57,7 +85,7 @@ A cost type is a **definition**, not data: it declares what a cost of that kind
 measures, what attributes it carries, and how it prices.
 
 ```ts
-/** "ai" ships built-in; "resource" is reserved (§8). */
+/** "ai" ships built-in; "people" is specified in §8, not yet built. */
 export type CostTypeId = string;
 
 /** One thing a cost type counts. `priceScale` is how many units a unit cost is
@@ -101,7 +129,7 @@ export interface CostTypeDef {
 registry now; `Pulse.costTypes?: CostTypeDef[]` later if user-defined types are
 wanted, mirroring how `Pulse.statuses` extends `DEFAULT_STATUSES`.*
 
-### 2.1 The AI cost type (the only one built)
+### 2.1 The AI cost type (built and shipped)
 
 | Field | Value |
 |---|---|
@@ -151,9 +179,9 @@ export type CostBasis = "rate" | "amount";
 Rules:
 
 - **AI is always `"amount"`** (CO4): there is no price table to rate against, so
-  the unit cost is *always* calculated from actuals. `"rate"` stays in the model
-  because the reserved human type needs it (§8) — the field is what lets one view,
-  one proration and one total serve both.
+  the unit cost is *always* calculated from actuals. **`people` is always `"rate"`**
+  (§8.4): hours × $/h. One field, two types, one view — this is what the basis
+  discriminator was for.
 - **`basis` is stored per entry**, defaulted from the type, so a rate-priced entry
   can appear later without a schema change.
 - **The derived value is computed, never stored.** Storing all three numbers
@@ -164,9 +192,9 @@ Rules:
   rendered `—`, not `0` or `Infinity` (`theoreticalElapsed` sets the precedent:
   null when the denominator is meaningless). The amount still counts in every
   total; only the per-unit figure is unavailable.
-- **Multiple measures on one type** is supported by the shape but unused today —
-  AI has one measure, and the human type will have one. How a single amount would
-  split across several measures is deferred (**CO3**).
+- **Multiple measures on one type** is supported by the shape but unused: `ai` has
+  one (`tokens`), `people` has one (`hours`). How a single amount would split across
+  several measures is deferred (**CO3**).
 
 ### 3.1 Precision
 
@@ -405,10 +433,16 @@ the **time window** is ignored.
   write anywhere, viewers nowhere.
 - **Rate cards and type config** follow `editConfig` (they're Pulse-level
   settings), not `editScope`.
-- **No new capability flag** in `Capabilities` (**CO12**) — costs derive their gate
-  from the feature they hang off. *Recommend confirming this rather than adding
-  `editCosts`: another flag means another preset column in every role, for a
-  permission that has no coherent meaning apart from "can edit this task".*
+- **No `editCosts` capability** (**CO12**) — AI costs derive their gate from the
+  feature they hang off. *Recommend confirming this rather than adding one: another
+  flag means another preset column in every role, for a permission that has no
+  coherent meaning apart from "can edit this task".*
+- **People costs are the exception, and they do need a flag.** §8.7: pay rates are
+  admin-only, so `people` cost is gated by `viewPeopleCost` (owner by default) and
+  not by the parent feature's read scope. An editor who can see every task must
+  still not see anyone's rate. This is the one place where "costs inherit the task's
+  gates" does not hold, and it is enforced by the rate documents living in their own
+  admin-only collection rather than by a client-side check (**CO15**).
 - Rules sketch, following the `features` block:
 
 ```
@@ -430,28 +464,236 @@ match /costs/{costId} {
 
 - **Activity log**: add `"cost"` to `ActivityEntityKind` with `create` / `edit` /
   `delete`, `entityName` = `"{model} · ${amount}"` name-at-time. Money changing on
-  a task is exactly the kind of thing people need to reconstruct later.
+  a task is exactly the kind of thing people need to reconstruct later. **Rate edits
+  are the exception** — the log is member-readable, so a rate delta in it would
+  defeat §8.7 (**CO18**).
 - **Plans**: cost tracking is a plausible paid feature and a plausible quota
   (entries per Pulse). Not decided here — if gated, it lands as a flag in
   `Plans-Spec.md` §3.1 and composes as `entitlement ∧ capability`.
 
-## 8. Reserved: the `resource` cost type (not built)
+## 8. The `people` cost type — costing human effort
 
-Specified only so this phase doesn't foreclose it:
+The second cost type, and the one that makes the §2 abstraction earn its keep: a
+Pulse can now show what its *labour* costs alongside what its AI costs, in the same
+view, on the same calendar.
+
+### 8.1 Required behaviour
+
+1. A cost type **`people`**, sitting beside `ai` in the registry.
+2. Each Resource carries an **hourly cost**.
+3. Assigning a resource to a task produces the corresponding people-cost row.
+4. Changing an hourly cost, or changing an assignment, updates the corresponding
+   cost.
+5. Hours are **8 per weekday**; weekends count only when the task's weekend flag
+   is on.
+6. **People costs are visible to Pulse admins only.**
+
+Everything below is how those six land without a sync surface and without leaking
+anyone's rate.
+
+### 8.2 The type
 
 | Field | Value |
 |---|---|
-| `measures` | `hours` (priceScale 1) |
-| `attributes` | `resourceId` (required), with `inheritFrom` pulling `type`, `capacity` and `hourlyRate` off the Resource master |
-| `defaultBasis` | `"rate"` — hours × $/h |
+| `id` | `"people"` |
+| `label` | `cost.type.people` |
+| `measures` | **`hours`**, `priceScale: 1` (unit cost is quoted per hour, not per million) |
+| `attributes` | `resourceId` (resourceRef, **required**, `inheritFrom: "hourlyRate"`) |
+| `basis` | **always `"rate"`** — hours × $/h ⇒ amount (§3) |
+| `groupBy` | `["resourceId", "featureId"]` — person › task |
+| `color` | distinct from AI's violet |
 
-Two things it needs that don't exist yet: **`Resource.hourlyRate?: number | null`**
-(additive, reserved now, unused), and **generated entries** — a resource's
-allocation on a task already implies hours (`Elapsed Time × alloc%`, which
-`assignedEffort` computes today), so entries would be *derived from assignments*
-rather than typed. That derivation — whether it materializes documents or stays
-virtual, and how a materialized entry stays in sync when the box is dragged — is
-the substantive open question, deliberately deferred.
+This is precisely the `"rate"` half of §3 that had no user until now. Nothing in
+the derivation, the proration (§5.2), the view (§6) or the totals changes shape to
+accommodate it — which is the test the two-type design was meant to pass.
+
+### 8.3 Where the hourly cost lives — *not* on the Resource
+
+Requirement 2 says "add a field to resources"; requirement 6 says admins only.
+**Those two are incompatible as written**, and this is the single most important
+correction in this section.
+
+Firestore security is **per document, never per field**. `pulses/{p}/resources/{id}`
+is readable by every member (they need names, initials, avatars and capacity to
+render the canvas). Put `hourlyCost` on that document and every member can read
+every salary with one console call — the UI hiding it changes nothing.
+
+So the rate lives in its own document:
+
+```ts
+/** pulses/{pulseId}/rates/{resourceId} — admin-readable only (§8.7). */
+export interface ResourceRate {
+  resourceId: string;
+  hourlyCost: number;      // USD per hour (CO8: USD only)
+  currency: "USD";
+  updatedAt: Timestamp;
+  updatedBy: string;
+}
+```
+
+One document per resource, keyed by resource id, so it is addressable without a
+query — the same reason `invites` are keyed by email (§ that doc's rationale).
+`Resource` itself gains **no** cost field. The Capacity tab shows a rate input to
+admins, writing through to `rates/{id}`; to everyone else that control doesn't
+exist and the underlying document is unreadable.
+
+### 8.4 Hours, and where they come from
+
+Pulse already knows how long a task takes and how much of a person is on it. People
+cost reuses that rather than inventing a parallel model:
+
+```
+hours(feature, resourceId)
+  = elapsedOf(feature)                    // working days, weekend-aware
+  × hoursPerDay                           // 8 (CO16)
+  × allocOf(feature.alloc, resourceId)/100
+
+amount = hours × rate.hourlyCost
+```
+
+- **`elapsedOf` already implements requirement 5.** It returns the span's working
+  days and includes weekends exactly when `feature.useWeekends` is set
+  (`domain/graphEffort.ts`). Weekend behaviour therefore needs no new logic and
+  can't drift from the effort model.
+- **Allocation is respected**: someone at 50% on a 5-weekday task is 20 hours, not
+  40.
+- **Task-level assignments only.** Subtask assignments are "who's responsible"
+  markers and deliberately contribute no allocation (see `allocSum`); they
+  contribute no cost either. Same rule, one place.
+- **`Resource.capacity` is not used.** Capacity is an occupation *limit* for
+  utilization warnings; it is not a billing basis. A person over 100% allocated
+  costs more, and that is the correct signal.
+- Restated in the model's own terms: **people cost = Assigned Effort (per resource,
+  in man-days) × `hoursPerDay` × rate**.
+
+For the view, derive **per day** rather than totalling and prorating: each eligible
+day contributes `hoursPerDay × alloc% × rate`. Identical result, no rounding
+remainder to distribute, and automatically consistent with §5.2's calendar.
+
+### 8.5 Derived, not materialized (CO13 — resolved)
+
+**Decided: people-cost rows are derived, never stored.** Requirements 3 and 4 —
+rows appearing on assignment, following rate and allocation edits — are satisfied by
+computing them from data that already exists: the assignment, the allocation, the
+task's span and weekend flag, and the rate.
+
+The reasoning, recorded because it will be questioned later:
+
+- **A rate change is a fan-out write storm if materialized.** One senior developer's
+  raise would rewrite every people-cost row for that person across every task in
+  every Pulse — potentially thousands of documents, each one a write, each one an
+  activity-log entry. Derived, it is a single-document edit and every figure moves.
+- **Materialized rows carry no information the derivation doesn't.** Requirement 4
+  says a rate change *updates* the record, so the stored row is always just the
+  current rate re-applied. A copy that must always equal a computation is a cache,
+  and this one has no read-path problem to solve — the client already holds
+  features, resources and (for admins) rates in memory.
+- **The repo has already paid for this lesson.** `reconcileDenorms` exists solely
+  because a denormalized copy (`assignedUids`, `scopeUids`) drifts from its source.
+  A materialized people cost would need the same loop, and it would need to fire on
+  every box drag, every alloc slider move, and every rate edit.
+- **Fewer secrets to guard.** Derived, the only admin-only data is `rates/*` — one
+  collection, one rule. Materialized, the *amounts* are equally sensitive and need
+  their own protected collection plus a query-shape constraint for non-admins
+  (§8.7).
+
+**What would have forced materialization** — freezing a rate against a closed period,
+or invoicing — is explicitly out of scope (§0.1), so nothing does. If it ever returns,
+the shape is a **snapshot on demand**: a "close the month" action writing immutable
+rows, mirroring Pulse's existing `plannedX` / `estEffort` lock idiom rather than a
+background reconciler. A materialized-and-synced variant would have to be a server
+function per `Server-Functions-Spec.md` §4 — the client cannot be trusted to fan a
+rate change across other people's tasks.
+
+### 8.6 Lifecycle — what actually happens on each event
+
+| Event | Derived (recommended) | Materialized (alternative) |
+|---|---|---|
+| Resource assigned to task | row appears | write 1 doc |
+| Unassigned | row disappears | delete 1 doc |
+| Allocation % changed | amount moves | update 1 doc |
+| Task dragged / resized / weekend flag toggled | hours and amount move | update every row on that task |
+| **Hourly cost changed** | one rate doc written; every figure moves | **update every row for that resource, everywhere** |
+| Resource deleted | rows vanish with the assignment (existing cascade strips it from features) | cascade delete |
+| Rate absent | **no row** (§8.8) | no doc |
+
+### 8.7 Visibility — admins only, enforced in rules
+
+Salary data is the most sensitive thing this spec touches. Three separate leaks have
+to be closed, and only the first is UI work:
+
+1. **The rate documents.** `pulses/{p}/rates/*` is admin-only, read *and* write:
+
+```
+function isPulseAdmin(pulseId) {
+  let m = get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data;
+  return m.role == 'owner'
+      || (m.role == 'custom' && 'caps' in m && m.caps.get('viewPeopleCost', false));
+}
+
+match /rates/{resourceId} {
+  allow read, write: if isPulseMember(pulseId) && isPulseAdmin(pulseId);
+}
+```
+
+   Because the client cannot read rates, a non-admin's client **cannot compute**
+   people cost at all. The feature fails closed by construction rather than by
+   remembering to hide a component.
+
+2. **The activity log.** `pulses/{p}/activity/*` is member-readable. An entry
+   reading *"changed Ana's rate from $80 to $95"* leaks exactly what §8.3 protects,
+   and `scopeUids` cannot express "admins only" — it holds uids, and the admin set
+   changes. *Recommend logging the event without values* — `"updated a rate"`,
+   entity = the resource, no `deltas` — or omitting rate edits from the log
+   entirely (**CO18**).
+
+3. **Totals.** An admin and an editor looking at the same Cost view see different
+   grand totals, because one includes labour. That is correct, not a bug, but it
+   must be legible: the header states the scope (`"$4,812 · AI only"` for
+   non-admins), and the type row simply doesn't exist for them (**CO19**).
+
+Writing a rate is `isPulseAdmin`, deliberately narrower than `editResources` — an
+editor may rename people and change their capacity without being trusted with pay.
+
+### 8.8 Missing rates, and the honest-zero problem
+
+An assigned resource with no rate contributes **no row**, not a zero row. Zero is a
+number people believe; absence prompts a question. To stop silent under-reporting,
+the Cost view shows admins a hint when it applies — *"3 assigned people have no
+hourly cost set"* — linking to the Capacity tab.
+
+### 8.9 AI costs are actuals; people costs are a plan (CO17 — accepted)
+
+An AI entry records money that was really spent. A people cost is derived from the
+*schedule* — assignment × span × rate — so it is what the plan implies, not what
+anyone's timesheet says. A total therefore adds AI actuals to labour plan.
+
+**This is accepted, per §0.1.** It is the right answer to "roughly what will this
+cost", which is the question the view exists to answer. Timesheets are not coming.
+
+Two consequences to keep in mind rather than fix:
+
+- A task months in the future already carries labour cost while its AI cost is zero.
+  That's the plan showing through, not a bug.
+- The figure moves when the *schedule* moves. Drag a box longer and labour cost
+  rises, with no one having worked an extra hour.
+
+Worth a single word in the UI so nobody over-reads it — the people row labelled
+*planned*, or the header noting the total mixes the two. Not worth more than that.
+
+### 8.10 Retroactivity — a raise rewrites history (CO20 — accepted)
+
+One rate per resource, applied across all time. Give someone a raise in July and
+June's reported labour cost changes with it.
+
+**Accepted, per §0.1.** It also matches how the rest of the model already behaves:
+change a box and its history changes, because Pulse stores the current plan rather
+than a ledger of past states.
+
+The upgrade path exists if the need ever appears — **effective-dated rates** at
+`rates/{resourceId}/history/{fromDay}`, with the derivation picking the rate in force
+on each day it prices. The per-day derivation in §8.4 is already the right shape, so
+this stays cheap to add later and costs nothing to leave out now.
 
 The point of §2's shape is that this arrives as **a registry entry plus a
 derivation source**, with the view, proration, totals, permissions and audit
@@ -463,6 +705,20 @@ already in place.
   `graphEffort.ts` / `assignments.ts`: `amountOf(entry, type)`,
   `unitCostOf(entry, type, measureId)`, `spanOf(entry, feature)`,
   `costInRange(entries, features, filter, dStart, dEnd)`. The view does no math.
+- **People costs (§8) — `peopleCostRows(features, rates, hoursPerDay)`** in the same
+  module: derives synthetic `CostEntry` values from assignments so the whole
+  downstream pipeline (`bucketEntries`, `buildCostTree`, the $/hours toggle, the
+  totals) works on them unchanged. Returns nothing when `rates` is empty, which is
+  exactly what a non-admin's client holds.
+- **`CostPanel`'s dimension pivot is currently AI-shaped.** `groupByFor` forces the
+  global `DIMENSIONS` order (`model`, `resourceId`, `featureId`) onto *every* type, so
+  a `people` row would grow a spurious "unattributed model" level. It must intersect
+  the requested order with what the type actually declares — a small change, but it
+  breaks visibly if missed.
+- **The $/tokens toggle needs a third state or a rename.** `tokens` is meaningless
+  for `people` and `hours` is meaningless for `ai`. Cleanest is `$` vs *"quantity"*,
+  where each type's row shows its own measure's unit (`fmtQuantity` already takes the
+  raw number; only the label is type-specific).
 - **`src/services/firestore/costs.ts`** — `subscribeCosts` / `createCost` /
   `updateCost` / `deleteCost`, mirroring `resources.ts`. Wire into `pulseStore`
   alongside features and resources.
@@ -480,7 +736,7 @@ already in place.
   span to prorate anyway. Record it as one undo op so restoring the task restores
   its spend.
 
-## 10. Decisions (CO1–CO12)
+## 10. Decisions (CO1–CO20)
 
 ### 10.1 Resolved
 
@@ -543,10 +799,44 @@ already in place.
     real third column would push the time axis right and require a matching
     spacer in `CanvasView` (§6.1).
 
-### 10.2 Still open
+### 10.2 People costing (§8)
 
-All four are implementation-level — none blocks starting the build, and each can
-be settled by whoever picks it up.
+**Resolved**
+
+13. **CO13 — Derived or materialized? ✅ RESOLVED: derived, never stored (§8.5).** A
+    rate change is one write instead of a fan-out across every task the person is on,
+    and there is no copy to drift. Materialization would only have been needed for
+    frozen periods or invoicing, both out of scope.
+17. **CO17 — Mixing actuals and plan. ✅ RESOLVED: accepted (§8.9).** AI figures are
+    actuals, labour is derived from the schedule; a total adds the two. No timesheets.
+    Worth one word of labelling in the UI, nothing more.
+20. **CO20 — Retroactive rates. ✅ RESOLVED: accepted (§8.10).** One current rate per
+    person, applied across all time; a raise moves historical figures. Effective-dated
+    rates remain a cheap later addition and are not being built.
+
+**Open**
+
+14. **CO14 — Rate storage.** `pulses/{p}/rates/{resourceId}`, *not* a field on
+    `Resource`. Not really optional: Firestore has no field-level security, so a rate
+    on the member-readable resource doc is public to every member (§8.3). The only
+    alternative is accepting that all members can see all rates.
+15. **CO15 — Who is an "admin"?** *Recommend `owner`, plus `custom` roles carrying a
+    new `viewPeopleCost` capability.* Alternatives: reuse `manageMembers` (fewer
+    flags, but conflates "can add people" with "can see their pay"), or Pulse-owner
+    only (simplest, no new capability).
+16. **CO16 — Is 8 hours/day configurable?** *Recommend a Pulse-level `hoursPerDay`
+    defaulting to 8*, since 7.5 and 6-productive-hours are both common. One number,
+    same home as `graphConfig`.
+18. **CO18 — Logging rate changes.** *Recommend logging the event without values*
+    (`"updated a rate"`, no `deltas`) — the activity log is member-readable and
+    `scopeUids` can't express "admins" (§8.7).
+19. **CO19 — Non-admin totals.** A non-admin's Cost view excludes labour, so their
+    grand total differs from an admin's. *Recommend labelling the scope in the header
+    ("AI only") rather than hiding the discrepancy.*
+
+### 10.3 Still open — implementation-level
+
+None of these blocks starting the build; each can be settled by whoever picks it up.
 
 1. **CO1 — Type registry location.** Code registry vs. user-defined types on the
    Pulse doc. *Recommend: code now; `Pulse.costTypes` later if needed.*

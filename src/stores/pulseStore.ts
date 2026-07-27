@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, StatusDef, Subtask } from "@/types";
+import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, ResourceRate, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { subscribeCosts, createCost, updateCost, deleteCost, newCostId } from "@/services/firestore/costs";
+import { subscribeRates, setResourceRate, deleteResourceRate } from "@/services/firestore/rates";
 import { subscribeEpics, createEpic, updateEpic, deleteEpic, newEpicId } from "@/services/firestore/epics";
 import { subscribeFeatures, createFeature, updateFeature, deleteFeature, newFeatureId } from "@/services/firestore/features";
 import {
@@ -34,6 +35,10 @@ interface PulseStoreState {
   features: Feature[];
   resources: Resource[];
   costs: CostEntry[];
+  /** Hourly rates — admin-only (Costs-Spec §8.3). Empty for everyone else,
+   * because their listener is rejected by the rules; that's the mechanism, not a
+   * fallback. */
+  rates: ResourceRate[];
   members: PulseMember[];
   loading: boolean;
   notFound: boolean;
@@ -73,6 +78,8 @@ interface PulseStoreState {
 
   addAttachment: (featureId: string, title: string, url: string) => Promise<void>;
   removeAttachment: (featureId: string, attachmentId: string) => Promise<void>;
+
+  setRate: (resourceId: string, hourlyCost: number | null) => Promise<void>;
 
   addCost: (featureId: string, patch: Partial<CostEntry> & Pick<CostEntry, "typeId">) => Promise<string | null>;
   patchCost: (costId: string, patch: Partial<CostEntry>) => Promise<void>;
@@ -130,12 +137,13 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
   features: [],
   resources: [],
   costs: [],
+  rates: [],
   members: [],
   loading: true,
   notFound: false,
 
   load: (pulseId) => {
-    set({ pulseId, loading: true, notFound: false, epics: [], features: [], resources: [], costs: [], members: [] });
+    set({ pulseId, loading: true, notFound: false, epics: [], features: [], resources: [], costs: [], rates: [], members: [] });
     // `loading` must not go false until BOTH the pulse doc and the
     // pulseMembers roster have delivered their first snapshot — these are
     // two independent onSnapshot listeners with no ordering guarantee.
@@ -157,6 +165,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       }),
       subscribeEpics(pulseId, (epics) => set({ epics })),
       subscribeResources(pulseId, (resources) => { set({ resources }); reconcileDenorms(get); }),
+      subscribeRates(pulseId, (rates) => set({ rates })),
       subscribePulseMembers(pulseId, (members) => {
         membersArrived = true;
         set({ members });
@@ -530,6 +539,33 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const patch: Partial<Feature> = { attachments: (feature.attachments || []).filter((a) => a.id !== attachmentId) };
     await updateFeature(pulseId, featureId, patch);
     recordSingle("Remove attachment", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
+  },
+
+  // ---- rates (Costs-Spec §8.3) --------------------------------------------
+
+  /**
+   * Set or clear a resource's hourly cost. Null clears it, which removes that
+   * person's labour rows entirely rather than zeroing them (§8.8).
+   *
+   * Deliberately NOT recorded in undo or the activity log: the log is
+   * member-readable, so a rate delta in it would defeat the admin-only rule the
+   * rates collection exists to enforce (§8.7 / CO18).
+   */
+  setRate: async (resourceId, hourlyCost) => {
+    const { pulseId } = get();
+    const uid = useAuthStore.getState().firebaseUser?.uid;
+    if (!pulseId || !uid) return;
+    if (hourlyCost == null || !(hourlyCost > 0)) {
+      await deleteResourceRate(pulseId, resourceId);
+      return;
+    }
+    await setResourceRate(pulseId, {
+      resourceId,
+      hourlyCost,
+      currency: "USD",
+      updatedAt: Date.now(),
+      updatedBy: uid,
+    });
   },
 
   // ---- costs (Costs-Spec.md) ----------------------------------------------

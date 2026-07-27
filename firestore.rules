@@ -80,6 +80,15 @@ service cloud.firestore {
         : (m.role == 'custom' && 'caps' in m) ? m.caps.readScope
         : 'all';
     }
+    // May the caller see people cost — hourly rates and the labour figures derived
+    // from them (Costs-Spec §8.7)? Owner by preset; a `custom` role needs the
+    // capability explicitly. Deliberately narrower than editResources: an editor may
+    // rename people and set their capacity without being trusted with their pay.
+    function canViewPeopleCost(pulseId) {
+      let m = get(/databases/$(database)/documents/pulses/$(pulseId)/pulseMembers/$(request.auth.uid)).data;
+      return m.role == 'owner'
+        || (m.role == 'custom' && 'caps' in m && m.caps.get('viewPeopleCost', false) == true);
+    }
     // Does the caller lead this task? Used by the costs block, where a Task
     // Lead's write scope is defined by the parent feature rather than by the
     // document being written (Costs-Spec §7). A missing feature reads as
@@ -260,6 +269,14 @@ service cloud.firestore {
       match /resources/{resourceId} {
         allow read: if isPulseMember(pulseId);
         allow write: if canEditPulse(pulseId);
+      }
+
+      // Hourly rates (Costs-Spec §8.3) — the one genuinely sensitive collection in
+      // a Pulse. Admin-only, read AND write: a member who can't read a rate can't
+      // derive labour cost either, so people costing fails closed by construction
+      // rather than by the UI remembering to hide something.
+      match /rates/{resourceId} {
+        allow read, write: if isPulseMember(pulseId) && canViewPeopleCost(pulseId);
       }
 
       // Costs (Costs-Spec.md §7). A cost has no capability of its own — it

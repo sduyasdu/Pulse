@@ -57,6 +57,10 @@ export interface Pulse {
   statuses?: StatusDef[];
   /** Active copy-link invite (owner/editor generated). Null/absent = none. */
   invite?: InviteLink | null;
+  /** Working hours in a day, for costing human effort (Costs-Spec §8.4, CO16).
+   * Unset = DEFAULT_HOURS_PER_DAY (8). 7.5 and "6 productive hours" are both
+   * common, so it's a per-Pulse number rather than a constant. */
+  hoursPerDay?: number;
 }
 
 /** One Kanban/status column. `id` is what Feature.status / Subtask.status
@@ -103,6 +107,11 @@ export interface Capabilities {
   invite: boolean;
   manageMembers: boolean;
   deletePulse: boolean;
+  /** See and set people cost — hourly rates and the labour figures derived from
+   * them (Costs-Spec §8.7, CO15). Deliberately narrower than `editResources`: an
+   * editor may rename people and change their capacity without being trusted with
+   * their pay. Absent on legacy docs → false everywhere except owner. */
+  viewPeopleCost?: boolean;
 }
 
 export interface PulseMember {
@@ -354,8 +363,26 @@ export interface Feature {
 // Entries live at pulses/{pulseId}/costs/{costId}.
 // ---------------------------------------------------------------------------
 
-/** "ai" is the only type built; "resource" (human hours) is reserved (spec §8). */
+/** Built-in types: "ai" (tokens) and "people" (hours) — Costs-Spec §2.1 and §8. */
 export type CostTypeId = string;
+
+/**
+ * A resource's hourly cost, at pulses/{pulseId}/rates/{resourceId}.
+ *
+ * Deliberately NOT a field on `Resource`: Firestore security is per document,
+ * never per field, and the resource doc must stay readable by every member (names,
+ * initials, capacity all render on the canvas). A rate stored there would be public
+ * to the whole Pulse no matter what the UI did. This document is admin-only
+ * (Costs-Spec §8.3 / §8.7), which is also why a non-admin's client physically
+ * cannot compute labour cost.
+ */
+export interface ResourceRate {
+  resourceId: string;
+  hourlyCost: number; // USD per hour
+  currency: "USD";
+  updatedAt: Timestamp;
+  updatedBy: string;
+}
 
 /** Which side of quantity × unit cost = amount is derived (spec §3).
  *  amount: quantity + amount known, unit cost derived — every AI entry.

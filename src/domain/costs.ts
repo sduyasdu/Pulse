@@ -3,6 +3,7 @@
 // Money is integer micro-dollars everywhere; round only at render.
 import type { CostEntry, CostTypeDef, Feature } from "@/types";
 import { isWeekend } from "./dateUtils";
+import { allocOf, elapsedOf } from "./graphEffort";
 
 export const MICROS = 1_000_000; // micro-dollars per dollar
 
@@ -102,6 +103,80 @@ export function prorateToDays(
     out.set(d, (out.get(d) ?? 0) + base + extra);
   });
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// People cost (Costs-Spec §8) — derived from assignments, never stored (CO13).
+// ---------------------------------------------------------------------------
+
+type PeopleFeature = Pick<Feature, "id" | "x" | "duration" | "useWeekends" | "resources" | "alloc">;
+
+/**
+ * Hours a resource is booked for on a task.
+ *
+ * `elapsedOf` supplies the working days and already honours the task's weekend
+ * flag, so §8's "8 hours per weekday, weekends only when the flag is on" needs no
+ * new calendar logic and can't drift from the effort model. Allocation is
+ * respected: 50% on a 5-day task is 20 hours, not 40.
+ *
+ * Subtask assignments are excluded on purpose — they're "who's responsible"
+ * markers that contribute no allocation (see `allocSum`), so they contribute no
+ * cost either.
+ */
+export function hoursFor(feature: PeopleFeature, resourceId: string, hoursPerDay: number): number {
+  if (!(feature.resources || []).includes(resourceId)) return 0;
+  return elapsedOf(feature) * hoursPerDay * (allocOf(feature.alloc, resourceId) / 100);
+}
+
+/**
+ * Synthetic people-cost entries for every task assignment that has a rate.
+ *
+ * Returning `CostEntry` values means the whole downstream pipeline — proration,
+ * bucketing, the row tree, the totals, the $/quantity toggle — works on labour
+ * unchanged. A resource with no rate yields no row at all rather than a zero
+ * (§8.8): zero is a number people believe, absence prompts a question.
+ *
+ * A non-admin's client holds no rates, so this returns [] for them — the
+ * visibility rule enforces itself rather than relying on the UI to hide a row.
+ */
+export function peopleCostRows(
+  features: PeopleFeature[],
+  rateOf: (resourceId: string) => number | null,
+  hoursPerDay: number,
+): CostEntry[] {
+  const out: CostEntry[] = [];
+  features.forEach((f) => {
+    (f.resources || []).forEach((rid) => {
+      const rate = rateOf(rid);
+      if (rate == null || rate <= 0) return;
+      const hours = hoursFor(f, rid, hoursPerDay);
+      if (hours <= 0) return;
+      out.push({
+        // Stable id so React keys and any dedup behave; never written to Firestore.
+        id: `people:${f.id}:${rid}`,
+        typeId: "people",
+        featureId: f.id,
+        quantities: { hours },
+        basis: "rate",
+        unitCosts: { hours: rate },
+        amountMicros: Math.round(hours * rate * MICROS),
+        currency: "USD",
+        attrs: { resourceId: rid },
+        createdBy: "",
+        createdAt: 0,
+      });
+    });
+  });
+  return out;
+}
+
+/** Assigned resources with no hourly cost set — the honest-zero hint (§8.8). */
+export function resourcesMissingRate(features: PeopleFeature[], rateOf: (id: string) => number | null): string[] {
+  const seen = new Set<string>();
+  features.forEach((f) => (f.resources || []).forEach((rid) => {
+    if (rateOf(rid) == null) seen.add(rid);
+  }));
+  return Array.from(seen);
 }
 
 export interface Period {

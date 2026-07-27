@@ -17,14 +17,21 @@ export function canonicalRole(role: PulseRole): PresetRole {
 }
 
 export const PRESET_CAPS: Record<PresetRole, Capabilities> = {
-  owner: { readScope: "all", editScope: "all", editEpics: true, editResources: true, editConfig: true, comment: true, invite: true, manageMembers: true, deletePulse: true },
-  editor: { readScope: "all", editScope: "all", editEpics: true, editResources: true, editConfig: true, comment: true, invite: true, manageMembers: false, deletePulse: false },
-  fullViewer: { readScope: "all", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false },
-  myBeatViewer: { readScope: "beat", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false },
-  taskLead: { readScope: "all", editScope: "lead", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false },
+  owner: { readScope: "all", editScope: "all", editEpics: true, editResources: true, editConfig: true, comment: true, invite: true, manageMembers: true, deletePulse: true, viewPeopleCost: true },
+  editor: { readScope: "all", editScope: "all", editEpics: true, editResources: true, editConfig: true, comment: true, invite: true, manageMembers: false, deletePulse: false, viewPeopleCost: false },
+  fullViewer: { readScope: "all", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false, viewPeopleCost: false },
+  myBeatViewer: { readScope: "beat", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false, viewPeopleCost: false },
+  taskLead: { readScope: "all", editScope: "lead", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false, viewPeopleCost: false },
   // `custom` requires explicit `caps`; this is only the safety fallback.
-  custom: { readScope: "all", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false },
+  custom: { readScope: "all", editScope: "none", editEpics: false, editResources: false, editConfig: false, comment: true, invite: false, manageMembers: false, deletePulse: false, viewPeopleCost: false },
 };
+
+/** May this member see and set hourly rates, and the labour costs derived from
+ * them? Owner-only by preset (Costs-Spec §8.7 / CO15). Absent on a legacy `caps`
+ * bundle reads as false — pay data fails closed. */
+export function canViewPeopleCost(member: Pick<PulseMember, "role" | "caps">): boolean {
+  return capsOf(member).viewPeopleCost === true;
+}
 
 /** The capability bundle a role preset carries — materialized onto the member doc. */
 export function capsForRole(role: PulseRole): Capabilities {

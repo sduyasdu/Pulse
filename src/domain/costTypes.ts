@@ -27,7 +27,26 @@ export const AI_COST_TYPE: CostTypeDef = {
   color: "#8B5CF6", // matches the ✨/bolt AI marker already used on task boxes
 };
 
-export const COST_TYPES: CostTypeDef[] = [AI_COST_TYPE];
+/**
+ * People cost — Costs-Spec §8. The `"rate"` half of the basis model: hours × $/h.
+ * Entries of this type are never stored (CO13); they're derived from assignments by
+ * `peopleCostRows`, and the rate comes from the admin-only `rates/{resourceId}`
+ * document rather than from the Resource itself (§8.3).
+ */
+export const PEOPLE_COST_TYPE: CostTypeDef = {
+  id: "people",
+  label: "cost.type.people",
+  measures: [{ id: "hours", label: "cost.measure.hours", unit: "cost.unit.hours", priceScale: 1 }],
+  attributes: [{ id: "resourceId", label: "cost.attr.person", kind: "resourceRef", required: true, inheritFrom: "hourlyRate" }],
+  defaultBasis: "rate",
+  groupBy: ["resourceId", "featureId"], // person › task
+  color: "#0E7490", // teal — distinct from AI's violet
+};
+
+export const COST_TYPES: CostTypeDef[] = [AI_COST_TYPE, PEOPLE_COST_TYPE];
+
+/** Working hours in a day when a Pulse hasn't set its own (Costs-Spec CO16). */
+export const DEFAULT_HOURS_PER_DAY = 8;
 
 export function costTypeById(id: CostTypeId): CostTypeDef | null {
   return COST_TYPES.find((t) => t.id === id) ?? null;
