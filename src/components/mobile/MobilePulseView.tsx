@@ -194,7 +194,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
         </div>
       )}
 
-      {showHelp && <HelpDrawer onClose={() => setShowHelp(false)} fullScreen />}
+      {showHelp && <HelpDrawer onClose={() => setShowHelp(false)} placement="fullScreen" />}
 
       {showInvite && (
         <CollaboratorsDialog

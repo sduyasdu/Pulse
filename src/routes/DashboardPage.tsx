@@ -8,6 +8,8 @@ import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
 import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
+import { HelpDrawer } from "@/components/help/HelpDrawer";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
 import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
@@ -20,6 +22,8 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [pulses, setPulses] = useState<MyPulseIndexEntry[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [invitingPulse, setInvitingPulse] = useState<MyPulseIndexEntry | null>(null);
   const [renamingPulse, setRenamingPulse] = useState<MyPulseIndexEntry | null>(null);
   const [duplicatingPulse, setDuplicatingPulse] = useState<MyPulseIndexEntry | null>(null);
@@ -124,8 +128,23 @@ export function DashboardPage() {
         <span className="font-display text-base font-semibold text-white">Pulse</span>
         <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         <div className="flex-1" />
+        {/* Same help as inside a Pulse — arguably more useful here, where a
+            newcomer hasn't opened one yet. Full-screen on mobile, a pinned
+            drawer on desktop (the dashboard scrolls, so it can't be absolute). */}
+        <button
+          onClick={() => setHelpOpen(true)}
+          title={t("help.open")}
+          aria-label={t("help.open")}
+          aria-expanded={helpOpen}
+          className="flex items-center justify-center rounded"
+          style={{ width: 30, height: 30, color: "#EE7240" }}
+        >
+          <Icon name="help" size={18} />
+        </button>
         <AccountMenu />
       </header>
+
+      {helpOpen && <HelpDrawer onClose={() => setHelpOpen(false)} placement={isMobile ? "fullScreen" : "fixed"} />}
 
       <main className="mx-auto max-w-5xl px-6 py-8">
         {/* On mobile this stacks: a full-width search box on top, then the

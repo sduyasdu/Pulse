@@ -25,7 +25,17 @@ function Highlighted({ text, query }: { text: string; query: string }) {
   );
 }
 
-export function HelpDrawer({ onClose, fullScreen }: { onClose: () => void; fullScreen?: boolean }) {
+/**
+ * Where the panel sits:
+ *  - `panel`      absolute inside a positioned shell — the Pulse page, where it
+ *                 must start below the toolbar rather than cover it.
+ *  - `fixed`      pinned to the viewport — the dashboard, which scrolls and has
+ *                 no full-height shell to anchor to.
+ *  - `fullScreen`  mobile.
+ */
+export type HelpPlacement = "panel" | "fixed" | "fullScreen";
+
+export function HelpDrawer({ onClose, placement = "panel" }: { onClose: () => void; placement?: HelpPlacement }) {
   const t = useT();
   const lang = useI18nStore((s) => s.lang);
   const [doc, setDoc] = useState<HelpDoc | null>(null);
@@ -55,14 +65,18 @@ export function HelpDrawer({ onClose, fullScreen }: { onClose: () => void; fullS
     [doc, query],
   );
 
-  const frame: React.CSSProperties = fullScreen
-    ? { position: "fixed", inset: 0, zIndex: 60, background: "#FFFFFF", display: "flex", flexDirection: "column" }
-    : {
-        position: "absolute", right: 0, top: 0, bottom: 0, width: 380, maxWidth: "92%",
-        background: "#FFFFFF", borderLeft: "1px solid #E2DFD9",
-        boxShadow: "-10px 0 28px rgba(15,23,42,0.10)", zIndex: 40,
-        display: "flex", flexDirection: "column",
-      };
+  const side: React.CSSProperties = {
+    right: 0, top: 0, bottom: 0, width: 380, maxWidth: "92%",
+    background: "#FFFFFF", borderLeft: "1px solid #E2DFD9",
+    boxShadow: "-10px 0 28px rgba(15,23,42,0.10)",
+    display: "flex", flexDirection: "column",
+  };
+  const frame: React.CSSProperties =
+    placement === "fullScreen"
+      ? { position: "fixed", inset: 0, zIndex: 60, background: "#FFFFFF", display: "flex", flexDirection: "column" }
+      : placement === "fixed"
+        ? { ...side, position: "fixed", zIndex: 60 }
+        : { ...side, position: "absolute", zIndex: 40 };
 
   return (
     <div style={frame} role="dialog" aria-modal="false" aria-labelledby="help-title">
