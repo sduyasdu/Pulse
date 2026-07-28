@@ -56,6 +56,10 @@ interface ToolbarProps {
   onSetGraphConfig: (stepPx: number, workPerStep: number) => void;
   canEdit: boolean;
   roleLabel: string;
+  /** Help is available to EVERY role — the button therefore sits outside the
+   * canEdit block below, or viewers (who need it most) never see it. */
+  helpOpen: boolean;
+  onToggleHelp: () => void;
 }
 
 export function Toolbar({
@@ -105,6 +109,8 @@ export function Toolbar({
   onSetGraphConfig,
   canEdit,
   roleLabel,
+  helpOpen,
+  onToggleHelp,
 }: ToolbarProps) {
   const t = useT();
   const [showGraphSettings, setShowGraphSettings] = useState(false);
@@ -161,6 +167,16 @@ export function Toolbar({
           ))}
         </div>
         <div className="flex-1" />
+        <button
+          onClick={onToggleHelp}
+          title={t("help.open")}
+          aria-label={t("help.open")}
+          aria-expanded={helpOpen}
+          className="flex items-center justify-center rounded"
+          style={{ width: 26, height: 26, flexShrink: 0, background: helpOpen ? "#EE7240" : "#1B3A63", color: helpOpen ? "#0A1428" : "#EE7240", border: "1px solid " + (helpOpen ? "#EE7240" : "#24406B") }}
+        >
+          <Icon name="help" size={14} />
+        </button>
         {canEdit && (
           <div className="relative" style={{ flexShrink: 0 }}>
             <button onClick={() => setShowGraphSettings((v) => !v)} title={t("toolbar.effortScaleTitle")} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>

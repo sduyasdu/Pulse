@@ -101,6 +101,15 @@ export const pt: Dict = {
   "cost.inTokens": "tokens",
   "cost.unitTitle": "Mostrar os custos em dólares ou em tokens",
 
+  // ajuda no app (Help-Spec.md)
+  "help.title": "Ajuda",
+  "help.open": "Ajuda — o que o Pulse faz e como lê-lo",
+  "help.close": "Fechar a ajuda",
+  "help.searchPlaceholder": "Buscar na ajuda…",
+  "help.noMatch": "Nada corresponde a “{query}”.",
+  "help.englishOnly": "No momento a ajuda está disponível apenas em inglês.",
+  "help.reviewed": "Revisada em {date}",
+
   // mobile list / board
   "mobile.noTasks": "Ainda não há tarefas. Toque no botão + para adicionar uma.",
   "mobile.searchPlaceholder": "Buscar tarefas, epics, pessoas",

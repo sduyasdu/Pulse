@@ -105,6 +105,15 @@ export const en = {
   "cost.inTokens": "tokens",
   "cost.unitTitle": "Show costs in dollars or in tokens",
 
+  // in-app help (Help-Spec.md). The PROSE lives in src/help/, not here.
+  "help.title": "Help",
+  "help.open": "Help — what Pulse does and how to read it",
+  "help.close": "Close help",
+  "help.searchPlaceholder": "Search help…",
+  "help.noMatch": "Nothing matches “{query}”.",
+  "help.englishOnly": "Help is currently available in English only.",
+  "help.reviewed": "Reviewed against {date}",
+
   // ── mobile list / board ─────────────────────────────────────────────────────
   "mobile.noTasks": "No tasks yet. Tap the + button to add one.",
   "mobile.searchPlaceholder": "Search tasks, epics, people",

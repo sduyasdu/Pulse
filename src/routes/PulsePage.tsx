@@ -23,6 +23,7 @@ import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { Icon } from "@/components/shared/Icon";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { CostPanel } from "@/components/costPanel/CostPanel";
+import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
@@ -189,6 +190,9 @@ export function PulsePage() {
   const [assignPanelOpen, setAssignPanelOpen] = useState(true);
   // Which view occupies the bottom panel — assignments or costs (Costs-Spec §6).
   const [bottomPanel, setBottomPanel] = useState<"assign" | "cost">("assign");
+  // Only one right-edge drawer at a time — two overlapping panels is a layout bug
+  // waiting to be filed (Help-Spec §2).
+  const [helpOpen, setHelpOpen] = useState(false);
   const [timelineBounds, setTimelineBounds] = useState({ startDay: 0, endDay: 0, dayWidth: BASE_DAY_WIDTH });
 
   const canvasRef = useRef<CanvasViewHandle>(null);
@@ -313,7 +317,7 @@ export function PulsePage() {
         onRenamePulse={(name) => void renamePulse(name)}
         onInvite={() => setShowInvite(true)}
         commentsOpen={commentsOpen}
-        onToggleComments={() => setCommentsOpen((v) => !v)}
+        onToggleComments={() => { setCommentsOpen((v) => !v); if (!commentsOpen) setHelpOpen(false); }}
         presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark size={28} />}
         notifications={<NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark size={32} />}
         viewMode={viewMode}
@@ -354,6 +358,8 @@ export function PulsePage() {
         graph={graph}
         onSetGraphConfig={(stepPx, workPerStep) => void setGraphConfig(stepPx, workPerStep)}
         canEdit={canEdit}
+        helpOpen={helpOpen}
+        onToggleHelp={() => { setHelpOpen((v) => !v); if (!helpOpen) setCommentsOpen(false); }}
         roleLabel={roleMeta(myRole).label}
       />
 
@@ -540,6 +546,8 @@ export function PulsePage() {
         {/* Comments drawer — overlays the right edge of the whole content area
             (canvas + assignment-by-resource panel) so toggling it doesn't
             reflow anything. Hidden by default. */}
+        {helpOpen && <HelpDrawer onClose={() => setHelpOpen(false)} />}
+
         {commentsOpen && (
           <div className="absolute flex flex-col" style={{ right: 0, top: 0, bottom: 0, width: 360, maxWidth: "92%", background: "#FFFFFF", borderLeft: "1px solid #E2DFD9", boxShadow: "-10px 0 28px rgba(15,23,42,0.10)", zIndex: 40 }}>
             <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>

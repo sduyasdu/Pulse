@@ -15,6 +15,7 @@ import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog"
 import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { MobileTaskList } from "@/components/mobile/MobileTaskList";
 import { MobileBoard } from "@/components/mobile/MobileBoard";
+import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { useT } from "@/i18n";
 
 interface MobilePulseViewProps {
@@ -49,6 +50,8 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  // HL5: mobile has no toolbar, so help lives in the header beside comments.
+  const [showHelp, setShowHelp] = useState(false);
   const [myTasksOnly, setMyTasksOnly] = useState(false);
 
   // "My Pulse": tasks involving a resource linked to my account.
@@ -77,6 +80,9 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
             <Icon name="forum" size={20} />
           </button>
         )}
+        <button onClick={() => setShowHelp(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240" }} title={t("help.open")} aria-label={t("help.open")}>
+          <Icon name="help" size={20} />
+        </button>
         <NotificationsBell pulseId={pulse?.id} uid={uid} onOpenTask={setSelectedId} dark />
         {canEdit && (
           <button onClick={() => setShowInvite(true)} className="flex items-center gap-1 rounded px-2.5 py-1.5" style={{ background: "#1B3A63", color: "#EE7240", fontSize: 12, fontWeight: 600 }}>
@@ -187,6 +193,8 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
           </div>
         </div>
       )}
+
+      {showHelp && <HelpDrawer onClose={() => setShowHelp(false)} fullScreen />}
 
       {showInvite && (
         <CollaboratorsDialog
