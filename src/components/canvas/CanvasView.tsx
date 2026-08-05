@@ -834,36 +834,30 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               );
             })}
 
-            {/* Delay lines */}
+            {/* Baseline "ghost": where each task was planned, drawn on the box's
+                OWN row (behind the box) so a slip reads as a left/right shift.
+                The delay figure rides on the box as a badge (rendered after the
+                boxes, below) — nothing is drawn in the gap between rows, which is
+                what used to make ownership ambiguous and overlap neighbours. */}
             {showDelays &&
               displayFeatures
                 .filter((b) => b.plannedX != null && b.plannedDuration != null)
                 .map((b) => {
                   const pStart = b.plannedX as number;
                   const pEnd = pStart + (b.plannedDuration as number);
-                  const aStart = b.x;
-                  const aEnd = b.x + b.duration;
-                  const planLeft = xForDay(pStart);
-                  const planW = Math.max(2, (pEnd - pStart) * dayWidth);
-                  const boxBottom = b.y + (epicsShrunk ? 26 : boxHeight(b, graph));
-                  const lineY = boxBottom + 10;
-                  const dStart = aStart - pStart;
-                  const dEnd = aEnd - pEnd;
-                  const startColor = dStart > 0 ? "#E5484D" : dStart < 0 ? "#0F6B5C" : "#64748B";
-                  const endColor = dEnd > 0 ? "#E5484D" : "#0F6B5C";
-                  const aStartX = xForDay(aStart);
-                  const aEndX = xForDay(aEnd);
+                  const dStart = b.x - pStart;
+                  const dEnd = b.x + b.duration - pEnd;
+                  if (dStart === 0 && dEnd === 0) return null; // no slip → no ghost
+                  const ghostLeft = xForDay(pStart);
+                  const ghostW = Math.max(3, (pEnd - pStart) * dayWidth);
+                  const h = epicsShrunk ? 26 : boxHeight(b, graph);
                   return (
-                    <div key={`dl${b.id}`} style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 4 }}>
-                      <div style={{ position: "absolute", left: planLeft, top: lineY - 1.5, width: planW, height: 3, background: "repeating-linear-gradient(90deg,#94A3B8 0,#94A3B8 5px,transparent 5px,transparent 9px)" }} />
-                      <span className="mono" style={{ position: "absolute", left: planLeft + 3, top: lineY + 4, fontSize: 8, color: "#64748B", whiteSpace: "nowrap" }}>plan</span>
-                      <div style={{ position: "absolute", left: planLeft - 1, top: lineY - 6, width: 2, height: 12, background: "#94A3B8" }} />
-                      <div style={{ position: "absolute", left: planLeft + planW - 1, top: lineY - 6, width: 2, height: 12, background: "#94A3B8" }} />
-                      <div style={{ position: "absolute", left: Math.min(planLeft, aStartX), top: lineY - 6, width: Math.abs(aStartX - planLeft), height: 0, borderTop: `2px dotted ${startColor}` }} />
-                      <div style={{ position: "absolute", left: Math.min(planLeft + planW, aEndX), top: lineY - 6, width: Math.abs(aEndX - (planLeft + planW)), height: 0, borderTop: `2px dotted ${endColor}` }} />
-                      {dStart !== 0 && <span className="mono" style={{ position: "absolute", left: Math.min(planLeft, aStartX) + 2, top: lineY - 20, fontSize: 9, fontWeight: 700, color: startColor, whiteSpace: "nowrap", background: "rgba(255,255,255,0.85)", padding: "0 3px", borderRadius: 2 }}>start {dStart > 0 ? `+${dStart}d` : `${dStart}d`}</span>}
-                      {dEnd !== 0 && <span className="mono" style={{ position: "absolute", left: Math.min(planLeft + planW, aEndX) + 2, top: lineY - 20, fontSize: 9, fontWeight: 700, color: endColor, whiteSpace: "nowrap", background: "rgba(255,255,255,0.85)", padding: "0 3px", borderRadius: 2 }}>end {dEnd > 0 ? `+${dEnd}d` : `${dEnd}d`}</span>}
-                      {dStart > 0 && dEnd < dStart && <span className="mono" style={{ position: "absolute", left: aEndX + 4, top: lineY - 6, fontSize: 8, fontWeight: 700, color: "#0F6B5C", whiteSpace: "nowrap" }}>▲ {dStart - dEnd}d recovered</span>}
+                    <div
+                      key={`ghost${b.id}`}
+                      title={`Planned ${fmtDate(pStart)} → ${fmtDate(pEnd)}`}
+                      style={{ position: "absolute", left: ghostLeft, top: b.y, width: ghostW, height: h, borderRadius: 8, border: "1.5px dashed #AEB6C2", background: "rgba(148,163,184,0.10)", zIndex: 3, pointerEvents: "none" }}
+                    >
+                      <span className="mono" style={{ position: "absolute", top: 1, left: 4, fontSize: 8, color: "#8B94A3", letterSpacing: 0.3 }}>plan</span>
                     </div>
                   );
                 })}
@@ -1020,6 +1014,37 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                 </div>
               );
             })}
+
+            {/* Delay badge — one compact pill riding the box's top-right corner,
+                coloured by direction (red = finished late, green = early). Drawn
+                after the boxes so it sits on top, and positioned from the box's
+                own coordinates so it tracks the box (incl. during a drag) and
+                never lands in a neighbouring row. Headline = finish variance;
+                the tooltip has the start/end/recovered breakdown. */}
+            {showDelays &&
+              displayFeatures
+                .filter((b) => b.plannedX != null && b.plannedDuration != null)
+                .map((b) => {
+                  const pStart = b.plannedX as number;
+                  const pEnd = pStart + (b.plannedDuration as number);
+                  const dStart = b.x - pStart;
+                  const dEnd = b.x + b.duration - pEnd;
+                  if (dStart === 0 && dEnd === 0) return null;
+                  const head = dEnd !== 0 ? dEnd : dStart; // finish variance leads
+                  const late = head > 0;
+                  const fmtD = (n: number) => (n > 0 ? `+${n}d` : `${n}d`);
+                  const recovered = dStart > 0 && dEnd < dStart ? ` · ${dStart - dEnd}d recovered` : "";
+                  return (
+                    <div
+                      key={`db${b.id}`}
+                      className="mono"
+                      title={`Delay vs plan — start ${fmtD(dStart)} · end ${fmtD(dEnd)}${recovered}`}
+                      style={{ position: "absolute", left: xForDay(b.x + b.duration), top: b.y, transform: "translate(-100%, -100%)", marginTop: -1, zIndex: 15, pointerEvents: "none", fontSize: 9, fontWeight: 700, color: "#fff", background: late ? "#E5484D" : "#0F6B5C", borderRadius: 5, padding: "1px 5px", boxShadow: "0 1px 3px rgba(15,23,42,0.25)", whiteSpace: "nowrap" }}
+                    >
+                      {late ? "▸" : "◂"} {fmtD(head)}
+                    </div>
+                  );
+                })}
           </div>
         </div>
       </div>
