@@ -144,6 +144,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // everything (thin/short tasks) — see the collapsed feature-box body.
   const [hoverCard, setHoverCard] = useState<{ x: number; y: number; box: Feature } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  // True mid-drag when, in compact/Layout mode, the user tries to move a box
+  // vertically (blocked — the layout auto-packs Y). Drives a not-allowed cursor.
+  const [vertBlocked, setVertBlocked] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panArmed, setPanArmed] = useState(false);
   const [dragOverBoxId, setDragOverBoxId] = useState<string | null>(null);
@@ -407,7 +410,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   }, [handleWheel, handleGestureStart, handleGestureChange, handleGestureEnd]);
 
   // ---- box drag/resize ----
-  const dragRef = useRef<{ kind: DragKind; id: string; startX: number; startY: number; orig: Feature; dayWidth: number; viewZoom: number; lastWrite: number } | null>(null);
+  const dragRef = useRef<{ kind: DragKind; id: string; startX: number; startY: number; orig: Feature; dayWidth: number; viewZoom: number; lastWrite: number; xOnly?: boolean } | null>(null);
   const latestPatchRef = useRef<Partial<Feature> | null>(null);
 
   const fmtDate = useCallback(
@@ -426,7 +429,17 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const deltaDays = Math.round(dx / d.dayWidth);
       let patch: Partial<Feature> = {};
 
-      if (d.kind === "move") {
+      if (d.kind === "move" && d.xOnly) {
+        // Compact/Layout mode: dates only. Vertical drag is ignored (the layout
+        // auto-packs Y); surface that with a not-allowed cursor + hint when the
+        // user tries to move up/down.
+        const nx = d.orig.x + deltaDays;
+        const span = `${fmtDate(nx)} → ${fmtDate(nx + d.orig.duration)}`;
+        const tryingVertical = Math.abs(dy) > graph.stepPx;
+        setVertBlocked(tryingVertical);
+        patch = { x: nx };
+        setDimHint({ x: e.clientX, y: e.clientY, text: tryingVertical ? `${span} · ↕ turn off Layout to move rows` : `${span} · ⟷ dates only` });
+      } else if (d.kind === "move") {
         const nx = d.orig.x + deltaDays;
         const ny = Math.max(6, d.orig.y + dy);
         const span = `${fmtDate(nx)} → ${fmtDate(nx + d.orig.duration)}`;
@@ -504,13 +517,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     dragRef.current = null;
     latestPatchRef.current = null;
     setDragId(null);
+    setVertBlocked(false);
     setDimHint(null);
     setDragOverlay(null);
     window.removeEventListener("pointermove", handleDragMove);
     window.removeEventListener("pointerup", handleDragUp);
   }, [handleDragMove, patchFeature]);
 
-  const startDrag = (kind: DragKind, box: Feature, e: React.PointerEvent) => {
+  const startDrag = (kind: DragKind, box: Feature, e: React.PointerEvent, xOnly = false) => {
     // Selection must happen for everyone (viewers included) and must stop the
     // event before it bubbles to the canvas's deselect handler — do both first,
     // then gate the actual drag. A viewer or a locked/done task can be selected
@@ -519,7 +533,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     onSelect(box.id);
     if (!canEditFeature(box) || box.status === "done") return;
     setDragId(box.id);
-    dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
+    // `xOnly` = compact/Layout mode: the vertical layout is auto-packed, so a
+    // move may only change dates (x); vertical reposition / epic-reassign are
+    // blocked (see handleDragMove).
+    dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now(), xOnly };
     window.addEventListener("pointermove", handleDragMove);
     window.addEventListener("pointerup", handleDragUp);
   };
@@ -528,15 +545,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // selects it (opens the details panel), and a drag past a small threshold
   // moves it. On mouse, fall back to the normal press-to-select/drag.
   const startBoxInteraction = (box: Feature, e: React.PointerEvent) => {
-    // In compact-filter mode the layout is view-only and repacks on every
-    // change, so a drag would fight the reflow — allow selection only.
-    if (compactFilterActive) {
-      e.stopPropagation();
-      onSelect(box.id);
-      return;
-    }
+    // In compact/Layout mode the vertical layout is auto-packed, so a move may
+    // only change dates (x) — vertical reposition/epic-reassign fight the reflow
+    // and are blocked with feedback (handleDragMove). Resize handles work as
+    // normal (they call startDrag directly). Horizontal-only when compact.
+    const xOnly = compactFilterActive;
     if (!coarse) {
-      startDrag("move", box, e);
+      startDrag("move", box, e, xOnly);
       return;
     }
     e.stopPropagation();
@@ -560,7 +575,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       if (canEditFeature(box) && box.status !== "done") {
         onSelect(box.id);
         setDragId(box.id);
-        dragRef.current = { kind: "move", id: box.id, startX, startY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
+        dragRef.current = { kind: "move", id: box.id, startX, startY, orig: box, dayWidth, viewZoom, lastWrite: performance.now(), xOnly: compactFilterActive };
         window.addEventListener("pointermove", handleDragMove);
         window.addEventListener("pointerup", handleDragUp);
       }
@@ -913,7 +928,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     border: `2px ${unassigned ? "dashed" : "solid"} ${dragOver ? "#EE7240" : meta.border}`,
                     borderRadius: 8,
                     boxShadow: dragOver ? "0 0 0 3px rgba(34,211,238,0.35)" : selected ? "0 0 0 2px #EE7240, 0 6px 14px rgba(15,23,42,.15)" : "0 1px 3px rgba(15,23,42,.08)",
-                    cursor: dragId === box.id ? "grabbing" : "grab",
+                    cursor: dragId === box.id ? (vertBlocked ? "not-allowed" : "grabbing") : "grab",
                     zIndex: dragId === box.id ? 30 : selected ? 20 : 10,
                     userSelect: "none",
                     overflow: "hidden",
