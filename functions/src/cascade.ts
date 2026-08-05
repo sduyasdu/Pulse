@@ -23,7 +23,9 @@ async function pulseAlive(db: FirebaseFirestore.Firestore, pulseId: string): Pro
  * (already-deleted) Pulse doc, and every member's dashboard index entry. Member
  * `myPulses` are found by a collectionGroup query on `pulseId` rather than by
  * reading `pulseMembers` — the client races to delete `pulseMembers` on teardown,
- * so that read is unreliable; the index query is not.
+ * so that read is unreliable; the index query is not. (No declared index needed:
+ * a single-field collectionGroup query is served by Firestore's automatic
+ * single-field index.)
  */
 export const onPulseDelete = onDocumentDeleted("pulses/{pulseId}", async (event) => {
   const { pulseId } = event.params;

@@ -24,13 +24,6 @@
         { "fieldPath": "scopeUids", "arrayConfig": "CONTAINS" },
         { "fieldPath": "at", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "myPulses",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "pulseId", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []
