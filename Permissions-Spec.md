@@ -491,8 +491,9 @@ Permissions are one of **two** axes; the other is the owner's **subscription pla
   `scopedRoles` plan flag**. On a plan without it, the collaborators UI offers only
   Owner/Editor/Full-Viewer, and rules reject a write that sets a scoped role.
 - **Enforcement** mirrors §4: a gated write checks the caller's `caps` **and**
-  `entitlements(pulse.billingOwnerUid)` (rules `get()` the owner's `billing/{uid}` doc —
-  see Plans-Spec §4–§5). Plan absent ⇒ Free tier.
+  `entitlements(pulse.workspaceId)` (rules `get()` the owning Organization's
+  `billing/{workspaceId}` doc — the org is the workspace, Plans-Spec §1/PL6; see
+  Plans-Spec §4–§5). Plan absent ⇒ Free tier.
 - **Details live in `Plans-Spec.md`** (tiers, flags, quotas, storage, downgrade
   behaviour); this section is only the seam. The plan layer never changes *who* a role
   is — it changes *whether the owner's account can use it at all*.

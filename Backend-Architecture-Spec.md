@@ -278,24 +278,28 @@ this doc's completeness:
 Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF3` and `Plans-Spec.md
 §4–§5, §8 PL8`. Summary:
 
-- **Owns:** `billing/{ownerUid} = { tier, status, currentPeriodEnd, seats?, source, updatedAt }`,
-  the **only** writer. `Pulse.billingOwnerUid` selects whose billing doc gates a Pulse.
+- **Owns:** `billing/{orgId} = { tier, status, currentPeriodEnd, seats?, source, updatedAt,
+  stripeCustomerId, stripeSubscriptionId, country, currency }`, the **only** writer. Keyed by
+  **Organization**, and **`orgId === workspaceId`** (Plans-Spec §1, PL6) — a Pulse's org is its
+  `workspaceId`, which selects whose billing doc gates the Pulse.
 - **Why server-side (mandatory):** the plan is a **hard security boundary** — a client-writable
   plan lets anyone self-upgrade to Pro. **No client interim for *writing* the plan exists**; until
   SF3 ships, absent doc ⇒ Free (Plans-Spec §4), i.e. paid tiers don't exist and the account-menu
   entry stays a stub (`AccountMenu.tsx:92`).
-- **Trigger:** HTTPS webhook (`onRequest`) the payment provider (Stripe/RevenueCat, PL8) calls on
-  subscription create/update/cancel/renew. **Verify the provider signature**, map to
-  `{ tier, status, currentPeriodEnd }`, write via Admin SDK.
+- **Trigger:** HTTPS webhook (`onRequest`) **Stripe** (PL8 — decided) calls on subscription
+  create/update/cancel/renew (and tax/invoice events, Plans-Spec §9). **Verify the Stripe
+  signature**, map to `{ tier, status, currentPeriodEnd }`, write via Admin SDK; resolve the org
+  from the Stripe Customer (`Workspace.stripeCustomerId` ↔ `orgId`).
 - **Idempotency:** recompute the doc from the event's *current* subscription state; ignore
   out-of-order/duplicate deliveries by event id / `updatedAt`. `minInstances: 1` so a cold start
   doesn't force a provider retry.
-- **Rules interaction:** `billing/{uid}` is `read: if self; write: if false`; rules `get()` it
-  (bypassing its read rule) to gate Pulse actions on `pulse.billingOwnerUid` — the
-  `entitlement ∧ capability` seam (Permissions-Spec §6.5, Plans-Spec §5).
-- **Dependencies:** SF11 (quota counters) pairs with it; ownership-transfer moving
-  `billingOwnerUid` (PL7) must not orphan entitlements.
-- **Acceptance:** every provider event lands as the correct `billing/{uid}` state within one call;
+- **Rules interaction:** `billing/{orgId}` is `read: if isOrgAdmin(orgId)` (an `owner` in that
+  workspace's `WorkspaceMember`)`; write: if false`; rules `get()` it (bypassing its read rule) to
+  gate Pulse actions on `pulse.workspaceId` — the `entitlement ∧ capability` seam
+  (Permissions-Spec §6.5, Plans-Spec §5).
+- **Dependencies:** SF11 (quota counters) pairs with it; ownership-transfer moving a Pulse's
+  `workspaceId` (PL7) must not orphan entitlements.
+- **Acceptance:** every provider event lands as the correct `billing/{orgId}` state within one call;
   replays/out-of-order deliveries never regress a newer state; an unsigned/invalid request is
   rejected and logged.
 

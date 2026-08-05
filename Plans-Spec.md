@@ -1,7 +1,10 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **Proposal — decisions open (PL1–PL8)** · Owner: product + eng ·
+Status: **Proposal — decisions open (PL1–PL11)** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
+
+**Decided:** the billing entity is an **Organization** (§1), and the payment provider is
+**Stripe** (**PL8** — resolved; see §4 and §9).
 
 ## 0. What this is (and isn't)
 
@@ -22,20 +25,56 @@ the other — both must say yes.
 
 Spec/design only — no application code changes.
 
-## 1. Who "the plan owner" is
+## 1. Who "the plan owner" is — the Organization
 
-A Pulse's entitlements come from a **single billing owner account**, not from each
-member's own plan.
+A Pulse's entitlements come from a **single billing entity: an Organization** — not from
+an individual member, and not from each member's own plan.
 
-- The billing owner is the account tracked in **`Pulse.billingOwnerUid`** (new field;
-  default = creator). It follows an **ownership transfer** (the "Make owner" flow already
-  in `CollaboratorsDialog`) — transferring billing ownership is part of that action
-  (**PL7**: confirm transfer moves billing, or keep billing with the original owner).
-- Members' own plans are irrelevant to a Pulse they don't own. A Free-plan member can
-  fully use a Pro owner's Pulse; that's intended (the owner pays for the workspace).
-- For a Pulse inside a **Team/workspace**, the entitlement source may be the *workspace's*
-  plan rather than an individual (**PL6** — recommend: workspace plan when
-  `workspaceId` is a real team; personal-workspace Pulses use the owner's personal plan).
+> **The Organization *is* the Workspace (PL6, decided — option 1).** Rather than a new
+> parallel entity, an Organization is the app's existing **`Workspace`** extended with
+> billing + legal identity (country, Stripe, org roles). So `orgId === workspaceId`, and a
+> Pulse's org is its existing **`Pulse.workspaceId`** — no separate `billingOrgId` and no
+> second membership roster. "Organization" is the name for the billing/legal face of a
+> Workspace. Everything below that says "Organization" is a property of that Workspace.
+
+- Every Pulse belongs to exactly one **Workspace/Organization** (`Pulse.workspaceId`). The
+  Organization holds the subscription; its plan entitles *all* Pulses in that workspace.
+  (Supersedes the earlier `billingOwnerUid`/`billingOrgId` sketch — billing attaches to the
+  workspace, not a single user account. Both are retired; see §7.)
+- **Members' own plans are irrelevant.** A member with no subscription of their own can
+  fully use a Pulse in a Pro/Team Organization — the *Organization* pays. This is intended.
+- **Solo / personal use** is just the user's **personal workspace** acting as a
+  single-admin personal Organization (auto-created on sign-up — it already exists as
+  `user.personalWorkspaceId`). There is always a workspace behind a Pulse, so there is
+  always an org; "no organization" is not a state.
+- **Ownership transfer** moves a Pulse between workspaces/organizations by reassigning its
+  `workspaceId` (the "Make owner"/transfer flow). Entitlements immediately follow the new
+  org's plan (**PL7**).
+
+### 1.1 The Organization entity (= the extended Workspace)
+
+An **Organization** is a **Workspace** in its role as the account that subscribes, pays,
+and is invoiced. It owns Pulses (its `workspaceId` Pulses) and, beyond what a Workspace
+holds today, has:
+
+- **Administrators** — the existing **`WorkspaceMember`** roster carries the org roles:
+  workspace `owner` → org **admin**, workspace `member` → org **member** (PL9). Admins
+  manage the subscription and billing, the org's country/tax details, and org/workspace
+  membership. A user can administer more than one Organization (they're an owner in more
+  than one workspace); a user's *plan-level* rights in a Pulse come from that Pulse's org,
+  never from the user. Org **admin** is a distinct axis from a Pulse's per-Pulse roles
+  (`Permissions-Spec.md`): being an org admin does **not** grant edit rights inside a
+  Pulse, and a Pulse owner/editor is not automatically an org admin. (**PL9** — confirm
+  whether to keep the `owner/member` names or rename to `admin/member`; the mapping is the
+  point.)
+- **A country of establishment** — the ISO 3166-1 country the Organization is legally
+  based in, plus optionally the set of countries it operates/bills in. This is the anchor
+  for tax, currency, and invoice legal requirements (§9). It is set when the org is
+  created and editable by admins; changing it may re-derive tax treatment going forward
+  (never retroactively — issued invoices are immutable records).
+
+Members' own plans stay irrelevant; only the owning Organization's plan matters for
+entitlement.
 
 ## 2. Tiers (placeholder — product to finalize, PL1)
 
@@ -90,14 +129,20 @@ resource), never on read.
 
 The plan **must not be client-writable** (a user could set themselves to Pro). Design:
 
-- A locked doc **`billing/{ownerUid}`** (or `plans/{uid}`): `{ tier, status, currentPeriodEnd, seats?, updatedAt, source }`.
-- **Written only by the payment webhook** via the Admin SDK (bypasses rules) — see
-  `Server-Functions-Spec.md` **SF3**. Rules: `allow read: if request.auth.uid == uid`
-  (owner reads their own for UI); `allow write: if false` (no client writes ever).
-- Rules gating a Pulse action read it with `get(/databases/$(db)/documents/billing/$(pulse.billingOwnerUid))`
-  — security-rules `get()` bypasses the doc's own read rule, so the doc stays private but
-  still gate-able.
-- **Absent doc = Free** (new accounts have no billing doc until they subscribe).
+- A locked doc **`billing/{orgId}`** where **`orgId === workspaceId`** (PL6): `{ tier,
+  status, currentPeriodEnd, seats?, updatedAt, source, stripeCustomerId,
+  stripeSubscriptionId, country, currency, taxStatus? }`. Keyed by **workspace/Organization**,
+  not user — one subscription per org.
+- **Written only by the Stripe webhook** via the Admin SDK (bypasses rules) — see
+  `Server-Functions-Spec.md` **SF3**. Rules: `allow read: if isOrgAdmin(orgId)` — i.e. the
+  caller is an `owner` in `WorkspaceMember` for that workspace (org admin); `allow write: if
+  false` (no client writes ever — the tier is set from Stripe's subscription state, never by
+  a client).
+- Rules gating a Pulse action read it with
+  `get(/databases/$(db)/documents/billing/$(pulse.workspaceId))` — security-rules `get()`
+  bypasses the doc's own read rule, so the doc stays private but still gate-able.
+- **Absent doc = Free** (a newly-created Organization has no billing doc until it
+  subscribes).
 
 ## 5. Enforcement
 
@@ -106,7 +151,7 @@ Mirror the Permissions-Spec `entitlement ∧ capability` model at every layer.
 - **Firestore rules (authoritative for anything security/quota-relevant).** A gated
   write does `planOf(pulse) has flag X` **and** the caller's `caps` allow it. Example:
   assigning a scoped role to a member is allowed only if
-  `entitlements(billingOwnerUid).scopedRoles == true` **and** the actor is owner.
+  `entitlements(pulse.workspaceId).scopedRoles == true` **and** the actor is owner.
   Quotas that rules can check cheaply (a stored counter, or comparing an array length in
   the same doc) go in rules; **counts across a collection can't be done in rules** →
   those are client-guarded + optionally reconciled by a function (PL5, and
@@ -133,13 +178,26 @@ Mirror the Permissions-Spec `entitlement ∧ capability` model at every layer.
 
 ## 7. Data-model changes (additive)
 
-- **`Pulse.billingOwnerUid: string`** — the account whose plan entitles this Pulse
-  (default = creator; moves on ownership transfer, PL7).
-- **`billing/{uid}` doc** (§4): `{ tier, status, currentPeriodEnd, seats?, source, updatedAt }`.
+**PL6 decided (option 1): the Organization is the existing `Workspace`, extended.** No
+separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second roster —
+`orgId === workspaceId`, and a Pulse's org is its existing `Pulse.workspaceId`.
+
+- **Extend `Workspace`** (`workspaces/{workspaceId}`) with org/legal fields:
+  `country` (ISO 3166-1 alpha-2, legal establishment), `countries?: string[]` (additional
+  billing jurisdictions), `stripeCustomerId?`, and for the launch country
+  `rfc?`, `taxRegime?`, `postalCode?` (§9.5). `isPersonal: true` = a single-admin personal
+  org.
+- **Reuse `WorkspaceMember`** as the org roster: role `owner` = org **admin**, `member` =
+  org member (PL9). No new membership collection.
+- **`billing/{workspaceId}` doc** (§4): `{ tier, status, currentPeriodEnd, seats?, source,
+  updatedAt, stripeCustomerId, stripeSubscriptionId, country, currency, taxStatus? }`.
+  Keyed by workspace id.
+- **Retired:** `Pulse.billingOwnerUid` and the interim `Pulse.billingOrgId` — the org is
+  resolved from `Pulse.workspaceId`, so a Pulse can never drift from its org.
 - No change to `PulseMember`/`Resource`/`Feature`. Entitlements are read, never stored on
   those.
 
-## 8. Open decisions (PL1–PL8)
+## 8. Open decisions (PL1–PL11)
 
 1. **PL1 — Tier names, count, prices.** Product-owned. Recommend 3 tiers (Free/Pro/Team).
 2. **PL2 — Feature-flag split.** Which features are gated (esp. `scopedRoles`, `teams`,
@@ -150,14 +208,143 @@ Mirror the Permissions-Spec `entitlement ∧ capability` model at every layer.
 5. **PL5 — Collection-count quotas.** Rules can't count a collection; do we (a) store a
    maintained counter (needs a function), or (b) client-guard only for v1? *Recommend
    client-guard v1, add a counter function later (register in Server-Functions-Spec).*
-6. **PL6 — Personal vs workspace billing.** Whose plan entitles a team Pulse — the
-   workspace's or the individual owner's? *Recommend: workspace plan for team Pulses,
-   personal plan for personal-workspace Pulses.*
-7. **PL7 — Ownership transfer moves billing?** Does "Make owner" also move
-   `billingOwnerUid`? *Recommend yes (billing follows control); confirm.*
-8. **PL8 — Payment provider.** Stripe vs. RevenueCat vs. other; drives SF3's webhook
-   shape. Product/eng decision.
+6. **PL6 — Organization ↔ workspace mapping. → DECIDED: option 1 (fold together).** The
+   Organization **is** the existing `Workspace`, extended with billing/legal fields; a
+   non-personal workspace is a team org, a personal workspace is a single-admin personal
+   org. `orgId === workspaceId`; the org is resolved via `Pulse.workspaceId` (no separate
+   entity, no `billingOrgId`, no second roster — §7). Reuse `WorkspaceMember` for org roles
+   (PL9). *Future:* one-org-owns-many-workspaces (option 2) is a later change if a single
+   bill must span multiple workspaces — not needed now.
+7. **PL7 — Ownership transfer moves billing?** Does the transfer flow move the Pulse's
+   `workspaceId` to the new owner's workspace/org? *Recommend yes (billing follows control);
+   confirm, and define what happens if the target user has no team workspace (falls back to
+   their personal org, or must pick one).*
+8. **PL8 — Payment provider. → DECIDED: Stripe.** Drives SF3's webhook shape and the §9
+   country/tax design. (Was Stripe vs RevenueCat vs other.)
+9. **PL9 — Org role set.** Just `admin` + `member`, or a richer set (billing-admin vs
+   org-admin, owner)? *Recommend `admin` + `member` to start; `admin` manages billing +
+   membership + country/tax.*
+10. **PL10 — Launch country. → DECIDED: Mexico (MX).** Pulse launches billing in **Mexico
+    only**; Organizations are Mexico-based (`country: "MX"`), billed in **MXN**, with **IVA
+    (16%)** and **RFC** tax IDs. Mexico mandates **CFDI** e-invoices validated by the SAT —
+    see §9.5 for how that's handled (Stripe Tax covers IVA calculation, but SAT-valid CFDI
+    issuance likely needs a certified e-invoicing integration beyond Stripe). Additional
+    countries are a later expansion (§9.4 step 3).
+    - **PL10-a — CFDI approach at launch. → DECIDED: summary "factura global", not
+      per-customer CFDI.** At launch, customers get only the (non-fiscal) Stripe invoice;
+      Mexican origin is inferred from **card country**; a **weekly/monthly** job extracts
+      Stripe collections and issues **one aggregate SAT-compliant factura global** (público
+      en general). Per-customer CFDI via a PAC is deferred. Full detail in §9.5.
+11. **PL11 — Seat definition.** What counts as a billable "seat" — an Organization member,
+    or a member across the org's Pulses (deduped by user)? Drives `billing.seats` and the
+    Team-tier quota (§3.2). *Recommend: unique users across the org's Pulses, deduped.*
 
 > **Cross-refs:** this layer is referenced from `Permissions-Spec.md` (§ Plan gating,
 > `entitlement ∧ capability`), and its server side is `Server-Functions-Spec.md` **SF3**
-> (billing/plan sync — webhook writes `billing/{uid}`, the only writer).
+> (billing/plan sync — the Stripe webhook writes `billing/{orgId}`, the only writer).
+
+## 9. Payments, tax & country-aware invoicing (Stripe)
+
+**Provider: Stripe** (PL8, decided). The guiding principle is to **lean on Stripe's own
+compliance machinery for per-country legal requirements rather than building tax/invoice
+logic in Pulse.** Pulse's job is to model the Organization and its country correctly and
+hand that to Stripe; Stripe computes tax and produces compliant invoices.
+
+### 9.1 Mapping Pulse → Stripe
+
+- One **Stripe Customer per Organization/Workspace** (`Workspace.stripeCustomerId`), created on
+  first subscribe. The customer's **address (country)** and any **Tax IDs** (VAT/CUIT/EIN/
+  ABN…) come from the Organization's country/legal details (§1.1). Country drives currency,
+  tax treatment, and invoice format.
+- One **Subscription per Organization**, mapped to the tier (PL1). Subscription state is
+  the source of truth for `billing/{orgId}.tier/status` (§4), synced by **SF3**.
+- **Seats** (PL11) map to Stripe **quantity** on a per-seat price, if Team tier is
+  per-seat.
+
+### 9.2 Leverage Stripe's country/legal capabilities (don't reinvent)
+
+- **Stripe Tax** — automatic calculation and collection of VAT / GST / sales tax by the
+  customer's jurisdiction, including rate lookup, thresholds, and reverse-charge handling.
+  This is the primary mechanism for "invoice per each country's legal requirements."
+- **Customer Tax IDs** — collect and validate business tax IDs; Stripe renders them on
+  invoices where legally required and applies reverse-charge/B2B rules.
+- **Stripe Invoicing / hosted invoices & credit notes** — Stripe produces the invoice
+  document with the fields each country mandates (sequential numbering, seller/buyer tax
+  details, tax breakdown, currency), hosted + PDF. Where Stripe supports **local/e-invoicing
+  or Revenue Recognition** for a jurisdiction, use it rather than a custom pipeline.
+- **Stripe Checkout / Customer Portal** — all payment-detail entry and plan management
+  happens in Stripe's **hosted** flows (never in-app — consistent with §6 and the app's
+  security rules against handling card data). The account-menu "Billing & payment" screen
+  deep-links into the portal.
+
+### 9.3 What Pulse still owns
+
+- **Correct org country & legal identity** — capture at org creation, editable by admins;
+  this is the input Stripe Tax/Invoicing depends on, so it must be accurate.
+- **Entitlement sync** — SF3 translates Stripe subscription/tax events into
+  `billing/{orgId}` (idempotently; Stripe delivers webhooks at-least-once). Invoices/tax
+  are read-only artifacts in Stripe; Pulse links to them, never regenerates them.
+- **Immutability of issued documents** — a later change to the org's country affects
+  *future* invoices only; already-issued invoices are legal records and are never
+  rewritten.
+
+### 9.4 Phasing (future-facing)
+
+Country-aware invoicing is explicitly a **future** capability, not v1. Sequence:
+1. Stripe Customer + Subscription per Org; tier sync via SF3; hosted Checkout/Portal.
+   (Enough to charge and gate — single-country to start, PL10.)
+2. Turn on **Stripe Tax** + Tax ID collection for the launch countries (PL10).
+3. Expand jurisdictions / enable local e-invoicing where Stripe offers it, as Pulse sells
+   into more countries.
+
+The org data model (§1.1, §7) is designed now so this can land later without a migration:
+`Organization.country`/`countries` and the per-org Stripe Customer are the only anchors
+the country-aware tax/invoicing work needs.
+
+### 9.5 Launch country: Mexico (PL10, decided)
+
+Pulse launches billing in **Mexico only**. Concretely:
+
+- **Currency:** MXN. **Tax:** **IVA** (VAT), standard **16%**. **Tax ID:** **RFC**
+  (Registro Federal de Contribuyentes) — collected on the Stripe Customer and validated;
+  personas físicas vs. morales differ in RFC length/format.
+- **Stripe covers:** IVA calculation/collection via **Stripe Tax** (Mexico is supported),
+  RFC capture as a Customer Tax ID, MXN charges, and hosted Checkout/Portal. Use these as
+  the baseline.
+- **The CFDI gap (important).** Mexico requires a legally valid invoice to be a **CFDI 4.0**
+  (Comprobante Fiscal Digital por Internet) — an XML issued and **stamped (timbrado)**
+  through the **SAT** (tax authority), normally via an authorized certification provider
+  (**PAC**), carrying the buyer's RFC, `uso de CFDI`, `régimen fiscal`, and `código postal`.
+  A standard Stripe invoice PDF is **not** a CFDI. **Stripe does not natively issue
+  SAT-stamped CFDIs.**
+
+- **PL10-a — CFDI approach at launch. → DECIDED: summary "factura global", no per-customer
+  CFDI.** The initial release **does not issue individual CFDIs** to customers. Instead:
+  - Each customer receives only the **generic Stripe invoice/receipt** for their charge —
+    which has **no legal (fiscal) status in Mexico** and is explicitly not a CFDI. The
+    billing UI must not imply it's a tax invoice.
+  - **Customer origin (is-this-Mexico?) is inferred from the payment card's country**
+    (Stripe card/issuer country / BIN), **not** from a collected RFC or address. This keeps
+    onboarding frictionless — no RFC/fiscal-data capture at launch.
+  - On a **weekly or monthly** cadence, a scheduled job **extracts the collections summary
+    from Stripe** (all MX-attributed charges for the period) and **one aggregate,
+    SAT-compliant "factura global" (CFDI to público en general, RFC genérico
+    `XAXX010101000`)** is issued for the period's total — via a PAC or manually at first.
+    This satisfies the SAT obligation in aggregate without per-transaction CFDIs.
+  - **Trade-off (accepted):** individual customers who need their *own* CFDI can't
+    self-serve one at launch. Per-customer CFDI issuance (the PAC-on-payment path below) is
+    a **later** enhancement, gated on demand.
+  - *Deferred alternative (post-launch):* **PAC / e-invoicing integration** (Facturama,
+    Facturapi, …) triggered on Stripe `invoice.paid` to stamp a per-customer CFDI from
+    collected RFC/fiscal data. Requires capturing `rfc`, `régimen fiscal`, `código postal`,
+    `uso de CFDI` — deliberately **not** collected in the summary-invoice launch.
+
+- **Data implications of the launch choice:** the Mexico-specific `Workspace` fields (`rfc`,
+  `taxRegime`, `postalCode`, `usoCFDI`) from §7 are **not needed for the summary-invoice
+  launch** — they belong to the deferred per-customer CFDI path. At launch, store only what
+  the summary needs: the period's Stripe collections and each charge's card-inferred country.
+- **SF-scope for MX (launch):** a **scheduled** function (weekly/monthly — register in
+  `Server-Functions-Spec.md`) pulls the period's MX collections from Stripe and produces the
+  single summary total for the factura global (stamped via PAC or handed to finance). This is
+  distinct from SF3 (subscription→`billing` sync); the per-payment CFDI stamping described in
+  the deferred alternative is a *future* function, not built now.
