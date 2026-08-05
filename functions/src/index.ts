@@ -24,3 +24,6 @@ export const ping = onCall((req) => {
 // SF1 — feature denormalization maintainer (Phase 1). Owns Feature.assignedUids
 // / leadUid and the linkedUid fan-out.
 export { onFeatureWriteDenorm, onResourceWriteFanout } from "./denorm";
+
+// SF6–SF9 — cross-user integrity & cleanup on delete (Phase 2).
+export { onPulseDelete, onMemberRemoved, onResourceDelete, onEpicDelete } from "./cascade";
