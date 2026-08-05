@@ -226,15 +226,14 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    membership + country/tax.*
 10. **PL10 — Launch country. → DECIDED: Mexico (MX).** Pulse launches billing in **Mexico
     only**; Organizations are Mexico-based (`country: "MX"`), billed in **MXN**, with **IVA
-    (16%)** and **RFC** tax IDs. Mexico mandates **CFDI** e-invoices validated by the SAT —
-    see §9.5 for how that's handled (Stripe Tax covers IVA calculation, but SAT-valid CFDI
-    issuance likely needs a certified e-invoicing integration beyond Stripe). Additional
-    countries are a later expansion (§9.4 step 3).
-    - **PL10-a — CFDI approach at launch. → DECIDED: summary "factura global", not
-      per-customer CFDI.** At launch, customers get only the (non-fiscal) Stripe invoice;
-      Mexican origin is inferred from **card country**; a **weekly/monthly** job extracts
-      Stripe collections and issues **one aggregate SAT-compliant factura global** (público
-      en general). Per-customer CFDI via a PAC is deferred. Full detail in §9.5.
+    (16%)** calculated by Stripe Tax. Additional countries are a later expansion (§9.4).
+    - **PL10-a — CFDI/invoicing at launch. → DECIDED: none in Pulse; the factura global is
+      issued MANUALLY, out of band.** No CFDI code, no PAC integration, no invoicing function
+      is built — removed from scope. Customers get only the (non-fiscal) Stripe receipt;
+      Mexican origin is inferred from **card country**; finance/the accountant reads the
+      period's collections from the **Stripe dashboard** and files the SAT factura global
+      themselves. Automating it (scheduled job and/or PAC) is a later, separate initiative.
+      Full detail in §9.5.
 11. **PL11 — Seat definition.** What counts as a billable "seat" — an Organization member,
     or a member across the org's Pulses (deduped by user)? Drives `billing.seats` and the
     Team-tier quota (§3.2). *Recommend: unique users across the org's Pulses, deduped.*
@@ -248,7 +247,14 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 **Provider: Stripe** (PL8, decided). The guiding principle is to **lean on Stripe's own
 compliance machinery for per-country legal requirements rather than building tax/invoice
 logic in Pulse.** Pulse's job is to model the Organization and its country correctly and
-hand that to Stripe; Stripe computes tax and produces compliant invoices.
+hand that to Stripe; Stripe computes tax.
+
+> **Scope note — read §9.5 for the actual launch.** §9.1–§9.4 describe the *future*
+> multi-country vision (where Stripe also produces the legal invoice). That does **not**
+> hold for the Mexico launch: Stripe cannot issue a SAT-valid CFDI, so at launch Pulse
+> **builds no invoicing** — the factura global is done **manually, out of band** (§9.5).
+> Only the subscription/tax/entitlement parts (§9.1, §9.3 entitlement sync) are in the
+> launch build.
 
 ### 9.1 Mapping Pulse → Stripe
 
@@ -305,46 +311,33 @@ the country-aware tax/invoicing work needs.
 
 Pulse launches billing in **Mexico only**. Concretely:
 
-- **Currency:** MXN. **Tax:** **IVA** (VAT), standard **16%**. **Tax ID:** **RFC**
-  (Registro Federal de Contribuyentes) — collected on the Stripe Customer and validated;
-  personas físicas vs. morales differ in RFC length/format.
-- **Stripe covers:** IVA calculation/collection via **Stripe Tax** (Mexico is supported),
-  RFC capture as a Customer Tax ID, MXN charges, and hosted Checkout/Portal. Use these as
-  the baseline.
-- **The CFDI gap (important).** Mexico requires a legally valid invoice to be a **CFDI 4.0**
-  (Comprobante Fiscal Digital por Internet) — an XML issued and **stamped (timbrado)**
-  through the **SAT** (tax authority), normally via an authorized certification provider
-  (**PAC**), carrying the buyer's RFC, `uso de CFDI`, `régimen fiscal`, and `código postal`.
-  A standard Stripe invoice PDF is **not** a CFDI. **Stripe does not natively issue
-  SAT-stamped CFDIs.**
+- **Currency:** MXN. **Tax:** **IVA** (VAT), standard **16%** — calculated/collected by
+  **Stripe Tax** (Mexico supported). No tax IDs are collected in-app at launch (see below).
+- **Stripe covers:** IVA calculation/collection via Stripe Tax, MXN charges, and hosted
+  Checkout/Portal. That is the full extent of billing Pulse builds for Mexico at launch.
 
-- **PL10-a — CFDI approach at launch. → DECIDED: summary "factura global", no per-customer
-  CFDI.** The initial release **does not issue individual CFDIs** to customers. Instead:
-  - Each customer receives only the **generic Stripe invoice/receipt** for their charge —
-    which has **no legal (fiscal) status in Mexico** and is explicitly not a CFDI. The
-    billing UI must not imply it's a tax invoice.
+- **PL10-a — CFDI approach at launch. → DECIDED: no invoicing in Pulse; the factura global
+  is issued MANUALLY, out of band.** Pulse (and any integrated service) issues **no fiscal
+  documents at all** at launch:
+  - Pulse builds **no CFDI code, no PAC integration, and no invoice-issuing function** —
+    none of it is in scope. **Removed from the build entirely.**
+  - Each customer receives only the **generic Stripe invoice/receipt** for their charge,
+    which has **no legal (fiscal) status in Mexico**. The billing UI must not imply it's a
+    tax invoice.
   - **Customer origin (is-this-Mexico?) is inferred from the payment card's country**
-    (Stripe card/issuer country / BIN), **not** from a collected RFC or address. This keeps
-    onboarding frictionless — no RFC/fiscal-data capture at launch.
-  - On a **weekly or monthly** cadence, a scheduled job **extracts the collections summary
-    from Stripe** (all MX-attributed charges for the period) and **one aggregate,
-    SAT-compliant "factura global" (CFDI to público en general, RFC genérico
-    `XAXX010101000`)** is issued for the period's total — via a PAC or manually at first.
-    This satisfies the SAT obligation in aggregate without per-transaction CFDIs.
-  - **Trade-off (accepted):** individual customers who need their *own* CFDI can't
-    self-serve one at launch. Per-customer CFDI issuance (the PAC-on-payment path below) is
-    a **later** enhancement, gated on demand.
-  - *Deferred alternative (post-launch):* **PAC / e-invoicing integration** (Facturama,
-    Facturapi, …) triggered on Stripe `invoice.paid` to stamp a per-customer CFDI from
-    collected RFC/fiscal data. Requires capturing `rfc`, `régimen fiscal`, `código postal`,
-    `uso de CFDI` — deliberately **not** collected in the summary-invoice launch.
+    (Stripe card/issuer country), **not** from a collected RFC or address — keeps onboarding
+    frictionless; no fiscal-data capture.
+  - The SAT-required **factura global** (CFDI to público en general) is produced **manually
+    by finance/the accountant, outside Pulse** — they read the period's collections from the
+    **Stripe dashboard** and file the global invoice with the SAT themselves. Pulse's only
+    job is to make the charge data available in Stripe (which it already is).
+  - **Trade-off (accepted):** no automation and no per-customer CFDI. Automating this — a
+    scheduled collections job and/or a PAC integration for per-customer CFDIs — is a
+    **later, separate initiative** with its own decision, deliberately **not** built now.
 
-- **Data implications of the launch choice:** the Mexico-specific `Workspace` fields (`rfc`,
-  `taxRegime`, `postalCode`, `usoCFDI`) from §7 are **not needed for the summary-invoice
-  launch** — they belong to the deferred per-customer CFDI path. At launch, store only what
-  the summary needs: the period's Stripe collections and each charge's card-inferred country.
-- **SF-scope for MX (launch):** a **scheduled** function (weekly/monthly — register in
-  `Server-Functions-Spec.md`) pulls the period's MX collections from Stripe and produces the
-  single summary total for the factura global (stamped via PAC or handed to finance). This is
-  distinct from SF3 (subscription→`billing` sync); the per-payment CFDI stamping described in
-  the deferred alternative is a *future* function, not built now.
+- **Data implications:** because there is no in-app invoicing, the Mexico fiscal fields once
+  sketched on `Workspace` (`rfc`, `taxRegime`, `postalCode`, `usoCFDI`) are **not added** —
+  they belong to a future automated-CFDI effort if it ever happens. Store nothing fiscal at
+  launch.
+- **No new server function for MX at launch.** The only billing function is **SF3**
+  (Stripe subscription → `billing/{orgId}` sync). There is no scheduled invoicer.
