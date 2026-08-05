@@ -5,12 +5,12 @@ import * as logger from "firebase-functions/logger";
 // loop-avoidance are applied uniformly rather than reinvented per function.
 
 /**
- * Region for ALL functions — MUST match the Firestore database's location to
- * avoid cross-region latency and egress cost.
+ * Region for ALL functions, co-located with Firestore to avoid cross-region
+ * latency and egress cost.
  *
- * ⚠️ Verify against the pulse-b9d96 Firestore location in the console before the
- * first real deploy; `us-central1` is a placeholder default, not a confirmed
- * value (Backend-Architecture-Spec open decision: "region = match Firestore").
+ * Confirmed: pulse-b9d96 Firestore is the `nam5` US multi-region, whose
+ * recommended co-located Cloud Functions region is `us-central1`
+ * (Backend-Architecture-Spec: "region = match Firestore" — resolved).
  */
 export const REGION = "us-central1";
 
