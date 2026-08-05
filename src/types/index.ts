@@ -27,6 +27,12 @@ export interface Workspace {
   isPersonal: boolean;
   ownerId: string;
   createdAt: Timestamp;
+  /** Org/legal identity for billing (Plans-Spec §1.1/§7). A Workspace *is* the
+   * billing Organization (PL6), so these live here. Set when the org subscribes;
+   * absent = never subscribed (Free). `country` is ISO 3166-1 alpha-2. */
+  country?: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
 }
 
 export type WorkspaceRole = "owner" | "member";
@@ -35,6 +41,49 @@ export interface WorkspaceMember {
   uid: string;
   role: WorkspaceRole;
   joinedAt: Timestamp;
+}
+
+// ---------------------------------------------------------------------------
+// Plans & entitlements (Plans-Spec.md). The billing entity is the Organization,
+// which *is* the Workspace (PL6) — so the billing doc is keyed by workspaceId.
+// ---------------------------------------------------------------------------
+
+export type PlanTier = "free" | "pro" | "team";
+
+/** Mirrors the subset of Stripe subscription states we act on. */
+export type BillingStatus = "active" | "trialing" | "past_due" | "canceled" | "incomplete";
+
+/**
+ * `billing/{workspaceId}` — the server-authoritative plan doc (Plans-Spec §4).
+ * Written ONLY by the Stripe webhook (Server-Functions-Spec SF3) via the Admin
+ * SDK; never client-writable. Absent doc = Free.
+ */
+export interface BillingDoc {
+  tier: PlanTier;
+  status: BillingStatus;
+  currentPeriodEnd?: Timestamp;
+  seats?: number;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  country?: string; // ISO 3166-1 alpha-2
+  currency?: string; // e.g. "mxn"
+  source: "stripe" | "manual";
+  updatedAt: Timestamp;
+}
+
+/**
+ * What a tier unlocks (Plans-Spec §3). Boolean feature flags + numeric quotas
+ * (`null` = unlimited). Combined with role capabilities as
+ * `entitlement ∧ capability` (Permissions-Spec §6.5). Values are resolved from
+ * the tier by `domain/entitlements.ts`.
+ */
+export interface Entitlements {
+  scopedRoles: boolean; // My-Beat Viewer / Task Lead
+  teams: boolean; // workspaces with >1 member
+  advancedCaps: boolean; // custom capability toggles
+  maxPulses: number | null;
+  maxMembersPerPulse: number | null;
+  maxResourcesPerPulse: number | null;
 }
 
 export interface Pulse {

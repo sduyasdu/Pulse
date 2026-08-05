@@ -782,3 +782,33 @@ describe("hourly rates (Costs-Spec §8.7)", () => {
     await assertFails(getDoc(doc(dbAs("pm", "pm@example.com"), "pulses", "p1", "rates", "res1")));
   });
 });
+
+describe("billing / plan doc (Plans-Spec §4)", () => {
+  const WS = "ws1";
+  async function seedWorkspace() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "owner", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "owner"), { uid: "owner", role: "owner", joinedAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "member"), { uid: "member", role: "member", joinedAt: Date.now() });
+      await setDoc(doc(db, "billing", WS), { tier: "pro", status: "active", source: "stripe", updatedAt: Date.now() });
+    });
+  }
+
+  it("only the org admin (workspace owner) may read the billing doc", async () => {
+    await seedWorkspace();
+    await assertSucceeds(getDoc(doc(dbAs("owner"), "billing", WS)));
+    await assertFails(getDoc(doc(dbAs("member"), "billing", WS))); // non-owner member
+    await assertFails(getDoc(doc(dbAs("stranger"), "billing", WS))); // non-member
+    await assertFails(getDoc(doc(dbAs(null), "billing", WS))); // unauthenticated
+  });
+
+  it("no client may ever write the billing doc — Stripe/SF3 only", async () => {
+    await seedWorkspace();
+    const asOwner = dbAs("owner");
+    await assertFails(setDoc(doc(asOwner, "billing", WS), { tier: "team", status: "active", source: "stripe", updatedAt: Date.now() }));
+    await assertFails(updateDoc(doc(asOwner, "billing", WS), { tier: "team" }));
+    await assertFails(deleteDoc(doc(asOwner, "billing", WS)));
+    // Even minting a fresh billing doc for a workspace you own is denied.
+    await assertFails(setDoc(doc(asOwner, "billing", "ws-new"), { tier: "pro", status: "active", source: "stripe", updatedAt: Date.now() }));
+  });
+});
