@@ -80,50 +80,56 @@ entitlement.
 
 Illustrative; final names/prices are product's. The shape is what matters.
 
-| Tier | Intent |
-|---|---|
-| **Free** | Solo / trial. Core planning, coarse roles only. |
-| **Pro** | Individual power user. Granular roles, larger quotas. |
-| **Team** | Multi-seat workspace. Everything + team management + higher quotas. |
+Three tiers. Prices are in **MXN** (Mexico launch) and are **illustrative starting points
+for product/finance to finalize**, not committed pricing. IVA (16%) is added by Stripe Tax —
+decide tax-inclusive vs -exclusive display (§9.6, PL1).
+
+| Tier | Who | Price (MXN, illustrative) | Billing |
+|---|---|---|---|
+| **Free** | Solo / trial. Core planning, coarse roles only. | $0 | — |
+| **Pro** | Individual power user. Granular roles, costs, bigger quotas. | ~$199 / mo · ~$1,990 / yr | per account |
+| **Team** | Multi-member workspace. Everything + team management + unlimited quotas. | ~$249 / seat / mo · ~$2,490 / seat / yr | per seat (Stripe `quantity`) |
+
+Annual ≈ two months free. Team is per-seat (subscription `quantity` = seat count, PL11).
+Free is simply the absence of a subscription — there's no Stripe product for it.
 
 ## 3. Entitlements = feature flags + quotas
 
 Two kinds, both derived from the tier.
 
-### 3.1 Feature flags (boolean unlocks)
-
-Candidate gated features (PL2 — confirm the split):
+### 3.1 Feature flags (boolean unlocks) — PL2 proposed
 
 | Flag | Free | Pro | Team |
 |---|---|---|---|
-| `scopedRoles` — assign My-Beat Viewer / Task Lead (`Permissions-Spec`) | ✗ | ✓ | ✓ |
-| `teams` — workspaces with >1 member | ✗ | ✗ | ✓ |
-| `advancedCaps` — custom capability toggles (Permissions §5 Advanced) | ✗ | ✓ | ✓ |
-| (future) integrations / export / API | ✗ | — | ✓ |
-| (candidate) `costs` — the cost layer (`Costs-Spec.md`) | ? | ? | ? |
-| (candidate) `byos` — bring your own storage (`Storage-Spec.md`) | ? | ? | ? |
+| `scopedRoles` — My-Beat Viewer / Task Lead (`Permissions-Spec`) | ✗ | ✓ | ✓ |
+| `advancedCaps` — custom capability toggles (Permissions §5) | ✗ | ✓ | ✓ |
+| `costs` — the cost-tracking layer (`Costs-Spec.md`) | ✗ | ✓ | ✓ |
+| `teams` — team workspaces (multiple admins / workspace-level org) | ✗ | ✗ | ✓ |
+| (future) integrations / export / API | ✗ | ✗ | ✓ |
 
-Coarse roles (owner/editor/full-viewer) and commenting stay on **every** tier so
-downgrades never lock people out of basic collaboration.
+Everything **not** in this table — canvas, kanban, epics, **coarse roles
+(owner/editor/full-viewer)**, comments, activity, undo, i18n, and **per-Pulse sharing up
+to the member quota** — is on **every** tier, so a downgrade never locks anyone out of
+basic planning or collaboration. Note `teams` gates *team workspaces* (workspace-level
+org with more than the owner as admin), **not** per-Pulse sharing, which every tier has up
+to its member quota (§3.2).
 
-**Cost tracking (`Costs-Spec.md`) is listed as a candidate, not a decision** — whether
-it's gated at all, and whether as a flag or a quota (entries per Pulse), is open and
-belongs to PL2/PL3. If it is gated, note that §5's downgrade rule matters more here
-than elsewhere: recorded spend is *history*, so a lapse must hide or freeze the view,
-never drop entries.
+Two code notes: `costs` adds a `costs` flag to `Entitlements` (small change; not yet in
+the type). Per §5 a lapse **hides/freezes** recorded spend (history), never deletes it.
+`byos` (`Storage-Spec.md`) is out of scope until that feature ships.
 
-### 3.2 Quotas (numeric limits)
-
-Candidate quotas (PL3 — confirm the numbers):
+### 3.2 Quotas (numeric limits) — PL3 proposed
 
 | Quota | Free | Pro | Team |
 |---|---|---|---|
-| Pulses per billing owner | e.g. 3 | ∞ | ∞ |
-| Members per Pulse (incl. viewers) | e.g. 3 | e.g. 10 | ∞ |
-| Resources per Pulse | e.g. 15 | ∞ | ∞ |
+| Pulses per billing org | 3 | ∞ | ∞ |
+| Members per Pulse (incl. viewers) | 3 | 10 | ∞ |
+| Resources per Pulse | 15 | ∞ | ∞ |
 
-Quota checks happen at the **point of growth** (create Pulse, add member/link, add
-resource), never on read.
+These are the values already encoded in `src/domain/entitlements.ts`
+(`TIER_ENTITLEMENTS`). Quota checks happen at the **point of growth** (create Pulse, add
+member/link, add resource), never on read; enforced client-side for v1 (PL5), with a
+counter function later if a collection count must be authoritative.
 
 ## 4. Storage — server-authoritative plan
 
@@ -199,10 +205,13 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 
 ## 8. Open decisions (PL1–PL11)
 
-1. **PL1 — Tier names, count, prices.** Product-owned. Recommend 3 tiers (Free/Pro/Team).
-2. **PL2 — Feature-flag split.** Which features are gated (esp. `scopedRoles`, `teams`,
-   `advancedCaps`). *Recommend the §3.1 split; confirm.*
-3. **PL3 — Quota numbers.** The actual limits per tier (§3.2). Product-owned.
+1. **PL1 — Tier names, count, prices. → PROPOSED (§2), pending product sign-off.** 3 tiers
+   Free/Pro/Team; MXN prices illustrative (Pro ~$199/mo, Team ~$249/seat/mo); confirm
+   prices and tax-inclusive vs -exclusive display.
+2. **PL2 — Feature-flag split. → PROPOSED (§3.1), pending sign-off.** Gated: `scopedRoles`
+   + `advancedCaps` + `costs` on Pro+, `teams` on Team. Everything else on all tiers.
+3. **PL3 — Quota numbers. → PROPOSED (§3.2), pending sign-off.** Free 3 Pulses / 3 members /
+   15 resources; Pro 10 members; Team unlimited. (Matches `entitlements.ts`.)
 4. **PL4 — Downgrade behaviour.** *Recommend:* graceful/read-only, never destructive.
    *Confirm.*
 5. **PL5 — Collection-count quotas.** Rules can't count a collection; do we (a) store a
@@ -341,3 +350,49 @@ Pulse launches billing in **Mexico only**. Concretely:
   launch.
 - **No new server function for MX at launch.** The only billing function is **SF3**
   (Stripe subscription → `billing/{orgId}` sync). There is no scheduled invoicer.
+
+### 9.6 Stripe setup — concrete requirements
+
+Everything that must exist in Stripe (and as function secrets) before SF3 / Checkout can
+ship, grouped by owner. This is the prerequisite the build plan calls "Stripe account".
+
+**A. Account & tax — product/finance**
+- Activate the Stripe account for **Mexico**: MXN, business verification, payout bank.
+- Enable **Stripe Tax**; register the **Mexico IVA (16%)** obligation; set the SaaS tax
+  category on products; decide **tax-inclusive vs -exclusive** price display (PL1).
+- (Reminder — PL10-a) Stripe does not issue CFDIs; the factura global stays **manual**.
+
+**B. Product catalog — product (Stripe dashboard)**
+- Product **"Pulse Pro"** → recurring **Prices**: monthly + annual, **MXN**.
+- Product **"Pulse Team"** → recurring **per-seat** Prices (billed by `quantity`):
+  monthly + annual, **MXN**.
+- **No Free product** (absence of a subscription = Free).
+- On **every Price**, set metadata **`tier`** (`pro`|`team`) and **`interval`** so SF3
+  maps a subscription's price → our tier without hard-coding Price ids.
+
+**C. Integration surfaces — eng**
+- **Checkout (hosted)** — a callable creates a Checkout Session: `mode: "subscription"`,
+  the chosen Price, `client_reference_id = workspaceId`, and the workspace's
+  `stripeCustomerId` (create the Customer on first checkout, store it on the Workspace,
+  set Customer metadata `workspaceId`). Success/cancel URLs return to the billing screen.
+- **Customer Portal** — configure allowed actions (switch Pro↔Team, change seats/
+  `quantity`, update card, cancel, view invoices). The account-menu **"Billing & payment"**
+  deep-links to a portal session (a second callable).
+- **Webhook → SF3** (the HTTPS function URL). Subscribe to:
+  `checkout.session.completed`, `customer.subscription.created`,
+  `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`,
+  `invoice.payment_failed`. SF3 verifies the signature, maps the subscription's
+  price-metadata → `{ tier, status, currentPeriodEnd, seats, currency, … }`, and writes
+  `billing/{workspaceId}` (workspace resolved from the Customer). Idempotent by event id
+  (at-least-once delivery).
+
+**D. Secrets — eng (Firebase Functions secrets, test + live)**
+- `STRIPE_SECRET_KEY` — for the Checkout/Portal callables.
+- `STRIPE_WEBHOOK_SECRET` — for SF3 signature verification.
+- Set via `firebase functions:secrets:set …`; QA with **test** keys + Stripe **test
+  clocks** before switching to live.
+
+**E. Data mapping — already scaffolded (Phase 3 groundwork)**
+- `Workspace.stripeCustomerId` / `stripeSubscriptionId` (types shipped).
+- Customer metadata `workspaceId` ↔ our workspace; Price metadata `tier` ↔ our tier.
+- Seats (PL11): subscription `quantity` = unique users across the org's Pulses.
