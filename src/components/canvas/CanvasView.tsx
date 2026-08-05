@@ -889,6 +889,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               // md/allocation figures are always reachable. Expanded boxes are
               // excluded — they already list their subtasks and assignees inline.
               const showHover = !expanded;
+              // Schedule-delay chips (shown inside the box's top-right when the
+              // delays toggle is on and there's a baseline that has slipped).
+              const hasBaseline = box.plannedX != null && box.plannedDuration != null;
+              const dStart = hasBaseline ? box.x - (box.plannedX as number) : 0;
+              const dEnd = hasBaseline ? box.x + box.duration - ((box.plannedX as number) + (box.plannedDuration as number)) : 0;
+              const showDelayChips = showDelays && hasBaseline && (dStart !== 0 || dEnd !== 0);
+              const fmtD = (n: number) => (n > 0 ? `+${n}d` : `${n}d`);
+              const deltaColor = (n: number) => (n > 0 ? "#E5484D" : n < 0 ? "#0F6B5C" : "#94A3B8");
 
               return (
                 <div
@@ -941,6 +949,12 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       {resourceById[filterResource]?.initials ?? filterResource}
                     </div>
                   )}
+                  {showDelayChips && (
+                    <div className="mono" style={{ position: "absolute", top: 2, right: 2, display: "flex", gap: 2, zIndex: 3, pointerEvents: "none" }}>
+                      <span title={`Started ${fmtD(dStart)} vs plan`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dStart), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>S{fmtD(dStart)}</span>
+                      <span title={`Ended ${fmtD(dEnd)} vs plan`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dEnd), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>E{fmtD(dEnd)}</span>
+                    </div>
+                  )}
                   {unassigned && <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.18) 0 6px, transparent 6px 12px)", pointerEvents: "none" }} />}
                   {box.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, background: box.labelColor, pointerEvents: "none" }} />}
                   <div className="flex items-center justify-between px-2" style={{ height: 28, borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
@@ -954,7 +968,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       {box.labelColor && <span style={{ width: 10, height: 10, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
                       <span className="text-xs font-semibold truncate" title={box.title} style={{ color: "#1F2330" }}>{box.title}</span>
                     </div>
-                    {box.plannedX != null && <Icon name="keep" size={12} title="Baseline plan set" className="flex-shrink-0" />}
+                    {box.plannedX != null && !showDelayChips && <Icon name="keep" size={12} title="Baseline plan set" className="flex-shrink-0" />}
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{box.attachments!.length}</span>}
                     {box.ai && <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} className="flex-shrink-0" />}
                     {box.status === "done" && <Icon name="lock" size={13} title="Done — locked. Change its status to edit." className="flex-shrink-0" />}
@@ -1014,37 +1028,6 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                 </div>
               );
             })}
-
-            {/* Delay badge — one compact pill riding the box's top-right corner,
-                coloured by direction (red = finished late, green = early). Drawn
-                after the boxes so it sits on top, and positioned from the box's
-                own coordinates so it tracks the box (incl. during a drag) and
-                never lands in a neighbouring row. Headline = finish variance;
-                the tooltip has the start/end/recovered breakdown. */}
-            {showDelays &&
-              displayFeatures
-                .filter((b) => b.plannedX != null && b.plannedDuration != null)
-                .map((b) => {
-                  const pStart = b.plannedX as number;
-                  const pEnd = pStart + (b.plannedDuration as number);
-                  const dStart = b.x - pStart;
-                  const dEnd = b.x + b.duration - pEnd;
-                  if (dStart === 0 && dEnd === 0) return null;
-                  const head = dEnd !== 0 ? dEnd : dStart; // finish variance leads
-                  const late = head > 0;
-                  const fmtD = (n: number) => (n > 0 ? `+${n}d` : `${n}d`);
-                  const recovered = dStart > 0 && dEnd < dStart ? ` · ${dStart - dEnd}d recovered` : "";
-                  return (
-                    <div
-                      key={`db${b.id}`}
-                      className="mono"
-                      title={`Delay vs plan — start ${fmtD(dStart)} · end ${fmtD(dEnd)}${recovered}`}
-                      style={{ position: "absolute", left: xForDay(b.x + b.duration), top: b.y, transform: "translate(-100%, -100%)", marginTop: -1, zIndex: 15, pointerEvents: "none", fontSize: 9, fontWeight: 700, color: "#fff", background: late ? "#E5484D" : "#0F6B5C", borderRadius: 5, padding: "1px 5px", boxShadow: "0 1px 3px rgba(15,23,42,0.25)", whiteSpace: "nowrap" }}
-                    >
-                      {late ? "▸" : "◂"} {fmtD(head)}
-                    </div>
-                  );
-                })}
           </div>
         </div>
       </div>
