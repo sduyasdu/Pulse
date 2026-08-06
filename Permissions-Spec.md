@@ -490,9 +490,11 @@ There is **no feature gating** — every tier has every feature. The plan layer 
 **quantity limits**, and it splits the roles into two **license classes**:
 
 - **Editor seats (paid)** — roles **owner** and **editor**. These are the users who may
-  **create Pulses** and fully edit. An org's editor count ≤ its seat limit (Pro = 1;
-  Teams/Business = purchased `billing.seats`). Promoting a member to owner/editor is
-  rejected when no seat is free.
+  **create Pulses** and fully edit. Editors are an **explicit licensed roster**,
+  `Workspace.editorUids[]` (Plans-Spec §3.1, PL9 option B): a user may hold owner/editor on a
+  Pulse **only if** they're on it, and rules cap the roster at the org's seat limit (Pro = 1;
+  Teams/Business = purchased `billing.seats`) — so promoting/creating past your paid seats is
+  rejected synchronously.
 - **Collaborators (free)** — roles **full viewer**, **my-beat viewer**, **task lead**. They
   don't consume a seat and **cannot create Pulses**; they participate in Pulses the org's
   editors own, up to the collaborator quota. (A task lead edits its own tasks but still

@@ -33,6 +33,12 @@ export interface Workspace {
   country?: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  /** The org's **licensed editor seats** (Plans-Spec §3.1, PL9 option B) — the
+   * uids allowed to hold owner/editor on this org's Pulses (and thus create/edit
+   * them). Owner-managed; the owner is always included; rules cap its length at
+   * the tier's editor-seat limit (`editorSeatLimit`). Absent ⇒ just the owner
+   * (Pro, 1 seat). Collaborators are NOT here — they're free, per-Pulse. */
+  editorUids?: string[];
 }
 
 export type WorkspaceRole = "owner" | "member";

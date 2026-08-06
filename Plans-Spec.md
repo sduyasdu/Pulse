@@ -1,6 +1,6 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **Mostly decided — open: PL9** · Owner: product + eng ·
+Status: **All decisions resolved (PL1–PL11)** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
@@ -106,21 +106,30 @@ activity, undo, costs, i18n. Tiers differ **only** by the limits below, so a dow
 never removes a capability, only caps growth. Resolved from the tier in
 `src/domain/entitlements.ts` (`TIER_ENTITLEMENTS`).
 
-### 3.1 The licensing model — editors vs collaborators
+### 3.1 The licensing model — editors vs collaborators (PL9 option B)
 
 Two kinds of member, per Organization:
 
-- **Editors** (roles **owner** / **editor**) are **paid seats**. Only editors can **create
-  Pulses** and fully edit. The number of editors in an org ≤ its editor-seat limit (Pro = 1;
-  Teams/Business = purchased seats). "Pay users create Pulses."
+- **Editors** are an **explicit, licensed roster** — `Workspace.editorUids[]`, a list of the
+  users who hold a **paid editor seat**. Only a licensed editor can be made **owner/editor**
+  on the org's Pulses, and only editors can **create Pulses** and fully edit. The roster is
+  **owner-managed** (the org admin adds/removes editors on a "Members & seats" screen); the
+  owner is always in it; **rules cap its length** at the tier's editor-seat limit (Pro = 1;
+  Teams/Business = purchased `seats`) — a synchronous, race-free check. This is the seat
+  count Stripe bills (`quantity`).
 - **Collaborators** (roles **full viewer** / **my-beat viewer** / **task lead**) are **free**,
-  don't consume an editor seat, and **cannot create Pulses** — they only participate in
-  Pulses the org's editors own. They count toward the collaborator quota.
+  are **not** on the editor roster, don't consume a seat, and **cannot create Pulses** — they
+  only participate in Pulses the org's editors own. They're invited **per-Pulse** and counted
+  per-org toward `maxCollaborators` (via SF11, §5).
 
-A **user's role is per-Organization**: the same person can be a collaborator in one org, an
-owner/editor in another, and an editor in several more — each editor role consumes one seat
-**in that org**. Every user also gets their own free **Pro** org (their personal workspace),
-where they are the single editor and can create up to 3 Pulses.
+A **user's role is per-Organization**: the same person can be a collaborator in one org and a
+licensed editor in several others — each editorship consuming one seat **in that org**. Every
+user also gets their own free **Pro** org (their personal workspace), where they are the
+single editor and can create up to 3 Pulses.
+
+> **Rule gate:** setting a `PulseMember` role to owner/editor requires the target uid to be in
+> that org's `editorUids` (rules `get()` the workspace). So a Pulse can never have an unlicensed
+> editor, and the seat cap is enforced once, at the roster, not per-Pulse.
 
 ### 3.2 Quotas (per org, unless noted)
 
@@ -172,23 +181,25 @@ The plan **must not be client-writable** (a user could set themselves to Pro). D
 There is **no feature gating** — enforcement is entirely about **quantity limits** at the
 point of growth (create Pulse, add editor/collaborator, add resource).
 
-- **Create-Pulse gate.** Only an **editor** (role owner/editor) in the target org may create
-  a Pulse, and only while the org is under its `maxPulses` cap. Collaborators can't create.
-- **Seat / member gates.** Promoting a member to editor is allowed only while editors <
-  `editorSeatLimit` (Pro 1; Teams/Business purchased `seats`). Adding a collaborator is
-  allowed only under `maxCollaborators`. Adding a resource, under `maxResourcesPerPulse`.
-- **Firestore rules enforce the counts against server-maintained counters (PL5 — Option b).**
-  Rules can't count a collection, so a function (**SF11**, `Backend-Architecture-Spec`) keeps
-  the counters current and rules `get()` them:
+- **Editor seats — enforced synchronously in rules (PL9 option B).** The editor roster is
+  `Workspace.editorUids[]`, owner-written; the rule caps `editorUids.size() ≤ editorSeatLimit`
+  (get `billing/{ws}`: Pro 1; else `seats`) on every write, and requires the owner to stay
+  included. Because it's an array in one doc, there's **no counter lag and no race** — you can
+  never exceed your paid seats. Making a `PulseMember` owner/editor requires the target uid ∈
+  the org's `editorUids` (rules `get()` the workspace).
+- **Create-Pulse gate.** Only a licensed **editor** of the target org may create a Pulse
+  (uid ∈ `editorUids` — a synchronous `get()`), and only while under `maxPulses`.
+  Collaborators can't create.
+- **Collection counts — server-maintained counters (PL5 — Option b).** Rules can't count a
+  collection, so **SF11** (`Backend-Architecture-Spec`) keeps the counters rules read via
+  `get()`:
   - `workspace.pulseCount` → gate Pulse create (`< maxPulses`).
-  - `workspace.editorUids[]` → gate promote-to-editor (`.size() < editorSeatLimit`).
   - `workspace.collaboratorUids[]` → gate add-collaborator (`.size() < maxCollaborators`).
   - `pulse.resourceCount` → gate resource create (`< maxResourcesPerPulse`).
-  Counters are **server-maintained** (never client-written — a client could forge them) and
-  updated **asynchronously**, so a rapid burst can transiently allow *one* over the limit; it
-  converges and blocks steady-state — acceptable for a commercial quota (not a security
-  boundary). The **editor-only create gate** (caller is an editor of `pulse.workspaceId`) is a
-  plain `get()` and is enforced synchronously in rules regardless.
+  These are **server-maintained** (never client-written — a client could forge them) and
+  **async**, so a rapid burst can transiently allow *one* over; it converges and blocks
+  steady-state — fine for a commercial quota (not a security boundary). *(Editor seats are
+  **not** in this list — they're the rules-native `editorUids` array above.)*
 - **Client (UX).** Read the effective entitlements (from `billing/{workspaceId}`), disable/
   soft-gate growth controls with an **upsell** affordance (ties into the "Billing & payment"
   item already stubbed in the account menu). Client gating alone is *not* the security
@@ -237,6 +248,9 @@ are otherwise out of scope for v1.
 separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second roster —
 `orgId === workspaceId`, and a Pulse's org is its existing `Pulse.workspaceId`.
 
+- **`Workspace.editorUids: string[]`** (PL9 option B) — the licensed editor roster;
+  owner-written, rules-capped at the tier's seat limit; the owner is always included.
+  Collaborators are **not** here.
 - **Extend `Workspace`** (`workspaces/{workspaceId}`) with org/legal fields:
   `country` (ISO 3166-1 alpha-2, legal establishment), `countries?: string[]` (additional
   billing jurisdictions), `stripeCustomerId?`, and for the launch country
@@ -266,9 +280,10 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    to full viewer** (keep access, lose edit) server-side; **collaborators unaffected**; a grace
    window on `past_due`.
 5. **PL5 — Collection-count quotas. → DECIDED: Option (b), maintained counters.** A function
-   (**SF11**) keeps `workspace.pulseCount` / `editorUids[]` / `collaboratorUids[]` and
+   (**SF11**) keeps `workspace.pulseCount`, `workspace.collaboratorUids[]`, and
    `pulse.resourceCount`; rules `get()` them to gate growth (§5). Server-maintained (not
    client-written); async, so a burst may transiently allow one over, then converges.
+   **Editor seats are not counted here** — they're the rules-native `editorUids` array (PL9).
 6. **PL6 — Organization ↔ workspace mapping. → DECIDED: option 1 (fold together).** The
    Organization **is** the existing `Workspace`, extended with billing/legal fields; a
    non-personal workspace is a team org, a personal workspace is a single-admin personal
@@ -282,9 +297,11 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    creation. Simplifies everything: no cross-org capacity/access/seat accounting.
 8. **PL8 — Payment provider. → DECIDED: Stripe.** Drives SF3's webhook shape and the §9
    country/tax design. (Was Stripe vs RevenueCat vs other.)
-9. **PL9 — Org role set.** Just `admin` + `member`, or a richer set (billing-admin vs
-   org-admin, owner)? *Recommend `admin` + `member` to start; `admin` manages billing +
-   membership + country/tax.*
+9. **PL9 — Editor licensing & org roles. → DECIDED: Option B (explicit roster).** Editors are
+   an explicit, owner-managed roster `Workspace.editorUids[]` (§3.1) — rules-capped at the seat
+   limit; being a Pulse owner/editor requires being on it. Managed on a new **"Members & seats"**
+   screen (a Phase-3 build). `WorkspaceMember` stays `owner`/`member` (`owner` = billing admin,
+   `isOrgAdmin`). SF11 no longer counts editors (the array is rules-native).
 10. **PL10 — Launch country. → DECIDED: Mexico (MX).** Pulse launches billing in **Mexico
     only**; Organizations are Mexico-based (`country: "MX"`), priced in **USD** with **IVA
     (16%) included** (VAT-inclusive) via Stripe Tax. Additional countries are a later

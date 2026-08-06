@@ -483,8 +483,9 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 #### SF11 — Entitlement / quota counters
 
 - **Owns/does (PL5 = Option b, decided):** maintain the counters Firestore rules **cannot** compute
-  so quota gates are cheap: `workspace.pulseCount`, `workspace.editorUids[]` (distinct editor users =
-  seat count), `workspace.collaboratorUids[]`, and `pulse.resourceCount` (Plans-Spec §3.2/§5).
+  so quota gates are cheap: `workspace.pulseCount`, `workspace.collaboratorUids[]`, and
+  `pulse.resourceCount` (Plans-Spec §3.2/§5). **Not editor seats** — those are the owner-managed
+  `Workspace.editorUids[]` array, capped directly in rules (PL9 option B).
 - **Why server-side:** rules can't count a collection; a maintained counter lets a rule do
   `count < quota` in O(1) via `get()`. Server-maintained only — a client-written counter could be
   forged. Fail-closed on lag-high (wrongly blocks a create — annoying, safe), and the plan tier

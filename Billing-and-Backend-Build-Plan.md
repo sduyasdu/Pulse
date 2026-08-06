@@ -133,20 +133,24 @@ no feature gating; tiers differ by editor seats / Pulses / collaborators / resou
   `workspace.ownerId` to full viewer** across the org's Pulses (server-side, so it's enforced
   regardless of client).
 
-**New** `functions/src/counters.ts` — **SF11** (quota counters, PL5 Option b). Maintain, on
-the relevant create/delete/role-change writes, `workspace.pulseCount`, `workspace.editorUids[]`,
-`workspace.collaboratorUids[]`, and `pulse.resourceCount`, so the rules can gate growth against
-them (§5). Server-maintained only; idempotent (recompute-from-source where cheap).
+**New** `functions/src/counters.ts` — **SF11** (quota counters, PL5 Option b). Maintain, on the
+relevant create/delete/role-change writes, `workspace.pulseCount`, `workspace.collaboratorUids[]`,
+and `pulse.resourceCount`, so the rules can gate growth against them (§5). Server-maintained only;
+idempotent. (Editor seats are **not** counted here — they're the rules-native `editorUids` array,
+PL9.)
 - A **callable** to create a Checkout session / Customer-Portal link (hosted Stripe flows).
 
 **Edit** `firestore.rules` — add the **quota/licensing enforcement** gates (the read rule
 already ships):
-- **Create-Pulse**: only an editor (owner/editor) in `pulse.workspaceId`, under `maxPulses`.
-- **Promote to editor**: rejected when editors ≥ `editorSeatLimit` (Pro 1; else `seats`).
+- **Editor roster (PL9, rules-native):** `Workspace.editorUids[]` writable only by the org
+  owner, `.size() ≤ editorSeatLimit` (`get billing/{ws}`), owner always included — synchronous,
+  race-free.
+- **Pulse owner/editor**: allowed only when the target uid ∈ that org's `editorUids`.
+- **Create-Pulse**: only a licensed editor of `pulse.workspaceId`, under `maxPulses`.
 - **Add collaborator / resource**: under `maxCollaborators` / `maxResourcesPerPulse`.
-- Cheap checks (array-length / stored counter, via `get(billing/{ws})`) in rules; collection
-  counts checked against **SF11 counters** (`workspace.pulseCount`, `editorUids[]`,
-  `collaboratorUids[]`, `pulse.resourceCount`) via `get()` (PL5 Option b). **No feature flags.**
+- Count gates use **SF11 counters** (`workspace.pulseCount`, `collaboratorUids[]`,
+  `pulse.resourceCount`) via `get()` (PL5 Option b). Editor seats are the `editorUids` array,
+  not a counter. **No feature flags.**
 
 **Edit** `rules/security.test.ts` — extend `describe("billing")` with the quota gates
 (create-Pulse editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Pro).
@@ -157,6 +161,9 @@ already ships):
 - **PL4 read-only lock (§5.1):** on Pro, derive which Pulses are over the limit (non-archived,
   ordered by `createdAt`, newest beyond `maxPulses`) and render them **read-only** with an
   "archive another Pulse to edit this" affordance. Client-derived (rules can't sort/count).
+- **Members & seats screen (PL9):** a new org-admin surface to manage `Workspace.editorUids[]`
+  — add/remove licensed editors, showing seats used / purchased and a link to buy more (Stripe
+  portal). This is net-new (today there's only per-Pulse Collaborators).
 - **Dashboard grouped by Organization** (Plans-Spec §3.3): "Your Pulses" (orgs you edit) and
   "Shared with you" (orgs you collaborate in), grouped per org. When an editor belongs to
   **>1** org, **New Pulse prompts which org** (or derives it from the org section it was
@@ -226,17 +233,11 @@ prerequisites are still in flight.
 
 ## Decisions this plan carries
 
-**Decided:** PL1–3 (tiers/prices/quotas — quota-only), PL4 (downgrade — §5.1),
-PL6 (Org=Workspace), PL8 (Stripe), PL10/10-a (Mexico, manual invoicing), PL11 (seat = editor).
-Also decided: **PL4** (downgrade — §5.1), **PL5** (Option b, SF11 counters),
-**PL7** (no cross-org transfer — "Make owner" is same-org co-ownership).
-
-**Still open:**
-
-| Decision | Resolve in |
-|---|---|
-| **PL9** — org role names + how editors are counted | Phase 0/3, in `isOrgAdmin` / SF11 |
-| **PL11** — seat definition (unique users across the org's Pulses) | Phase 3, drives `billing.seats` |
+**All PL1–PL11 are resolved** (Plans-Spec §8):
+- PL1 tiers/prices, PL2 no feature gating, PL3 quotas — quota-only model.
+- PL4 downgrade (§5.1); PL5 SF11 counters (pulses/collaborators/resources); PL6 Org=Workspace.
+- PL7 no cross-org transfer; PL8 Stripe; PL9 explicit editor roster (`editorUids[]`, option B).
+- PL10/10-a Mexico + manual invoicing; PL11 a seat = a licensed editor.
 
 ## Risk register
 
