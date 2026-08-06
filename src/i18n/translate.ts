@@ -1,6 +1,6 @@
 import type { Dict } from "./en";
 import { en } from "./en";
-import { dictionaries } from "./dictionaries";
+import { dictFor } from "./dictionaries";
 import type { Lang } from "./langs";
 
 /** A translation key — every key that exists in the English source dictionary. */
@@ -22,7 +22,7 @@ function interpolate(template: string, params?: TParams): string {
  * enforced by the `Dict`-typed dictionaries).
  */
 export function translate(lang: Lang, key: TranslationKey, params?: TParams): string {
-  const dict = dictionaries[lang] ?? en;
+  const dict = dictFor(lang);
   const template = dict[key] ?? en[key];
   return interpolate(template, params);
 }
