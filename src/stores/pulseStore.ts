@@ -17,7 +17,6 @@ import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updat
 import { subscribePulseMembers, fetchMembership } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
-import { featureDenorm, denormMatches } from "@/domain/denorm";
 import { capsOf } from "@/domain/permissions";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -105,22 +104,22 @@ const asDoc = (o: object): Record<string, unknown> => o as Record<string, unknow
  * Runs only for a full editor (rules reject others; a stale denorm fails
  * closed), and converges (a correction re-triggers it, then matches → no write).
  */
-function reconcileDenorms(get: () => PulseStoreState) {
-  const { pulseId, features, resources, costs, members } = get();
+// SF1 (deployed) is now the authoritative maintainer of Feature.assignedUids /
+// leadUid — including the linkedUid fan-out the client couldn't do atomically —
+// so the client no longer reconciles those (it did per-snapshot over every
+// feature, which was needless work on mobile). What remains client-side is the
+// cost→feature scopeUids copy (Costs-Spec §7), which no server function owns yet:
+// a cost snapshots its parent task's assignedUids at write time, and reassigning
+// the task later leaves that copy stale, silently denying a My-Beat viewer the
+// costs on their own task. Re-sync it here. Reads features[].assignedUids —
+// maintained by SF1 and arriving via snapshot. Service-layer writes, so a
+// reconcile never lands in undo history or the activity log.
+function reconcileCostScopes(get: () => PulseStoreState) {
+  const { pulseId, features, costs, members } = get();
   if (!pulseId) return;
   const uid = useAuthStore.getState().firebaseUser?.uid;
   const me = uid ? members.find((m) => m.uid === uid) : undefined;
   if (!me || capsOf(me).editScope !== "all") return;
-  const linkOf = (rid: string) => resources.find((r) => r.id === rid)?.linkedUid ?? null;
-  for (const f of features) {
-    const want = featureDenorm(f, linkOf);
-    if (!denormMatches(f, want)) void updateFeature(pulseId, f.id, want).catch(() => {});
-  }
-  // A cost copies its parent task's assignedUids at write time (Costs-Spec §7).
-  // Reassigning the task later would leave that copy stale, silently denying a
-  // My-Beat viewer the costs on their own task — so re-sync it here. These go
-  // straight to the service layer, bypassing recordSingle, so a reconcile never
-  // lands in undo history or the activity log.
   for (const c of costs) {
     const want = features.find((f) => f.id === c.featureId)?.assignedUids ?? [];
     const have = c.scopeUids ?? [];
@@ -164,13 +163,12 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         maybeFinishLoading();
       }),
       subscribeEpics(pulseId, (epics) => set({ epics })),
-      subscribeResources(pulseId, (resources) => { set({ resources }); reconcileDenorms(get); }),
+      subscribeResources(pulseId, (resources) => set({ resources })),
       subscribeRates(pulseId, (rates) => set({ rates })),
       subscribePulseMembers(pulseId, (members) => {
         membersArrived = true;
         set({ members });
         maybeFinishLoading();
-        reconcileDenorms(get);
       }),
     ];
     // Features are scoped for a My-Beat Viewer (Permissions-Spec §4.3): the rules
@@ -186,10 +184,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         if (me && capsOf(me).readScope === "beat") beatUid = uid;
       }
       if (get().pulseId !== pulseId) return; // a newer load() superseded this one
-      featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileDenorms(get); }, beatUid);
+      featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileCostScopes(get); }, beatUid);
       // Costs carry the same beat scoping as features (Costs-Spec §7), so they
       // ride the same resolved read scope rather than resolving it twice.
-      costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileDenorms(get); }, beatUid);
+      costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileCostScopes(get); }, beatUid);
     })();
     return () => { unsubs.forEach((u) => u()); featuresUnsub(); costsUnsub(); };
   },
