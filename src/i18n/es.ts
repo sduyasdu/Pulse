@@ -160,6 +160,11 @@ export const es: Dict = {
   "account.myAccount": "Mi cuenta",
   "account.billing": "Facturación y pagos",
   "account.soon": "Pronto",
+
+  "plan.pastDue": "El pago falló. Actualiza tu tarjeta en {days} días para conservar {tier}.",
+  "plan.pastDueToday": "El pago falló. Actualiza tu tarjeta hoy para conservar {tier}.",
+  "plan.pastDueExpired": "Tras {days} días sin pago, este espacio de trabajo pasó a Pro.",
+  "plan.dismissAria": "Descartar este aviso",
   "account.signOut": "Cerrar sesión",
   "account.language": "Idioma",
   "account.languageAuto": "Automático (navegador)",

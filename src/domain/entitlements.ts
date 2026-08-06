@@ -23,19 +23,82 @@ export const DEFAULT_TIER: PlanTier = "pro";
 export const PRO_ENTITLEMENTS = TIER_ENTITLEMENTS.pro;
 
 /**
- * The tier a billing doc grants. Absent doc = Pro (Plans-Spec §4). A
- * non-active/-trialing status also resolves to Pro — the conservative free
- * default (per PL4, enforcement stays graceful/read-only, never destructive).
+ * Days a delinquent org keeps its paid entitlements before resolving to Pro.
+ * Plans-Spec §5.1: "ride Stripe's dunning — treat `past_due` as still-paid for a
+ * short grace window". A failed card is usually a expired-card annoyance, not a
+ * decision to stop paying, so the org keeps working while Stripe retries.
  */
-export function tierOf(billing: BillingDoc | null | undefined): PlanTier {
+export const DELINQUENCY_GRACE_DAYS = 15;
+const GRACE_MS = DELINQUENCY_GRACE_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * When the grace window closes for a delinquent org, or `null` if it isn't
+ * delinquent. Measured from `pastDueSince` (stamped by SF3 on the first failed
+ * charge); falls back to `updatedAt` for docs written before that field existed,
+ * so an old doc gets a window rather than dropping instantly.
+ */
+function graceEndsAt(billing: BillingDoc | null | undefined): number | null {
+  if (!billing || billing.status !== "past_due") return null;
+  const startedAt = billing.pastDueSince ?? billing.updatedAt;
+  return startedAt + GRACE_MS;
+}
+
+/**
+ * The tier a billing doc grants. Absent doc = Pro (Plans-Spec §4).
+ *
+ * `past_due` keeps the paid tier until the grace window closes
+ * (DELINQUENCY_GRACE_DAYS), then resolves to Pro. Every other non-active status
+ * resolves to Pro immediately — the conservative free default (per PL4,
+ * enforcement stays graceful/read-only, never destructive).
+ *
+ * `now` is injectable so callers can render a projected state and so this stays
+ * deterministic under test.
+ */
+export function tierOf(billing: BillingDoc | null | undefined, now: number = Date.now()): PlanTier {
   if (!billing) return DEFAULT_TIER;
-  if (billing.status !== "active" && billing.status !== "trialing") return DEFAULT_TIER;
-  return billing.tier;
+  if (billing.status === "active" || billing.status === "trialing") return billing.tier;
+  const graceEnd = graceEndsAt(billing);
+  if (graceEnd !== null && now < graceEnd) return billing.tier;
+  return DEFAULT_TIER;
 }
 
 /** Resolve the effective quota limits from a billing doc (absent ⇒ Pro). */
-export function entitlementsFor(billing: BillingDoc | null | undefined): Entitlements {
-  return TIER_ENTITLEMENTS[tierOf(billing)];
+export function entitlementsFor(billing: BillingDoc | null | undefined, now: number = Date.now()): Entitlements {
+  return TIER_ENTITLEMENTS[tierOf(billing, now)];
+}
+
+/** What to warn a delinquent org about, and how urgently. */
+export interface Delinquency {
+  /** The org is `past_due` — payment failed and Stripe is retrying. */
+  isDelinquent: boolean;
+  /** The grace window has closed: entitlements have ALREADY dropped to Pro. */
+  expired: boolean;
+  /** Whole days left in the window, floored at 0. 0 means "closes today". */
+  daysRemaining: number;
+  /** When the window closes (epoch millis), or null when not delinquent. */
+  expiresAt: number | null;
+}
+
+const NOT_DELINQUENT: Delinquency = { isDelinquent: false, expired: false, daysRemaining: 0, expiresAt: null };
+
+/**
+ * The delinquency warning state for an org (Plans-Spec §5.1). Drives the
+ * "payment failed — fix it within N days" notice shown during the grace window,
+ * and the "your plan has dropped to Pro" notice after it closes.
+ *
+ * Only the org owner can read the billing doc (firestore.rules), so only they
+ * can be warned; everyone else sees `isDelinquent: false` because their read
+ * resolves to null.
+ */
+export function delinquency(billing: BillingDoc | null | undefined, now: number = Date.now()): Delinquency {
+  const expiresAt = graceEndsAt(billing);
+  if (expiresAt === null) return NOT_DELINQUENT;
+  return {
+    isDelinquent: true,
+    expired: now >= expiresAt,
+    daysRemaining: Math.max(0, Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000))),
+    expiresAt,
+  };
 }
 
 /**
@@ -45,8 +108,8 @@ export function entitlementsFor(billing: BillingDoc | null | undefined): Entitle
  * pending the seat sync — enforcement should fail open here, never lock the
  * owner out).
  */
-export function editorSeatLimit(billing: BillingDoc | null | undefined): number | null {
-  const cap = entitlementsFor(billing).maxEditors;
+export function editorSeatLimit(billing: BillingDoc | null | undefined, now: number = Date.now()): number | null {
+  const cap = entitlementsFor(billing, now).maxEditors;
   if (cap != null) return cap; // Pro → 1
   return billing?.seats ?? null; // Teams/Business → purchased seats
 }

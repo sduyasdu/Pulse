@@ -8,6 +8,7 @@ import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
 import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
+import { PlanBanner } from "@/components/shared/PlanBanner";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
@@ -143,6 +144,10 @@ export function DashboardPage() {
         </button>
         <AccountMenu />
       </header>
+
+      {/* Delinquency notice (Plans-Spec §5.1). Renders nothing unless the
+          signed-in user owns an org whose payment has failed. */}
+      <PlanBanner />
 
       {helpOpen && <HelpDrawer onClose={() => setHelpOpen(false)} placement={isMobile ? "fullScreen" : "fixed"} />}
 

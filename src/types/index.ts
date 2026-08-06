@@ -79,6 +79,11 @@ export interface BillingDoc {
   currency?: string; // "usd" (VAT-inclusive for MX customers via Stripe Tax)
   source: "stripe" | "manual";
   updatedAt: Timestamp;
+  /** When the org first went `past_due` — the start of the delinquency grace
+   * window (Plans-Spec §5.1). Set by SF3 on entering past_due, carried across
+   * dunning retries, and removed on recovery. Absent while not delinquent.
+   * `domain/entitlements` resolves the org to Pro once the window closes. */
+  pastDueSince?: Timestamp;
   /** The Stripe event this doc was last computed from. SF3 uses these to drop
    * duplicate and out-of-order deliveries (Stripe delivers at-least-once);
    * `stripeEventCreated` is the event's unix seconds. Not read by the UI. */

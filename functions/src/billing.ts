@@ -1,6 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { log, logError } from "./lib/conventions";
 
@@ -254,6 +254,11 @@ export async function syncSubscription(
   const tier: PlanTier = licensed?.tier ?? "pro";
   const status = mapStatus(sub.status);
 
+  // Timestamps are plain epoch millis, NOT Firestore Timestamp objects: the app
+  // declares `type Timestamp = number` (src/types/index.ts) and every client
+  // service writes `Date.now()`. Writing a Timestamp object here would hand the
+  // billing UI an object where the type promises a number.
+  const now = Date.now();
   const doc: Data = {
     tier,
     status,
@@ -261,14 +266,25 @@ export async function syncSubscription(
     stripeSubscriptionId: sub.id,
     currency: sub.currency,
     source: "stripe",
-    updatedAt: Timestamp.now(),
+    updatedAt: now,
     stripeEventId: event.id,
     stripeEventCreated: event.created,
   };
   if (licensed) {
     doc.seats = licensed.item.quantity ?? 1;
-    doc.currentPeriodEnd = Timestamp.fromMillis(licensed.item.current_period_end * 1000);
+    doc.currentPeriodEnd = licensed.item.current_period_end * 1000;
   }
+
+  // Delinquency clock (Plans-Spec §5.1). Stamped when the org first enters
+  // `past_due` and carried across every later past_due delivery, so the grace
+  // window measures from the FIRST failed charge rather than restarting on each
+  // dunning retry. Cleared the moment the org leaves past_due, so a recovered
+  // org that later fails again gets a fresh window. `domain/entitlements`
+  // resolves the org to Pro once DELINQUENCY_GRACE_DAYS have elapsed.
+  doc.pastDueSince =
+    status === "past_due"
+      ? (typeof prev?.pastDueSince === "number" ? prev.pastDueSince : now)
+      : FieldValue.delete();
   const country = customer?.address?.country;
   if (country) doc.country = country;
 

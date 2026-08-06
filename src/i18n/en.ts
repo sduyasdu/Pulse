@@ -164,6 +164,13 @@ export const en = {
   "account.myAccount": "My account",
   "account.billing": "Billing & payment",
   "account.soon": "Soon",
+
+  // ── plan / billing notices (Plans-Spec §5.1) ──────────────────────────────
+  // Tier names (Pro, Teams, Business) are product terms — left untranslated.
+  "plan.pastDue": "Payment failed. Update your card within {days} days to keep {tier}.",
+  "plan.pastDueToday": "Payment failed. Update your card today to keep {tier}.",
+  "plan.pastDueExpired": "After {days} days without payment, this workspace is now on Pro.",
+  "plan.dismissAria": "Dismiss this notice",
   "account.signOut": "Sign out",
   "account.language": "Language",
   "account.languageAuto": "Auto (browser)",

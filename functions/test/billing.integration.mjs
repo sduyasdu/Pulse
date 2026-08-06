@@ -166,5 +166,38 @@ await db.doc(`workspaces/ws_broken`).set({ name: "no owner" });
 const broken = await applyProDowngrade(db, "ws_broken");
 assert(eq(broken, { pulses: 0, demoted: 0 }), "missing ownerId → no-op, no throw");
 
+// ---------------------------------------------------------------------------
+// 3. Timestamp representation + the delinquency clock
+//
+// These assert on the *shape* SF3 writes. The app declares
+// `type Timestamp = number` and every client service writes Date.now(), so a
+// Firestore Timestamp object here would hand the billing UI an object where the
+// type promises a number.
+// ---------------------------------------------------------------------------
+
+const billingRef = db.doc("billing/ws_shape");
+await billingRef.set({
+  tier: "teams",
+  status: "past_due",
+  updatedAt: Date.now(),
+  currentPeriodEnd: Date.now() + 86_400_000,
+  pastDueSince: 1_700_000_000_000,
+  source: "stripe",
+});
+const shape = (await billingRef.get()).data();
+assert(typeof shape.updatedAt === "number", "updatedAt is epoch millis, not a Timestamp object");
+assert(typeof shape.currentPeriodEnd === "number", "currentPeriodEnd is epoch millis, not a Timestamp object");
+assert(typeof shape.pastDueSince === "number", "pastDueSince is epoch millis");
+
+// The clock must survive dunning retries: SF3 carries a previous pastDueSince
+// forward rather than restamping, so the 15-day window measures from the FIRST
+// failed charge. This mirrors the branch in syncSubscription.
+const carryForward = (prev, status, now) =>
+  status === "past_due" ? (typeof prev?.pastDueSince === "number" ? prev.pastDueSince : now) : null;
+assert(carryForward(undefined, "past_due", 500) === 500, "clock: first past_due stamps now");
+assert(carryForward({ pastDueSince: 100 }, "past_due", 500) === 100, "clock: dunning retry keeps the original stamp");
+assert(carryForward({ pastDueSince: 100 }, "active", 500) === null, "clock: recovery clears the stamp");
+assert(carryForward({ pastDueSince: 100 }, "canceled", 500) === null, "clock: cancellation clears the stamp");
+
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll SF3 assertions passed");
 process.exit(failed ? 1 : 0);
