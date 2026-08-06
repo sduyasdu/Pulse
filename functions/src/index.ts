@@ -27,3 +27,7 @@ export { onFeatureWriteDenorm, onResourceWriteFanout } from "./denorm";
 
 // SF6–SF9 — cross-user integrity & cleanup on delete (Phase 2).
 export { onPulseDelete, onMemberRemoved, onResourceDelete, onEpicDelete } from "./cascade";
+
+// SF3 — billing / plan sync (Phase 3). The only writer of `billing/{orgId}`, and
+// the server-side half of the PL4 downgrade.
+export { stripeWebhook } from "./billing";

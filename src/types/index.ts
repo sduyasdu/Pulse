@@ -79,6 +79,11 @@ export interface BillingDoc {
   currency?: string; // "usd" (VAT-inclusive for MX customers via Stripe Tax)
   source: "stripe" | "manual";
   updatedAt: Timestamp;
+  /** The Stripe event this doc was last computed from. SF3 uses these to drop
+   * duplicate and out-of-order deliveries (Stripe delivers at-least-once);
+   * `stripeEventCreated` is the event's unix seconds. Not read by the UI. */
+  stripeEventId?: string;
+  stripeEventCreated?: number;
 }
 
 /**
