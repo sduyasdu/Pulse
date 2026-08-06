@@ -96,17 +96,25 @@ export function licensedItem(sub: Stripe.Subscription): { item: Stripe.Subscript
 }
 
 /**
- * Does this (tier, status) pair grant a paid plan *right now*? Mirrors
- * `tierOf` in src/domain/entitlements.ts — only `active`/`trialing` count.
+ * Does this (tier, status) pair still **hold its editor seats**? This is the
+ * question the PL4 flip turns on — deliberately NOT the same as "does it grant a
+ * paid plan for display", which is `tierOf` in src/domain/entitlements.ts
+ * (active/trialing only).
  *
- * `past_due` is deliberately NOT treated as unpaid for the purpose of the PL4
- * downgrade: Plans-Spec §5.1 says to ride Stripe's dunning for a grace window,
- * and Stripe emits `customer.subscription.deleted` if dunning is exhausted —
- * that event is what actually triggers the demotion.
+ * `past_due` counts as holding: Plans-Spec §5.1 says to ride Stripe's dunning for
+ * a grace window rather than demote on a single failed charge, and Stripe emits
+ * `customer.subscription.deleted` once dunning is exhausted — that is the event
+ * that demotes.
+ *
+ * Both sides of the flip must use this same predicate. Using an active/trialing-
+ * only test for the *previous* state would mean the usual involuntary-churn path
+ * `active → past_due → canceled` never demotes at all: on the final event the
+ * previous status is `past_due`, so "was paid" would read false and the flip
+ * would go undetected.
  */
-function grantsPaid(tier: unknown, status: unknown): boolean {
+export function holdsSeats(tier: unknown, status: unknown): boolean {
   const paidTier = tier === "teams" || tier === "business";
-  return paidTier && (status === "active" || status === "trialing");
+  return paidTier && (status === "active" || status === "trialing" || status === "past_due");
 }
 
 /**
@@ -282,12 +290,12 @@ export async function syncSubscription(
     { merge: true },
   );
 
-  // A *flip* off a paid plan, not merely "currently unpaid" — so a renewal
-  // failure or a second cancel delivery doesn't re-demote. `past_due` rides
-  // dunning (see grantsPaid).
-  const wasPaid = grantsPaid(prev?.tier, prev?.status);
-  const nowPaid = grantsPaid(tier, status);
-  if (wasPaid && !nowPaid && status !== "past_due") {
+  // A *flip* off the seats, not merely "currently unpaid" — so a duplicate cancel
+  // delivery doesn't re-demote. `past_due` holds on both sides (see holdsSeats),
+  // so entering dunning is a no-op while exhausting it demotes.
+  const heldSeats = holdsSeats(prev?.tier, prev?.status);
+  const holdsNow = holdsSeats(tier, status);
+  if (heldSeats && !holdsNow) {
     await applyProDowngrade(db, orgId);
   }
 }

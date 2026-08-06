@@ -12,7 +12,7 @@
 // Exits non-zero on any failed assertion.
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { mapStatus, readTier, licensedItem, subscriptionIdFor, applyProDowngrade } from "../lib/billing.js";
+import { mapStatus, readTier, licensedItem, subscriptionIdFor, holdsSeats, applyProDowngrade } from "../lib/billing.js";
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-pulse-rules-test" });
 const db = getFirestore();
@@ -62,6 +62,30 @@ assert(
   licensedItem(subWith([item("teams")]))?.item.current_period_end === 1_800_000_000,
   "licensedItem: period end read off the item (2025 API move)",
 );
+
+// holdsSeats + the flip matrix it drives. The `active → past_due → canceled`
+// row is the regression guard: dunning-exhausted cancellation is the usual
+// involuntary-churn path, and an active/trialing-only test for the PREVIOUS state
+// makes it never demote (on the final event the previous status is past_due).
+assert(holdsSeats("teams", "active") === true, "holdsSeats: teams/active");
+assert(holdsSeats("business", "trialing") === true, "holdsSeats: business/trialing");
+assert(holdsSeats("teams", "past_due") === true, "holdsSeats: past_due still holds (§5.1 dunning grace)");
+assert(holdsSeats("teams", "canceled") === false, "holdsSeats: canceled releases");
+assert(holdsSeats("teams", "incomplete") === false, "holdsSeats: incomplete never held");
+assert(holdsSeats("pro", "active") === false, "holdsSeats: pro is not a paid tier");
+assert(holdsSeats(undefined, undefined) === false, "holdsSeats: absent doc holds nothing");
+
+const flips = (fromTier, fromStatus, toTier, toStatus) =>
+  holdsSeats(fromTier, fromStatus) && !holdsSeats(toTier, toStatus);
+
+assert(flips("teams", "active", "teams", "past_due") === false, "flip: active → past_due does NOT demote (grace)");
+assert(flips("teams", "past_due", "teams", "canceled") === true, "flip: past_due → canceled DOES demote (dunning exhausted)");
+assert(flips("teams", "active", "teams", "canceled") === true, "flip: active → canceled demotes");
+assert(flips("business", "trialing", "business", "canceled") === true, "flip: trial abandoned demotes");
+assert(flips("teams", "canceled", "teams", "canceled") === false, "flip: duplicate cancel does not re-demote");
+assert(flips(undefined, undefined, "teams", "canceled") === false, "flip: never-subscribed org is not demoted");
+assert(flips("teams", "past_due", "teams", "active") === false, "flip: dunning recovered does not demote");
+assert(flips("business", "active", "teams", "active") === false, "flip: paid→paid downgrade does not demote (out of scope, §5.1)");
 
 const ev = (type, object) => ({ type, data: { object } });
 assert(subscriptionIdFor(ev("customer.subscription.updated", { id: "sub_1" })) === "sub_1", "subscriptionIdFor: subscription.updated");
