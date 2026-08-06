@@ -1,10 +1,12 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **Proposal — decisions open (PL1–PL11)** · Owner: product + eng ·
+Status: **Mostly decided — open: PL4, PL5, PL7, PL9** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
-**Decided:** the billing entity is an **Organization** (§1), and the payment provider is
-**Stripe** (**PL8** — resolved; see §4 and §9).
+**Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
+(PL8); **quota-only** model, no feature gating (PL2); tiers **Pro/Teams/Business** at
+**$0/$6/$12 per editor seat/mo** (PL1) with the §3.2 quotas (PL3); a seat = an **editor**
+(PL11); launch **Mexico**, invoicing manual (PL10/10-a). See §2–§3, §8.
 
 ## 0. What this is (and isn't)
 
@@ -42,7 +44,8 @@ an individual member, and not from each member's own plan.
   (Supersedes the earlier `billingOwnerUid`/`billingOrgId` sketch — billing attaches to the
   workspace, not a single user account. Both are retired; see §7.)
 - **Members' own plans are irrelevant.** A member with no subscription of their own can
-  fully use a Pulse in a Pro/Team Organization — the *Organization* pays. This is intended.
+  fully use a Pulse in a paid (Teams/Business) Organization — the *Organization* pays. A
+  collaborator never needs a paid seat; only editors do. This is intended.
 - **Solo / personal use** is just the user's **personal workspace** acting as a
   single-admin personal Organization (auto-created on sign-up — it already exists as
   `user.personalWorkspaceId`). There is always a workspace behind a Pulse, so there is
@@ -76,60 +79,73 @@ holds today, has:
 Members' own plans stay irrelevant; only the owning Organization's plan matters for
 entitlement.
 
-## 2. Tiers (placeholder — product to finalize, PL1)
+## 2. Tiers & pricing (PL1 — decided)
 
-Illustrative; final names/prices are product's. The shape is what matters.
+**Three tiers, differentiated by quantity limits only** (§3) — every tier has **every
+feature**. Price is **per editor seat, per month**, in **USD**, billed **monthly in
+arrears** ("mass" billing at month end) via Stripe. For Mexican customers the price is
+**VAT-inclusive** (IVA 16% via Stripe Tax); the SAT factura global stays manual (§9.5).
 
-Three tiers. Prices are in **MXN** (Mexico launch) and are **illustrative starting points
-for product/finance to finalize**, not committed pricing. IVA (16%) is added by Stripe Tax —
-decide tax-inclusive vs -exclusive display (§9.6, PL1).
+| Tier | $/editor/mo | Editor seats | Pulses/org | Collaborators/org | Resources/Pulse |
+|---|---|---|---|---|---|
+| **Pro** | **$0** (free) | 1 (fixed) | 3 | 10 | 20 |
+| **Teams** | **$6** | per purchased seat | 5 | 20 | 40 |
+| **Business** | **$12** | per purchased seat | ∞ | ∞ | ∞ |
 
-| Tier | Who | Price (MXN, illustrative) | Billing |
+- **Pro is the free default** — the absence of a subscription (no Stripe product). One
+  editor (the org owner), enough to plan solo and invite collaborators.
+- **Teams / Business bill per editor seat** (Stripe subscription `quantity` = editor
+  count). Pulses / collaborators / resources are the tier's caps; editors are the billing
+  driver and, on Teams/Business, are limited only by the seats purchased.
+
+## 3. Entitlements = quantity limits only (no feature gating)
+
+Every tier unlocks **every feature** — canvas, kanban, epics, all roles, comments,
+activity, undo, costs, i18n. Tiers differ **only** by the limits below, so a downgrade
+never removes a capability, only caps growth. Resolved from the tier in
+`src/domain/entitlements.ts` (`TIER_ENTITLEMENTS`).
+
+### 3.1 The licensing model — editors vs collaborators
+
+Two kinds of member, per Organization:
+
+- **Editors** (roles **owner** / **editor**) are **paid seats**. Only editors can **create
+  Pulses** and fully edit. The number of editors in an org ≤ its editor-seat limit (Pro = 1;
+  Teams/Business = purchased seats). "Pay users create Pulses."
+- **Collaborators** (roles **full viewer** / **my-beat viewer** / **task lead**) are **free**,
+  don't consume an editor seat, and **cannot create Pulses** — they only participate in
+  Pulses the org's editors own. They count toward the collaborator quota.
+
+A **user's role is per-Organization**: the same person can be a collaborator in one org, an
+owner/editor in another, and an editor in several more — each editor role consumes one seat
+**in that org**. Every user also gets their own free **Pro** org (their personal workspace),
+where they are the single editor and can create up to 3 Pulses.
+
+### 3.2 Quotas (per org, unless noted)
+
+| Quota | Pro | Teams | Business |
 |---|---|---|---|
-| **Free** | Solo / trial. Core planning, coarse roles only. | $0 | — |
-| **Pro** | Individual power user. Granular roles, costs, bigger quotas. | ~$199 / mo · ~$1,990 / yr | per account |
-| **Team** | Multi-member workspace. Everything + team management + unlimited quotas. | ~$249 / seat / mo · ~$2,490 / seat / yr | per seat (Stripe `quantity`) |
+| Editor seats | 1 (fixed) | purchased | purchased |
+| Pulses per org | 3 | 5 | ∞ |
+| Collaborators per org | 10 | 20 | ∞ |
+| Resources per Pulse | 20 | 40 | ∞ |
 
-Annual ≈ two months free. Team is per-seat (subscription `quantity` = seat count, PL11).
-Free is simply the absence of a subscription — there's no Stripe product for it.
+Checks happen at the **point of growth** (create Pulse, add editor/collaborator, add
+resource), never on read; enforced client-side for v1 (PL5), with a counter function later
+if a collection count must be authoritative. Encoded in `src/domain/entitlements.ts`
+(`Entitlements` = `{ maxEditors, maxPulses, maxCollaborators, maxResourcesPerPulse }`;
+`maxEditors: null` on Teams/Business means "bounded by purchased seats", `editorSeatLimit()`).
 
-## 3. Entitlements = feature flags + quotas
+### 3.3 Dashboard — Pulses grouped by Organization
 
-Two kinds, both derived from the tier.
+Because a user can belong to several orgs, the dashboard groups Pulses **by Organization**:
 
-### 3.1 Feature flags (boolean unlocks) — PL2 proposed
-
-| Flag | Free | Pro | Team |
-|---|---|---|---|
-| `scopedRoles` — My-Beat Viewer / Task Lead (`Permissions-Spec`) | ✗ | ✓ | ✓ |
-| `advancedCaps` — custom capability toggles (Permissions §5) | ✗ | ✓ | ✓ |
-| `costs` — the cost-tracking layer (`Costs-Spec.md`) | ✗ | ✓ | ✓ |
-| `teams` — team workspaces (multiple admins / workspace-level org) | ✗ | ✗ | ✓ |
-| (future) integrations / export / API | ✗ | ✗ | ✓ |
-
-Everything **not** in this table — canvas, kanban, epics, **coarse roles
-(owner/editor/full-viewer)**, comments, activity, undo, i18n, and **per-Pulse sharing up
-to the member quota** — is on **every** tier, so a downgrade never locks anyone out of
-basic planning or collaboration. Note `teams` gates *team workspaces* (workspace-level
-org with more than the owner as admin), **not** per-Pulse sharing, which every tier has up
-to its member quota (§3.2).
-
-Two code notes: `costs` adds a `costs` flag to `Entitlements` (small change; not yet in
-the type). Per §5 a lapse **hides/freezes** recorded spend (history), never deletes it.
-`byos` (`Storage-Spec.md`) is out of scope until that feature ships.
-
-### 3.2 Quotas (numeric limits) — PL3 proposed
-
-| Quota | Free | Pro | Team |
-|---|---|---|---|
-| Pulses per billing org | 3 | ∞ | ∞ |
-| Members per Pulse (incl. viewers) | 3 | 10 | ∞ |
-| Resources per Pulse | 15 | ∞ | ∞ |
-
-These are the values already encoded in `src/domain/entitlements.ts`
-(`TIER_ENTITLEMENTS`). Quota checks happen at the **point of growth** (create Pulse, add
-member/link, add resource), never on read; enforced client-side for v1 (PL5), with a
-counter function later if a collection count must be authoritative.
+- **Your Pulses** — Pulses in orgs where you're an **editor/owner**, grouped under each org.
+- **Shared with you** — Pulses in orgs where you're a **collaborator**, grouped under each org.
+- The **New Pulse** action appears only for editors (collaborators can't create). If a user
+  is an editor in **more than one** org, creating a Pulse **prompts which org** it belongs to
+  (or the app derives it from dashboard context — e.g. the org section the action was invoked
+  from). With a single editor org, that org is used implicitly.
 
 ## 4. Storage — server-authoritative plan
 
@@ -147,21 +163,23 @@ The plan **must not be client-writable** (a user could set themselves to Pro). D
 - Rules gating a Pulse action read it with
   `get(/databases/$(db)/documents/billing/$(pulse.workspaceId))` — security-rules `get()`
   bypasses the doc's own read rule, so the doc stays private but still gate-able.
-- **Absent doc = Free** (a newly-created Organization has no billing doc until it
-  subscribes).
+- **Absent doc = Pro** (the free default — a newly-created Organization has no billing doc
+  until it subscribes to Teams/Business).
 
 ## 5. Enforcement
 
-Mirror the Permissions-Spec `entitlement ∧ capability` model at every layer.
+There is **no feature gating** — enforcement is entirely about **quantity limits** at the
+point of growth (create Pulse, add editor/collaborator, add resource).
 
-- **Firestore rules (authoritative for anything security/quota-relevant).** A gated
-  write does `planOf(pulse) has flag X` **and** the caller's `caps` allow it. Example:
-  assigning a scoped role to a member is allowed only if
-  `entitlements(pulse.workspaceId).scopedRoles == true` **and** the actor is owner.
-  Quotas that rules can check cheaply (a stored counter, or comparing an array length in
-  the same doc) go in rules; **counts across a collection can't be done in rules** →
-  those are client-guarded + optionally reconciled by a function (PL5, and
-  `Server-Functions-Spec` if a counter function is added).
+- **Create-Pulse gate.** Only an **editor** (role owner/editor) in the target org may create
+  a Pulse, and only while the org is under its `maxPulses` cap. Collaborators can't create.
+- **Seat / member gates.** Promoting a member to editor is allowed only while editors <
+  `editorSeatLimit` (Pro 1; Teams/Business purchased `seats`). Adding a collaborator is
+  allowed only under `maxCollaborators`. Adding a resource, under `maxResourcesPerPulse`.
+- **Firestore rules** enforce what they can check cheaply (a stored counter or an
+  array-length in the same doc, read via `get(billing/{pulse.workspaceId})`). **Counts
+  across a collection can't be done in rules** → client-guarded for v1 (PL5), with a counter
+  function later (`Server-Functions-Spec`) if a count must be authoritative.
 - **Client (UX).** Read the effective entitlements (from `billing/{owner}`), disable/soft-
   gate gated controls with an **upsell** affordance (ties into the "Billing & payment"
   item already stubbed in the account menu). Client gating alone is *not* the security
@@ -205,13 +223,12 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 
 ## 8. Open decisions (PL1–PL11)
 
-1. **PL1 — Tier names, count, prices. → PROPOSED (§2), pending product sign-off.** 3 tiers
-   Free/Pro/Team; MXN prices illustrative (Pro ~$199/mo, Team ~$249/seat/mo); confirm
-   prices and tax-inclusive vs -exclusive display.
-2. **PL2 — Feature-flag split. → PROPOSED (§3.1), pending sign-off.** Gated: `scopedRoles`
-   + `advancedCaps` + `costs` on Pro+, `teams` on Team. Everything else on all tiers.
-3. **PL3 — Quota numbers. → PROPOSED (§3.2), pending sign-off.** Free 3 Pulses / 3 members /
-   15 resources; Pro 10 members; Team unlimited. (Matches `entitlements.ts`.)
+1. **PL1 — Tiers & prices. → DECIDED (§2).** Pro/Teams/Business, **$0 / $6 / $12 per editor
+   seat / month**, USD, billed monthly in arrears via Stripe, VAT-inclusive for MX.
+2. **PL2 — Feature gating. → DECIDED: none.** All tiers have all features; tiers differ by
+   quantity limits only (§3). No feature flags in `Entitlements`.
+3. **PL3 — Quota numbers. → DECIDED (§3.2).** Pro 1 editor / 3 Pulses / 10 collaborators /
+   20 resources; Teams (per seat) 5 / 20 / 40; Business unlimited. (Matches `entitlements.ts`.)
 4. **PL4 — Downgrade behaviour.** *Recommend:* graceful/read-only, never destructive.
    *Confirm.*
 5. **PL5 — Collection-count quotas.** Rules can't count a collection; do we (a) store a
@@ -234,8 +251,9 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    org-admin, owner)? *Recommend `admin` + `member` to start; `admin` manages billing +
    membership + country/tax.*
 10. **PL10 — Launch country. → DECIDED: Mexico (MX).** Pulse launches billing in **Mexico
-    only**; Organizations are Mexico-based (`country: "MX"`), billed in **MXN**, with **IVA
-    (16%)** calculated by Stripe Tax. Additional countries are a later expansion (§9.4).
+    only**; Organizations are Mexico-based (`country: "MX"`), priced in **USD** with **IVA
+    (16%) included** (VAT-inclusive) via Stripe Tax. Additional countries are a later
+    expansion (§9.4).
     - **PL10-a — CFDI/invoicing at launch. → DECIDED: none in Pulse; the factura global is
       issued MANUALLY, out of band.** No CFDI code, no PAC integration, no invoicing function
       is built — removed from scope. Customers get only the (non-fiscal) Stripe receipt;
@@ -243,9 +261,10 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
       period's collections from the **Stripe dashboard** and files the SAT factura global
       themselves. Automating it (scheduled job and/or PAC) is a later, separate initiative.
       Full detail in §9.5.
-11. **PL11 — Seat definition.** What counts as a billable "seat" — an Organization member,
-    or a member across the org's Pulses (deduped by user)? Drives `billing.seats` and the
-    Team-tier quota (§3.2). *Recommend: unique users across the org's Pulses, deduped.*
+11. **PL11 — Seat definition. → DECIDED: an editor seat.** A billable seat = one **editor**
+    (role owner/editor) in the org; collaborators (viewers / task leads / my-beat viewers)
+    are free and don't consume seats. `billing.seats` = purchased editor seats = Stripe
+    subscription `quantity`. Pro is fixed at 1 editor; Teams/Business bill per editor.
 
 > **Cross-refs:** this layer is referenced from `Permissions-Spec.md` (§ Plan gating,
 > `entitlement ∧ capability`), and its server side is `Server-Functions-Spec.md` **SF3**
@@ -273,8 +292,8 @@ hand that to Stripe; Stripe computes tax.
   tax treatment, and invoice format.
 - One **Subscription per Organization**, mapped to the tier (PL1). Subscription state is
   the source of truth for `billing/{orgId}.tier/status` (§4), synced by **SF3**.
-- **Seats** (PL11) map to Stripe **quantity** on a per-seat price, if Team tier is
-  per-seat.
+- **Seats** (PL11) map to Stripe **quantity** on the per-seat price (Teams/Business);
+  `quantity` = the org's editor count.
 
 ### 9.2 Leverage Stripe's country/legal capabilities (don't reinvent)
 
@@ -320,10 +339,11 @@ the country-aware tax/invoicing work needs.
 
 Pulse launches billing in **Mexico only**. Concretely:
 
-- **Currency:** MXN. **Tax:** **IVA** (VAT), standard **16%** — calculated/collected by
-  **Stripe Tax** (Mexico supported). No tax IDs are collected in-app at launch (see below).
-- **Stripe covers:** IVA calculation/collection via Stripe Tax, MXN charges, and hosted
-  Checkout/Portal. That is the full extent of billing Pulse builds for Mexico at launch.
+- **Currency:** USD, **VAT-inclusive** for MX. **Tax:** **IVA** (VAT) 16% — calculated by
+  **Stripe Tax** (Mexico supported) and included in the $6/$12 price. No tax IDs collected
+  in-app at launch (see below).
+- **Stripe covers:** IVA calculation via Stripe Tax, USD charges, and hosted Checkout/Portal.
+  That is the full extent of billing Pulse builds for Mexico at launch.
 
 - **PL10-a — CFDI approach at launch. → DECIDED: no invoicing in Pulse; the factura global
   is issued MANUALLY, out of band.** Pulse (and any integrated service) issues **no fiscal
@@ -357,25 +377,28 @@ Everything that must exist in Stripe (and as function secrets) before SF3 / Chec
 ship, grouped by owner. This is the prerequisite the build plan calls "Stripe account".
 
 **A. Account & tax — product/finance**
-- Activate the Stripe account for **Mexico**: MXN, business verification, payout bank.
+- Activate the Stripe account for **Mexico**: **USD** charges, business verification, payout.
 - Enable **Stripe Tax**; register the **Mexico IVA (16%)** obligation; set the SaaS tax
-  category on products; decide **tax-inclusive vs -exclusive** price display (PL1).
+  category; use **tax-inclusive** pricing so the $6/$12 already includes IVA for MX (PL1).
 - (Reminder — PL10-a) Stripe does not issue CFDIs; the factura global stays **manual**.
 
 **B. Product catalog — product (Stripe dashboard)**
-- Product **"Pulse Pro"** → recurring **Prices**: monthly + annual, **MXN**.
-- Product **"Pulse Team"** → recurring **per-seat** Prices (billed by `quantity`):
-  monthly + annual, **MXN**.
-- **No Free product** (absence of a subscription = Free).
-- On **every Price**, set metadata **`tier`** (`pro`|`team`) and **`interval`** so SF3
-  maps a subscription's price → our tier without hard-coding Price ids.
+- Product **"Pulse Teams"** → recurring **per-seat** Price billed by `quantity`:
+  **$6 USD / editor / month**.
+- Product **"Pulse Business"** → recurring **per-seat** Price billed by `quantity`:
+  **$12 USD / editor / month**.
+- **No Pro product** — Pro is the free default (absence of a subscription; 1 editor).
+- Monthly billing **in arrears** (usage/quantity finalized at period end — "mass billing").
+- On **every Price**, set metadata **`tier`** (`teams`|`business`) so SF3 maps a
+  subscription's price → our tier without hard-coding Price ids. The subscription
+  `quantity` = editor seats (PL11).
 
 **C. Integration surfaces — eng**
 - **Checkout (hosted)** — a callable creates a Checkout Session: `mode: "subscription"`,
   the chosen Price, `client_reference_id = workspaceId`, and the workspace's
   `stripeCustomerId` (create the Customer on first checkout, store it on the Workspace,
   set Customer metadata `workspaceId`). Success/cancel URLs return to the billing screen.
-- **Customer Portal** — configure allowed actions (switch Pro↔Team, change seats/
+- **Customer Portal** — configure allowed actions (switch Teams↔Business, change seats/
   `quantity`, update card, cancel, view invoices). The account-menu **"Billing & payment"**
   deep-links to a portal session (a second callable).
 - **Webhook → SF3** (the HTTPS function URL). Subscribe to:

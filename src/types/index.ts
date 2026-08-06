@@ -48,7 +48,9 @@ export interface WorkspaceMember {
 // which *is* the Workspace (PL6) — so the billing doc is keyed by workspaceId.
 // ---------------------------------------------------------------------------
 
-export type PlanTier = "free" | "pro" | "team";
+// Three tiers, differentiated ONLY by quantity limits — every tier has every
+// feature (Plans-Spec §3). Pro is the free default (absent billing doc = Pro).
+export type PlanTier = "pro" | "teams" | "business";
 
 /** Mirrors the subset of Stripe subscription states we act on. */
 export type BillingStatus = "active" | "trialing" | "past_due" | "canceled" | "incomplete";
@@ -56,33 +58,38 @@ export type BillingStatus = "active" | "trialing" | "past_due" | "canceled" | "i
 /**
  * `billing/{workspaceId}` — the server-authoritative plan doc (Plans-Spec §4).
  * Written ONLY by the Stripe webhook (Server-Functions-Spec SF3) via the Admin
- * SDK; never client-writable. Absent doc = Free.
+ * SDK; never client-writable. Absent doc = Pro (the free tier). `seats` = the
+ * number of paid **editor** seats the org has bought (the billing quantity;
+ * $/editor/mo). Billed monthly in arrears via Stripe.
  */
 export interface BillingDoc {
   tier: PlanTier;
   status: BillingStatus;
   currentPeriodEnd?: Timestamp;
-  seats?: number;
+  seats?: number; // purchased editor seats
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   country?: string; // ISO 3166-1 alpha-2
-  currency?: string; // e.g. "mxn"
+  currency?: string; // "usd" (VAT-inclusive for MX customers via Stripe Tax)
   source: "stripe" | "manual";
   updatedAt: Timestamp;
 }
 
 /**
- * What a tier unlocks (Plans-Spec §3). Boolean feature flags + numeric quotas
- * (`null` = unlimited). Combined with role capabilities as
- * `entitlement ∧ capability` (Permissions-Spec §6.5). Values are resolved from
- * the tier by `domain/entitlements.ts`.
+ * A tier's quantity limits (Plans-Spec §3). `null` = unlimited. There are no
+ * feature flags — all tiers unlock all features; only these quotas differ.
+ * Combined with role capabilities as `entitlement ∧ capability`
+ * (Permissions-Spec §6.5). Resolved from the tier by `domain/entitlements.ts`.
+ *
+ * `maxEditors` is the tier's hard cap on **editor seats** (roles owner/editor,
+ * the paid users who can create Pulses): Pro = 1, Teams/Business = `null` (bounded
+ * instead by purchased seats, `BillingDoc.seats`). `maxCollaborators` caps free
+ * collaborator members (fullViewer / myBeatViewer / taskLead) per org.
  */
 export interface Entitlements {
-  scopedRoles: boolean; // My-Beat Viewer / Task Lead
-  teams: boolean; // workspaces with >1 member
-  advancedCaps: boolean; // custom capability toggles
+  maxEditors: number | null;
   maxPulses: number | null;
-  maxMembersPerPulse: number | null;
+  maxCollaborators: number | null;
   maxResourcesPerPulse: number | null;
 }
 

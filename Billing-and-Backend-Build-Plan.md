@@ -23,11 +23,12 @@ Sizes are rough calibration, not commitments: **S** ≈ half a day, **M** ≈ 1�
 These gate the billing phases and are **not** engineering tasks. Kick them off on day 0, in
 parallel with Phase 0–2, so Phase 3 isn't blocked when it's ready.
 
-- **Close PL1–PL3** — tier names/prices, which features are gated (§3.1), quota numbers
-  (§3.2). Product-owned; blocks the entitlement model, so nothing in Phase 3 is real until
-  these are frozen.
-- **Stripe account** — test + live, products/prices matching the tiers, a webhook endpoint,
-  **Stripe Tax** enabled for Mexico.
+- **PL1–PL3 — DONE.** Tiers/prices/quotas are decided (Plans-Spec §2/§3): Pro/Teams/Business,
+  $0/$6/$12 per **editor seat**/mo (USD), quota-only (no feature gating). Encoded in
+  `entitlements.ts`.
+- **Stripe account** — test + live, the two per-seat products ("Pulse Teams" $6, "Pulse
+  Business" $12) with `tier` metadata, a webhook endpoint, **Stripe Tax** (VAT-inclusive)
+  for Mexico. Full checklist: Plans-Spec §9.6.
 - **Mexico tax registration** — a finance/legal task. Note per PL10-a there is **no PAC and
   no invoicing code**: the SAT *factura global* is filed **manually, out of band** from the
   Stripe dashboard (Plans-Spec §9.5). The only "invoicing" prerequisite is that a human
@@ -112,58 +113,57 @@ stale even before their own self-heal runs.
 
 ## Phase 3 — Billing core: the revenue path — SF3 + rules + UX (XL)
 
-The **hard security boundary**. The plan must never be client-writable. Gated on Phase 0,
-frozen PL1–3, and the Stripe account. Billing is keyed by **Organization = Workspace**
-(`orgId === workspaceId`, PL6) — there is **no** separate org entity or roster.
+The **hard security boundary**. The plan must never be client-writable. Gated on Phase 0
+and the Stripe account (PL1–3 are now **decided**, §2/§3). Billing is keyed by
+**Organization = Workspace** (`orgId === workspaceId`, PL6). The model is **quota-only** —
+no feature gating; tiers differ by editor seats / Pulses / collaborators / resources.
 
-**Edit** `src/types/index.ts` — extend `Workspace` with `country` (ISO-2), `countries?`,
-`stripeCustomerId?`, `stripeSubscriptionId?`. Add a `Billing`/entitlements type. **No MX
-fiscal fields** (`rfc`, `taxRegime`, …) — invoicing is manual (PL10-a).
+**Already shipped (Phase 3 groundwork, committed):** `Workspace.country`/`stripeCustomerId`/
+`stripeSubscriptionId`; `PlanTier`/`BillingDoc`/`Entitlements` types; `domain/entitlements.ts`
+(`TIER_ENTITLEMENTS`, `tierOf`, `entitlementsFor`, `editorSeatLimit`, unit-tested);
+`services/firestore/billing.ts` (read-only); the `billing/{orgId}` **read** rule (owner-only)
++ `write:false` and its rules tests. What remains:
 
 **New** `functions/src/billing.ts`
+- **SF3 — Stripe webhook** (`onRequest`): verify signature, map subscription
+  create/update/cancel/renew to `billing/{workspaceId} = { tier, status, currentPeriodEnd,
+  seats (editor quantity), stripeCustomerId, stripeSubscriptionId, country, currency:"usd",
+  source, updatedAt }` via Admin SDK. Idempotent; workspace resolved from the Customer.
+- A **callable** to create a Checkout session / Customer-Portal link (hosted Stripe flows).
 
-- **SF3 — Stripe webhook** (`onRequest`): verify the Stripe signature, map subscription
-  create/update/cancel/renew (+ tax events) to `billing/{workspaceId} = { tier, status,
-  currentPeriodEnd, seats?, stripeCustomerId, stripeSubscriptionId, country, currency,
-  source, updatedAt }`, write via Admin SDK. Idempotent: recompute from the event's *current*
-  subscription state; resolve the workspace from the Stripe Customer
-  (`Workspace.stripeCustomerId ↔ workspaceId`).
-- A **callable** to create a Checkout session / Customer-Portal link (client never handles
-  card data — hosted Stripe flows only).
+**Edit** `firestore.rules` — add the **quota/licensing enforcement** gates (the read rule
+already ships):
+- **Create-Pulse**: only an editor (owner/editor) in `pulse.workspaceId`, under `maxPulses`.
+- **Promote to editor**: rejected when editors ≥ `editorSeatLimit` (Pro 1; else `seats`).
+- **Add collaborator / resource**: under `maxCollaborators` / `maxResourcesPerPulse`.
+- Cheap checks (array-length / stored counter, via `get(billing/{ws})`) in rules; collection
+  counts **client-guarded for v1** (PL5), counter function later (SF11). **No feature flags.**
 
-**Edit** `firestore.rules`
-
-- `match /billing/{orgId}` — `read: if isOrgAdmin(orgId)` (an `owner` in that workspace's
-  `WorkspaceMember`); `write: if false`.
-- Gate the plan-relevant writes on entitlements: a scoped-role assignment (Permissions-Spec
-  §6.5) is allowed only if `entitlements(pulse.workspaceId).scopedRoles == true` **and** the
-  actor's caps allow it. Cheap quotas (array-length in the same doc) go in rules; collection
-  counts are **client-guarded for v1** (PL5), a counter function later (SF11).
-
-**Edit** `rules/security.test.ts` — a `describe("billing")`: only an org admin reads
-`billing/{ws}`; no client can write it; a scoped-role write is rejected when the (seeded)
-billing doc lacks `scopedRoles` and allowed when it has it; absent doc ⇒ Free.
+**Edit** `rules/security.test.ts` — extend `describe("billing")` with the quota gates
+(create-Pulse editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Pro).
 
 **Edit** client
+- Consume `entitlementsFor(billing)` (already built) to soft-gate growth with an **upsell**
+  ("You've hit your plan's limit — upgrade"). Collaborators don't see **New Pulse**.
+- **Dashboard grouped by Organization** (Plans-Spec §3.3): "Your Pulses" (orgs you edit) and
+  "Shared with you" (orgs you collaborate in), grouped per org. When an editor belongs to
+  **>1** org, **New Pulse prompts which org** (or derives it from the org section it was
+  invoked in).
+- Turn the account-menu **"Billing & payment"** stub (`AccountMenu.tsx:92`) into the real
+  screen: tier, usage vs quota, seats, upgrade/manage → Stripe portal.
+- **i18n** — every new string into **all six** dictionaries (`Dict` is exact).
 
-- An entitlement hook reading `billing/{workspaceId}` (absent ⇒ Free).
-- Turn the account-menu **"Billing & payment"** stub (`AccountMenu.tsx:92`, currently `soon`)
-  into the real screen: current tier, usage vs. quota, upgrade/manage → Stripe portal.
-- **Upsell** affordance on gated controls (CollaboratorsDialog role picker, etc.) instead of
-  silently hiding them.
-- **i18n** — every new string into **all six** dictionaries (`Dict` is exact; a missing key
-  is a compile error).
-
-**Mexico specifics (launch):** Stripe Tax computes IVA (16%), charges in MXN, origin inferred
-from card country. **No invoicing built** (PL10-a).
+**Mexico specifics (launch):** Stripe Tax computes IVA (16%, **VAT-inclusive**), charges in
+**USD**, origin inferred from card country. **No invoicing built** (PL10-a).
 
 > ⚠️ **This phase's rules changes must be deployed with `firebase deploy --only firestore`.**
-> The billing gate is only real once the *live* rules read `billing/…`. Client gating is UX,
-> not the security boundary. Audit what else a firestore deploy carries.
+> The gates are only real once the *live* rules enforce them. Client gating is UX, not the
+> security boundary. The billing *read* rule already shipped (groundwork) but is **not yet
+> deployed** — it goes out with this phase's firestore deploy.
 
-**Exit:** an org admin can subscribe through Stripe, the tier lands in `billing/{ws}` via
-SF3, a gated feature unlocks only on the right tier (enforced in rules), and a self-upgrade
-attempt by writing the billing doc is rejected.
+**Exit:** an org admin subscribes through Stripe, the tier lands in `billing/{ws}` via SF3,
+a growth action is blocked at the quota (enforced in rules) with an upsell, the dashboard
+groups by org and prompts for the org on New Pulse, and a self-upgrade write is rejected.
 
 ---
 
@@ -217,12 +217,12 @@ prerequisites are still in flight.
 **Resolved** (baked into the plan): PL6 (Org = Workspace), PL8 (Stripe), PL10 (Mexico),
 PL10-a (manual invoicing — no PAC/CFDI/invoicer code).
 
-**Resolve in-phase** (none blocking, but PL1–3 gate Phase 3):
+**Decided:** PL1–3 (tiers/prices/quotas — quota-only), PL6 (Org=Workspace), PL8 (Stripe),
+PL10/10-a (Mexico, manual invoicing), PL11 (seat = editor). **Resolve in-phase:**
 
 | Decision | Resolve in |
 |---|---|
-| **PL1/PL2/PL3** — tiers, gated features, quota numbers | **Before Phase 3** (product; prerequisites list) |
-| **PL4** — graceful/read-only downgrade | Phase 3, in the rules + client gating |
+| **PL4** — graceful/read-only downgrade (never revoke, only cap growth) | Phase 3, in the rules + client gating |
 | **PL5** — collection-count quotas: client-guard v1 | Phase 3 (client), SF11 later if needed |
 | **PL7** — transfer moves `workspaceId` | Phase 3, in the transfer flow |
 | **PL9** — org role names (`owner/member` vs `admin/member`) | Phase 0/3, in `isOrgAdmin` |

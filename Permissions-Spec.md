@@ -481,22 +481,31 @@ P11 resolved):
 
 ## 6.5 Plan gating (subscription entitlements)
 
-Permissions are one of **two** axes; the other is the owner's **subscription plan**
+Permissions are one of **two** axes; the other is the Organization's **subscription plan**
 (`Plans-Spec.md`). They combine, neither overriding the other:
 
 > **effective permission = plan entitlement ∧ role capability**
 
-- A role capability still requires the owner's plan to include the feature — e.g.
-  **assigning the scoped roles (My-Beat Viewer / Task Lead) is gated behind the
-  `scopedRoles` plan flag**. On a plan without it, the collaborators UI offers only
-  Owner/Editor/Full-Viewer, and rules reject a write that sets a scoped role.
-- **Enforcement** mirrors §4: a gated write checks the caller's `caps` **and**
-  `entitlements(pulse.workspaceId)` (rules `get()` the owning Organization's
-  `billing/{workspaceId}` doc — the org is the workspace, Plans-Spec §1/PL6; see
-  Plans-Spec §4–§5). Plan absent ⇒ Free tier.
-- **Details live in `Plans-Spec.md`** (tiers, flags, quotas, storage, downgrade
-  behaviour); this section is only the seam. The plan layer never changes *who* a role
-  is — it changes *whether the owner's account can use it at all*.
+There is **no feature gating** — every tier has every feature. The plan layer only imposes
+**quantity limits**, and it splits the roles into two **license classes**:
+
+- **Editor seats (paid)** — roles **owner** and **editor**. These are the users who may
+  **create Pulses** and fully edit. An org's editor count ≤ its seat limit (Pro = 1;
+  Teams/Business = purchased `billing.seats`). Promoting a member to owner/editor is
+  rejected when no seat is free.
+- **Collaborators (free)** — roles **full viewer**, **my-beat viewer**, **task lead**. They
+  don't consume a seat and **cannot create Pulses**; they participate in Pulses the org's
+  editors own, up to the collaborator quota. (A task lead edits its own tasks but still
+  can't create Pulses — editing ≠ a seat.)
+
+- **Enforcement** mirrors §4 but is quota-based: a growth action (create Pulse, promote to
+  editor, add collaborator, add resource) checks the org's entitlements —
+  `entitlements(pulse.workspaceId)` / `editorSeatLimit()` — read via `get()` on the
+  `billing/{workspaceId}` doc (the org is the workspace, Plans-Spec §1/PL6). Plan absent ⇒
+  **Pro** (the free tier). No existing capability is ever revoked on downgrade — only
+  further growth is blocked (graceful, PL4).
+- **Details live in `Plans-Spec.md`** (tiers, quotas, licensing, storage, downgrade
+  behaviour); this section is only the seam.
 
 ---
 
