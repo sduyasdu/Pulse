@@ -132,6 +132,11 @@ no feature gating; tiers differ by editor seats / Pulses / collaborators / resou
   flip to Pro/canceled**, also run the PL4 downgrade (§5.1): **demote every editor except
   `workspace.ownerId` to full viewer** across the org's Pulses (server-side, so it's enforced
   regardless of client).
+
+**New** `functions/src/counters.ts` — **SF11** (quota counters, PL5 Option b). Maintain, on
+the relevant create/delete/role-change writes, `workspace.pulseCount`, `workspace.editorUids[]`,
+`workspace.collaboratorUids[]`, and `pulse.resourceCount`, so the rules can gate growth against
+them (§5). Server-maintained only; idempotent (recompute-from-source where cheap).
 - A **callable** to create a Checkout session / Customer-Portal link (hosted Stripe flows).
 
 **Edit** `firestore.rules` — add the **quota/licensing enforcement** gates (the read rule
@@ -140,7 +145,8 @@ already ships):
 - **Promote to editor**: rejected when editors ≥ `editorSeatLimit` (Pro 1; else `seats`).
 - **Add collaborator / resource**: under `maxCollaborators` / `maxResourcesPerPulse`.
 - Cheap checks (array-length / stored counter, via `get(billing/{ws})`) in rules; collection
-  counts **client-guarded for v1** (PL5), counter function later (SF11). **No feature flags.**
+  counts checked against **SF11 counters** (`workspace.pulseCount`, `editorUids[]`,
+  `collaboratorUids[]`, `pulse.resourceCount`) via `get()` (PL5 Option b). **No feature flags.**
 
 **Edit** `rules/security.test.ts` — extend `describe("billing")` with the quota gates
 (create-Pulse editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Pro).
@@ -184,7 +190,7 @@ sequence by value and shared triggers. Each ships with its rule flip.
 - **SF2 — Notifications**: server-authored, deduped/batched. Shares the features-write
   trigger with SF4. *Note it's reliability hardening, not a security boundary — shipped
   notifications already allow member-to-member client writes.*
-- **SF11 — Quota counters** (only if PL5 needs server-maintained counts).
+- **SF11 — Quota counters** (moved up to **Phase 3** — PL5 chose maintained counters).
 - **SF5** member profile denorm sync · **SF12** presence GC (scheduled) · **SF13** invite
   lifecycle cleanup (scheduled) · **SF14/SF15** auth lifecycle (user provisioning /
   account-deletion cleanup) · **SF16** activity retention (native TTL preferred) · **SF10**
@@ -222,13 +228,14 @@ prerequisites are still in flight.
 
 **Decided:** PL1–3 (tiers/prices/quotas — quota-only), PL4 (downgrade — §5.1),
 PL6 (Org=Workspace), PL8 (Stripe), PL10/10-a (Mexico, manual invoicing), PL11 (seat = editor).
-**Still open (resolve in-phase):**
+Also decided: **PL4** (downgrade — §5.1), **PL5** (Option b, SF11 counters),
+**PL7** (no cross-org transfer — "Make owner" is same-org co-ownership).
+
+**Still open:**
 
 | Decision | Resolve in |
 |---|---|
-| **PL5** — collection-count quotas: client-guard v1 | Phase 3 (client), SF11 later if needed |
-| **PL7** — transfer moves `workspaceId` | Phase 3, in the transfer flow |
-| **PL9** — org role names (`owner/member` vs `admin/member`) | Phase 0/3, in `isOrgAdmin` |
+| **PL9** — org role names + how editors are counted | Phase 0/3, in `isOrgAdmin` / SF11 |
 | **PL11** — seat definition (unique users across the org's Pulses) | Phase 3, drives `billing.seats` |
 
 ## Risk register

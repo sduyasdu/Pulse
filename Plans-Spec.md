@@ -1,6 +1,6 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **Mostly decided — open: PL5, PL7, PL9** · Owner: product + eng ·
+Status: **Mostly decided — open: PL9** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
@@ -50,9 +50,10 @@ an individual member, and not from each member's own plan.
   single-admin personal Organization (auto-created on sign-up — it already exists as
   `user.personalWorkspaceId`). There is always a workspace behind a Pulse, so there is
   always an org; "no organization" is not a state.
-- **Ownership transfer** moves a Pulse between workspaces/organizations by reassigning its
-  `workspaceId` (the "Make owner"/transfer flow). Entitlements immediately follow the new
-  org's plan (**PL7**).
+- **A Pulse never leaves its Organization (PL7).** There is **no cross-org transfer** —
+  `Pulse.workspaceId` is fixed at creation. "Make owner" grants co-ownership to another member
+  **of the same org** (consuming an editor seat); billing stays with that org. So a Pulse's
+  entitlements never change hands.
 
 ### 1.1 The Organization entity (= the extended Workspace)
 
@@ -176,10 +177,18 @@ point of growth (create Pulse, add editor/collaborator, add resource).
 - **Seat / member gates.** Promoting a member to editor is allowed only while editors <
   `editorSeatLimit` (Pro 1; Teams/Business purchased `seats`). Adding a collaborator is
   allowed only under `maxCollaborators`. Adding a resource, under `maxResourcesPerPulse`.
-- **Firestore rules** enforce what they can check cheaply (a stored counter or an
-  array-length in the same doc, read via `get(billing/{pulse.workspaceId})`). **Counts
-  across a collection can't be done in rules** → client-guarded for v1 (PL5), with a counter
-  function later (`Server-Functions-Spec`) if a count must be authoritative.
+- **Firestore rules enforce the counts against server-maintained counters (PL5 — Option b).**
+  Rules can't count a collection, so a function (**SF11**, `Backend-Architecture-Spec`) keeps
+  the counters current and rules `get()` them:
+  - `workspace.pulseCount` → gate Pulse create (`< maxPulses`).
+  - `workspace.editorUids[]` → gate promote-to-editor (`.size() < editorSeatLimit`).
+  - `workspace.collaboratorUids[]` → gate add-collaborator (`.size() < maxCollaborators`).
+  - `pulse.resourceCount` → gate resource create (`< maxResourcesPerPulse`).
+  Counters are **server-maintained** (never client-written — a client could forge them) and
+  updated **asynchronously**, so a rapid burst can transiently allow *one* over the limit; it
+  converges and blocks steady-state — acceptable for a commercial quota (not a security
+  boundary). The **editor-only create gate** (caller is an editor of `pulse.workspaceId`) is a
+  plain `get()` and is enforced synchronously in rules regardless.
 - **Client (UX).** Read the effective entitlements (from `billing/{workspaceId}`), disable/
   soft-gate growth controls with an **upsell** affordance (ties into the "Billing & payment"
   item already stubbed in the account menu). Client gating alone is *not* the security
@@ -256,9 +265,10 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    unlock — owner picks which 3 stay live); every editor **except the org owner** is **demoted
    to full viewer** (keep access, lose edit) server-side; **collaborators unaffected**; a grace
    window on `past_due`.
-5. **PL5 — Collection-count quotas.** Rules can't count a collection; do we (a) store a
-   maintained counter (needs a function), or (b) client-guard only for v1? *Recommend
-   client-guard v1, add a counter function later (register in Server-Functions-Spec).*
+5. **PL5 — Collection-count quotas. → DECIDED: Option (b), maintained counters.** A function
+   (**SF11**) keeps `workspace.pulseCount` / `editorUids[]` / `collaboratorUids[]` and
+   `pulse.resourceCount`; rules `get()` them to gate growth (§5). Server-maintained (not
+   client-written); async, so a burst may transiently allow one over, then converges.
 6. **PL6 — Organization ↔ workspace mapping. → DECIDED: option 1 (fold together).** The
    Organization **is** the existing `Workspace`, extended with billing/legal fields; a
    non-personal workspace is a team org, a personal workspace is a single-admin personal
@@ -266,10 +276,10 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    entity, no `billingOrgId`, no second roster — §7). Reuse `WorkspaceMember` for org roles
    (PL9). *Future:* one-org-owns-many-workspaces (option 2) is a later change if a single
    bill must span multiple workspaces — not needed now.
-7. **PL7 — Ownership transfer moves billing?** Does the transfer flow move the Pulse's
-   `workspaceId` to the new owner's workspace/org? *Recommend yes (billing follows control);
-   confirm, and define what happens if the target user has no team workspace (falls back to
-   their personal org, or must pick one).*
+7. **PL7 — Ownership transfer & billing. → DECIDED: no cross-org transfer.** "Make owner"
+   grants co-ownership **within the same org** (consumes an editor seat); billing stays with
+   that org. A Pulse **never** moves between organizations — `Pulse.workspaceId` is fixed at
+   creation. Simplifies everything: no cross-org capacity/access/seat accounting.
 8. **PL8 — Payment provider. → DECIDED: Stripe.** Drives SF3's webhook shape and the §9
    country/tax design. (Was Stripe vs RevenueCat vs other.)
 9. **PL9 — Org role set.** Just `admin` + `member`, or a richer set (billing-admin vs
