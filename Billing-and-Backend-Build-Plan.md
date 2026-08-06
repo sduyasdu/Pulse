@@ -128,7 +128,10 @@ no feature gating; tiers differ by editor seats / Pulses / collaborators / resou
 - **SF3 — Stripe webhook** (`onRequest`): verify signature, map subscription
   create/update/cancel/renew to `billing/{workspaceId} = { tier, status, currentPeriodEnd,
   seats (editor quantity), stripeCustomerId, stripeSubscriptionId, country, currency:"usd",
-  source, updatedAt }` via Admin SDK. Idempotent; workspace resolved from the Customer.
+  source, updatedAt }` via Admin SDK. Idempotent; workspace resolved from the Customer. **On a
+  flip to Pro/canceled**, also run the PL4 downgrade (§5.1): **demote every editor except
+  `workspace.ownerId` to full viewer** across the org's Pulses (server-side, so it's enforced
+  regardless of client).
 - A **callable** to create a Checkout session / Customer-Portal link (hosted Stripe flows).
 
 **Edit** `firestore.rules` — add the **quota/licensing enforcement** gates (the read rule
@@ -145,6 +148,9 @@ already ships):
 **Edit** client
 - Consume `entitlementsFor(billing)` (already built) to soft-gate growth with an **upsell**
   ("You've hit your plan's limit — upgrade"). Collaborators don't see **New Pulse**.
+- **PL4 read-only lock (§5.1):** on Pro, derive which Pulses are over the limit (non-archived,
+  ordered by `createdAt`, newest beyond `maxPulses`) and render them **read-only** with an
+  "archive another Pulse to edit this" affordance. Client-derived (rules can't sort/count).
 - **Dashboard grouped by Organization** (Plans-Spec §3.3): "Your Pulses" (orgs you edit) and
   "Shared with you" (orgs you collaborate in), grouped per org. When an editor belongs to
   **>1** org, **New Pulse prompts which org** (or derives it from the org section it was
@@ -214,15 +220,12 @@ prerequisites are still in flight.
 
 ## Decisions this plan carries
 
-**Resolved** (baked into the plan): PL6 (Org = Workspace), PL8 (Stripe), PL10 (Mexico),
-PL10-a (manual invoicing — no PAC/CFDI/invoicer code).
-
-**Decided:** PL1–3 (tiers/prices/quotas — quota-only), PL6 (Org=Workspace), PL8 (Stripe),
-PL10/10-a (Mexico, manual invoicing), PL11 (seat = editor). **Resolve in-phase:**
+**Decided:** PL1–3 (tiers/prices/quotas — quota-only), PL4 (downgrade — §5.1),
+PL6 (Org=Workspace), PL8 (Stripe), PL10/10-a (Mexico, manual invoicing), PL11 (seat = editor).
+**Still open (resolve in-phase):**
 
 | Decision | Resolve in |
 |---|---|
-| **PL4** — graceful/read-only downgrade (never revoke, only cap growth) | Phase 3, in the rules + client gating |
 | **PL5** — collection-count quotas: client-guard v1 | Phase 3 (client), SF11 later if needed |
 | **PL7** — transfer moves `workspaceId` | Phase 3, in the transfer flow |
 | **PL9** — org role names (`owner/member` vs `admin/member`) | Phase 0/3, in `isOrgAdmin` |

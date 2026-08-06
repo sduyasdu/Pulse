@@ -1,6 +1,6 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **Mostly decided — open: PL4, PL5, PL7, PL9** · Owner: product + eng ·
+Status: **Mostly decided — open: PL5, PL7, PL9** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
@@ -180,15 +180,37 @@ point of growth (create Pulse, add editor/collaborator, add resource).
   array-length in the same doc, read via `get(billing/{pulse.workspaceId})`). **Counts
   across a collection can't be done in rules** → client-guarded for v1 (PL5), with a counter
   function later (`Server-Functions-Spec`) if a count must be authoritative.
-- **Client (UX).** Read the effective entitlements (from `billing/{owner}`), disable/soft-
-  gate gated controls with an **upsell** affordance (ties into the "Billing & payment"
+- **Client (UX).** Read the effective entitlements (from `billing/{workspaceId}`), disable/
+  soft-gate growth controls with an **upsell** affordance (ties into the "Billing & payment"
   item already stubbed in the account menu). Client gating alone is *not* the security
   boundary — rules are.
-- **Downgrade behaviour (PL4).** When a plan lapses to a lower tier, over-quota/over-
-  feature state must degrade gracefully, **read-only not destructive**: e.g. existing
-  scoped-role assignments keep working but no *new* ones can be created; Pulses beyond
-  the Free limit become read-only rather than deleted. Recommend never auto-deleting
-  data on downgrade.
+
+### 5.1 Downgrade behaviour (PL4 — decided)
+
+**Graceful downsize, never destructive** — nothing is ever deleted. The over-limit handling
+below applies **only when downgrading to the free tier (Pro)**; paid→paid downgrades are
+handled at the source (the portal blocks reducing seats below the current editor count) and
+are otherwise out of scope for v1.
+
+- **Pulses over the limit → newest become read-only; archive to unlock.** On dropping to Pro
+  (3 Pulses), at most `maxPulses` **non-archived** Pulses stay editable; the **newest** beyond
+  that are **read-only** (viewable, not editable), never deleted. To edit a locked Pulse the
+  owner **archives another active Pulse**, freeing a slot so a locked one becomes editable —
+  i.e. the owner chooses which 3 stay live. Enforced **client-side** (the lock is derived from
+  the Pulse list ordered by `createdAt` + the tier cap; rules can't count/sort — PL5); a
+  bypass only lets someone exceed a commercial limit, not a security boundary.
+- **Editors are demoted to a single editor.** Pro allows **1 editor seat**, so on the
+  downgrade every editor/owner **except the org owner** (the workspace owner — the only user
+  who can trigger a billing change) is **demoted to full viewer** across the org's Pulses.
+  They keep access and their data; they lose edit until the org re-subscribes and the owner
+  re-promotes them. Done **server-side** (SF3, or a companion, when the billing doc flips to
+  Pro/canceled) so it happens regardless of client, keeping `workspace.ownerId` as the sole
+  editor.
+- **Collaborators are unaffected.** Viewers / my-beat viewers / task leads keep their access
+  and roles even if the org is over the collaborator quota; only *adding new* collaborators is
+  blocked while over.
+- **Grace before enforcing.** Ride Stripe's dunning: treat `past_due` as still-paid for a
+  short grace window before the org resolves to Pro.
 
 ## 6. UX
 
@@ -229,8 +251,11 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    quantity limits only (§3). No feature flags in `Entitlements`.
 3. **PL3 — Quota numbers. → DECIDED (§3.2).** Pro 1 editor / 3 Pulses / 10 collaborators /
    20 resources; Teams (per seat) 5 / 20 / 40; Business unlimited. (Matches `entitlements.ts`.)
-4. **PL4 — Downgrade behaviour.** *Recommend:* graceful/read-only, never destructive.
-   *Confirm.*
+4. **PL4 — Downgrade behaviour. → DECIDED (§5.1).** Graceful, never destructive, and only on
+   dropping to **Pro**: the **newest** over-limit Pulses go **read-only** (archive another to
+   unlock — owner picks which 3 stay live); every editor **except the org owner** is **demoted
+   to full viewer** (keep access, lose edit) server-side; **collaborators unaffected**; a grace
+   window on `past_due`.
 5. **PL5 — Collection-count quotas.** Rules can't count a collection; do we (a) store a
    maintained counter (needs a function), or (b) client-guard only for v1? *Recommend
    client-guard v1, add a counter function later (register in Server-Functions-Spec).*
