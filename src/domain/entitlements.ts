@@ -22,6 +22,20 @@ export const TIER_ENTITLEMENTS: Record<PlanTier, Entitlements> = {
 export const DEFAULT_TIER: PlanTier = "pro";
 export const PRO_ENTITLEMENTS = TIER_ENTITLEMENTS.pro;
 
+/** Every tier, in upgrade order — the order the plan picker renders them. */
+export const ALL_TIERS: PlanTier[] = ["pro", "teams", "business"];
+
+/**
+ * Monthly USD list price **per editor seat** (Plans-Spec §2, PL1 — decided).
+ *
+ * ⚠️ Display only. **Stripe is the source of truth for what is actually
+ * charged**: Checkout bills the price attached to the product carrying the
+ * matching `tier` metadata, not this number. They agree today; if the Stripe
+ * price is ever edited without updating this, the picker will advertise a stale
+ * figure. Sourcing it from Stripe would need a `listPlans` callable.
+ */
+export const TIER_PRICE_USD: Record<PlanTier, number> = { pro: 0, teams: 6, business: 12 };
+
 /**
  * Days a delinquent org keeps its paid entitlements before resolving to Pro.
  * Plans-Spec §5.1: "ride Stripe's dunning — treat `past_due` as still-paid for a

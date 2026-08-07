@@ -1,23 +1,29 @@
 import { useState } from "react";
-import { Icon } from "@/components/shared/Icon";
 import { useBilling } from "@/hooks/useBilling";
 import { createCheckoutUrl, createPortalUrl } from "@/services/firestore/billing";
-import { entitlementsFor, tierOf, editorSeatLimit, delinquency, DELINQUENCY_GRACE_DAYS } from "@/domain/entitlements";
+import {
+  ALL_TIERS,
+  TIER_ENTITLEMENTS,
+  TIER_PRICE_USD,
+  DELINQUENCY_GRACE_DAYS,
+  delinquency,
+  editorSeatLimit,
+  tierOf,
+} from "@/domain/entitlements";
 import { useT, type TFn } from "@/i18n";
 import { useI18nStore } from "@/stores/i18nStore";
 import type { PlanTier } from "@/types";
 
 /**
- * "Billing & payment" — the org's current plan, what it allows, and the way out
- * to Stripe's hosted flows (Plans-Spec §6). Read-only by construction: the plan
- * doc is server-authoritative (SF3 is its only writer), so every mutation here
- * is a redirect to Stripe and the change lands back via the webhook.
+ * "Billing & payment" — the three plans side by side, what the org is on now,
+ * and the way out to Stripe's hosted flows (Plans-Spec §6). Read-only by
+ * construction: `billing/{orgId}` is server-authoritative (SF3 is its only
+ * writer), so every button here is a redirect and the change lands back through
+ * the webhook.
  *
- * Owner-only in practice — `billing/{orgId}` is readable only by the workspace
- * owner, so anyone else sees the free-tier view of their own org.
+ * Owner-only in practice — only a workspace owner may read `billing/{orgId}`, so
+ * everyone else sees the free-tier view of their own org.
  */
-
-const PAID_TIERS: Exclude<PlanTier, "pro">[] = ["teams", "business"];
 
 /** `null` = unlimited (Plans-Spec §3). */
 const limit = (n: number | null, t: TFn) => (n === null ? t("billing.unlimited") : String(n));
@@ -29,11 +35,88 @@ function formatDate(ms: number | undefined, lang: string): string {
   return new Date(ms).toLocaleDateString(lang, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** Product terms, left untranslated like Pulse and Epic (see i18n/en.ts). */
+const TIER_LABEL: Record<PlanTier, string> = { pro: "Pro", teams: "Teams", business: "Business" };
+
+function PlanColumn({
+  tier,
+  current,
+  subscribed,
+  busy,
+  onChoose,
+  t,
+}: {
+  tier: PlanTier;
+  current: boolean;
+  subscribed: boolean;
+  busy: boolean;
+  onChoose: () => void;
+  t: TFn;
+}) {
+  const limits = TIER_ENTITLEMENTS[tier];
+  const price = TIER_PRICE_USD[tier];
+
+  // The action depends on whether a subscription already exists, NOT on which
+  // tier was clicked: sending an existing subscriber through Checkout would open
+  // a SECOND subscription rather than move them. Stripe's portal is the only
+  // correct place to switch plans, change seats, or cancel down to Pro.
+  const label = current
+    ? t("billing.currentPlan")
+    : subscribed
+      ? t("billing.switchPlan")
+      : tier === "pro"
+        ? t("billing.currentPlan")
+        : t("billing.selectPlan");
+
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1.5">
-      <span className="text-xs" style={{ color: "#64748B" }}>{label}</span>
-      <span className="text-sm font-medium" style={{ color: "#1F2330" }}>{value}</span>
+    <div
+      className="flex flex-col rounded-xl border p-4"
+      style={{
+        borderColor: current ? "#D85A28" : "#E2DFD9",
+        background: current ? "#FFF7F2" : "#FFFFFF",
+        boxShadow: current ? "0 0 0 1px #D85A28 inset" : "none",
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{TIER_LABEL[tier]}</span>
+        {tier === "pro" && (
+          <span className="mono rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#94A3B8" }}>
+            {t("billing.free")}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className="font-display text-xl font-semibold" style={{ color: "#1F2330" }}>${price}</span>
+        <span className="text-[11px]" style={{ color: "#94A3B8" }}>{t("billing.perEditorMonth")}</span>
+      </div>
+
+      <dl className="mt-3 flex flex-1 flex-col gap-1.5 border-t pt-3" style={{ borderColor: "#F1F5F9" }}>
+        {[
+          [t("billing.editorSeats"), tier === "pro" ? "1" : t("billing.perSeat")],
+          [t("billing.maxPulses"), limit(limits.maxPulses, t)],
+          [t("billing.maxCollaborators"), limit(limits.maxCollaborators, t)],
+          [t("billing.maxResources"), limit(limits.maxResourcesPerPulse, t)],
+        ].map(([label_, value]) => (
+          <div key={label_} className="flex items-baseline justify-between gap-2">
+            <dt className="text-[11px]" style={{ color: "#64748B" }}>{label_}</dt>
+            <dd className="text-xs font-medium" style={{ color: "#1F2330" }}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <button
+        onClick={onChoose}
+        disabled={current || busy || (tier === "pro" && !subscribed)}
+        className="hoverable mt-4 rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-default disabled:opacity-55"
+        style={
+          current || (tier === "pro" && !subscribed)
+            ? { background: "#EEF1F5", color: "#64748B" }
+            : { background: tier === "business" ? "#123359" : "#D85A28", color: "#FFFFFF" }
+        }
+      >
+        {busy ? t("common.loading") : label}
+      </button>
     </div>
   );
 }
@@ -42,57 +125,51 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const lang = useI18nStore((s) => s.lang);
   const { billing } = useBilling();
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<PlanTier | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seats, setSeats] = useState(1);
 
   const now = Date.now();
-  const tier = tierOf(billing, now);
-  const limits = entitlementsFor(billing, now);
+  const current = tierOf(billing, now);
   const seatCap = editorSeatLimit(billing, now);
   const state = delinquency(billing, now);
   const subscribed = Boolean(billing?.stripeCustomerId);
 
-  // Redirect to a Stripe-hosted page. Deliberately a full navigation rather than
-  // a popup — popups are blocked more often, and Checkout brings the user back.
-  const go = async (kind: "checkout" | "portal", chosen?: Exclude<PlanTier, "pro">) => {
-    setBusy(kind);
+  // Full navigation rather than a popup — popups get blocked, and Checkout
+  // returns the user here anyway.
+  const goto = async (get: () => Promise<string>, marker: PlanTier | "portal") => {
+    setBusy(marker);
     setError(null);
     try {
-      const url = kind === "portal" ? await createPortalUrl() : await createCheckoutUrl(chosen!, seats);
-      window.location.assign(url);
+      window.location.assign(await get());
     } catch (err) {
       setError((err as Error).message || t("billing.error"));
       setBusy(null);
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display mb-4 text-base font-semibold text-yasdu-fg">{t("account.billing")}</h2>
+  const choose = (tier: PlanTier) => {
+    // Already paying? Every change — up, down, or cancel — belongs in the portal.
+    if (subscribed) return goto(createPortalUrl, "portal");
+    if (tier === "pro") return; // the free default; nothing to buy
+    return goto(() => createCheckoutUrl(tier, seats), tier);
+  };
 
-        {/* Current plan */}
-        <div className="rounded-xl border p-4" style={{ borderColor: "#E2DFD9", background: "#FAFAF8" }}>
-          <div className="mb-1 flex items-center gap-2">
-            <Icon name="credit_card" size={16} style={{ color: "#64748B" }} />
-            <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>
-              {tier.charAt(0).toUpperCase() + tier.slice(1)}
-            </span>
-            {tier === "pro" && (
-              <span className="mono rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#94A3B8" }}>
-                {t("billing.free")}
-              </span>
-            )}
-          </div>
-          <Row label={t("billing.editorSeats")} value={seatCap === null ? t("billing.unlimited") : String(seatCap)} />
-          <Row label={t("billing.maxPulses")} value={limit(limits.maxPulses, t)} />
-          <Row label={t("billing.maxCollaborators")} value={limit(limits.maxCollaborators, t)} />
-          <Row label={t("billing.maxResources")} value={limit(limits.maxResourcesPerPulse, t)} />
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6" onClick={onClose}>
+      <div
+        className="max-h-full w-full max-w-3xl overflow-y-auto rounded-2xl bg-yasdu-card p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-display text-base font-semibold text-yasdu-fg">{t("account.billing")}</h2>
+
+        <p className="mt-1 text-xs" style={{ color: "#64748B" }}>
+          {t("billing.youAreOn", { tier: TIER_LABEL[current] })}
           {billing?.currentPeriodEnd && billing.status === "active" && (
-            <Row label={t("billing.renews")} value={formatDate(billing.currentPeriodEnd, lang)} />
+            <> · {t("billing.renews")} {formatDate(billing.currentPeriodEnd, lang)}</>
           )}
-        </div>
+          {seatCap !== null && <> · {t("billing.editorSeats")}: {seatCap}</>}
+        </p>
 
         {/* Delinquency — the same state the dashboard banner reads. */}
         {state.isDelinquent && (
@@ -103,46 +180,47 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Actions. An existing subscriber manages everything in the portal —
-            card, seat count, cancellation — so we don't rebuild any of it. */}
-        <div className="mt-4 flex flex-col gap-2">
-          {subscribed ? (
-            <button
-              onClick={() => void go("portal")}
-              disabled={busy !== null}
-              className="hoverable rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg disabled:opacity-60"
-              style={{ background: "#D85A28" }}
-            >
-              {busy === "portal" ? t("common.loading") : t("billing.managePayment")}
-            </button>
-          ) : (
-            <>
-              <label className="flex items-center justify-between gap-3 text-xs" style={{ color: "#64748B" }}>
-                {t("billing.seatsToBuy")}
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={seats}
-                  onChange={(e) => setSeats(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
-                  className="w-20 rounded-lg border px-2 py-1.5 text-sm"
-                  style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", outline: "none" }}
-                />
-              </label>
-              {PAID_TIERS.map((paid) => (
-                <button
-                  key={paid}
-                  onClick={() => void go("checkout", paid)}
-                  disabled={busy !== null}
-                  className="hoverable rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg disabled:opacity-60"
-                  style={{ background: paid === "teams" ? "#D85A28" : "#123359" }}
-                >
-                  {busy === "checkout" ? t("common.loading") : t("billing.upgradeTo", { tier: paid === "teams" ? "Teams" : "Business" })}
-                </button>
-              ))}
-            </>
-          )}
+        {/* Seats are chosen up front only for a first subscription; afterwards
+            the quantity is changed in the portal alongside everything else. */}
+        {!subscribed && (
+          <label className="mt-4 flex items-center gap-3 text-xs" style={{ color: "#64748B" }}>
+            {t("billing.seatsToBuy")}
+            <input
+              type="number"
+              min={1}
+              max={999}
+              value={seats}
+              onChange={(e) => setSeats(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
+              className="w-20 rounded-lg border px-2 py-1.5 text-sm"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", outline: "none" }}
+            />
+          </label>
+        )}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {ALL_TIERS.map((tier) => (
+            <PlanColumn
+              key={tier}
+              tier={tier}
+              current={tier === current}
+              subscribed={subscribed}
+              busy={busy === tier || (subscribed && busy === "portal")}
+              onChoose={() => void choose(tier)}
+              t={t}
+            />
+          ))}
         </div>
+
+        {subscribed && (
+          <button
+            onClick={() => void goto(createPortalUrl, "portal")}
+            disabled={busy !== null}
+            className="hoverable mt-3 w-full rounded-lg border px-3.5 py-2 text-sm font-semibold disabled:opacity-60"
+            style={{ borderColor: "#D85A28", color: "#D85A28" }}
+          >
+            {busy === "portal" ? t("common.loading") : t("billing.managePayment")}
+          </button>
+        )}
 
         {error && <p className="mt-3 text-xs" style={{ color: "#DC2626" }}>{error}</p>}
         <p className="mt-3 text-[11px] leading-relaxed" style={{ color: "#94A3B8" }}>{t("billing.hostedNote")}</p>
