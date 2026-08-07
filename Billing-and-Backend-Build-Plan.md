@@ -2,16 +2,22 @@
 
 Companion to **`Plans-Spec.md`**, **`Server-Functions-Spec.md`**, and
 **`Backend-Architecture-Spec.md`** (what to build and why). This is the **how**, in order,
-against the codebase as it stands at `8fed153`.
+against the codebase. *Written at `8fed153`; status blocks below refreshed at `9c9d838`.*
 
 **Framing — one program, not two builds.** The Plans/Billing spec is *delivered through*
 backend functions (SF3 + rules + client UX), so it shares the Functions foundation with the
 hardening functions. Sequence everything by dependency and risk on one timeline.
 
-**Today's baseline:** Pulse is **100% serverless** — a React client talking straight to
-Firestore. There are **no Cloud Functions** (`functions/` doesn't exist; `firebase.json`
-has only `hosting`, `firestore`, `emulators`). Phase 0 stands the runtime up; nothing
-server-side can precede it.
+**Original baseline (historical):** Pulse was **100% serverless** — a React client talking
+straight to Firestore, with no Cloud Functions at all. Phase 0 stood the runtime up; nothing
+server-side could precede it.
+
+**Where it actually stands now — Phases 0, 1, 2 and most of 3 are done and deployed.**
+`functions/` exists and ten functions run in `us-central1`: `ping`; SF1
+(`onFeatureWriteDenorm`, `onResourceWriteFanout`); the SF6–SF9 cascades (`onPulseDelete`,
+`onMemberRemoved`, `onResourceDelete`, `onEpicDelete`); and SF3 (`stripeWebhook`,
+`createCheckoutSession`, `createPortalSession`). See the Phase 3 status block below for
+what remains.
 
 Sizes are rough calibration, not commitments: **S** ≈ half a day, **M** ≈ 1–2 days,
 **L** ≈ 3–4 days, **XL** ≈ a week+.
@@ -26,9 +32,12 @@ parallel with Phase 0–2, so Phase 3 isn't blocked when it's ready.
 - **PL1–PL3 — DONE.** Tiers/prices/quotas are decided (Plans-Spec §2/§3): Pro/Teams/Business,
   $0/$6/$12 per **editor seat**/mo (USD), quota-only (no feature gating). Encoded in
   `entitlements.ts`.
-- **Stripe account** — test + live, the two per-seat products ("Pulse Teams" $6, "Pulse
-  Business" $12) with `tier` metadata, a webhook endpoint, **Stripe Tax** (VAT-inclusive)
-  for Mexico. Full checklist: Plans-Spec §9.6.
+- **Stripe account** — *mostly done.* The two per-seat products ("Pulse Teams" $6, "Pulse
+  Business" $12) exist **with `tier` metadata** (which is how SF3 and the Checkout callable
+  both resolve a tier), and `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` are in Secret
+  Manager and bound to the deployed functions. **Still open:** point the webhook endpoint at
+  the deployed URL (it was created with a placeholder), save the **Customer Portal**
+  configuration once, and confirm **Stripe Tax** is active. Full checklist: Plans-Spec §9.6.
 - **Mexico tax registration** — a finance/legal task. Note per PL10-a there is **no PAC and
   no invoicing code**: the SAT *factura global* is filed **manually, out of band** from the
   Stripe dashboard (Plans-Spec §9.5). The only "invoicing" prerequisite is that a human
@@ -122,23 +131,38 @@ no feature gating; tiers differ by editor seats / Pulses / collaborators / resou
 `stripeSubscriptionId`; `PlanTier`/`BillingDoc`/`Entitlements` types; `domain/entitlements.ts`
 (`TIER_ENTITLEMENTS`, `tierOf`, `entitlementsFor`, `editorSeatLimit`, unit-tested);
 `services/firestore/billing.ts` (read-only); the `billing/{orgId}` **read** rule (owner-only)
-+ `write:false` and its rules tests. What remains:
++ `write:false` and its rules tests.
 
-**New** `functions/src/billing.ts`
-- **SF3 — Stripe webhook** (`onRequest`): verify signature, map subscription
-  create/update/cancel/renew to `billing/{workspaceId} = { tier, status, currentPeriodEnd,
-  seats (editor quantity), stripeCustomerId, stripeSubscriptionId, country, currency:"usd",
-  source, updatedAt }` via Admin SDK. Idempotent; workspace resolved from the Customer. **On a
-  flip to Pro/canceled**, also run the PL4 downgrade (§5.1): **demote every editor except
-  `workspace.ownerId` to full viewer** across the org's Pulses (server-side, so it's enforced
-  regardless of client).
+**✅ DONE and deployed — `functions/src/billing.ts`**
+- **SF3 — Stripe webhook** (`stripeWebhook`, `onRequest`): signature-verified over the raw
+  body, then **recomputes** `billing/{workspaceId}` from the subscription refetched from
+  Stripe, so at-least-once and out-of-order deliveries converge. Duplicate `event.id` is a
+  no-op; a strictly older `event.created` is dropped. Org resolved subscription-metadata →
+  Customer-metadata → reverse lookup on `stripeCustomerId`.
+- **PL4 downgrade (§5.1)** runs on a flip *off the seats*: demotes every editor/owner except
+  `workspace.ownerId` to full viewer and collapses `editorUids` to `[ownerId]`. `past_due`
+  rides dunning instead, with a **15-day** client-side grace window
+  (`DELINQUENCY_GRACE_DAYS`) clocked from `pastDueSince`, stamped on the first failed charge.
+- **Checkout + Portal callables** (`createCheckoutSession`, `createPortalSession`): hosted
+  Stripe URLs only, owner-asserted, return URL matched against an origin allowlist. Neither
+  writes the billing doc — the webhook stays the single writer. Stripe Tax is enabled for
+  MX IVA.
+- **Client:** `PlanBanner` (dismissible delinquency notice on the Dashboard) and
+  `BillingDialog` (the real "Billing & payment" screen — tier, seats, quotas, renewal,
+  upgrade/manage). Timestamps are plain epoch millis, matching `type Timestamp = number`.
+
+> **Two Stripe-console steps are still required before a live purchase works:** save the
+> **Customer Portal** configuration once, and confirm **Stripe Tax** is active (the callables
+> fail with messages naming each). The webhook endpoint URL is
+> `https://us-central1-pulse-b9d96.cloudfunctions.net/stripeWebhook`.
+
+**What remains in Phase 3:**
 
 **New** `functions/src/counters.ts` — **SF11** (quota counters, PL5 Option b). Maintain, on the
 relevant create/delete/role-change writes, `workspace.pulseCount`, `workspace.collaboratorUids[]`,
 and `pulse.resourceCount`, so the rules can gate growth against them (§5). Server-maintained only;
 idempotent. (Editor seats are **not** counted here — they're the rules-native `editorUids` array,
 PL9.)
-- A **callable** to create a Checkout session / Customer-Portal link (hosted Stripe flows).
 
 **Edit** `firestore.rules` — add the **quota/licensing enforcement** gates (the read rule
 already ships):
@@ -168,8 +192,9 @@ already ships):
   "Shared with you" (orgs you collaborate in), grouped per org. When an editor belongs to
   **>1** org, **New Pulse prompts which org** (or derives it from the org section it was
   invoked in).
-- Turn the account-menu **"Billing & payment"** stub (`AccountMenu.tsx:92`) into the real
-  screen: tier, usage vs quota, seats, upgrade/manage → Stripe portal.
+- ~~Turn the account-menu **"Billing & payment"** stub into the real screen.~~ **DONE** —
+  `BillingDialog.tsx`, opened from `AccountMenu.tsx:94`; the `soon` flag is gone. Shows tier,
+  seats, quota *limits*, renewal and delinquency. Usage-vs-limit still needs SF11 counts.
 - **i18n** — every new string into **all six** dictionaries (`Dict` is exact).
 
 **Mexico specifics (launch):** Stripe Tax computes IVA (16%, **VAT-inclusive**), charges in
@@ -183,6 +208,12 @@ already ships):
 **Exit:** an org admin subscribes through Stripe, the tier lands in `billing/{ws}` via SF3,
 a growth action is blocked at the quota (enforced in rules) with an upsell, the dashboard
 groups by org and prompts for the org on New Pulse, and a self-upgrade write is rejected.
+
+*Progress against that exit:* the subscribe path and the SF3 write are **done**; the
+self-upgrade write is **already rejected** (`billing/{orgId}` is `write: if false`). Still
+open: quota blocking **enforced in rules** (needs SF11 + the gates), the org-grouped
+dashboard, and the Members & seats screen. Quotas today are advisory — the UI shows the
+right limits, but nothing server-side stops an org exceeding them.
 
 ---
 
@@ -211,13 +242,18 @@ scheduled hygiene runs; account deletion leaves nothing behind.
 ## Dependency order
 
 ```
-            ┌─→ Phase 1 (SF1 denorm) ──┐
-Phase 0 ────┤                          ├─→ Phase 4 (SF4/2/11/5/12/13/14/15/16/10)
-foundation  └─→ Phase 2 (SF6–9 cleanup)┘
+            ┌─→ Phase 1 (SF1 denorm) ✅ ┐
+Phase 0 ✅ ─┤                           ├─→ Phase 4 (SF4/2/11/5/12/13/14/15/16/10)
+foundation  └─→ Phase 2 (SF6–9 cleanup)✅┘
             │
-   (PL1–3, Stripe, MX tax — in parallel)
-            └─────────────────────────→ Phase 3 (SF3 + rules + UX)  ──→ Phase 4
+   (PL1–3 ✅, Stripe ~, MX tax — in parallel)
+            └──────────────────────────→ Phase 3 (SF3 ✅ + rules ⬜ + UX ~) ──→ Phase 4
 ```
+
+✅ done & deployed · ~ partly done · ⬜ not started. **The critical remaining item is the
+rules half of Phase 3** — SF11 counters plus the quota/licensing gates. Without them the
+plan is sold and displayed correctly but not *enforced*, which is the difference between a
+commercial limit and a real one.
 
 Phase 0 gates everything. Phases 1 and 2 are independent of billing and of each other —
 parallelizable across two people. Phase 3 waits on its non-code prerequisites, not on
