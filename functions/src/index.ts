@@ -29,5 +29,6 @@ export { onFeatureWriteDenorm, onResourceWriteFanout } from "./denorm";
 export { onPulseDelete, onMemberRemoved, onResourceDelete, onEpicDelete } from "./cascade";
 
 // SF3 — billing / plan sync (Phase 3). The only writer of `billing/{orgId}`, and
-// the server-side half of the PL4 downgrade.
-export { stripeWebhook } from "./billing";
+// the server-side half of the PL4 downgrade. The two callables mint hosted
+// Stripe URLs (Checkout / Customer Portal); payment details never touch the app.
+export { stripeWebhook, createCheckoutSession, createPortalSession } from "./billing";

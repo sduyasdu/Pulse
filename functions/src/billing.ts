@@ -1,4 +1,4 @@
-import { onRequest } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
@@ -410,3 +410,189 @@ export const stripeWebhook = onRequest(
     }
   },
 );
+
+// ---------------------------------------------------------------------------
+// Hosted Stripe flows — Checkout (subscribe) and Customer Portal (manage).
+//
+// Payment details are NEVER entered in-app (Plans-Spec §6): both callables just
+// mint a URL on Stripe's domain and hand it back for the client to redirect to.
+// Neither writes `billing/{orgId}` — the resulting subscription comes back
+// through the webhook above, which stays the single writer.
+// ---------------------------------------------------------------------------
+
+/**
+ * Origins allowed as a Checkout/Portal return target. The return URL comes from
+ * the client, so it is matched against this list rather than trusted: an open
+ * redirect here would let an attacker bounce a user from a Stripe page they
+ * trust to one they shouldn't.
+ */
+const ALLOWED_RETURN_ORIGINS = [
+  "https://pulse-b9d96.web.app",
+  "https://pulse-b9d96.firebaseapp.com",
+  "http://localhost:5173",
+];
+
+export function safeReturnUrl(raw: unknown): string {
+  const fallback = ALLOWED_RETURN_ORIGINS[0];
+  if (typeof raw !== "string" || !raw) return fallback;
+  try {
+    const url = new URL(raw);
+    return ALLOWED_RETURN_ORIGINS.includes(url.origin) ? url.toString() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** The org the caller is acting for, asserting they may act for it at all. */
+async function requireOwnedWorkspace(db: Db, uid: string, requested: unknown): Promise<{ workspaceId: string; workspace: Data }> {
+  let workspaceId = typeof requested === "string" && requested.trim() ? requested.trim() : null;
+  if (!workspaceId) {
+    const user = await db.doc(`users/${uid}`).get();
+    const personal = user.get("personalWorkspaceId");
+    workspaceId = typeof personal === "string" ? personal : null;
+  }
+  if (!workspaceId) throw new HttpsError("failed-precondition", "No workspace for this account.");
+
+  const snap = await db.doc(`workspaces/${workspaceId}`).get();
+  if (!snap.exists) throw new HttpsError("not-found", "Workspace not found.");
+  // Billing is owner-only, mirroring the `billing/{orgId}` read rule. Checked
+  // here because callables bypass security rules entirely.
+  if (snap.get("ownerId") !== uid) throw new HttpsError("permission-denied", "Only the workspace owner can manage billing.");
+  return { workspaceId, workspace: snap.data() ?? {} };
+}
+
+/**
+ * The active recurring price for a tier, found by the `tier` metadata on its
+ * product — the same metadata SF3 reads back off the subscription, so the two
+ * directions can't drift. Listing and filtering rather than using the Search API
+ * because search is eventually consistent and would miss a just-created price.
+ */
+async function priceForTier(stripe: Stripe, tier: PlanTier): Promise<Stripe.Price | null> {
+  const prices = await stripe.prices.list({ active: true, type: "recurring", limit: 100, expand: ["data.product"] });
+  for (const price of prices.data) {
+    const product = price.product;
+    if (typeof product !== "object" || product === null) continue;
+    if ("deleted" in product && product.deleted) continue;
+    const p = product as Stripe.Product;
+    if (p.active && readTier(p.metadata) === tier) return price;
+  }
+  return null;
+}
+
+/** Reuse the org's Stripe Customer, creating one (once) if it has never had one. */
+async function ensureCustomer(db: Db, stripe: Stripe, workspaceId: string, workspace: Data, email: string | undefined): Promise<string> {
+  const existing = workspace.stripeCustomerId;
+  if (typeof existing === "string" && existing) return existing;
+
+  const customer = await stripe.customers.create(
+    {
+      email,
+      name: typeof workspace.name === "string" ? workspace.name : undefined,
+      // Read first by SF3's resolveOrgId — without it a dashboard-created
+      // subscription could only be matched by the reverse lookup below.
+      metadata: { workspaceId },
+    },
+    // Keyed on the workspace so a double-click (or a retry) reuses the same
+    // Customer instead of silently creating a second one.
+    { idempotencyKey: `pulse-customer-${workspaceId}` },
+  );
+  await db.doc(`workspaces/${workspaceId}`).set({ stripeCustomerId: customer.id }, { merge: true });
+  log(FN, "created Stripe customer", { workspaceId, customerId: customer.id });
+  return customer.id;
+}
+
+export function requireSeats(raw: unknown): number {
+  const seats = raw === undefined || raw === null ? 1 : Number(raw);
+  if (!Number.isInteger(seats) || seats < 1 || seats > 999) {
+    throw new HttpsError("invalid-argument", "Seats must be a whole number between 1 and 999.");
+  }
+  return seats;
+}
+
+/**
+ * Create a Stripe Checkout session for a paid tier and return its URL.
+ *
+ * Stamps `workspaceId` onto both the session and the resulting subscription, so
+ * the webhook can resolve the org from the very first delivery.
+ */
+export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to manage billing.");
+
+  const tier = request.data?.tier;
+  if (tier !== "teams" && tier !== "business") {
+    throw new HttpsError("invalid-argument", "Choose the Teams or Business plan."); // Pro is free — never a Checkout
+  }
+  const seats = requireSeats(request.data?.seats);
+  const returnUrl = safeReturnUrl(request.data?.returnUrl);
+
+  const db = getFirestore();
+  const { workspaceId, workspace } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
+  const stripe = new Stripe(STRIPE_SECRET_KEY.value());
+
+  const price = await priceForTier(stripe, tier);
+  if (!price) {
+    logError(FN, "no active price for tier", new Error("missing price"), { tier });
+    throw new HttpsError("failed-precondition", `No active Stripe price is tagged with tier "${tier}".`);
+  }
+  const customerId = await ensureCustomer(db, stripe, workspaceId, workspace, request.auth?.token?.email);
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: price.id, quantity: seats }],
+      client_reference_id: workspaceId,
+      metadata: { workspaceId },
+      // Read first by SF3 — the most direct org resolution there is.
+      subscription_data: { metadata: { workspaceId } },
+      // Stripe Tax computes IVA for MX customers, VAT-inclusive (Plans-Spec §9.5,
+      // Billing-and-Backend-Build-Plan "Mexico specifics"). Needs a customer
+      // address, which `customer_update` lets Checkout collect and save.
+      automatic_tax: { enabled: true },
+      customer_update: { address: "auto", name: "auto" },
+      allow_promotion_codes: true,
+      success_url: `${returnUrl}?billing=success`,
+      cancel_url: `${returnUrl}?billing=cancelled`,
+    });
+    if (!session.url) throw new HttpsError("internal", "Stripe returned a session without a URL.");
+    log(FN, "created checkout session", { workspaceId, tier, seats, sessionId: session.id });
+    return { url: session.url };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    logError(FN, "checkout session failed", err, { workspaceId, tier, seats });
+    // Most likely cause on a fresh account is Stripe Tax not being activated,
+    // which `automatic_tax` requires — say so rather than a bare "internal".
+    throw new HttpsError("internal", "Could not start Stripe Checkout. Check that Stripe Tax is enabled for this account.");
+  }
+});
+
+/**
+ * Create a Stripe Customer Portal session — where an existing subscriber updates
+ * their card, changes seat quantity, or cancels. Requires a Customer, so it is
+ * only reachable once the org has been through Checkout at least once.
+ */
+export const createPortalSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to manage billing.");
+
+  const returnUrl = safeReturnUrl(request.data?.returnUrl);
+  const db = getFirestore();
+  const { workspaceId, workspace } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
+
+  const customerId = workspace.stripeCustomerId;
+  if (typeof customerId !== "string" || !customerId) {
+    throw new HttpsError("failed-precondition", "This workspace has no Stripe customer yet — subscribe first.");
+  }
+
+  const stripe = new Stripe(STRIPE_SECRET_KEY.value());
+  try {
+    const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnUrl });
+    log(FN, "created portal session", { workspaceId, customerId });
+    return { url: session.url };
+  } catch (err) {
+    logError(FN, "portal session failed", err, { workspaceId, customerId });
+    // The portal 400s until its configuration is saved once in the dashboard.
+    throw new HttpsError("internal", "Could not open the Stripe billing portal. Check that the Customer Portal is configured.");
+  }
+});

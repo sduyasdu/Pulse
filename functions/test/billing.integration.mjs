@@ -12,7 +12,16 @@
 // Exits non-zero on any failed assertion.
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { mapStatus, readTier, licensedItem, subscriptionIdFor, holdsSeats, applyProDowngrade } from "../lib/billing.js";
+import {
+  mapStatus,
+  readTier,
+  licensedItem,
+  subscriptionIdFor,
+  holdsSeats,
+  applyProDowngrade,
+  safeReturnUrl,
+  requireSeats,
+} from "../lib/billing.js";
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-pulse-rules-test" });
 const db = getFirestore();
@@ -198,6 +207,45 @@ assert(carryForward(undefined, "past_due", 500) === 500, "clock: first past_due 
 assert(carryForward({ pastDueSince: 100 }, "past_due", 500) === 100, "clock: dunning retry keeps the original stamp");
 assert(carryForward({ pastDueSince: 100 }, "active", 500) === null, "clock: recovery clears the stamp");
 assert(carryForward({ pastDueSince: 100 }, "canceled", 500) === null, "clock: cancellation clears the stamp");
+
+// ---------------------------------------------------------------------------
+// 4. Checkout / Portal callable guards
+//
+// safeReturnUrl is an open-redirect guard: the return URL arrives from the
+// client and lands on a Stripe page, so an unvalidated value would let an
+// attacker bounce a user from a page they trust to one they shouldn't.
+// ---------------------------------------------------------------------------
+
+const APP = "https://pulse-b9d96.web.app";
+assert(safeReturnUrl(`${APP}/`) === `${APP}/`, "returnUrl: the app origin is allowed");
+assert(safeReturnUrl("https://pulse-b9d96.firebaseapp.com/x") === "https://pulse-b9d96.firebaseapp.com/x", "returnUrl: alternate Firebase domain allowed");
+assert(safeReturnUrl("http://localhost:5173/") === "http://localhost:5173/", "returnUrl: local dev allowed");
+assert(safeReturnUrl("https://evil.example.com/steal") === APP, "returnUrl: foreign origin rejected");
+// The classic bypasses: a lookalike host and a scheme swap on the real host.
+assert(safeReturnUrl("https://pulse-b9d96.web.app.evil.com/") === APP, "returnUrl: suffix-lookalike host rejected");
+assert(safeReturnUrl("http://pulse-b9d96.web.app/") === APP, "returnUrl: http on the https origin rejected");
+assert(safeReturnUrl("javascript:alert(1)") === APP, "returnUrl: javascript: scheme rejected");
+assert(safeReturnUrl("//evil.example.com") === APP, "returnUrl: protocol-relative rejected");
+assert(safeReturnUrl("not a url") === APP, "returnUrl: unparseable falls back");
+assert(safeReturnUrl(undefined) === APP && safeReturnUrl(null) === APP, "returnUrl: absent falls back");
+assert(safeReturnUrl(42) === APP, "returnUrl: non-string falls back");
+
+const seatsThrows = (v) => {
+  try {
+    requireSeats(v);
+    return false;
+  } catch {
+    return true;
+  }
+};
+assert(requireSeats(undefined) === 1, "seats: default is 1");
+assert(requireSeats(5) === 5, "seats: a valid count passes through");
+assert(requireSeats("7") === 7, "seats: numeric string coerced");
+assert(seatsThrows(0), "seats: 0 rejected");
+assert(seatsThrows(-3), "seats: negative rejected");
+assert(seatsThrows(2.5), "seats: fractional rejected");
+assert(seatsThrows(1000), "seats: absurd count rejected");
+assert(seatsThrows("many"), "seats: non-numeric rejected");
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll SF3 assertions passed");
 process.exit(failed ? 1 : 0);

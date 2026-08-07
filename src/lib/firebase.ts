@@ -5,6 +5,7 @@ import {
   connectAuthEmulator,
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,6 +25,9 @@ if (!firebaseConfig.projectId) {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+// Must match conventions.REGION in functions/ — a callable invoked against the
+// wrong region 404s rather than falling back.
+export const functions = getFunctions(app, "us-central1");
 export const googleProvider = new GoogleAuthProvider();
 
 // Point the SDK at local emulators during development when explicitly
@@ -33,4 +37,5 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true") {
     disableWarnings: true,
   });
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
 }
