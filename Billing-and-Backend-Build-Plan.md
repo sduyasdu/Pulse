@@ -24,6 +24,40 @@ Sizes are rough calibration, not commitments: **S** ≈ half a day, **M** ≈ 1�
 
 ---
 
+## Custom domain — `pulse.yasdu.com` (decided 2026-08-10)
+
+Console and DNS work, not engineering. **The code side is already done and deployed** — the
+Checkout/Portal return-URL allowlist in `functions/src/billing.ts` pre-authorises the origin,
+so the cutover needs no release.
+
+1. **Firebase Console → Hosting → `pulse-b9d96` → Add custom domain** → `pulse.yasdu.com`.
+   Add the TXT/A (or CNAME) records it gives you — **use the console's values**, not any
+   published IP list, which goes stale.
+2. **DNS on `yasdu.com`** — add those records for the `pulse` subdomain. Verification is
+   minutes; SSL provisioning can take **up to ~24h**, during which the domain may serve a
+   certificate warning. Don't announce the URL until Hosting shows *Connected* with a clean
+   padlock.
+3. **Firebase Console → Authentication → Settings → Authorized domains** → add
+   `pulse.yasdu.com`. ⚠️ **Miss this and Google sign-in breaks on the new domain**
+   (`auth/unauthorized-domain`). Email/password keeps working, so a quick smoke test won't
+   catch it.
+4. **Leave `VITE_FIREBASE_AUTH_DOMAIN` as `pulse-b9d96.firebaseapp.com`.** That's the OAuth
+   handler domain, not the app URL; repointing it needs extra setup and buys nothing. No
+   Google Cloud OAuth client changes are needed — the handler URL is unchanged.
+5. **After it resolves:** switch `DEFAULT_RETURN_ORIGIN` in `functions/src/billing.ts` from the
+   Firebase URL to `https://pulse.yasdu.com` and redeploy the two callables. It is deliberately
+   still the Firebase URL, because a fallback pointing at a hostname that doesn't resolve turns
+   a recoverable redirect into a dead end.
+6. **Then** publish the URL on the Yasdu site — see `Yasdu-Site-Pulse-Listing-Spec.md` §3.5.
+
+**Both Firebase domains keep serving the app.** Two consequences to expect rather than debug:
+existing sessions **do not carry over** (Firebase Auth state is per-origin, so everyone signs
+in again on the new domain), and Firebase Hosting cannot host-conditionally redirect
+`.web.app` → the custom domain from `firebase.json`, so retiring the old URL needs a
+client-side redirect or simply letting it fall out of use.
+
+---
+
 ## Start now — non-code prerequisites with real lead time
 
 These gate the billing phases and are **not** engineering tasks. Kick them off on day 0, in

@@ -435,21 +435,42 @@ export const stripeWebhook = onRequest(
  * the client, so it is matched against this list rather than trusted: an open
  * redirect here would let an attacker bounce a user from a Stripe page they
  * trust to one they shouldn't.
+ *
+ * Adding an origin here is required for that origin to work at all. A returnUrl
+ * from an unlisted origin does not error — it silently falls back to
+ * DEFAULT_RETURN_ORIGIN, which strands the customer on a different domain, and
+ * (because Firebase Auth state is per-origin) **signed out**, immediately after
+ * paying. Quiet by design, so keep this list ahead of any new domain.
+ *
+ * `pulse.yasdu.com` is the intended branded domain and is pre-authorised here so
+ * the DNS cutover needs no code change.
  */
 const ALLOWED_RETURN_ORIGINS = [
+  "https://pulse.yasdu.com",
   "https://pulse-b9d96.web.app",
   "https://pulse-b9d96.firebaseapp.com",
   "http://localhost:5173",
 ];
 
+/**
+ * Where an absent or rejected returnUrl lands. Named rather than taken as
+ * `ALLOWED_RETURN_ORIGINS[0]`, so reordering the list above can't silently
+ * repoint the fallback.
+ *
+ * ⚠️ Still the Firebase URL on purpose: it is the origin known to resolve today.
+ * **Switch it to `https://pulse.yasdu.com` once that domain is live and serving a
+ * valid certificate** — pointing the fallback at a hostname that doesn't resolve
+ * yet would turn a recoverable redirect into a dead end.
+ */
+const DEFAULT_RETURN_ORIGIN = "https://pulse-b9d96.web.app";
+
 export function safeReturnUrl(raw: unknown): string {
-  const fallback = ALLOWED_RETURN_ORIGINS[0];
-  if (typeof raw !== "string" || !raw) return fallback;
+  if (typeof raw !== "string" || !raw) return DEFAULT_RETURN_ORIGIN;
   try {
     const url = new URL(raw);
-    return ALLOWED_RETURN_ORIGINS.includes(url.origin) ? url.toString() : fallback;
+    return ALLOWED_RETURN_ORIGINS.includes(url.origin) ? url.toString() : DEFAULT_RETURN_ORIGIN;
   } catch {
-    return fallback;
+    return DEFAULT_RETURN_ORIGIN;
   }
 }
 

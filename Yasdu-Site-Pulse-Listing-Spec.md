@@ -145,19 +145,37 @@ unless someone with authority confirms the wording.
 
 ### 3.5 Entry URL
 
-The live app:
+**The canonical URL to publish:**
 
 ```
-https://pulse-b9d96.web.app
+https://pulse.yasdu.com
 ```
 
-`https://pulse-b9d96.firebaseapp.com` serves the same app.
+This is a decided branded domain (2026-08-10), not a placeholder. Pulse's backend already
+pre-authorises it, so the app side needs nothing further.
 
-> **Confirm before publishing.** That is a default Firebase Hosting domain, not a branded
-> one. Putting it in permanent marketing copy commits Yasdu to it. **Ask whether a custom
-> domain (e.g. `pulse.yasdu.com`) is planned first** — if one is, define the link as a single
-> shared constant so it can be changed in one place, and consider holding the launch until
-> the domain exists. Do not scatter the raw URL across templates.
+> ### ⚠️ Verify it resolves before you ship the link
+>
+> The DNS cutover is a **separate, manual task in the Firebase console and the yasdu.com DNS
+> zone**, and it may not be done yet when you read this. Before publishing, check:
+>
+> ```
+> curl -sI https://pulse.yasdu.com | head -1
+> ```
+>
+> - **`HTTP/2 200`** → the domain is live; publish it.
+> - **DNS failure, or a certificate warning** → the cutover is incomplete. Firebase's SSL
+>   provisioning can take up to ~24h after the records are added. **Stop and ask** rather
+>   than either publishing a dead link or quietly substituting the Firebase URL — a marketing
+>   page that silently points somewhere off-brand is worse than a delayed launch.
+>
+> `https://pulse-b9d96.web.app` and `https://pulse-b9d96.firebaseapp.com` are the raw Firebase
+> Hosting domains. They serve the same app and will keep working, but they are **not** for
+> publication — use them only to sanity-check that the app is up.
+
+**Define the URL once**, as a single shared constant/config value in the site codebase. Do not
+scatter the literal across templates: a domain that appears in six places is a domain that
+gets half-changed.
 
 Link behaviour: the site's existing convention wins. If there is none, open in the same tab
 (it's a Yasdu product, not an external site) and don't add `noopener` theatrics for a
@@ -213,7 +231,8 @@ Verify each; don't assume.
 
 - [ ] Pulse page exists, builds, and renders — run the site's own build and lint.
 - [ ] Pulse appears in **every** navigation surface identified in §1.3.
-- [ ] Every CTA resolves to the §3.5 URL and returns HTTP 200 (`curl -sI` it).
+- [ ] Every CTA points at `https://pulse.yasdu.com` (§3.5), from one shared constant, and that
+      URL returns HTTP 200 with a valid certificate (`curl -sI` it — do not skip this).
 - [ ] The pricing table matches §3.4 exactly — three tiers, Starter → Pro → Business, Starter
       labelled free, and no tier called "Teams" anywhere.
 - [ ] No feature outside §3.2 is mentioned; nothing from the "do NOT advertise" list appears.
@@ -229,8 +248,8 @@ Verify each; don't assume.
 
 Resolve these with the user first — each changes the work materially:
 
-1. **Custom domain** — is `pulse.yasdu.com` (or similar) planned? Publishing the raw Firebase
-   URL is hard to walk back.
+1. **Is `pulse.yasdu.com` live yet?** The domain is decided, but the DNS/SSL cutover is manual
+   and may still be pending — check it per §3.5 before publishing any link.
 2. **Screenshots or a demo video** — available? If not, what visual should carry the page?
 3. **Depth** — one page, or a page plus a separate pricing page? Match the other products or
    deliberately exceed them?

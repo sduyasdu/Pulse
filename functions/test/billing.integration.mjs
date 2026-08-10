@@ -219,6 +219,19 @@ assert(carryForward({ pastDueSince: 100 }, "canceled", 500) === null, "clock: ca
 
 const APP = "https://pulse-b9d96.web.app";
 assert(safeReturnUrl(`${APP}/`) === `${APP}/`, "returnUrl: the app origin is allowed");
+// Pre-authorised for the DNS cutover, so no code change is needed on the day.
+assert(
+  safeReturnUrl("https://pulse.yasdu.com/") === "https://pulse.yasdu.com/",
+  "returnUrl: the branded domain pulse.yasdu.com is allowed",
+);
+assert(
+  safeReturnUrl("https://pulse.yasdu.com/?billing=success") === "https://pulse.yasdu.com/?billing=success",
+  "returnUrl: branded domain keeps its query string",
+);
+// A lookalike of the branded domain must still be rejected.
+assert(safeReturnUrl("https://pulse.yasdu.com.evil.com/") === APP, "returnUrl: branded-domain lookalike rejected");
+assert(safeReturnUrl("https://evil.pulse.yasdu.com/") === APP, "returnUrl: subdomain of the branded host rejected");
+assert(safeReturnUrl("http://pulse.yasdu.com/") === APP, "returnUrl: http on the branded domain rejected");
 assert(safeReturnUrl("https://pulse-b9d96.firebaseapp.com/x") === "https://pulse-b9d96.firebaseapp.com/x", "returnUrl: alternate Firebase domain allowed");
 assert(safeReturnUrl("http://localhost:5173/") === "http://localhost:5173/", "returnUrl: local dev allowed");
 assert(safeReturnUrl("https://evil.example.com/steal") === APP, "returnUrl: foreign origin rejected");
