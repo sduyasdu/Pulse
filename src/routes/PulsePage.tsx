@@ -21,6 +21,7 @@ import { PresenceBar } from "@/components/presence/PresenceBar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { Icon } from "@/components/shared/Icon";
+import { Spinner } from "@/components/shared/Spinner";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { CostPanel } from "@/components/costPanel/CostPanel";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
@@ -300,7 +301,7 @@ export function PulsePage() {
   if (loading || myRole === null) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg">
-        <span className="font-display text-sm text-yasdu-muted">{t("pulse.loading")}</span>
+        <Spinner size={24} label={t("pulse.loading")} />
       </div>
     );
   }

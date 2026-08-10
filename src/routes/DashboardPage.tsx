@@ -9,6 +9,7 @@ import type { MyPulseIndexEntry } from "@/types";
 import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
 import { PlanBanner } from "@/components/shared/PlanBanner";
+import { Spinner } from "@/components/shared/Spinner";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
@@ -179,7 +180,7 @@ export function DashboardPage() {
         </div>
 
         {pulses === null ? (
-          <p className="text-sm text-yasdu-muted">{t("common.loading")}</p>
+          <Spinner size={22} label={t("common.loading")} className="py-10" />
         ) : noResults ? (
           <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
             <p className="text-sm text-yasdu-muted">{t("dashboard.noMatch", { query: query.trim() })}</p>
