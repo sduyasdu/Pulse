@@ -29,10 +29,10 @@ Sizes are rough calibration, not commitments: **S** ≈ half a day, **M** ≈ 1�
 These gate the billing phases and are **not** engineering tasks. Kick them off on day 0, in
 parallel with Phase 0–2, so Phase 3 isn't blocked when it's ready.
 
-- **PL1–PL3 — DONE.** Tiers/prices/quotas are decided (Plans-Spec §2/§3): Pro/Teams/Business,
+- **PL1–PL3 — DONE.** Tiers/prices/quotas are decided (Plans-Spec §2/§3): Starter/Pro/Business,
   $0/$6/$12 per **editor seat**/mo (USD), quota-only (no feature gating). Encoded in
   `entitlements.ts`.
-- **Stripe account** — *mostly done.* The two per-seat products ("Pulse Teams" $6, "Pulse
+- **Stripe account** — *mostly done.* The two per-seat products ("Pulse Pro" $6, "Pulse
   Business" $12) exist **with `tier` metadata** (which is how SF3 and the Checkout callable
   both resolve a tier), and `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` are in Secret
   Manager and bound to the deployed functions. **Still open:** point the webhook endpoint at
@@ -177,12 +177,12 @@ already ships):
   not a counter. **No feature flags.**
 
 **Edit** `rules/security.test.ts` — extend `describe("billing")` with the quota gates
-(create-Pulse editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Pro).
+(create-Pulse editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Starter).
 
 **Edit** client
 - Consume `entitlementsFor(billing)` (already built) to soft-gate growth with an **upsell**
   ("You've hit your plan's limit — upgrade"). Collaborators don't see **New Pulse**.
-- **PL4 read-only lock (§5.1):** on Pro, derive which Pulses are over the limit (non-archived,
+- **PL4 read-only lock (§5.1):** on Starter, derive which Pulses are over the limit (non-archived,
   ordered by `createdAt`, newest beyond `maxPulses`) and render them **read-only** with an
   "archive another Pulse to edit this" affordance. Client-derived (rules can't sort/count).
 - **Members & seats screen (PL9):** a new org-admin surface to manage `Workspace.editorUids[]`

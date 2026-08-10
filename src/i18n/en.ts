@@ -166,10 +166,10 @@ export const en = {
   "account.soon": "Soon",
 
   // ── plan / billing notices (Plans-Spec §5.1) ──────────────────────────────
-  // Tier names (Pro, Teams, Business) are product terms — left untranslated.
+  // Tier names (Starter, Pro, Business) are product terms — left untranslated.
   "plan.pastDue": "Payment failed. Update your card within {days} days to keep {tier}.",
   "plan.pastDueToday": "Payment failed. Update your card today to keep {tier}.",
-  "plan.pastDueExpired": "After {days} days without payment, this workspace is now on Pro.",
+  "plan.pastDueExpired": "After {days} days without payment, this workspace is now on Starter.",
   "plan.dismissAria": "Dismiss this notice",
   "billing.perEditorMonth": "per editor / month",
   "billing.perSeat": "Per seat bought",
@@ -187,7 +187,7 @@ export const en = {
   "billing.seatsToBuy": "Editor seats to buy",
   "billing.upgradeTo": "Upgrade to {tier}",
   "billing.managePayment": "Manage payment & seats",
-  "billing.pastDueDetail": "Payment failed. Update your card within {days} days or this workspace moves to Pro.",
+  "billing.pastDueDetail": "Payment failed. Update your card within {days} days or this workspace moves to Starter.",
   "billing.hostedNote": "Payments are handled by Stripe. Card details are never entered in Pulse.",
   "billing.error": "Something went wrong. Please try again.",
   "account.signOut": "Sign out",

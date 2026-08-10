@@ -44,10 +44,11 @@ assert(mapStatus("incomplete_expired") === "canceled", "mapStatus: incomplete_ex
 assert(mapStatus("paused") === "canceled", "mapStatus: paused → canceled");
 assert(mapStatus("some_future_status") === "canceled", "mapStatus: unknown status fails closed to canceled");
 
-assert(readTier({ tier: "teams" }) === "teams", "readTier: teams");
+assert(readTier({ tier: "pro" }) === "pro", "readTier: pro");
+assert(readTier({ tier: "teams" }) === "pro", "readTier: legacy \"teams\" metadata still resolves to pro");
 assert(readTier({ tier: "Business" }) === "business", "readTier: case-insensitive");
-assert(readTier({ tier: " teams " }) === "teams", "readTier: trims");
-assert(readTier({ tier: "pro" }) === null, "readTier: pro is never a Stripe product");
+assert(readTier({ tier: " pro " }) === "pro", "readTier: trims");
+assert(readTier({ tier: "starter" }) === null, "readTier: starter is never a Stripe product");
 assert(readTier({}) === null && readTier(null) === null, "readTier: absent → null");
 
 const subWith = (items) => ({ items: { data: items } });
@@ -60,15 +61,15 @@ const item = (tier, { onPrice = false, quantity = 1, periodEnd = 1_800_000_000 }
   },
 });
 
-assert(licensedItem(subWith([item("teams")]))?.tier === "teams", "licensedItem: tier from expanded product");
+assert(licensedItem(subWith([item("pro")]))?.tier === "pro", "licensedItem: tier from expanded product");
 assert(licensedItem(subWith([item("business", { onPrice: true })]))?.tier === "business", "licensedItem: falls back to price metadata");
-assert(licensedItem(subWith([item("teams", { quantity: 7 })]))?.item.quantity === 7, "licensedItem: quantity = purchased seats");
+assert(licensedItem(subWith([item("pro", { quantity: 7 })]))?.item.quantity === 7, "licensedItem: quantity = purchased seats");
 assert(licensedItem(subWith([])) === null, "licensedItem: no items → null");
 assert(licensedItem(subWith([item(undefined)])) === null, "licensedItem: no tier metadata → null (falls back to Pro)");
 // A metered/add-on item first, the licensed one second — must skip past it.
-assert(licensedItem(subWith([item(undefined), item("teams")]))?.tier === "teams", "licensedItem: skips untagged items");
+assert(licensedItem(subWith([item(undefined), item("pro")]))?.tier === "pro", "licensedItem: skips untagged items");
 assert(
-  licensedItem(subWith([item("teams")]))?.item.current_period_end === 1_800_000_000,
+  licensedItem(subWith([item("pro")]))?.item.current_period_end === 1_800_000_000,
   "licensedItem: period end read off the item (2025 API move)",
 );
 
@@ -76,25 +77,25 @@ assert(
 // row is the regression guard: dunning-exhausted cancellation is the usual
 // involuntary-churn path, and an active/trialing-only test for the PREVIOUS state
 // makes it never demote (on the final event the previous status is past_due).
-assert(holdsSeats("teams", "active") === true, "holdsSeats: teams/active");
+assert(holdsSeats("pro", "active") === true, "holdsSeats: pro/active");
 assert(holdsSeats("business", "trialing") === true, "holdsSeats: business/trialing");
-assert(holdsSeats("teams", "past_due") === true, "holdsSeats: past_due still holds (§5.1 dunning grace)");
-assert(holdsSeats("teams", "canceled") === false, "holdsSeats: canceled releases");
-assert(holdsSeats("teams", "incomplete") === false, "holdsSeats: incomplete never held");
-assert(holdsSeats("pro", "active") === false, "holdsSeats: pro is not a paid tier");
+assert(holdsSeats("pro", "past_due") === true, "holdsSeats: past_due still holds (§5.1 dunning grace)");
+assert(holdsSeats("pro", "canceled") === false, "holdsSeats: canceled releases");
+assert(holdsSeats("pro", "incomplete") === false, "holdsSeats: incomplete never held");
+assert(holdsSeats("starter", "active") === false, "holdsSeats: starter is not a paid tier");
 assert(holdsSeats(undefined, undefined) === false, "holdsSeats: absent doc holds nothing");
 
 const flips = (fromTier, fromStatus, toTier, toStatus) =>
   holdsSeats(fromTier, fromStatus) && !holdsSeats(toTier, toStatus);
 
-assert(flips("teams", "active", "teams", "past_due") === false, "flip: active → past_due does NOT demote (grace)");
-assert(flips("teams", "past_due", "teams", "canceled") === true, "flip: past_due → canceled DOES demote (dunning exhausted)");
-assert(flips("teams", "active", "teams", "canceled") === true, "flip: active → canceled demotes");
+assert(flips("pro", "active", "pro", "past_due") === false, "flip: active → past_due does NOT demote (grace)");
+assert(flips("pro", "past_due", "pro", "canceled") === true, "flip: past_due → canceled DOES demote (dunning exhausted)");
+assert(flips("pro", "active", "pro", "canceled") === true, "flip: active → canceled demotes");
 assert(flips("business", "trialing", "business", "canceled") === true, "flip: trial abandoned demotes");
-assert(flips("teams", "canceled", "teams", "canceled") === false, "flip: duplicate cancel does not re-demote");
-assert(flips(undefined, undefined, "teams", "canceled") === false, "flip: never-subscribed org is not demoted");
-assert(flips("teams", "past_due", "teams", "active") === false, "flip: dunning recovered does not demote");
-assert(flips("business", "active", "teams", "active") === false, "flip: paid→paid downgrade does not demote (out of scope, §5.1)");
+assert(flips("pro", "canceled", "pro", "canceled") === false, "flip: duplicate cancel does not re-demote");
+assert(flips(undefined, undefined, "pro", "canceled") === false, "flip: never-subscribed org is not demoted");
+assert(flips("pro", "past_due", "pro", "active") === false, "flip: dunning recovered does not demote");
+assert(flips("business", "active", "pro", "active") === false, "flip: paid→paid downgrade does not demote (out of scope, §5.1)");
 
 const ev = (type, object) => ({ type, data: { object } });
 assert(subscriptionIdFor(ev("customer.subscription.updated", { id: "sub_1" })) === "sub_1", "subscriptionIdFor: subscription.updated");
@@ -186,7 +187,7 @@ assert(eq(broken, { pulses: 0, demoted: 0 }), "missing ownerId → no-op, no thr
 
 const billingRef = db.doc("billing/ws_shape");
 await billingRef.set({
-  tier: "teams",
+  tier: "pro",
   status: "past_due",
   updatedAt: Date.now(),
   currentPeriodEnd: Date.now() + 86_400_000,

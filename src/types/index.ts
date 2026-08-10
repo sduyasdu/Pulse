@@ -56,7 +56,7 @@ export interface WorkspaceMember {
 
 // Three tiers, differentiated ONLY by quantity limits — every tier has every
 // feature (Plans-Spec §3). Pro is the free default (absent billing doc = Pro).
-export type PlanTier = "pro" | "teams" | "business";
+export type PlanTier = "starter" | "pro" | "business";
 
 /** Mirrors the subset of Stripe subscription states we act on. */
 export type BillingStatus = "active" | "trialing" | "past_due" | "canceled" | "incomplete";
@@ -64,7 +64,7 @@ export type BillingStatus = "active" | "trialing" | "past_due" | "canceled" | "i
 /**
  * `billing/{workspaceId}` — the server-authoritative plan doc (Plans-Spec §4).
  * Written ONLY by the Stripe webhook (Server-Functions-Spec SF3) via the Admin
- * SDK; never client-writable. Absent doc = Pro (the free tier). `seats` = the
+ * SDK; never client-writable. Absent doc = Starter (the free tier). `seats` = the
  * number of paid **editor** seats the org has bought (the billing quantity;
  * $/editor/mo). Billed monthly in arrears via Stripe.
  */

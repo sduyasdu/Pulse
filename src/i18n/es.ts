@@ -163,7 +163,7 @@ export const es: Dict = {
 
   "plan.pastDue": "El pago falló. Actualiza tu tarjeta en {days} días para conservar {tier}.",
   "plan.pastDueToday": "El pago falló. Actualiza tu tarjeta hoy para conservar {tier}.",
-  "plan.pastDueExpired": "Tras {days} días sin pago, este espacio de trabajo pasó a Pro.",
+  "plan.pastDueExpired": "Tras {days} días sin pago, este espacio de trabajo pasó a Starter.",
   "plan.dismissAria": "Descartar este aviso",
   "billing.perEditorMonth": "por editor / mes",
   "billing.perSeat": "Por licencia comprada",
@@ -181,7 +181,7 @@ export const es: Dict = {
   "billing.seatsToBuy": "Licencias de editor a comprar",
   "billing.upgradeTo": "Cambiar a {tier}",
   "billing.managePayment": "Gestionar pago y licencias",
-  "billing.pastDueDetail": "El pago falló. Actualiza tu tarjeta en {days} días o este espacio de trabajo pasará a Pro.",
+  "billing.pastDueDetail": "El pago falló. Actualiza tu tarjeta en {days} días o este espacio de trabajo pasará a Starter.",
   "billing.hostedNote": "Los pagos los gestiona Stripe. Los datos de la tarjeta nunca se introducen en Pulse.",
   "billing.error": "Algo salió mal. Inténtalo de nuevo.",
   "account.signOut": "Cerrar sesión",

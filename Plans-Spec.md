@@ -4,7 +4,7 @@ Status: **All decisions resolved (PL1–PL11)** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
-(PL8); **quota-only** model, no feature gating (PL2); tiers **Pro/Teams/Business** at
+(PL8); **quota-only** model, no feature gating (PL2); tiers **Starter/Pro/Business** at
 **$0/$6/$12 per editor seat/mo** (PL1) with the §3.2 quotas (PL3); a seat = an **editor**
 (PL11); launch **Mexico**, invoicing manual (PL10/10-a). See §2–§3, §8.
 
@@ -44,7 +44,7 @@ an individual member, and not from each member's own plan.
   (Supersedes the earlier `billingOwnerUid`/`billingOrgId` sketch — billing attaches to the
   workspace, not a single user account. Both are retired; see §7.)
 - **Members' own plans are irrelevant.** A member with no subscription of their own can
-  fully use a Pulse in a paid (Teams/Business) Organization — the *Organization* pays. A
+  fully use a Pulse in a paid (Pro/Business) Organization — the *Organization* pays. A
   collaborator never needs a paid seat; only editors do. This is intended.
 - **Solo / personal use** is just the user's **personal workspace** acting as a
   single-admin personal Organization (auto-created on sign-up — it already exists as
@@ -89,15 +89,15 @@ arrears** ("mass" billing at month end) via Stripe. For Mexican customers the pr
 
 | Tier | $/editor/mo | Editor seats | Pulses/org | Collaborators/org | Resources/Pulse |
 |---|---|---|---|---|---|
-| **Pro** | **$0** (free) | 1 (fixed) | 3 | 10 | 20 |
-| **Teams** | **$6** | per purchased seat | 5 | 20 | 40 |
+| **Starter** | **$0** (free) | 1 (fixed) | 3 | 10 | 20 |
+| **Pro** | **$6** | per purchased seat | 5 | 20 | 40 |
 | **Business** | **$12** | per purchased seat | ∞ | ∞ | ∞ |
 
-- **Pro is the free default** — the absence of a subscription (no Stripe product). One
+- **Starter is the free default** — the absence of a subscription (no Stripe product). One
   editor (the org owner), enough to plan solo and invite collaborators.
-- **Teams / Business bill per editor seat** (Stripe subscription `quantity` = editor
+- **Pro / Business bill per editor seat** (Stripe subscription `quantity` = editor
   count). Pulses / collaborators / resources are the tier's caps; editors are the billing
-  driver and, on Teams/Business, are limited only by the seats purchased.
+  driver and, on Pro/Business, are limited only by the seats purchased.
 
 ## 3. Entitlements = quantity limits only (no feature gating)
 
@@ -114,8 +114,8 @@ Two kinds of member, per Organization:
   users who hold a **paid editor seat**. Only a licensed editor can be made **owner/editor**
   on the org's Pulses, and only editors can **create Pulses** and fully edit. The roster is
   **owner-managed** (the org admin adds/removes editors on a "Members & seats" screen); the
-  owner is always in it; **rules cap its length** at the tier's editor-seat limit (Pro = 1;
-  Teams/Business = purchased `seats`) — a synchronous, race-free check. This is the seat
+  owner is always in it; **rules cap its length** at the tier's editor-seat limit (Starter = 1;
+  Pro/Business = purchased `seats`) — a synchronous, race-free check. This is the seat
   count Stripe bills (`quantity`).
 - **Collaborators** (roles **full viewer** / **my-beat viewer** / **task lead**) are **free**,
   are **not** on the editor roster, don't consume a seat, and **cannot create Pulses** — they
@@ -124,7 +124,7 @@ Two kinds of member, per Organization:
 
 A **user's role is per-Organization**: the same person can be a collaborator in one org and a
 licensed editor in several others — each editorship consuming one seat **in that org**. Every
-user also gets their own free **Pro** org (their personal workspace), where they are the
+user also gets their own free **Starter** org (their personal workspace), where they are the
 single editor and can create up to 3 Pulses.
 
 > **Rule gate:** setting a `PulseMember` role to owner/editor requires the target uid to be in
@@ -133,7 +133,7 @@ single editor and can create up to 3 Pulses.
 
 ### 3.2 Quotas (per org, unless noted)
 
-| Quota | Pro | Teams | Business |
+| Quota | Starter | Pro | Business |
 |---|---|---|---|
 | Editor seats | 1 (fixed) | purchased | purchased |
 | Pulses per org | 3 | 5 | ∞ |
@@ -144,7 +144,7 @@ Checks happen at the **point of growth** (create Pulse, add editor/collaborator,
 resource), never on read; enforced client-side for v1 (PL5), with a counter function later
 if a collection count must be authoritative. Encoded in `src/domain/entitlements.ts`
 (`Entitlements` = `{ maxEditors, maxPulses, maxCollaborators, maxResourcesPerPulse }`;
-`maxEditors: null` on Teams/Business means "bounded by purchased seats", `editorSeatLimit()`).
+`maxEditors: null` on Pro/Business means "bounded by purchased seats", `editorSeatLimit()`).
 
 ### 3.3 Dashboard — Pulses grouped by Organization
 
@@ -159,7 +159,7 @@ Because a user can belong to several orgs, the dashboard groups Pulses **by Orga
 
 ## 4. Storage — server-authoritative plan
 
-The plan **must not be client-writable** (a user could set themselves to Pro). Design:
+The plan **must not be client-writable** (a user could set themselves to Starter). Design:
 
 - A locked doc **`billing/{orgId}`** where **`orgId === workspaceId`** (PL6): `{ tier,
   status, currentPeriodEnd, seats?, updatedAt, source, stripeCustomerId,
@@ -173,8 +173,8 @@ The plan **must not be client-writable** (a user could set themselves to Pro). D
 - Rules gating a Pulse action read it with
   `get(/databases/$(db)/documents/billing/$(pulse.workspaceId))` — security-rules `get()`
   bypasses the doc's own read rule, so the doc stays private but still gate-able.
-- **Absent doc = Pro** (the free default — a newly-created Organization has no billing doc
-  until it subscribes to Teams/Business).
+- **Absent doc = Starter** (the free default — a newly-created Organization has no billing doc
+  until it subscribes to Pro/Business).
 
 ## 5. Enforcement
 
@@ -183,7 +183,7 @@ point of growth (create Pulse, add editor/collaborator, add resource).
 
 - **Editor seats — enforced synchronously in rules (PL9 option B).** The editor roster is
   `Workspace.editorUids[]`, owner-written; the rule caps `editorUids.size() ≤ editorSeatLimit`
-  (get `billing/{ws}`: Pro 1; else `seats`) on every write, and requires the owner to stay
+  (get `billing/{ws}`: Starter 1; else `seats`) on every write, and requires the owner to stay
   included. Because it's an array in one doc, there's **no counter lag and no race** — you can
   never exceed your paid seats. Making a `PulseMember` owner/editor requires the target uid ∈
   the org's `editorUids` (rules `get()` the workspace).
@@ -208,29 +208,29 @@ point of growth (create Pulse, add editor/collaborator, add resource).
 ### 5.1 Downgrade behaviour (PL4 — decided)
 
 **Graceful downsize, never destructive** — nothing is ever deleted. The over-limit handling
-below applies **only when downgrading to the free tier (Pro)**; paid→paid downgrades are
+below applies **only when downgrading to the free tier (Starter)**; paid→paid downgrades are
 handled at the source (the portal blocks reducing seats below the current editor count) and
 are otherwise out of scope for v1.
 
-- **Pulses over the limit → newest become read-only; archive to unlock.** On dropping to Pro
+- **Pulses over the limit → newest become read-only; archive to unlock.** On dropping to Starter
   (3 Pulses), at most `maxPulses` **non-archived** Pulses stay editable; the **newest** beyond
   that are **read-only** (viewable, not editable), never deleted. To edit a locked Pulse the
   owner **archives another active Pulse**, freeing a slot so a locked one becomes editable —
   i.e. the owner chooses which 3 stay live. Enforced **client-side** (the lock is derived from
   the Pulse list ordered by `createdAt` + the tier cap; rules can't count/sort — PL5); a
   bypass only lets someone exceed a commercial limit, not a security boundary.
-- **Editors are demoted to a single editor.** Pro allows **1 editor seat**, so on the
+- **Editors are demoted to a single editor.** Starter allows **1 editor seat**, so on the
   downgrade every editor/owner **except the org owner** (the workspace owner — the only user
   who can trigger a billing change) is **demoted to full viewer** across the org's Pulses.
   They keep access and their data; they lose edit until the org re-subscribes and the owner
   re-promotes them. Done **server-side** (SF3, or a companion, when the billing doc flips to
-  Pro/canceled) so it happens regardless of client, keeping `workspace.ownerId` as the sole
+  Starter/canceled) so it happens regardless of client, keeping `workspace.ownerId` as the sole
   editor.
 - **Collaborators are unaffected.** Viewers / my-beat viewers / task leads keep their access
   and roles even if the org is over the collaborator quota; only *adding new* collaborators is
   blocked while over.
 - **Grace before enforcing.** Ride Stripe's dunning: treat `past_due` as still-paid for a
-  short grace window before the org resolves to Pro.
+  short grace window before the org resolves to Starter.
 
 ## 6. UX
 
@@ -238,7 +238,7 @@ are otherwise out of scope for v1.
   plan/billing screen (current tier, usage vs. quota, upgrade/manage → payment provider
   portal). *Entering payment details is handled by the provider's hosted flow, never
   in-app.*
-- Gated controls show a lightweight upsell ("Pro feature") instead of silently vanishing,
+- Gated controls show a lightweight upsell ("Starter feature") instead of silently vanishing,
   so the value is discoverable.
 - Quota-at-limit shows a clear "you've hit your plan's limit" with the upgrade path.
 
@@ -268,14 +268,14 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 
 ## 8. Open decisions (PL1–PL11)
 
-1. **PL1 — Tiers & prices. → DECIDED (§2).** Pro/Teams/Business, **$0 / $6 / $12 per editor
+1. **PL1 — Tiers & prices. → DECIDED (§2).** Starter/Pro/Business, **$0 / $6 / $12 per editor
    seat / month**, USD, billed monthly in arrears via Stripe, VAT-inclusive for MX.
 2. **PL2 — Feature gating. → DECIDED: none.** All tiers have all features; tiers differ by
    quantity limits only (§3). No feature flags in `Entitlements`.
-3. **PL3 — Quota numbers. → DECIDED (§3.2).** Pro 1 editor / 3 Pulses / 10 collaborators /
-   20 resources; Teams (per seat) 5 / 20 / 40; Business unlimited. (Matches `entitlements.ts`.)
+3. **PL3 — Quota numbers. → DECIDED (§3.2).** Starter 1 editor / 3 Pulses / 10 collaborators /
+   20 resources; Pro (per seat) 5 / 20 / 40; Business unlimited. (Matches `entitlements.ts`.)
 4. **PL4 — Downgrade behaviour. → DECIDED (§5.1).** Graceful, never destructive, and only on
-   dropping to **Pro**: the **newest** over-limit Pulses go **read-only** (archive another to
+   dropping to **Starter**: the **newest** over-limit Pulses go **read-only** (archive another to
    unlock — owner picks which 3 stay live); every editor **except the org owner** is **demoted
    to full viewer** (keep access, lose edit) server-side; **collaborators unaffected**; a grace
    window on `past_due`.
@@ -316,7 +316,7 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 11. **PL11 — Seat definition. → DECIDED: an editor seat.** A billable seat = one **editor**
     (role owner/editor) in the org; collaborators (viewers / task leads / my-beat viewers)
     are free and don't consume seats. `billing.seats` = purchased editor seats = Stripe
-    subscription `quantity`. Pro is fixed at 1 editor; Teams/Business bill per editor.
+    subscription `quantity`. Starter is fixed at 1 editor; Pro/Business bill per editor.
 
 > **Cross-refs:** this layer is referenced from `Permissions-Spec.md` (§ Plan gating,
 > `entitlement ∧ capability`), and its server side is `Server-Functions-Spec.md` **SF3**
@@ -344,7 +344,7 @@ hand that to Stripe; Stripe computes tax.
   tax treatment, and invoice format.
 - One **Subscription per Organization**, mapped to the tier (PL1). Subscription state is
   the source of truth for `billing/{orgId}.tier/status` (§4), synced by **SF3**.
-- **Seats** (PL11) map to Stripe **quantity** on the per-seat price (Teams/Business);
+- **Seats** (PL11) map to Stripe **quantity** on the per-seat price (Pro/Business);
   `quantity` = the org's editor count.
 
 ### 9.2 Leverage Stripe's country/legal capabilities (don't reinvent)
@@ -435,13 +435,21 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
 - (Reminder — PL10-a) Stripe does not issue CFDIs; the factura global stays **manual**.
 
 **B. Product catalog — product (Stripe dashboard)**
-- Product **"Pulse Teams"** → recurring **per-seat** Price billed by `quantity`:
+
+> ⚠️ **Pending in Stripe (as of 2026-08-10).** The $6 tier was renamed **Teams → Pro**. The
+> live Stripe product is still named *"Pulse Teams"* and still carries `tier: "teams"`.
+> `readTier()` in `functions/src/billing.ts` accepts `"teams"` as a **legacy alias for
+> `"pro"`**, so nothing is broken and the dashboard edit can happen at any time — but until
+> it's done, the product name on customer **invoices and receipts** still reads "Pulse Teams".
+> Rename the product and switch the metadata to `pro` before taking real payments.
+
+- Product **"Pulse Pro"** → recurring **per-seat** Price billed by `quantity`:
   **$6 USD / editor / month**.
 - Product **"Pulse Business"** → recurring **per-seat** Price billed by `quantity`:
   **$12 USD / editor / month**.
-- **No Pro product** — Pro is the free default (absence of a subscription; 1 editor).
+- **No Starter product** — Starter is the free default (absence of a subscription; 1 editor).
 - Monthly billing **in arrears** (usage/quantity finalized at period end — "mass billing").
-- On **every Price**, set metadata **`tier`** (`teams`|`business`) so SF3 maps a
+- On **every Price**, set metadata **`tier`** (`pro`|`business` — lowercase) so SF3 maps a
   subscription's price → our tier without hard-coding Price ids. The subscription
   `quantity` = editor seats (PL11).
 
@@ -450,7 +458,7 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
   the chosen Price, `client_reference_id = workspaceId`, and the workspace's
   `stripeCustomerId` (create the Customer on first checkout, store it on the Workspace,
   set Customer metadata `workspaceId`). Success/cancel URLs return to the billing screen.
-- **Customer Portal** — configure allowed actions (switch Teams↔Business, change seats/
+- **Customer Portal** — configure allowed actions (switch Pro↔Business, change seats/
   `quantity`, update card, cancel, view invoices). The account-menu **"Billing & payment"**
   deep-links to a portal session (a second callable).
 - **Webhook → SF3** (the HTTPS function URL). Subscribe to:

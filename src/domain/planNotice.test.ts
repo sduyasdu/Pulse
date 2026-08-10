@@ -9,7 +9,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const T0 = new Date(2026, 0, 10, 12, 0, 0).getTime();
 const WS = "ws1";
 
-const billing = (over: Partial<BillingDoc>): BillingDoc => ({ tier: "teams", status: "active", source: "stripe", updatedAt: T0, ...over });
+const billing = (over: Partial<BillingDoc>): BillingDoc => ({ tier: "pro", status: "active", source: "stripe", updatedAt: T0, ...over });
 const pastDue = (over: Partial<BillingDoc> = {}) => billing({ status: "past_due", pastDueSince: T0, ...over });
 
 describe("planNotice (delinquency banner)", () => {
@@ -35,7 +35,7 @@ describe("planNotice (delinquency banner)", () => {
     const doc = pastDue();
     const day1 = planNotice(doc, WS, T0)!;
     expect(day1.messageKey).toBe("plan.pastDue");
-    expect(day1.params).toEqual({ days: DELINQUENCY_GRACE_DAYS, tier: "Teams" });
+    expect(day1.params).toEqual({ days: DELINQUENCY_GRACE_DAYS, tier: "Pro" });
     expect(day1.urgent).toBe(false);
 
     // Calm right up to the urgency threshold, then warmer.
@@ -47,7 +47,7 @@ describe("planNotice (delinquency banner)", () => {
     const doc = pastDue();
     const last = planNotice(doc, WS, T0 + (DELINQUENCY_GRACE_DAYS - 1) * DAY)!;
     expect(last.messageKey).toBe("plan.pastDueToday");
-    expect(last.params).toEqual({ days: 1, tier: "Teams" });
+    expect(last.params).toEqual({ days: 1, tier: "Pro" });
     expect(last.urgent).toBe(true);
   });
 

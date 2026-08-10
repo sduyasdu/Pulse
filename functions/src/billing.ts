@@ -30,7 +30,7 @@ type Data = FirebaseFirestore.DocumentData;
 /** Mirrors src/types PlanTier / BillingStatus. Duplicated rather than imported:
  * functions/ is a separate package with its own tsconfig (rootDir `src`), so it
  * cannot reach the app's `src/types`. Keep the two in sync. */
-export type PlanTier = "pro" | "teams" | "business";
+export type PlanTier = "starter" | "pro" | "business";
 export type BillingStatus = "active" | "trialing" | "past_due" | "canceled" | "incomplete";
 
 /** The `fullViewer` capability bundle — mirrors PRESET_CAPS.fullViewer in
@@ -55,7 +55,7 @@ const FULL_VIEWER_CAPS = {
  * includes `OtherString` (forward-compatibility for statuses added server-side),
  * so this is a lookup with a fallback rather than an exhaustive switch: anything
  * unrecognized, plus `canceled`/`incomplete_expired`/`unpaid`/`paused`, means
- * "no live plan" and resolves to Pro downstream.
+ * "no live plan" and resolves to Starter downstream.
  */
 const STATUS_MAP: Partial<Record<Stripe.Subscription.Status, BillingStatus>> = {
   active: "active",
@@ -68,11 +68,21 @@ export function mapStatus(status: Stripe.Subscription.Status): BillingStatus {
   return STATUS_MAP[status] ?? "canceled";
 }
 
-/** A `tier` metadata value, validated. Only the two paid products carry it; Pro
- * is the absence of a subscription, never a Stripe product. */
+/**
+ * A `tier` metadata value, validated. Only the two paid products carry it;
+ * Starter is the absence of a subscription, never a Stripe product.
+ *
+ * **`"teams"` is accepted as a legacy alias for `"pro"`.** The $6 tier was
+ * originally named Teams, and the live Stripe product still carries
+ * `tier: "teams"` until someone edits it in the dashboard. Without this alias the
+ * rename would be a coordinated deploy — code and Stripe having to change in the
+ * same instant, with Checkout failing to find a price in between. With it, either
+ * order is safe and the Stripe edit can happen whenever.
+ */
 export function readTier(meta: Stripe.Metadata | null | undefined): PlanTier | null {
   const t = meta?.tier?.trim().toLowerCase();
-  return t === "teams" || t === "business" ? t : null;
+  if (t === "teams") return "pro"; // legacy: the $6 tier's former name
+  return t === "pro" || t === "business" ? t : null;
 }
 
 /**
@@ -113,7 +123,7 @@ export function licensedItem(sub: Stripe.Subscription): { item: Stripe.Subscript
  * would go undetected.
  */
 export function holdsSeats(tier: unknown, status: unknown): boolean {
-  const paidTier = tier === "teams" || tier === "business";
+  const paidTier = tier === "pro" || tier === "business";
   return paidTier && (status === "active" || status === "trialing" || status === "past_due");
 }
 
@@ -135,10 +145,10 @@ async function resolveOrgId(db: Db, sub: Stripe.Subscription, customer: Stripe.C
 }
 
 /**
- * PL4 downgrade (Plans-Spec §5.1) — run when an org's plan flips to Pro.
+ * PL4 downgrade (Plans-Spec §5.1) — run when an org's plan flips to Starter.
  * **Graceful, never destructive:** nothing is deleted and nobody loses access;
  * every editor/owner across the org's Pulses **except the org owner** is demoted
- * to full viewer, because Pro allows exactly one editor seat. They keep their
+ * to full viewer, because Starter allows exactly one editor seat. They keep their
  * data and can be re-promoted when the org re-subscribes. The editor roster
  * collapses to `[ownerId]` to match.
  *
@@ -159,7 +169,7 @@ export async function applyProDowngrade(db: Db, orgId: string): Promise<{ pulses
   }
 
   const writer = db.bulkWriter();
-  // Pro = 1 editor seat, and it belongs to the org owner.
+  // Starter = 1 editor seat, and it belongs to the org owner.
   writer.set(wsRef, { editorUids: [ownerId] }, { merge: true });
 
   const pulses = await db.collection("pulses").where("workspaceId", "==", orgId).get();
@@ -244,14 +254,14 @@ export async function syncSubscription(
   const licensed = licensedItem(sub);
   if (!licensed) {
     // A subscription with no `tier` metadata on any item — misconfigured product.
-    // Recorded as unpaid so the org falls back to Pro rather than silently
+    // Recorded as unpaid so the org falls back to Starter rather than silently
     // inheriting a stale paid tier.
     logError(FN, "subscription has no tier metadata on any item", new Error("missing tier metadata"), {
       orgId,
       subscriptionId,
     });
   }
-  const tier: PlanTier = licensed?.tier ?? "pro";
+  const tier: PlanTier = licensed?.tier ?? "starter";
   const status = mapStatus(sub.status);
 
   // Timestamps are plain epoch millis, NOT Firestore Timestamp objects: the app
@@ -520,8 +530,8 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to manage billing.");
 
   const tier = request.data?.tier;
-  if (tier !== "teams" && tier !== "business") {
-    throw new HttpsError("invalid-argument", "Choose the Teams or Business plan."); // Pro is free — never a Checkout
+  if (tier !== "pro" && tier !== "business") {
+    throw new HttpsError("invalid-argument", "Choose the Pro or Business plan."); // Starter is free — never a Checkout
   }
   const seats = requireSeats(request.data?.seats);
   const returnUrl = safeReturnUrl(request.data?.returnUrl);

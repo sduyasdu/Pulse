@@ -163,7 +163,7 @@ export const de: Dict = {
 
   "plan.pastDue": "Zahlung fehlgeschlagen. Aktualisiere deine Karte innerhalb von {days} Tagen, um {tier} zu behalten.",
   "plan.pastDueToday": "Zahlung fehlgeschlagen. Aktualisiere deine Karte heute, um {tier} zu behalten.",
-  "plan.pastDueExpired": "Nach {days} Tagen ohne Zahlung nutzt dieser Workspace jetzt Pro.",
+  "plan.pastDueExpired": "Nach {days} Tagen ohne Zahlung nutzt dieser Workspace jetzt Starter.",
   "plan.dismissAria": "Diesen Hinweis ausblenden",
   "billing.perEditorMonth": "pro Editor / Monat",
   "billing.perSeat": "Pro gekaufter Lizenz",
@@ -181,7 +181,7 @@ export const de: Dict = {
   "billing.seatsToBuy": "Zu kaufende Editor-Lizenzen",
   "billing.upgradeTo": "Auf {tier} wechseln",
   "billing.managePayment": "Zahlung & Lizenzen verwalten",
-  "billing.pastDueDetail": "Zahlung fehlgeschlagen. Aktualisiere deine Karte innerhalb von {days} Tagen, sonst wechselt dieser Workspace zu Pro.",
+  "billing.pastDueDetail": "Zahlung fehlgeschlagen. Aktualisiere deine Karte innerhalb von {days} Tagen, sonst wechselt dieser Workspace zu Starter.",
   "billing.hostedNote": "Zahlungen werden von Stripe abgewickelt. Kartendaten werden nie in Pulse eingegeben.",
   "billing.error": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   "account.signOut": "Abmelden",

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { InlineSpinner } from "@/components/shared/Spinner";
 import { useBilling } from "@/hooks/useBilling";
 import { createCheckoutUrl, createPortalUrl } from "@/services/firestore/billing";
 import {
@@ -36,7 +37,7 @@ function formatDate(ms: number | undefined, lang: string): string {
 }
 
 /** Product terms, left untranslated like Pulse and Epic (see i18n/en.ts). */
-const TIER_LABEL: Record<PlanTier, string> = { pro: "Pro", teams: "Teams", business: "Business" };
+const TIER_LABEL: Record<PlanTier, string> = { starter: "Starter", pro: "Pro", business: "Business" };
 
 function PlanColumn({
   tier,
@@ -59,12 +60,12 @@ function PlanColumn({
   // The action depends on whether a subscription already exists, NOT on which
   // tier was clicked: sending an existing subscriber through Checkout would open
   // a SECOND subscription rather than move them. Stripe's portal is the only
-  // correct place to switch plans, change seats, or cancel down to Pro.
+  // correct place to switch plans, change seats, or cancel down to Starter.
   const label = current
     ? t("billing.currentPlan")
     : subscribed
       ? t("billing.switchPlan")
-      : tier === "pro"
+      : tier === "starter"
         ? t("billing.currentPlan")
         : t("billing.selectPlan");
 
@@ -79,7 +80,7 @@ function PlanColumn({
     >
       <div className="flex items-center gap-2">
         <span className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{TIER_LABEL[tier]}</span>
-        {tier === "pro" && (
+        {tier === "starter" && (
           <span className="mono rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#94A3B8" }}>
             {t("billing.free")}
           </span>
@@ -93,7 +94,7 @@ function PlanColumn({
 
       <dl className="mt-3 flex flex-1 flex-col gap-1.5 border-t pt-3" style={{ borderColor: "#F1F5F9" }}>
         {[
-          [t("billing.editorSeats"), tier === "pro" ? "1" : t("billing.perSeat")],
+          [t("billing.editorSeats"), tier === "starter" ? "1" : t("billing.perSeat")],
           [t("billing.maxPulses"), limit(limits.maxPulses, t)],
           [t("billing.maxCollaborators"), limit(limits.maxCollaborators, t)],
           [t("billing.maxResources"), limit(limits.maxResourcesPerPulse, t)],
@@ -107,15 +108,15 @@ function PlanColumn({
 
       <button
         onClick={onChoose}
-        disabled={current || busy || (tier === "pro" && !subscribed)}
+        disabled={current || busy || (tier === "starter" && !subscribed)}
         className="hoverable mt-4 rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-default disabled:opacity-55"
         style={
-          current || (tier === "pro" && !subscribed)
+          current || (tier === "starter" && !subscribed)
             ? { background: "#EEF1F5", color: "#64748B" }
             : { background: tier === "business" ? "#123359" : "#D85A28", color: "#FFFFFF" }
         }
       >
-        {busy ? t("common.loading") : label}
+        {busy ? <InlineSpinner /> : label}
       </button>
     </div>
   );
@@ -151,7 +152,7 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
   const choose = (tier: PlanTier) => {
     // Already paying? Every change — up, down, or cancel — belongs in the portal.
     if (subscribed) return goto(createPortalUrl, "portal");
-    if (tier === "pro") return; // the free default; nothing to buy
+    if (tier === "starter") return; // the free default; nothing to buy
     return goto(() => createCheckoutUrl(tier, seats), tier);
   };
 
@@ -218,7 +219,7 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
             className="hoverable mt-3 w-full rounded-lg border px-3.5 py-2 text-sm font-semibold disabled:opacity-60"
             style={{ borderColor: "#D85A28", color: "#D85A28" }}
           >
-            {busy === "portal" ? t("common.loading") : t("billing.managePayment")}
+            {busy === "portal" ? <InlineSpinner /> : t("billing.managePayment")}
           </button>
         )}
 
