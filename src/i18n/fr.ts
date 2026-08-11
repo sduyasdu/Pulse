@@ -246,6 +246,8 @@ export const fr: Dict = {
   "invite.inviteTo": "Inviter à « {name} »",
   "invite.shareLinkHint": "Partagez un lien — l'accès est accordé dès que la personne l'ouvre et se connecte.",
   "invite.copyRoleLink": "Copier le lien d'invitation {role}",
+  "invite.shareRoleLink": "Partager le lien d’invitation ({role})",
+  "invite.copyLink": "Copier le lien",
   "invite.linkCopied": "✓ Lien copié",
   "invite.copyError": "Impossible de copier le lien — réessayez.",
   "invite.revokeError": "Impossible de révoquer le lien — réessayez.",
@@ -502,4 +504,12 @@ export const fr: Dict = {
   "activity.you": "Vous",
   "activity.heading": "Activité",
   "activity.noFeatureChanges": "Aucun changement enregistré sur cette tâche pour l'instant.",
+
+  // ── partage ─────────────────────────────────────────────────────────────────
+  "share.share": "Partager",
+  "share.copied": "Copié",
+  "share.shareTitle": "Partager un lien vers ce Pulse",
+  "share.copyTitle": "Copier un lien vers ce Pulse",
+  "share.pulseTitle": "Rejoindre ce Pulse",
+  "share.text": "Regardez « {name} » sur Pulse",
 };

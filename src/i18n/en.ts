@@ -252,6 +252,8 @@ export const en = {
   "invite.inviteTo": "Invite to “{name}”",
   "invite.shareLinkHint": "Share a link — they get access the moment they open it and sign in.",
   "invite.copyRoleLink": "Copy {role} invite link",
+  "invite.shareRoleLink": "Share {role} invite link",
+  "invite.copyLink": "Copy the link",
   "invite.linkCopied": "✓ Link copied",
   "invite.copyError": "Couldn't copy the link — try again.",
   "invite.revokeError": "Couldn't revoke the link — try again.",
@@ -508,6 +510,14 @@ export const en = {
   "activity.you": "You",
   "activity.heading": "Activity",
   "activity.noFeatureChanges": "No changes recorded on this task yet.",
+
+  // ── sharing ─────────────────────────────────────────────────────────────────
+  "share.share": "Share",
+  "share.copied": "Copied",
+  "share.shareTitle": "Share a link to this Pulse",
+  "share.copyTitle": "Copy a link to this Pulse",
+  "share.pulseTitle": "Join this Pulse",
+  "share.text": "Take a look at “{name}” on Pulse",
 };
 
 /** The shape every other-language dictionary must match exactly. */

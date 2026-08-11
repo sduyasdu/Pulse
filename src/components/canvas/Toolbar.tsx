@@ -7,6 +7,7 @@ import { toDateInputValue, dayIndexFromDateInputValue } from "@/domain/dateUtils
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { useT } from "@/i18n";
 import { MultiSelectFilter, type Option } from "@/components/shared/MultiSelectFilter";
+import { SharePulseButton } from "@/components/shared/SharePulseButton";
 import { Icon } from "@/components/shared/Icon";
 import { PulseLockup } from "@/components/shared/Logo";
 
@@ -151,6 +152,7 @@ export function Toolbar({
             <Icon name="archive" size={11} /> {t("pulse.archivedChip")}
           </span>
         )}
+        <SharePulseButton name={pulseName} dark />
         {canEdit && (
           <button
             onClick={onInvite}

@@ -3,6 +3,8 @@ import type { InviteLink, PulseRole } from "@/types";
 import { getPulseInviteLink, setPulseInviteLink, clearPulseInviteLink } from "@/services/firestore/joinLinks";
 import { ASSIGNABLE_ROLES, roleMeta } from "@/domain/permissions";
 import { logDirectActivity } from "@/domain/activityRecorder";
+import { canNativeShare, copyText, shareOrCopy } from "@/domain/share";
+import { Icon } from "@/components/shared/Icon";
 import { useT } from "@/i18n";
 
 /** Copy-link invite control: pick a role, copy a shareable join link, and
@@ -14,6 +16,8 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Capability, not a preference — fixed for the session, so read it once.
+  const [nativeShare] = useState(() => canNativeShare());
 
   useEffect(() => {
     let cancelled = false;
@@ -27,23 +31,40 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
 
   const urlFor = (i: InviteLink) => `${window.location.origin}/join/${pulseId}/${i.token}/${i.role}`;
 
-  const copyLink = async () => {
+  const sendLink = async () => {
     setBusy(true);
     setError(null);
     try {
       // Reuse the active link if it already grants the chosen role; otherwise
       // (re)generate — there's one active link at a time.
       const reused = !!(invite && invite.role === role);
-      let i = reused ? invite! : await setPulseInviteLink(pulseId, role);
+      const i = reused ? invite! : await setPulseInviteLink(pulseId, role);
       setInvite(i);
       if (!reused) logDirectActivity(pulseId, { entityKind: "invite", entityId: pulseId, entityName: "invite link", verb: "link-created", summary: `created a ${roleMeta(role).label} invite link` });
-      await navigator.clipboard.writeText(urlFor(i));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      // Share sheet where the platform has one, clipboard everywhere else.
+      // Note the round-trip above can cost us the user gesture on Safari when
+      // the link had to be created; shareOrCopy falls back to a copy in that
+      // case, so the user is never left empty-handed.
+      const outcome = await shareOrCopy({ title: t("share.pulseTitle"), url: urlFor(i) });
+      if (outcome === "failed") {
+        setError(t("invite.copyError"));
+      } else if (outcome === "copied") {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      }
     } catch {
       setError(t("invite.copyError"));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const copyExisting = async (i: InviteLink) => {
+    if (await copyText(urlFor(i))) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } else {
+      setError(t("invite.copyError"));
     }
   };
 
@@ -80,12 +101,19 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
 
       <button
         type="button"
-        onClick={() => void copyLink()}
+        onClick={() => void sendLink()}
         disabled={busy}
-        className="rounded-lg px-4 py-2.5 text-sm font-semibold text-yasdu-primary-fg disabled:opacity-50"
+        className="flex items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-yasdu-primary-fg disabled:opacity-50"
         style={{ background: copied ? "#12A594" : "#D85A28" }}
       >
-        {copied ? t("invite.linkCopied") : t("invite.copyRoleLink", { role: roleMeta(role).label })}
+        {copied ? (
+          t("invite.linkCopied")
+        ) : (
+          <>
+            <Icon name={nativeShare ? "share" : "link"} size={15} />
+            {nativeShare ? t("invite.shareRoleLink", { role: roleMeta(role).label }) : t("invite.copyRoleLink", { role: roleMeta(role).label })}
+          </>
+        )}
       </button>
 
       {invite && (
@@ -97,6 +125,12 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
             className="mono flex-1 rounded border px-2 py-1.5 text-[11px]"
             style={{ borderColor: "#E2DFD9", color: "#64748B", background: "#F8FAFC" }}
           />
+          {/* Copy stays reachable even when the button above opens a share
+              sheet instead — pasting the link somewhere by hand is still the
+              fastest route for plenty of people. */}
+          <button type="button" onClick={() => void copyExisting(invite)} disabled={busy} title={t("invite.copyLink")} aria-label={t("invite.copyLink")} className="flex items-center" style={{ color: "#64748B" }}>
+            <Icon name="content_copy" size={14} />
+          </button>
           <button type="button" onClick={() => void revoke()} disabled={busy} className="mono text-[11px]" style={{ color: "#DC2626" }}>
             {t("common.revoke")}
           </button>

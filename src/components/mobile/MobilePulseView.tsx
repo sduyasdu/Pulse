@@ -17,6 +17,7 @@ import { MobileTaskList } from "@/components/mobile/MobileTaskList";
 import { MobileBoard } from "@/components/mobile/MobileBoard";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { ArchivedBanner } from "@/components/shared/ArchivedBanner";
+import { SharePulseButton } from "@/components/shared/SharePulseButton";
 import { isArchived } from "@/domain/pulseLock";
 import { useT } from "@/i18n";
 
@@ -83,6 +84,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
             <Icon name="forum" size={20} />
           </button>
         )}
+        <SharePulseButton name={pulse?.name} compact />
         <button onClick={() => setShowHelp(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240" }} title={t("help.open")} aria-label={t("help.open")}>
           <Icon name="help" size={20} />
         </button>

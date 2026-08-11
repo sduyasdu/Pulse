@@ -246,6 +246,8 @@ export const de: Dict = {
   "invite.inviteTo": "Zu „{name}“ einladen",
   "invite.shareLinkHint": "Teile einen Link — der Zugriff wird gewährt, sobald er geöffnet und angemeldet wird.",
   "invite.copyRoleLink": "{role}-Einladungslink kopieren",
+  "invite.shareRoleLink": "Einladungslink teilen ({role})",
+  "invite.copyLink": "Link kopieren",
   "invite.linkCopied": "✓ Link kopiert",
   "invite.copyError": "Link konnte nicht kopiert werden — versuche es erneut.",
   "invite.revokeError": "Link konnte nicht widerrufen werden — versuche es erneut.",
@@ -502,4 +504,12 @@ export const de: Dict = {
   "activity.you": "Du",
   "activity.heading": "Aktivität",
   "activity.noFeatureChanges": "Noch keine Änderungen an dieser Aufgabe erfasst.",
+
+  // ── Teilen ──────────────────────────────────────────────────────────────────
+  "share.share": "Teilen",
+  "share.copied": "Kopiert",
+  "share.shareTitle": "Einen Link zu diesem Pulse teilen",
+  "share.copyTitle": "Einen Link zu diesem Pulse kopieren",
+  "share.pulseTitle": "Diesem Pulse beitreten",
+  "share.text": "Sieh dir „{name}“ in Pulse an",
 };
