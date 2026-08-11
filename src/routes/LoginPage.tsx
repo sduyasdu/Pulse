@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { EmailPasswordForm } from "@/components/auth/EmailPasswordForm";
+import { PulseLockup } from "@/components/shared/Logo";
 
 export function LoginPage() {
   const { firebaseUser, initializing, signInWithGoogle, signInWithEmail, registerWithEmail } = useAuthStore();
@@ -18,7 +19,7 @@ export function LoginPage() {
     <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg px-4">
       <div className="w-full max-w-sm rounded-2xl border bg-yasdu-card p-7 shadow-sm" style={{ borderColor: "#E2DFD9" }}>
         <div className="mb-6 flex items-center gap-2">
-          <span className="font-display text-xl font-semibold text-yasdu-blue">Pulse</span>
+          <PulseLockup variant="light" size={20} />
           <span className="mono text-[10px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         </div>
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
+import { PulseLockup } from "@/components/shared/Logo";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
@@ -127,7 +128,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
-        <span className="font-display text-base font-semibold text-white">Pulse</span>
+        <PulseLockup variant="dark" size={16} />
         <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         <div className="flex-1" />
         {/* Same help as inside a Pulse — arguably more useful here, where a
