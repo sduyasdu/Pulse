@@ -190,7 +190,15 @@ The dashboard also has a lighter `InviteDialog` (`InviteDialog.tsx`) wired to
 - **Archive** is per-user and non-destructive: `setMyPulseArchived`
   (`pulses.ts:161-163`) flips `archived` on *your own* index entry only, hiding
   the Pulse into your Archived section without touching the shared Pulse or
-  anyone else's view.
+  anyone else's view, and (per `Plans-Spec.md` PL12) without freeing a Pulse
+  slot. `archived` is read **nowhere** outside the dashboard's
+  grouping (`DashboardPage.tsx:83-87`) and the card's styling
+  (`PulseCard.tsx:25,38,62,110-119`) — not in `firestore.rules`, not in
+  `functions/`, not in notifications. It is strictly a dashboard filter: an
+  "archived" Pulse stays fully editable, keeps notifying you, and is unchanged
+  for everyone else. **This single action is overloaded** — it is named for a
+  shared lifecycle state but implemented as a personal one. §3.10 splits it into
+  **Hide** (this behaviour, renamed) and **Archive** (shared, read-only).
 - **Delete** is owner-only and global: `deletePulse` (`pulses.ts:207-223`)
   cascade-deletes `invites`/`epics`/`features`/`resources`, then the pulse doc,
   then `pulseMembers` **last** (deleting your own member doc first would deny
@@ -240,6 +248,15 @@ What's missing or rough today, in rough priority order:
 7. **No activity / audit log** — who changed what, when (§3.7).
 8. **Coarse permissions** — per-Pulse whole-Pulse only; no comment-only role;
    editors can invite (§3.8).
+9. **"Archive" is overloaded and can't express "this project is finished."**
+   The one action is personal (§1.8), so retiring a shared Pulse takes N manual
+   archives, one per member, and signals nothing to anyone. The delete
+   confirmation steers people to archive as the safe alternative
+   (`DashboardPage.tsx:72-76`) — but delete is global and archive is personal,
+   so the offered substitute doesn't do what the person wanted. Nor is there any
+   way to freeze a finished project: the data stays editable by every member
+   forever, and "done" is not a state the product can represent.
+   **Chosen fix: split into Hide + Archive (§3.10).**
 
 Design goals for the enhancements: keep Firestore the source of truth; preserve
 "indexes/inboxes are self-owned convenience caches, never security boundaries";
@@ -579,6 +596,103 @@ So `functions/` (which doesn't exist today) is **no longer on the critical path*
 and may never be needed if we accept in-app-only notifications written at the
 client's own boundary or skip the audit log. This is the D9 reframe.
 
+### 3.10 Hide vs Archive (split the overloaded action)
+
+Today's one action (§1.8) is named for a shared lifecycle state and implemented
+as a personal view filter (§2.9). Split it into two actions that mean exactly
+what they say:
+
+| | **Hide** (per-user) | **Archive** (shared) |
+|---|---|---|
+| Scope | Your dashboard only | The Pulse, for everyone |
+| Who | Any member, for themselves | **Owner only** |
+| Effect | Moves your card to a **Hidden** section | Pulse becomes **read-only for all members** |
+| Editable | Yes — nothing changes | **No** — unarchive first |
+| Counts against `maxPulses` | **Yes** (unchanged) | **Yes** — archiving is not quota relief (`Plans-Spec.md` PL12) |
+| Reversible by | You | Any owner |
+
+**Hide is today's behaviour, renamed.** It stays a pure dashboard filter with no
+behavioural change of any kind — same access, same notifications, same edits.
+Renaming it is the point: the word "archive" is what made people expect a shared
+lifecycle state. A hidden Pulse still counts against quota, because the quota is
+an **org-level** count and hiding is a **per-user** preference — letting it
+change the count would both be incoherent (whose hide wins?) and an obvious way
+to dodge the cap.
+
+**Archive is the new, shared state.** An owner archives; every member sees it
+archived; nobody can edit it — including the owner — until an owner unarchives.
+That is what makes read-only coherent: the freeze is shared, so nobody is locked
+out of something their teammates can still change, and it can't be
+self-serve-bypassed by flipping your own flag.
+
+**Data model** (§5 carries the shapes):
+
+- `pulses/{pulseId}`: **add** `archivedAt: Timestamp | null` and
+  `archivedBy: string | null` (`null`/absent = active). On the shared doc,
+  because the state is shared.
+- `users/{uid}/myPulses/{pulseId}`: **rename** `archived` → `hidden`. Same
+  self-owned index, same self-write rule (`firestore.rules:118-119`), unchanged
+  semantics.
+
+**Rules** (detail in §4). `canEditPulse(pulseId)` gains `&& !isPulseArchived(pulseId)`,
+so *every* existing write path — features, epics, resources, costs, comments —
+is frozen by one change at the chokepoint rather than per-collection. The
+unarchive write itself must stay permitted: on `pulses/{p}`, an owner may update
+when the diff touches only `archivedAt`/`archivedBy`/`updatedAt`. Deleting an
+archived Pulse stays allowed (`isPulseOwner`, unchanged) — archive freezes
+editing, it isn't a deletion guard.
+
+**The cost to accept:** `isPulseArchived()` is one extra rules `get()` on the
+pulse doc for every subcollection write. Subcollection writes already spend a
+`get()` on `pulseMembers` for the role, so this makes two — well inside the
+10-`get()` per-request budget, but it is not free, and it is on the hot write
+path. The alternative (a copy of the flag in each subcollection doc) is worse:
+it can go stale and would need a fan-out write to set.
+
+**Client wiring.** `PulsePage` derives `canEdit` from `editScope === "all"`
+(`PulsePage.tsx:102-107`), and `editScope` comes from the role/caps
+(`Permissions-Spec.md` §4). Fold archived in **there** — an archived Pulse
+resolves to `editScope: "none"` — and every existing disabled state, drag guard,
+and hidden control follows automatically, with no per-component work.
+
+**The warning.** Read-only must be explained, not just enforced, or it reads as a
+bug:
+
+- A persistent banner in the Pulse: *"This Pulse is archived. Unarchive it to
+  make changes."* — with an **Unarchive** button for owners, and *"Ask an owner
+  to unarchive it"* for everyone else.
+- The Toolbar carries an **Archived** chip next to the name.
+- Any edit attempt that slips past the disabled states (keyboard shortcut, drag,
+  paste) is swallowed and surfaces the same message as a transient notice rather
+  than failing silently or throwing a rules error.
+- Archiving asks for confirmation, naming the consequence: *"Archiving makes
+  this Pulse read-only for all N members. Any owner can unarchive it."*
+
+**Quota interaction** is specified in `Plans-Spec.md` (§3.2, §5, §5.1, **PL12**):
+archived Pulses **do** count against `maxPulses`, exactly like active ones, and
+so do hidden ones. Neither action is quota relief — an org at its cap frees a
+slot only by **deleting** a Pulse (archived ones included) or **upgrading**.
+Consequences for this feature: `workspace.pulseCount` needs no archive
+awareness (create/delete move it, nothing else), unarchive needs **no** quota
+check (it can't raise the count), and the archive UI must never imply it will
+make room. `Plans-Spec.md` §5.1 was revised to match — its over-limit lock is
+now cleared by delete/upgrade rather than by archiving.
+
+**Migration.** Existing `myPulses.archived` entries carry today's *personal*
+meaning, so they migrate to `hidden` — never to the new shared archive, which
+would surprise the other members of every Pulse anyone had tidied away. The
+index is self-owned and self-healed already (§1.6), so the dashboard's existing
+reconcile loop (`DashboardPage.tsx:46-74`) does it: if an entry has `archived`
+and no `hidden`, write `hidden = archived` and delete `archived`. Converges in
+one pass per user, no backfill job, no rules change.
+
+**D13 — decided.** Split as above: **Hide** = today's per-user filter, renamed,
+behaviour untouched; **Archive** = owner-only, shared, read-only-for-all,
+reversible by any owner, enforced in rules at `canEditPulse`. **Both count
+against `maxPulses`** (`Plans-Spec.md` PL12) — archiving never frees a slot, so
+unarchive needs no quota check and the archive UI must not offer itself as a way
+to make room. *Still to confirm: owner-only, or may editors archive too?*
+
 ## 4. Security-rules impact
 
 Rules delta per feature, preserving the invariants: (i) nothing under
@@ -599,6 +713,9 @@ collection-*group* queries.
 | Move Pulse to a team (§3.2) | `pulses/{p}` | unchanged | `update` already `canEditPulse`; add guard that `request.resource.data.workspaceId` is a workspace the caller owns |
 | Leave-Pulse (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | **add** to delete (`:122`): `\|\| memberUid == request.auth.uid` |
 | Transfer ownership (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | already `isPulseOwner` update (`:122`) — **no rules change**, UI only |
+| Archive freeze (§3.10) | `pulses/{p}` **and every subcollection** | unchanged | `canEditPulse(p)` (`:54-56`) gains `&& isPulseActive(p)`, where `isPulseActive(p)` = `get(/…/pulses/$(p)).data.archivedAt == null`. One chokepoint freezes every write path |
+| Archive / unarchive (§3.10) | `pulses/{p}` | unchanged | `update`: `isPulseOwner(p)` **and** `request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archivedAt','archivedBy','updatedAt'])` — the only write that may cross the freeze |
+| Hide (§3.10) | `users/{uid}/myPulses/{p}` | unchanged | **no rules change** — already self-owned (`:118-119`); the field is renamed `archived` → `hidden` |
 | Presence (§3.4) | `pulses/{p}/presence/{uid}` | member/team-member | `create/update/delete: uid == request.auth.uid && (isPulseMember(p) \|\| isWorkspaceMember(...))` |
 | Comments (§3.5) | `pulses/{p}/features/{f}/comments/{c}` | member/team-member | `create`: member && `authorUid == request.auth.uid` (**viewers allowed** — deliberately not `canEditPulse`); `update/delete`: author or `isPulseOwner(p)` |
 | Notifications (§3.6) | `users/{uid}/notifications/{n}` | `uid == request.auth.uid` | self may write own; **cross-user writes server-only** (same shape as `myPulses`, `:69-71`) |
@@ -654,6 +771,14 @@ interface Notification { id: string; type: NotificationType; pulseId: string;
                          actorUid: string; entityId?: string; text: string;
                          createdAt: Timestamp; readAt?: Timestamp | null; }
 
+// pulses/{pulseId}                 — ADD shared archive state (§3.10)
+//   archivedAt?: Timestamp | null   // null/absent = active; set => read-only for ALL
+//   archivedBy?: string | null      // uid of the owner who archived it
+
+// users/{uid}/myPulses/{pulseId}   — RENAME the per-user flag (§3.10)
+//   hidden?: boolean                // was `archived`; purely a dashboard filter,
+//                                   // no behavioural change, still counts to quota
+
 // pulses/{pulseId}/activity/{id}   (append-only; server-written)
 interface Activity { id: string; actorUid: string; actorEmail: string; verb: string;
                      entityKind: "feature"|"epic"|"resource"|"member"|"pulse";
@@ -684,20 +809,29 @@ optional backend features last.
    Share-panel UI reframe, the `memberUid == request.auth.uid` self-delete rule,
    and the "Make owner" transfer. Retire the email-invite UI; keep
    `resolvePendingInvites` for one deprecation window.
-2. **Retire `invites`/`inviteIndex` (§3.1).** After the window: delete the rule
+2. **Hide + Archive split (§3.10).** Small, serverless, and independent of the
+   billing work — archived Pulses count against quota like any other
+   (`Plans-Spec.md` PL12), so `workspace.pulseCount` needs no archive awareness
+   and this can land before or after the counter function. Rename
+   `myPulses.archived` → `hidden` (self-heal migration), add
+   `pulses.archivedAt`/`archivedBy`, the `isPulseActive` clause on
+   `canEditPulse`, the owner-only unarchive rule, and the read-only banner.
+   Sequenced early because it is the smallest change here and it removes a live
+   source of confusion about what "archive" promises.
+3. **Retire `invites`/`inviteIndex` (§3.1).** After the window: delete the rule
    blocks, `invites.ts`, `resolvePendingInvites`, and the `inviteIndex` docs/types.
-3. **Teams (§3.2).** The workspace activation: widen `WorkspaceRole`, the cascade
+4. **Teams (§3.2).** The workspace activation: widen `WorkspaceRole`, the cascade
    read/write rules, the team-Pulse `list` rule, team creation/naming, team join
    links, move-Pulse-to-team, the dashboard team switcher. Largest serverless
    piece; additive migration.
-4. **Presence & concurrent-edit awareness (§3.4).** Heartbeat presence, header
+5. **Presence & concurrent-edit awareness (§3.4).** Heartbeat presence, header
    avatars, "editing now" chip. Riskiest for multi-user correctness; sequenced
    after the access model is settled.
-5. **Comments / @mentions (§3.5).** DetailsTab thread + Kanban card badge;
+6. **Comments / @mentions (§3.5).** DetailsTab thread + Kanban card badge;
    comment-only viewers (§3.8). Client+rules only.
-6. **(Optional backend) Notifications (§3.6).** Only now does `functions/` become
+7. **(Optional backend) Notifications (§3.6).** Only now does `functions/` become
    worthwhile — for cross-user mention/assignment notifications. In-app only.
-7. **(Optional backend) Activity / audit log (§3.7).** Server-written, shares the
+8. **(Optional backend) Activity / audit log (§3.7).** Server-written, shares the
    function surface.
 
 Non-goals this round: per-epic/per-field permissions (§3.8); OT/CRDT concurrent
@@ -756,3 +890,13 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
 12. **D12 — Email channel later.** Pulse sends no email at all now (§3.1). If
     notifications (D6) ever want email, that re-introduces a mail provider.
     *Recommend:* defer; in-app only for the foreseeable roadmap. *Confirm.*
+13. **D13 — Hide vs Archive (§3.10). ✅ DECIDED (split, archived stays counted).**
+    **Hide** = today's per-user dashboard filter, renamed, behaviour untouched.
+    **Archive** = owner-only, shared, **read-only for every member**, reversible
+    by any owner, enforced in rules via `canEditPulse(p) && isPulseActive(p)`,
+    with a banner explaining the freeze and pointing at unarchive. **Both count
+    against `maxPulses`** — archiving is never quota relief; a slot is freed only
+    by deleting a Pulse (archived ones included) or upgrading
+    (`Plans-Spec.md` **PL12**, which revises §5.1 accordingly). Existing
+    `myPulses.archived` migrates to `hidden`, never to the shared state.
+    *Still to confirm:* owner-only, or may editors archive too?

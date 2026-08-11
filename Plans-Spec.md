@@ -1,12 +1,13 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **All decisions resolved (PL1–PL11)** · Owner: product + eng ·
+Status: **All decisions resolved (PL1–PL12)** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
 (PL8); **quota-only** model, no feature gating (PL2); tiers **Starter/Pro/Business** at
 **$0/$6/$12 per editor seat/mo** (PL1) with the §3.2 quotas (PL3); a seat = an **editor**
-(PL11); launch **Mexico**, invoicing manual (PL10/10-a). See §2–§3, §8.
+(PL11); launch **Mexico**, invoicing manual (PL10/10-a); **archived Pulses count against the
+Pulses quota** — delete or upgrade to free a slot, never archive (PL12). See §2–§3, §8.
 
 ## 0. What this is (and isn't)
 
@@ -140,6 +141,20 @@ single editor and can create up to 3 Pulses.
 | Collaborators per org | 10 | 20 | ∞ |
 | Resources per Pulse | 20 | 40 | ∞ |
 
+**"Pulses per org" counts _every_ Pulse the org holds — archived and hidden included.**
+The quota measures what the org **stores**, not what it is currently allowed to edit, so
+neither archiving (shared, `Collaboration-Spec.md` §3.10) nor hiding (per-user) frees a
+slot. The only ways to get capacity back are to **delete** a Pulse — archived ones very
+much included — or to upgrade.
+
+The consequence to state plainly in the UI (§6), because it is the whole point of the
+rule: **archiving is not a way around the cap.** An org at 3/3 on Starter that archives
+all three still cannot create a fourth. This keeps the limit honest (an unbounded archive
+would make Starter effectively unlimited storage) and keeps the count trivial to
+maintain and explain — one number per org, moved only by create and delete. It also means
+"you've hit your plan's limit" must offer **delete** and **upgrade** as the routes
+forward, never "archive something".
+
 Checks happen at the **point of growth** (create Pulse, add editor/collaborator, add
 resource), never on read; enforced client-side for v1 (PL5), with a counter function later
 if a collection count must be authoritative. Encoded in `src/domain/entitlements.ts`
@@ -193,7 +208,10 @@ point of growth (create Pulse, add editor/collaborator, add resource).
 - **Collection counts — server-maintained counters (PL5 — Option b).** Rules can't count a
   collection, so **SF11** (`Backend-Architecture-Spec`) keeps the counters rules read via
   `get()`:
-  - `workspace.pulseCount` → gate Pulse create (`< maxPulses`).
+  - `workspace.pulseCount` → gate Pulse create (`< maxPulses`). Counts **every** Pulse in
+    the org, archived and hidden included (§3.2), so SF11 moves it on **create and delete
+    only** — archive/unarchive and hide/unhide never touch it. Unarchiving therefore needs
+    no quota check: it can't raise the count, so it can never take the org over its cap.
   - `workspace.collaboratorUids[]` → gate add-collaborator (`.size() < maxCollaborators`).
   - `pulse.resourceCount` → gate resource create (`< maxResourcesPerPulse`).
   These are **server-maintained** (never client-written — a client could forge them) and
@@ -212,13 +230,23 @@ below applies **only when downgrading to the free tier (Starter)**; paid→paid 
 handled at the source (the portal blocks reducing seats below the current editor count) and
 are otherwise out of scope for v1.
 
-- **Pulses over the limit → newest become read-only; archive to unlock.** On dropping to Starter
-  (3 Pulses), at most `maxPulses` **non-archived** Pulses stay editable; the **newest** beyond
-  that are **read-only** (viewable, not editable), never deleted. To edit a locked Pulse the
-  owner **archives another active Pulse**, freeing a slot so a locked one becomes editable —
-  i.e. the owner chooses which 3 stay live. Enforced **client-side** (the lock is derived from
-  the Pulse list ordered by `createdAt` + the tier cap; rules can't count/sort — PL5); a
-  bypass only lets someone exceed a commercial limit, not a security boundary.
+- **Pulses over the limit → newest become read-only; delete or upgrade to unlock.** On
+  dropping to Starter (3 Pulses), the **oldest** `maxPulses` by `createdAt` stay editable and
+  the **newest** beyond that are **read-only** (viewable, not editable), never deleted. The
+  cap counts **every** Pulse the org holds, archived included (§3.2), so the only ways to
+  unlock a locked Pulse are to **delete** another Pulse — archived ones included — or to
+  **upgrade**. Enforced **client-side** (the lock is derived from the Pulse list ordered by
+  `createdAt` + the tier cap; rules can't count/sort — PL5); a bypass only lets someone
+  exceed a commercial limit, not a security boundary.
+  - **Archiving does not unlock anything** (revised — this bullet previously said archiving
+    freed a slot). Archive is a lifecycle state, not quota relief:
+    `Collaboration-Spec.md` §3.10.
+  - **Consequence to accept:** the owner no longer has a *non-destructive* way to choose
+    which 3 stay live — the choice is made for them by `createdAt`, and changing it means
+    deleting. The read-only lock itself is still never destructive, so nothing is lost
+    without an explicit delete; but the UI must be honest that delete/upgrade are the only
+    two routes, and must make deleting an **archived** Pulse an easy, obvious path (that is
+    the intended place to reclaim a slot).
 - **Editors are demoted to a single editor.** Starter allows **1 editor seat**, so on the
   downgrade every editor/owner **except the org owner** (the workspace owner — the only user
   who can trigger a billing change) is **demoted to full viewer** across the org's Pulses.
@@ -266,7 +294,7 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 - No change to `PulseMember`/`Resource`/`Feature`. Entitlements are read, never stored on
   those.
 
-## 8. Open decisions (PL1–PL11)
+## 8. Open decisions (PL1–PL12)
 
 1. **PL1 — Tiers & prices. → DECIDED (§2).** Starter/Pro/Business, **$0 / $6 / $12 per editor
    seat / month**, USD, billed monthly in arrears via Stripe, VAT-inclusive for MX.
@@ -275,8 +303,9 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 3. **PL3 — Quota numbers. → DECIDED (§3.2).** Starter 1 editor / 3 Pulses / 10 collaborators /
    20 resources; Pro (per seat) 5 / 20 / 40; Business unlimited. (Matches `entitlements.ts`.)
 4. **PL4 — Downgrade behaviour. → DECIDED (§5.1).** Graceful, never destructive, and only on
-   dropping to **Starter**: the **newest** over-limit Pulses go **read-only** (archive another to
-   unlock — owner picks which 3 stay live); every editor **except the org owner** is **demoted
+   dropping to **Starter**: the **newest** over-limit Pulses go **read-only** (**delete another
+   Pulse — archived ones included — or upgrade** to unlock; archiving does *not* free a slot,
+   PL12); every editor **except the org owner** is **demoted
    to full viewer** (keep access, lose edit) server-side; **collaborators unaffected**; a grace
    window on `past_due`.
 5. **PL5 — Collection-count quotas. → DECIDED: Option (b), maintained counters.** A function
@@ -317,6 +346,16 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
     (role owner/editor) in the org; collaborators (viewers / task leads / my-beat viewers)
     are free and don't consume seats. `billing.seats` = purchased editor seats = Stripe
     subscription `quantity`. Starter is fixed at 1 editor; Pro/Business bill per editor.
+12. **PL12 — Do archived Pulses count against `maxPulses`? → DECIDED: yes, they count.**
+    The Pulses quota counts **every** Pulse the org holds — active, archived
+    (`Collaboration-Spec.md` §3.10) and per-user *hidden* alike. Archiving is a lifecycle
+    state, never quota relief, so an org at its cap **cannot** create another Pulse by
+    archiving; the only routes are **delete** (archived Pulses very much included) or
+    **upgrade**. `workspace.pulseCount` therefore moves on create/delete only, which keeps
+    it a single number per org with no archive-aware bookkeeping. Rationale: the quota
+    measures what the org **stores**, and an archive that didn't count would make Starter
+    unbounded. Trade-off accepted: relief from the cap is destructive-only, and §5.1's
+    over-limit lock can no longer be re-pointed without deleting.
 
 > **Cross-refs:** this layer is referenced from `Permissions-Spec.md` (§ Plan gating,
 > `entitlement ∧ capability`), and its server side is `Server-Functions-Spec.md` **SF3**
