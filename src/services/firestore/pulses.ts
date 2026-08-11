@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   type DocumentReference,
   getDoc,
@@ -154,12 +155,38 @@ export async function removeMyPulseEntry(uid: string, pulseId: string): Promise<
   await deleteDoc(doc(db, "users", uid, "myPulses", pulseId)).catch(() => {});
 }
 
-/** Per-user archive toggle. Archiving lives on the user's own myPulses index
- * entry (which only they can write), so it hides the Pulse from their
- * dashboard's main sections without touching the shared Pulse or anyone else's
- * view — and keeps all the data intact, unlike delete. */
-export async function setMyPulseArchived(uid: string, pulseId: string, archived: boolean): Promise<void> {
-  await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { archived });
+/** Per-user hide toggle (Hide-and-Archive-Spec §2.2). Lives on the user's own
+ * myPulses index entry (which only they can write), so it moves the Pulse into
+ * their dashboard's Hidden section without touching the shared Pulse or anyone
+ * else's view. Access, notifications, edits and quota are all unaffected — it is
+ * a view filter, not a lifecycle state (that's `setPulseArchived`).
+ *
+ * Also clears the pre-split `archived` field, so the one-pass migration in
+ * DashboardPage converges and never rewrites the same entry twice. */
+export async function setMyPulseHidden(uid: string, pulseId: string, hidden: boolean): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { hidden, archived: deleteField() });
+}
+
+/** Refresh the denormalized copy of the shared archive state on this user's own
+ * index entry, so the dashboard card can show an Archived chip without a live
+ * listener per card. Called from the self-heal pass that already fetched the
+ * Pulse doc — a cache, never a security boundary (Hide-and-Archive-Spec §3). */
+export async function updateMyPulseArchivedAt(uid: string, pulseId: string, archivedAt: number | null): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { archivedAt }).catch(() => {});
+}
+
+/** Owner-only, shared archive toggle (Hide-and-Archive-Spec §2.3). Freezes the
+ * Pulse read-only for EVERY member until an owner unarchives.
+ *
+ * This is the one write allowed to cross its own freeze, so the rule accepts it
+ * only when the diff touches exactly archivedAt/archivedBy/updatedAt — nothing
+ * else may ride along, and `archivedBy` must be the caller (null when clearing). */
+export async function setPulseArchived(pulseId: string, uid: string, archived: boolean): Promise<void> {
+  await updateDoc(doc(db, "pulses", pulseId), {
+    archivedAt: archived ? Date.now() : null,
+    archivedBy: archived ? uid : null,
+    updatedAt: Date.now(),
+  });
 }
 
 /** Self-heal: an owner may have changed this user's role (in the authoritative

@@ -57,6 +57,9 @@ interface ToolbarProps {
   onSetGraphConfig: (stepPx: number, workPerStep: number) => void;
   canEdit: boolean;
   roleLabel: string;
+  /** Shared archive state — shows a chip beside the role, so the freeze stays
+   * visible after the banner scrolls away (Hide-and-Archive-Spec §5.2). */
+  archived?: boolean;
   /** Help is available to EVERY role — the button therefore sits outside the
    * canEdit block below, or viewers (who need it most) never see it. */
   helpOpen: boolean;
@@ -110,6 +113,7 @@ export function Toolbar({
   onSetGraphConfig,
   canEdit,
   roleLabel,
+  archived,
   helpOpen,
   onToggleHelp,
 }: ToolbarProps) {
@@ -142,6 +146,11 @@ export function Toolbar({
           />
         </div>
         <span className="mono px-2 py-0.5 rounded" style={{ fontSize: 9, background: "#1B3A63", color: "#94A3B8", textTransform: "uppercase" }}>{roleLabel}</span>
+        {archived && (
+          <span className="mono flex items-center gap-1 px-2 py-0.5 rounded" style={{ fontSize: 9, background: "#2A3F5F", color: "#CBD5E1", textTransform: "uppercase" }} title={t("pulse.archivedChip")}>
+            <Icon name="archive" size={11} /> {t("pulse.archivedChip")}
+          </span>
+        )}
         {canEdit && (
           <button
             onClick={onInvite}

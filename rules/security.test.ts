@@ -572,17 +572,29 @@ describe("Pulse deletion ordering (regression)", () => {
   // pulse doc's own delete rule (isPulseOwner) check the CALLER's own
   // pulseMembers doc. Delete that first and every subsequent cleanup step
   // denies itself — pulseMembers must be deleted last.
-  it("deleting your own pulseMembers doc first locks you out of deleting the rest", async () => {
+  // The owner's half of that hazard is now closed structurally: since HA10 no
+  // owner may delete their own membership while the Pulse still exists, so
+  // they can't lock themselves out of their own cascade. An EDITOR still can.
+  it("an owner can't delete their own membership first — the lockout is unreachable", async () => {
     await seedPulse("p1", "alice", { alice: { email: "alice@example.com", role: "owner" } });
+    const alice = dbAs("alice", "alice@example.com");
+    await assertFails(deleteDoc(doc(alice, "pulses", "p1", "pulseMembers", "alice")));
+  });
+
+  it("deleting your own pulseMembers doc first locks you out of deleting the rest", async () => {
+    await seedPulse("p1", "alice", {
+      alice: { email: "alice@example.com", role: "owner" },
+      bob: { email: "bob@example.com", role: "editor" },
+    });
     await seed(async (db) => {
       await setDoc(doc(db, "pulses", "p1", "features", "f1"), { title: "x", x: 0, y: 0, duration: 1, status: "planned", resources: [] });
     });
-    const alice = dbAs("alice", "alice@example.com");
-    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "pulseMembers", "alice")));
-    // alice is no longer a recognized member -> denied, even though she
-    // was the owner moments ago
-    await assertFails(deleteDoc(doc(alice, "pulses", "p1", "features", "f1")));
-    await assertFails(deleteDoc(doc(alice, "pulses", "p1")));
+    const bob = dbAs("bob", "bob@example.com");
+    await assertSucceeds(deleteDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob")));
+    // bob is no longer a recognized member -> denied, even though he
+    // could edit moments ago
+    await assertFails(deleteDoc(doc(bob, "pulses", "p1", "features", "f1")));
+    await assertFails(deleteDoc(doc(bob, "pulses", "p1")));
   });
 
   it("deleting other subcollections and the pulse doc BEFORE pulseMembers succeeds all the way through", async () => {
@@ -810,5 +822,169 @@ describe("billing / plan doc (Plans-Spec §4)", () => {
     await assertFails(deleteDoc(doc(asOwner, "billing", WS)));
     // Even minting a fresh billing doc for a workspace you own is denied.
     await assertFails(setDoc(doc(asOwner, "billing", "ws-new"), { tier: "pro", status: "active", source: "stripe", updatedAt: Date.now() }));
+  });
+});
+
+describe("hide & archive (Hide-and-Archive-Spec)", () => {
+  /** Seed a Pulse with alice as owner + bob as editor, optionally archived. */
+  async function seedArchivable(archived: boolean) {
+    await seedPulse("p1", "alice", {
+      alice: { email: "alice@example.com", role: "owner" },
+      bob: { email: "bob@example.com", role: "editor" },
+    });
+    await seed(async (db) => {
+      if (archived) {
+        await updateDoc(doc(db, "pulses", "p1"), { archivedAt: Date.now(), archivedBy: "alice" });
+      }
+      await setDoc(doc(db, "pulses", "p1", "epics", "e1"), { id: "e1", name: "Epic" });
+      await setDoc(doc(db, "pulses", "p1", "features", "f1"), { id: "f1", title: "Task", assignedUids: [] });
+      await setDoc(doc(db, "pulses", "p1", "resources", "r1"), { id: "r1", name: "Ana" });
+      await setDoc(doc(db, "pulses", "p1", "comments", "c1"), { id: "c1", authorUid: "bob", body: "hi", targetId: null });
+      await setDoc(doc(db, "pulses", "p1", "costs", "k1"), { id: "k1", featureId: "f1", amountMicros: 1, scopeUids: [] });
+      await setDoc(doc(db, "pulses", "p1", "rates", "r1"), { hourlyMicros: 1 });
+    });
+  }
+
+  it("an owner may archive; an editor may not (HA1)", async () => {
+    await seedArchivable(false);
+    const bob = dbAs("bob", "bob@example.com");
+    await assertFails(updateDoc(doc(bob, "pulses", "p1"), { archivedAt: Date.now(), archivedBy: "bob", updatedAt: Date.now() }));
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(updateDoc(doc(alice, "pulses", "p1"), { archivedAt: Date.now(), archivedBy: "alice", updatedAt: Date.now() }));
+  });
+
+  it("freezes every content write path for an editor, and thaws on unarchive", async () => {
+    await seedArchivable(true);
+    const bob = dbAs("bob", "bob@example.com");
+    await assertFails(setDoc(doc(bob, "pulses", "p1", "epics", "e2"), { id: "e2", name: "New" }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "epics", "e1"), { name: "Renamed" }));
+    await assertFails(setDoc(doc(bob, "pulses", "p1", "features", "f2"), { id: "f2", title: "New", assignedUids: [] }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "features", "f1"), { title: "Renamed" }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "resources", "r1"), { name: "Bea" }));
+    await assertFails(setDoc(doc(bob, "pulses", "p1", "costs", "k2"), { id: "k2", featureId: "f1", amountMicros: 2, scopeUids: [] }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1"), { name: "Renamed" }));
+    // …and all of it works again once an owner unarchives.
+    await seed(async (db) => updateDoc(doc(db, "pulses", "p1"), { archivedAt: null, archivedBy: null }));
+    await assertSucceeds(updateDoc(doc(bob, "pulses", "p1", "features", "f1"), { title: "Renamed" }));
+    await assertSucceeds(updateDoc(doc(bob, "pulses", "p1", "epics", "e1"), { name: "Renamed" }));
+  });
+
+  it("comments freeze too, while staying readable (HA2)", async () => {
+    await seedArchivable(true);
+    const bob = dbAs("bob", "bob@example.com");
+    await assertSucceeds(getDoc(doc(bob, "pulses", "p1", "comments", "c1")));
+    await assertFails(setDoc(doc(bob, "pulses", "p1", "comments", "c2"), { id: "c2", authorUid: "bob", body: "again", targetId: null }));
+    await assertFails(updateDoc(doc(bob, "pulses", "p1", "comments", "c1"), { body: "edited" }));
+  });
+
+  it("an owner can still delete content while archived, so deletePulse's cascade works (HA4)", async () => {
+    await seedArchivable(true);
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "epics", "e1")));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "features", "f1")));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "resources", "r1")));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "costs", "k1")));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "comments", "c1")));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1")));
+    // An editor gets no such exemption — the freeze still holds for them.
+    await seedArchivable(true);
+    const bob = dbAs("bob", "bob@example.com");
+    await assertFails(deleteDoc(doc(bob, "pulses", "p1", "epics", "e1")));
+  });
+
+  it("rates stay READABLE while archived, but not writable", async () => {
+    await seedArchivable(true);
+    const alice = dbAs("alice", "alice@example.com"); // owner = canViewPeopleCost
+    await assertSucceeds(getDoc(doc(alice, "pulses", "p1", "rates", "r1")));
+    await assertFails(updateDoc(doc(alice, "pulses", "p1", "rates", "r1"), { hourlyMicros: 2 }));
+  });
+
+  it("the archive write may not carry anything else, and can't forge archivedBy", async () => {
+    await seedArchivable(false);
+    const alice = dbAs("alice", "alice@example.com");
+    await assertFails(updateDoc(doc(alice, "pulses", "p1"), { archivedAt: Date.now(), archivedBy: "alice", name: "Sneaky", updatedAt: Date.now() }));
+    await assertFails(updateDoc(doc(alice, "pulses", "p1"), { archivedAt: Date.now(), archivedBy: "bob", updatedAt: Date.now() }));
+    await assertFails(updateDoc(doc(alice, "pulses", "p1"), { archivedAt: Date.now(), updatedAt: Date.now() })); // archivedBy missing
+    // Unarchive must clear archivedBy, not leave it dangling.
+    await seed(async (db) => updateDoc(doc(db, "pulses", "p1"), { archivedAt: Date.now(), archivedBy: "alice" }));
+    await assertFails(updateDoc(doc(alice, "pulses", "p1"), { archivedAt: null, updatedAt: Date.now() }));
+    await assertSucceeds(updateDoc(doc(alice, "pulses", "p1"), { archivedAt: null, archivedBy: null, updatedAt: Date.now() }));
+  });
+
+  it("an editor can't set the archive fields through the ordinary update path", async () => {
+    await seedArchivable(false);
+    const bob = dbAs("bob", "bob@example.com");
+    await assertFails(updateDoc(doc(bob, "pulses", "p1"), { name: "Renamed", archivedAt: Date.now(), updatedAt: Date.now() }));
+    await assertSucceeds(updateDoc(doc(bob, "pulses", "p1"), { name: "Renamed", updatedAt: Date.now() }));
+  });
+
+  it("a Pulse may not be created already archived", async () => {
+    const alice = dbAs("alice", "alice@example.com");
+    await assertFails(setDoc(doc(alice, "pulses", "born"), {
+      workspaceId: "w1", name: "Born archived", createdBy: "alice", createdAt: Date.now(),
+      updatedAt: Date.now(), graphConfig: { stepPx: 16, workPerStep: 1 }, archivedAt: Date.now(),
+    }));
+  });
+
+  it("a join link goes inert while archived, and works again after unarchive (HA3)", async () => {
+    await seedArchivable(true);
+    await seed(async (db) => updateDoc(doc(db, "pulses", "p1"), { invite: { token: "tok", role: "editor" } }));
+    const carol = dbAs("carol", "carol@example.com");
+    const join = () => setDoc(doc(carol, "pulses", "p1", "pulseMembers", "carol"), {
+      uid: "carol", email: "carol@example.com", role: "editor", joinedAt: Date.now(), joinToken: "tok",
+    });
+    await assertFails(join());
+    await seed(async (db) => updateDoc(doc(db, "pulses", "p1"), { archivedAt: null, archivedBy: null }));
+    await assertSucceeds(join());
+  });
+
+  it("presence, own-member self-update, activity and the myPulses index stay writable while archived", async () => {
+    await seedArchivable(true);
+    const bob = dbAs("bob", "bob@example.com");
+    await assertSucceeds(setDoc(doc(bob, "pulses", "p1", "presence", "bob"), { uid: "bob", email: "bob@example.com", lastSeen: Date.now() }));
+    await assertSucceeds(updateDoc(doc(bob, "pulses", "p1", "pulseMembers", "bob"), { photoURL: "https://x/y.png" }));
+    await assertSucceeds(setDoc(doc(bob, "pulses", "p1", "activity", "a1"), {
+      actorUid: "bob", actorEmail: "bob@example.com", at: Date.now(), entityKind: "pulse",
+      entityId: "p1", entityName: "Test Pulse", verb: "archive", summary: "archived the Pulse", source: "client",
+    }));
+    await assertSucceeds(setDoc(doc(bob, "users", "bob", "myPulses", "p1"), {
+      pulseId: "p1", name: "Test Pulse", workspaceId: "w1", role: "editor", joinedAt: Date.now(), hidden: true,
+    }));
+  });
+
+  it("reads are untouched by the freeze, including a My-Beat Viewer's scoped query", async () => {
+    await seedArchivable(true);
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "mo"), { uid: "mo", email: "mo@example.com", role: "myBeatViewer", joinedAt: Date.now() });
+      await setDoc(doc(db, "pulses", "p1", "features", "fm"), { id: "fm", title: "Mine", assignedUids: ["mo"] });
+    });
+    const bob = dbAs("bob", "bob@example.com");
+    await assertSucceeds(getDoc(doc(bob, "pulses", "p1")));
+    await assertSucceeds(getDocs(collection(bob, "pulses", "p1", "features")));
+    const mo = dbAs("mo", "mo@example.com");
+    await assertSucceeds(getDocs(query(collection(mo, "pulses", "p1", "features"), where("assignedUids", "array-contains", "mo"))));
+  });
+
+  it("no owner may remove themselves, archived or not — the always-an-owner invariant (HA10)", async () => {
+    await seedArchivable(false);
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "carol"), { uid: "carol", email: "carol@example.com", role: "owner", joinedAt: Date.now() });
+    });
+    // Sole-ness is irrelevant to the rule: even with two owners, self-delete is denied.
+    await assertFails(deleteDoc(doc(dbAs("alice", "alice@example.com"), "pulses", "p1", "pulseMembers", "alice")));
+    // Non-owners may still leave.
+    await assertSucceeds(deleteDoc(doc(dbAs("bob", "bob@example.com"), "pulses", "p1", "pulseMembers", "bob")));
+    // A co-owner may remove an owner…
+    await assertSucceeds(deleteDoc(doc(dbAs("carol", "carol@example.com"), "pulses", "p1", "pulseMembers", "alice")));
+  });
+
+  it("an owner who steps down to editor may then leave", async () => {
+    await seedArchivable(false);
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "p1", "pulseMembers", "carol"), { uid: "carol", email: "carol@example.com", role: "owner", joinedAt: Date.now() });
+    });
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(updateDoc(doc(alice, "pulses", "p1", "pulseMembers", "alice"), { role: "editor" }));
+    await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "pulseMembers", "alice")));
   });
 });

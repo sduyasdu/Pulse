@@ -133,6 +133,13 @@ export interface Pulse {
    * Unset = DEFAULT_HOURS_PER_DAY (8). 7.5 and "6 productive hours" are both
    * common, so it's a per-Pulse number rather than a constant. */
   hoursPerDay?: number;
+  /** Shared archive state (Hide-and-Archive-Spec §3). Null/absent = active; set
+   * = read-only for EVERY member until an owner unarchives. Lives on the shared
+   * doc because the state is shared — unlike `hidden`, which is per-user. */
+  archivedAt?: Timestamp | null;
+  /** Uid of the owner who archived it — for display only. Rules never consult
+   * it (any owner may unarchive, not just this one). */
+  archivedBy?: string | null;
 }
 
 /** One Kanban/status column. `id` is what Feature.status / Subtask.status
@@ -218,7 +225,7 @@ export type ActivityVerb =
   | "link" | "unlink" // resource
   | "add" | "remove" | "role-change" | "leave" // member
   | "link-created" | "link-revoked" // invite
-  | "rename" | "config" | "transfer"; // pulse
+  | "rename" | "config" | "transfer" | "archive" | "unarchive"; // pulse
 
 /** A curated before→after for a high-signal field, as display strings. */
 export interface ActivityDelta {
@@ -336,7 +343,22 @@ export interface MyPulseIndexEntry {
   workspaceId: string;
   role: PulseRole;
   joinedAt: Timestamp;
-  archived?: boolean; // per-user: hides the Pulse into the dashboard's Archived section
+  /** Per-user: moves the Pulse into the dashboard's Hidden section. A pure view
+   * filter — no access, notification or quota effect (Hide-and-Archive-Spec §2.2). */
+  hidden?: boolean;
+  /** @deprecated Pre-split name for `hidden`. Migrated by the dashboard's
+   * self-heal loop; read through `hiddenOf()` for one release, then drop. */
+  archived?: boolean;
+  /** Denormalized cache of the shared `Pulse.archivedAt`, refreshed by the same
+   * self-heal pass that reconciles the name (so it costs no extra read). Drives
+   * the card's Archived chip ONLY — never a security boundary. */
+  archivedAt?: Timestamp | null;
+}
+
+/** Per-user hidden state, tolerating the pre-split `archived` field for one
+ * release (Hide-and-Archive-Spec §8). */
+export function hiddenOf(entry: MyPulseIndexEntry): boolean {
+  return entry.hidden ?? entry.archived ?? false;
 }
 
 /**

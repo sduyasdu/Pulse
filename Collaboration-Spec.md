@@ -240,7 +240,10 @@ What's missing or rough today, in rough priority order:
 3. **No ownership transfer and no self-leave.** Only *an owner removing someone
    else* exists (§1.7). An owner can't hand off ownership, and a member can't
    remove themselves (archiving only hides their card while leaving them a live
-   member). The last-owner guard means an owner can't cleanly exit (§3.3).
+   member). A sole owner's exit is **transfer, archive or delete** — never leave,
+   since a Pulse must always keep an owner (§3.3, `Hide-and-Archive-Spec.md` HA10);
+   today only the first of those three is missing, and the dead end says so
+   without offering a route.
 4. **No awareness / presence.** Data syncs live, but you can't see who else is
    viewing/editing, or who's on the box you're editing (§3.4).
 5. **No comments / @mentions** on tasks (§3.5).
@@ -459,13 +462,20 @@ Two missing lifecycle actions (§2.3), both rules+UI only:
 - **Leave Pulse:** a member deletes **their own** `pulseMembers/{uid}` + `myPulses`
   docs. Needs a **one-line rules addition**: today `pulseMembers` delete is
   `isPulseOwner` only (`firestore.rules:122`); add
-  `|| memberUid == request.auth.uid`. An owner may only leave after transfer or if
-  another owner exists (reuse the last-owner guard). **Quick win.**
+  `|| memberUid == request.auth.uid`. **The last owner may never leave**
+  (`Hide-and-Archive-Spec.md` §5.7 / HA10): their exits are **Archive** (freeze it,
+  keep everything), **Delete**, or **Transfer** first — a Pulse always has at least
+  one owner, because archive/unarchive/delete/promote all require one and an
+  ownerless archived Pulse is unrecoverable. Enforced exactly client-side
+  (`CollaboratorsDialog.tsx:38`); the rules backstop is the self-delete clause
+  above narrowed to `&& pulseRole(pulseId) != 'owner'`, since rules can't count
+  owners. **Quick win.**
 
 **D3 (recommend both):** "Make owner" transfer with a last-owner guard, and
 "Leave Pulse" as a self-delete of one's own `pulseMembers` + `myPulses` (needs the
-`memberUid == request.auth.uid` self-delete rule). For a Team, "leave team" is the
-analogous self-delete of one's own `workspaceMembers` doc.
+`memberUid == request.auth.uid` self-delete rule, narrowed so no owner may
+self-delete — HA10). For a Team, "leave team" is the analogous self-delete of one's
+own `workspaceMembers` doc, and will want the same always-an-owner invariant.
 
 ### 3.4 Real-time presence & concurrent editing
 
@@ -598,6 +608,14 @@ client's own boundary or skip the audit log. This is the D9 reframe.
 
 ### 3.10 Hide vs Archive (split the overloaded action)
 
+> **Build spec: `Hide-and-Archive-Spec.md`** (HA1–HA9). This section is the summary
+> and the rationale for the split; the data model, the full rules delta, client
+> wiring, copy, migration and tests live there. Where the two disagree, that
+> document wins — it corrects two things sketched here: the freeze is **not** one
+> clause on `canEditPulse` (only 3 of the write paths route through it — see its
+> §4.1), and deleting an archived Pulse needs an explicit owner-delete exemption
+> or the client-side cascade denies itself (its §4.4).
+
 Today's one action (§1.8) is named for a shared lifecycle state and implemented
 as a personal view filter (§2.9). Split it into two actions that mean exactly
 what they say:
@@ -634,13 +652,17 @@ self-serve-bypassed by flipping your own flag.
   self-owned index, same self-write rule (`firestore.rules:118-119`), unchanged
   semantics.
 
-**Rules** (detail in §4). `canEditPulse(pulseId)` gains `&& !isPulseArchived(pulseId)`,
-so *every* existing write path — features, epics, resources, costs, comments —
-is frozen by one change at the chokepoint rather than per-collection. The
-unarchive write itself must stay permitted: on `pulses/{p}`, an owner may update
-when the diff touches only `archivedAt`/`archivedBy`/`updatedAt`. Deleting an
-archived Pulse stays allowed (`isPulseOwner`, unchanged) — archive freezes
-editing, it isn't a deletion guard.
+**Rules** (detail in §4; authoritative version in `Hide-and-Archive-Spec.md` §4).
+Every write path is frozen by an `isPulseActive(pulseId)` clause — but there is
+**no single chokepoint** to hang it on: only `epics`, `resources` and the pulse
+doc's own `update` route through `canEditPulse`; `features` and `costs` go
+through `callerEditScope`, and `comments` through `isPulseMember`. Each needs its
+own clause. The unarchive write itself must stay permitted: on `pulses/{p}`, an
+owner may update when the diff touches only `archivedAt`/`archivedBy`/`updatedAt`.
+Deleting an archived Pulse stays allowed (`isPulseOwner`, unchanged) — archive
+freezes editing, it isn't a deletion guard — and because `deletePulse` is a
+**client-side cascade**, the subcollection delete rules need an explicit
+owner exemption or an archived Pulse becomes undeletable.
 
 **The cost to accept:** `isPulseArchived()` is one extra rules `get()` on the
 pulse doc for every subcollection write. Subcollection writes already spend a
@@ -687,11 +709,13 @@ and no `hidden`, write `hidden = archived` and delete `archived`. Converges in
 one pass per user, no backfill job, no rules change.
 
 **D13 — decided.** Split as above: **Hide** = today's per-user filter, renamed,
-behaviour untouched; **Archive** = owner-only, shared, read-only-for-all,
-reversible by any owner, enforced in rules at `canEditPulse`. **Both count
+behaviour untouched; **Archive** = **owner-only** (confirmed, `Hide-and-Archive-Spec.md`
+HA1 — editors may hide like anyone, never archive), shared, read-only-for-all,
+reversible by any owner, enforced in rules on every write path. **Both count
 against `maxPulses`** (`Plans-Spec.md` PL12) — archiving never frees a slot, so
 unarchive needs no quota check and the archive UI must not offer itself as a way
-to make room. *Still to confirm: owner-only, or may editors archive too?*
+to make room. Two further calls settled there: **comments freeze too** (HA2) and
+**existing join links go inert while archived** (HA3).
 
 ## 4. Security-rules impact
 
@@ -711,9 +735,9 @@ collection-*group* queries.
 | Team roles/members (§3.2) | `workspaces/{w}/workspaceMembers` | already `isWorkspaceMember` (`:84`) | already owner-gated (`:88`); widen role enum to owner/editor/viewer |
 | Team join link (§3.2) | `workspaces/{w}/joinLinks/{token}` | `get`: `isSignedIn()` | create/delete: team owner; self-join creates `workspaceMembers/{uid}` token-validated (mirror of Case 3) |
 | Move Pulse to a team (§3.2) | `pulses/{p}` | unchanged | `update` already `canEditPulse`; add guard that `request.resource.data.workspaceId` is a workspace the caller owns |
-| Leave-Pulse (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | **add** to delete (`:122`): `\|\| memberUid == request.auth.uid` |
+| Leave-Pulse (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | **add** to delete (`:122`): `\|\| (memberUid == request.auth.uid && pulseRole(p) != 'owner')` — no owner may self-delete, so a Pulse always keeps one (`Hide-and-Archive-Spec.md` HA10) |
 | Transfer ownership (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | already `isPulseOwner` update (`:122`) — **no rules change**, UI only |
-| Archive freeze (§3.10) | `pulses/{p}` **and every subcollection** | unchanged | `canEditPulse(p)` (`:54-56`) gains `&& isPulseActive(p)`, where `isPulseActive(p)` = `get(/…/pulses/$(p)).data.archivedAt == null`. One chokepoint freezes every write path |
+| Archive freeze (§3.10) | `pulses/{p}` **and every content subcollection** | unchanged | every write gate ANDs `isPulseActive(p)` = `get(/…/pulses/$(p)).data.archivedAt == null` — `canEditPulse` for epics/resources, `callerEditScope` for features/costs, `isPulseMember` for comments; deletes keep an owner exemption. Per-gate, **not** one chokepoint (`Hide-and-Archive-Spec.md` §4.1, §4.4) |
 | Archive / unarchive (§3.10) | `pulses/{p}` | unchanged | `update`: `isPulseOwner(p)` **and** `request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archivedAt','archivedBy','updatedAt'])` — the only write that may cross the freeze |
 | Hide (§3.10) | `users/{uid}/myPulses/{p}` | unchanged | **no rules change** — already self-owned (`:118-119`); the field is renamed `archived` → `hidden` |
 | Presence (§3.4) | `pulses/{p}/presence/{uid}` | member/team-member | `create/update/delete: uid == request.auth.uid && (isPulseMember(p) \|\| isWorkspaceMember(...))` |
@@ -814,8 +838,9 @@ optional backend features last.
    (`Plans-Spec.md` PL12), so `workspace.pulseCount` needs no archive awareness
    and this can land before or after the counter function. Rename
    `myPulses.archived` → `hidden` (self-heal migration), add
-   `pulses.archivedAt`/`archivedBy`, the `isPulseActive` clause on
-   `canEditPulse`, the owner-only unarchive rule, and the read-only banner.
+   `pulses.archivedAt`/`archivedBy`, the `isPulseActive` clause on every write
+   gate, the owner-only unarchive rule, and the read-only banner. Ship the
+   rename as its own release first (`Hide-and-Archive-Spec.md` §8, §11).
    Sequenced early because it is the smallest change here and it removes a live
    source of confusion about what "archive" promises.
 3. **Retire `invites`/`inviteIndex` (§3.1).** After the window: delete the rule

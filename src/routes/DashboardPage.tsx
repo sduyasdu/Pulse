@@ -3,10 +3,11 @@ import { Icon } from "@/components/shared/Icon";
 import { PulseLockup } from "@/components/shared/Logo";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
-import { fetchMembership, leavePulse } from "@/services/firestore/memberships";
+import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseHidden, updateMyPulseArchivedAt, setPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
+import { countPulseMembers, fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
-import type { MyPulseIndexEntry } from "@/types";
+import { hiddenOf, type MyPulseIndexEntry } from "@/types";
+import { logDirectActivity } from "@/domain/activityRecorder";
 import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
 import { PlanBanner } from "@/components/shared/PlanBanner";
@@ -42,7 +43,13 @@ export function DashboardPage() {
   // can fix it:
   //   - membership gone (removed / Pulse deleted) -> drop the dangling entry;
   //   - role changed by an owner -> sync the cached role label + section;
-  //   - Pulse renamed by someone else -> sync the cached (denormalized) name.
+  //   - Pulse renamed by someone else -> sync the cached (denormalized) name;
+  //   - pre-split `archived` (per-user) -> migrate to `hidden`, NEVER to the new
+  //     shared archive, which would surprise the other members of every Pulse
+  //     anyone had tidied away (Hide-and-Archive-Spec §8);
+  //   - shared archive state -> refresh the denormalized `archivedAt` copy that
+  //     drives the card's Archived chip. Free: the Pulse doc is already fetched
+  //     here for the name, and cards have no live listener by design.
   // Only acts on a definitive read (getDoc succeeded); a transient/network
   // error leaves the entry for the next load to retry. Updates only when a
   // value actually changed, so it converges (no write/re-run loop).
@@ -61,10 +68,18 @@ export function DashboardPage() {
           if (membership.role !== p.role) {
             await updateMyPulseRole(firebaseUser.uid, p.pulseId, membership.role);
           }
+          // One-pass rename of the pre-split per-user flag. Runs once per entry
+          // (setMyPulseHidden clears `archived`), so it can't loop.
+          if (p.archived !== undefined && p.hidden === undefined) {
+            await setMyPulseHidden(firebaseUser.uid, p.pulseId, p.archived);
+          }
           const pulse = await getPulse(p.pulseId);
           if (cancelled) return;
           if (pulse && (pulse.name ?? "") !== (p.name ?? "")) {
             await updateMyPulseName(firebaseUser.uid, p.pulseId, pulse.name ?? "");
+          }
+          if (pulse && (pulse.archivedAt ?? null) !== (p.archivedAt ?? null)) {
+            await updateMyPulseArchivedAt(firebaseUser.uid, p.pulseId, pulse.archivedAt ?? null);
           }
         } catch {
           // transient — skip; a later load retries
@@ -79,15 +94,20 @@ export function DashboardPage() {
   if (!firebaseUser) return null;
   const uid = firebaseUser.uid;
 
-  // Three groups: Pulses you own, ones shared with you, and archived ones —
-  // each narrowed by the search box (matched on name).
+  // Four groups, each narrowed by the search box (matched on name). Placement
+  // rules (Hide-and-Archive-Spec §5.3): `hidden` wins over archived — hiding is
+  // the user's explicit "off my dashboard", and a Hidden Pulse resurfacing in
+  // the Archived section would defeat it. Otherwise archived (shared, everyone
+  // sees it) outranks the owned/shared split.
   const q = query.trim().toLowerCase();
   const match = (p: MyPulseIndexEntry) => !q || (p.name || "").toLowerCase().includes(q);
-  const active = pulses?.filter((p) => !p.archived) ?? [];
-  const owned = active.filter((p) => p.role === "owner" && match(p));
-  const shared = active.filter((p) => p.role !== "owner" && match(p));
-  const archived = (pulses?.filter((p) => p.archived) ?? []).filter(match);
-  const noResults = q !== "" && owned.length === 0 && shared.length === 0 && archived.length === 0;
+  const visible = pulses?.filter((p) => !hiddenOf(p)) ?? [];
+  const live = visible.filter((p) => (p.archivedAt ?? null) === null);
+  const owned = live.filter((p) => p.role === "owner" && match(p));
+  const shared = live.filter((p) => p.role !== "owner" && match(p));
+  const archived = visible.filter((p) => (p.archivedAt ?? null) !== null).filter(match);
+  const hidden = (pulses?.filter(hiddenOf) ?? []).filter(match);
+  const noResults = q !== "" && owned.length === 0 && shared.length === 0 && archived.length === 0 && hidden.length === 0;
 
   const del = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
     const ok = await confirmAt(pt, {
@@ -96,6 +116,34 @@ export function DashboardPage() {
       confirmLabel: t("dashboard.deleteConfirm"),
     });
     if (ok) await deletePulse(entry.pulseId, uid);
+  };
+
+  // Owner-only, shared, and read-only for everyone — so unlike hiding, it asks
+  // first and names the consequence (Hide-and-Archive-Spec §5.4).
+  const archive = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
+    const n = await countPulseMembers(entry.pulseId).catch(() => 0);
+    const ok = await confirmAt(pt, {
+      message: t("dashboard.archiveMessage", { name: entry.name || t("common.untitledPulse") }),
+      detail: t("dashboard.archiveDetail", { n }),
+      confirmLabel: t("dashboard.archiveConfirm"),
+    });
+    if (!ok) return;
+    await setPulseArchived(entry.pulseId, uid, true);
+    await updateMyPulseArchivedAt(uid, entry.pulseId, Date.now());
+    logDirectActivity(entry.pulseId, {
+      entityKind: "pulse", entityId: entry.pulseId, entityName: entry.name || "", verb: "archive",
+      summary: "archived the Pulse",
+    });
+  };
+
+  // Unarchiving restores the status quo, so it doesn't ask.
+  const unarchive = async (entry: MyPulseIndexEntry) => {
+    await setPulseArchived(entry.pulseId, uid, false);
+    await updateMyPulseArchivedAt(uid, entry.pulseId, null);
+    logDirectActivity(entry.pulseId, {
+      entityKind: "pulse", entityId: entry.pulseId, entityName: entry.name || "", verb: "unarchive",
+      summary: "unarchived the Pulse",
+    });
   };
 
   const leave = async (entry: MyPulseIndexEntry, pt: { clientX: number; clientY: number }) => {
@@ -116,8 +164,10 @@ export function DashboardPage() {
           onRenameClick={() => setRenamingPulse(entry)}
           onInviteClick={() => setInvitingPulse(entry)}
           onDuplicateClick={() => setDuplicatingPulse(entry)}
-          onArchive={() => void setMyPulseArchived(uid, entry.pulseId, true)}
-          onUnarchive={() => void setMyPulseArchived(uid, entry.pulseId, false)}
+          onHide={() => void setMyPulseHidden(uid, entry.pulseId, true)}
+          onUnhide={() => void setMyPulseHidden(uid, entry.pulseId, false)}
+          onArchive={(pt) => void archive(entry, pt)}
+          onUnarchive={() => void unarchive(entry)}
           onDelete={(pt) => void del(entry, pt)}
           onLeave={(pt) => void leave(entry, pt)}
         />
@@ -212,6 +262,13 @@ export function DashboardPage() {
               <>
                 <SectionHeading count={archived.length}>{t("dashboard.archived")}</SectionHeading>
                 {grid(archived)}
+              </>
+            )}
+
+            {hidden.length > 0 && (
+              <>
+                <SectionHeading count={hidden.length}>{t("dashboard.hidden")}</SectionHeading>
+                {grid(hidden)}
               </>
             )}
           </>
