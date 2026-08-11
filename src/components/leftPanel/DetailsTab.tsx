@@ -576,27 +576,40 @@ function SubtaskTitleInput({ title, disabled, done, onCommit }: { title: string;
   );
 }
 
+/** One labelled metric under a subtask date — same shape as the SCHEDULE &
+ * EFFORT tiles, one notch smaller for the nested subtask panel. */
+function DateStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  const empty = value === "—";
+  return (
+    <div className="rounded px-1.5 py-1" style={{ background: "#F8FAFC", minWidth: 0 }}>
+      <div className="mono" style={{ fontSize: 8, color: "#64748B", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      <div className="mono" style={{ fontSize: 11, fontWeight: 600, color: empty ? "#B4BECC" : (color ?? "#1F2330") }}>{value}</div>
+    </div>
+  );
+}
+
 /** A subtask's three dates: created (stamped once by addSubtask, read-only),
- * planned and finished (both editable), each annotated with how long it is —
- * or was — from creation. Subtasks created before `createdAt` existed simply
- * omit the "from created" readings rather than showing a bogus zero. */
+ * planned and finished (both editable). Each editable date carries two
+ * labelled fields: how long it is from creation, and how it stands against the
+ * plan. Anything that can't be computed — no creation date on subtasks that
+ * predate the field, no plan, not finished yet — reads "—" rather than
+ * disappearing, so the row of fields stays put as the dates get filled in. */
 function SubtaskDates({ subtask, disabled, onPatch }: { subtask: Subtask; disabled: boolean; onPatch: (patch: Partial<Subtask>) => void }) {
   const t = useT();
   const created = subtask.createdAt ?? null;
   const planned = subtask.plannedAt ?? null;
   const finished = subtask.finishedAt ?? null;
   const span = (from: string, to: string) => dayIndexFromDateInputValue(to) - dayIndexFromDateInputValue(from);
+  const days = (n: number) => t("details.nDays", { n });
+
   // Against today only while the subtask is still open — once it is finished
-  // the honest comparison is finished-vs-planned, not a countdown that keeps
-  // running after the work stopped.
-  const dueIn = planned && !finished ? dayIndexFromDateInputValue(planned) - todayIndex() : null;
+  // the honest comparison is finished-vs-planned, which is the pair of fields
+  // under the finished date.
+  const live = planned && !finished ? dayIndexFromDateInputValue(planned) - todayIndex() : null;
   const slip = planned && finished ? span(planned, finished) : null;
 
   const label = (s: string) => (
     <span className="mono" style={{ fontSize: 9, color: "#64748B", flexShrink: 0, width: 48, whiteSpace: "nowrap" }}>{s}</span>
-  );
-  const chip = (text: string, color: string) => (
-    <span className="mono" style={{ fontSize: 9, color, whiteSpace: "nowrap" }}>{text}</span>
   );
   const clear = (title: string, patch: Partial<Subtask>) =>
     !disabled && (
@@ -604,54 +617,53 @@ function SubtaskDates({ subtask, disabled, onPatch }: { subtask: Subtask; disabl
         <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
       </button>
     );
+  const dateInput = (value: string | null, onSet: (v: string | null) => void, title: string) => (
+    <input
+      type="date"
+      disabled={disabled}
+      value={value || ""}
+      onChange={(e) => onSet(e.target.value || null)}
+      title={title}
+      className="mono text-xs border rounded px-1 py-0.5"
+      style={{ borderColor: "#E2DFD9", color: "#334155" }}
+    />
+  );
 
   return (
-    <div className="flex flex-col gap-1 mt-1.5">
+    <div className="flex flex-col gap-1.5 mt-1.5">
       <div className="flex items-center gap-1.5">
         {label(t("details.created"))}
-        <span className="mono" style={{ fontSize: 10, color: created ? "#334155" : "#B4BECC" }} title={t("details.createdTitle")}>
+        <span className="mono" style={{ fontSize: 11, color: created ? "#334155" : "#B4BECC" }} title={t("details.createdTitle")}>
           {created ? fmtDate(dayIndexFromDateInputValue(created)) : "—"}
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5">
         {label(t("details.planned"))}
-        <input
-          type="date"
-          disabled={disabled}
-          value={planned || ""}
-          onChange={(e) => onPatch({ plannedAt: e.target.value || null })}
-          title={t("details.plannedTitle")}
-          className="mono text-xs border rounded px-1 py-0.5"
-          style={{ borderColor: "#E2DFD9", color: "#334155" }}
-        />
+        {dateInput(planned, (v) => onPatch({ plannedAt: v }), t("details.plannedTitle"))}
         {planned && clear(t("details.clearPlanned"), { plannedAt: null })}
-        {planned && created && chip(t("details.fromCreated", { n: span(created, planned) }), "#94A3B8")}
-        {dueIn != null &&
-          chip(
-            dueIn < 0 ? t("details.overdueBy", { n: -dueIn }) : dueIn === 0 ? t("details.dueToday") : t("details.dueIn", { n: dueIn }),
-            dueIn < 0 ? "#9F1D23" : "#0F6B5C",
-          )}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <DateStat label={t("details.plannedElapsed")} value={created && planned ? days(span(created, planned)) : "—"} />
+        <DateStat
+          label={t("details.delayPending")}
+          value={live == null ? "—" : live < 0 ? t("details.nDelay", { n: -live }) : live > 0 ? t("details.nPending", { n: live }) : t("details.dueToday")}
+          color={live == null ? undefined : live < 0 ? "#9F1D23" : live > 0 ? "#0F6B5C" : "#92400E"}
+        />
       </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5">
         {label(t("details.finished"))}
-        <input
-          type="date"
-          disabled={disabled}
-          value={finished || ""}
-          onChange={(e) => onPatch({ finishedAt: e.target.value || null })}
-          title={t("details.finishedTitle")}
-          className="mono text-xs border rounded px-1 py-0.5"
-          style={{ borderColor: "#E2DFD9", color: "#334155" }}
-        />
+        {dateInput(finished, (v) => onPatch({ finishedAt: v }), t("details.finishedTitle"))}
         {finished && clear(t("details.clearFinished"), { finishedAt: null })}
-        {finished && created && chip(t("details.tookDays", { n: span(created, finished) }), "#94A3B8")}
-        {slip != null &&
-          chip(
-            slip > 0 ? t("details.daysLate", { n: slip }) : slip < 0 ? t("details.daysEarly", { n: -slip }) : t("details.onPlan"),
-            slip > 0 ? "#9F1D23" : "#0F6B5C",
-          )}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <DateStat label={t("details.finalElapsed")} value={created && finished ? days(span(created, finished)) : "—"} />
+        <DateStat
+          label={t("details.finalDelayPending")}
+          value={slip == null ? "—" : slip > 0 ? t("details.nDelay", { n: slip }) : slip < 0 ? t("details.nEarly", { n: -slip }) : t("details.onPlan")}
+          color={slip == null ? undefined : slip > 0 ? "#9F1D23" : "#0F6B5C"}
+        />
       </div>
     </div>
   );
