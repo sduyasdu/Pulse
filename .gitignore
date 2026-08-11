@@ -15,6 +15,10 @@ dist-ssr
 # Cloud Functions build output
 functions/lib
 
+# Claude Code scratch worktrees — each is a full checkout (node_modules and all).
+# Only this subdirectory: .claude/skills/ is tracked and shared.
+.claude/worktrees/
+
 # Firebase
 .firebase/
 firebase-debug.log
