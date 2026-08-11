@@ -132,7 +132,6 @@ export function Toolbar({
       <div className="flex items-center gap-3 px-4" style={{ height: 34, borderBottom: "1px solid #24406B" }}>
         <Link to="/" className="flex items-center gap-2" title={t("toolbar.backToDashboard")}>
           <PulseLockup variant="dark" size={15} />
-          <span className="mono" style={{ fontSize: 8, color: "#EE7240", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>{t("auth.by")}</span>
         </Link>
         <div className="flex items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
           <span className="font-display" style={{ color: "#EE7240", fontSize: 14, fontWeight: 500 }}>›</span>
