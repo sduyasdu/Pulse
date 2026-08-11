@@ -218,6 +218,39 @@ button:disabled {
   color: #2563eb;
   text-decoration: underline;
 }
+/* Preflight also strips heading sizes and quote/code styling, and a pasted
+   screenshot would otherwise render at its natural pixel width in a 320px
+   panel. Everything here matches what the sanitiser allows through. */
+.rich-editor h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 4px 0 2px;
+  color: #1f2330;
+}
+.rich-editor h4 {
+  font-size: 1.05em;
+  font-weight: 700;
+  margin: 4px 0 2px;
+  color: #1f2330;
+}
+.rich-editor blockquote {
+  border-left: 2px solid #e2dfd9;
+  padding-left: 8px;
+  margin: 2px 0;
+  color: #64748b;
+}
+.rich-editor code,
+.rich-editor pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+  background: #f1f5f9;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.rich-editor img {
+  max-width: 100%;
+  height: auto;
+}
 .rich-editor:empty::before {
   content: attr(data-placeholder);
   color: #94a3b8;

@@ -470,7 +470,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) throw new Error("feature not found");
     const id = `st-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const subtask: Subtask = { id, title: "New subtask", status: "planned", resources: [] };
+    const subtask: Subtask = { id, title: "New subtask", status: "planned", resources: [], createdAt: toDateInputValue(todayIndex()) };
     const patch: Partial<Feature> = { collapsed: false, children: [...(feature.children || []), subtask] };
     await updateFeature(pulseId, featureId, patch);
     recordSingle("Add subtask", pulseId, patchOp("feature", featureId, asDoc(feature), patch));

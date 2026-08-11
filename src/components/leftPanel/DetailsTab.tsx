@@ -14,7 +14,7 @@ import {
   isEstimateLocked,
   theoreticalElapsed,
 } from "@/domain/graphEffort";
-import { dayIndexFromDateInputValue, fmtDate, toDateInputValue } from "@/domain/dateUtils";
+import { dayIndexFromDateInputValue, fmtDate, toDateInputValue, todayIndex } from "@/domain/dateUtils";
 import { LABEL_COLORS, colorForName, statusesOf, statusMetaOf } from "@/domain/constants";
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
@@ -269,23 +269,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <span className="mono" style={{ fontSize: 9, color: "#64748B", flexShrink: 0 }}>{t("details.finished")}</span>
-                      <input
-                        type="date"
-                        disabled={!canEdit}
-                        value={c.finishedAt || ""}
-                        onChange={(e) => void patchSubtask(feature.id, c.id, { finishedAt: e.target.value || null })}
-                        title="Set automatically when marked done — editable"
-                        className="mono text-xs border rounded px-1 py-0.5"
-                        style={{ borderColor: "#E2DFD9", color: "#334155" }}
-                      />
-                      {c.finishedAt && canEdit && (
-                        <button onClick={() => void patchSubtask(feature.id, c.id, { finishedAt: null })} title="Clear finished date">
-                          <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
-                        </button>
-                      )}
-                    </div>
+                    <SubtaskDates subtask={c} disabled={!canEdit} onPatch={(p) => void patchSubtask(feature.id, c.id, p)} />
                     <div className="mt-1.5">
                       <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("details.responsible")}</span>
                       <div className="mt-1">
@@ -589,6 +573,87 @@ function SubtaskTitleInput({ title, disabled, done, onCommit }: { title: string;
       className="text-xs font-medium flex-1 bg-transparent"
       style={{ border: "none", outline: "none", color: done ? "#94A3B8" : "#334155", textDecoration: done ? "line-through" : "none", minWidth: 0 }}
     />
+  );
+}
+
+/** A subtask's three dates: created (stamped once by addSubtask, read-only),
+ * planned and finished (both editable), each annotated with how long it is —
+ * or was — from creation. Subtasks created before `createdAt` existed simply
+ * omit the "from created" readings rather than showing a bogus zero. */
+function SubtaskDates({ subtask, disabled, onPatch }: { subtask: Subtask; disabled: boolean; onPatch: (patch: Partial<Subtask>) => void }) {
+  const t = useT();
+  const created = subtask.createdAt ?? null;
+  const planned = subtask.plannedAt ?? null;
+  const finished = subtask.finishedAt ?? null;
+  const span = (from: string, to: string) => dayIndexFromDateInputValue(to) - dayIndexFromDateInputValue(from);
+  // Against today only while the subtask is still open — once it is finished
+  // the honest comparison is finished-vs-planned, not a countdown that keeps
+  // running after the work stopped.
+  const dueIn = planned && !finished ? dayIndexFromDateInputValue(planned) - todayIndex() : null;
+  const slip = planned && finished ? span(planned, finished) : null;
+
+  const label = (s: string) => (
+    <span className="mono" style={{ fontSize: 9, color: "#64748B", flexShrink: 0, width: 48, whiteSpace: "nowrap" }}>{s}</span>
+  );
+  const chip = (text: string, color: string) => (
+    <span className="mono" style={{ fontSize: 9, color, whiteSpace: "nowrap" }}>{text}</span>
+  );
+  const clear = (title: string, patch: Partial<Subtask>) =>
+    !disabled && (
+      <button onClick={() => onPatch(patch)} title={title}>
+        <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
+      </button>
+    );
+
+  return (
+    <div className="flex flex-col gap-1 mt-1.5">
+      <div className="flex items-center gap-1.5">
+        {label(t("details.created"))}
+        <span className="mono" style={{ fontSize: 10, color: created ? "#334155" : "#B4BECC" }} title={t("details.createdTitle")}>
+          {created ? fmtDate(dayIndexFromDateInputValue(created)) : "—"}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {label(t("details.planned"))}
+        <input
+          type="date"
+          disabled={disabled}
+          value={planned || ""}
+          onChange={(e) => onPatch({ plannedAt: e.target.value || null })}
+          title={t("details.plannedTitle")}
+          className="mono text-xs border rounded px-1 py-0.5"
+          style={{ borderColor: "#E2DFD9", color: "#334155" }}
+        />
+        {planned && clear(t("details.clearPlanned"), { plannedAt: null })}
+        {planned && created && chip(t("details.fromCreated", { n: span(created, planned) }), "#94A3B8")}
+        {dueIn != null &&
+          chip(
+            dueIn < 0 ? t("details.overdueBy", { n: -dueIn }) : dueIn === 0 ? t("details.dueToday") : t("details.dueIn", { n: dueIn }),
+            dueIn < 0 ? "#9F1D23" : "#0F6B5C",
+          )}
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {label(t("details.finished"))}
+        <input
+          type="date"
+          disabled={disabled}
+          value={finished || ""}
+          onChange={(e) => onPatch({ finishedAt: e.target.value || null })}
+          title={t("details.finishedTitle")}
+          className="mono text-xs border rounded px-1 py-0.5"
+          style={{ borderColor: "#E2DFD9", color: "#334155" }}
+        />
+        {finished && clear(t("details.clearFinished"), { finishedAt: null })}
+        {finished && created && chip(t("details.tookDays", { n: span(created, finished) }), "#94A3B8")}
+        {slip != null &&
+          chip(
+            slip > 0 ? t("details.daysLate", { n: slip }) : slip < 0 ? t("details.daysEarly", { n: -slip }) : t("details.onPlan"),
+            slip > 0 ? "#9F1D23" : "#0F6B5C",
+          )}
+      </div>
+    </div>
   );
 }
 

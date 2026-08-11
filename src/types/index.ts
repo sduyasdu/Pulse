@@ -411,7 +411,12 @@ export interface Subtask {
   resources: string[];
   alloc?: Record<string, number>;
   notes?: string; // rich-text (HTML) detail annotation
-  finishedAt?: string | null; // YYYY-MM-DD; auto-set when marked done, cleared when reopened, editable
+  // The three subtask dates, all YYYY-MM-DD. `createdAt` is stamped once by
+  // addSubtask and never editable; it is absent on subtasks created before the
+  // field existed, so every reader must tolerate undefined.
+  createdAt?: string;
+  plannedAt?: string | null; // target date, set by hand
+  finishedAt?: string | null; // auto-set when marked done, cleared when reopened, editable
 }
 
 export interface Feature {
