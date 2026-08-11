@@ -10,7 +10,7 @@ import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog"
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
-import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusesOf, type Density } from "@/domain/constants";
+import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { roleMeta, capsOf } from "@/domain/permissions";
 import { effectiveEditScope, pulseLock } from "@/domain/pulseLock";
@@ -58,6 +58,7 @@ export function PulsePage() {
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const isMobile = useIsMobile();
   const coarsePointer = useCoarsePointer();
+  const statuses = statusesOf(pulse);
 
   // Pin the app to the actual visible height (px) rather than 100vh/100dvh,
   // which on iPad Safari can mismatch as the address bar shifts and leave a
@@ -378,7 +379,7 @@ export function PulsePage() {
         onToggleMyPulse={() => setMyTasksOnly((v) => !v)}
         canMyPulse={myResourceIds.length > 0}
         epicOptions={epics.map((e) => ({ id: e.id, name: e.name || t("pulse.untitledEpic"), color: e.color }))}
-        statusOptions={statusesOf(pulse).map((s) => ({ id: s.id, name: s.label }))}
+        statusOptions={statuses.map((s) => ({ id: s.id, name: s.label, color: statusMetaOf(s.id, statuses).border }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
         epicsShrunk={epicsShrunk}
