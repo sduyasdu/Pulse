@@ -216,9 +216,15 @@ already ships):
 **Edit** client
 - Consume `entitlementsFor(billing)` (already built) to soft-gate growth with an **upsell**
   ("You've hit your plan's limit — upgrade"). Collaborators don't see **New Pulse**.
-- **PL4 read-only lock (§5.1):** on Starter, derive which Pulses are over the limit (non-archived,
-  ordered by `createdAt`, newest beyond `maxPulses`) and render them **read-only** with an
-  "archive another Pulse to edit this" affordance. Client-derived (rules can't sort/count).
+- **PL4 read-only lock (§5.1):** on Starter, derive which Pulses are over the limit (**every**
+  Pulse the org holds — archived and hidden included, PL12 — ordered by `createdAt`, newest
+  beyond `maxPulses`) and render them **read-only** with a **"delete another Pulse or upgrade"**
+  affordance. Client-derived (rules can't sort/count). *(Revised: this previously said
+  "non-archived" and offered "archive another Pulse to edit this" — archiving is a lifecycle
+  state, not quota relief, so it frees nothing. `Plans-Spec.md` PL12, `Hide-and-Archive-Spec.md`
+  §7/HA8.)* Note this also needs a `list` rule on top-level `pulses` to fetch the org's Pulses
+  at all — it arrives with Teams (`Collaboration-Spec.md` §4). Feed the result to
+  `pulseLock(pulse, planLocked)` in `PulsePage`; the precedence and its tests already exist.
 - **Members & seats screen (PL9):** a new org-admin surface to manage `Workspace.editorUids[]`
   — add/remove licensed editors, showing seats used / purchased and a link to buy more (Stripe
   portal). This is net-new (today there's only per-Pulse Collaborators).

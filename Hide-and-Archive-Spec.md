@@ -283,10 +283,21 @@ how the client implements it. The principle it encodes — **archive stops quiet
 destruction** — is worth stating in the rules comment, because the alternative reading
 ("archived data is protected data") is the one people will assume.
 
-Alternatives considered and rejected: *unarchive-then-delete* in the client (a non-atomic
-multi-step flow that leaves the Pulse unfrozen for everyone if the delete fails midway); a
-*server-side cascade callable* (correct, and the right answer once `functions/` is load-bearing
-— `Server-Functions-Spec.md` — but it makes a small serverless feature wait on a backend).
+**The server-side cascade already exists, and does not remove the need for this.**
+`onPulseDelete` (SF6, `functions/src/cascade.ts:30-47`, deployed) fires on the pulse doc's
+deletion and `recursiveDelete`s the whole remaining tree plus every member's `myPulses`
+entry. So the client pass is a best-effort head start, not the whole teardown — but it still
+has to **reach** the pulse-doc delete, and it deletes subcollections first
+(`pulses.ts:245-256`). Without the exemption, the very first `epics` delete throws, the
+function aborts before the pulse doc is touched, SF6 never fires, and the Pulse survives.
+The exemption is what lets an archived Pulse be deleted at all.
+
+Alternative considered and rejected: *unarchive-then-delete* in the client — a non-atomic
+multi-step flow that leaves the Pulse unfrozen for everyone if the delete fails midway.
+
+(A cleaner future refactor: delete the pulse doc **first** and let SF6 own the rest, since
+`isPulseOwner` on that delete is unaffected by the freeze. Out of scope here — the current
+order is deliberately defensive about the function not running.)
 
 ### 4.5 What stays writable while archived
 
@@ -456,6 +467,15 @@ right now with one click, whereas the plan lock clears only by deleting another 
 upgrading. If both apply, show the archived banner; unarchiving then reveals the plan banner,
 which is honest — the Pulse really is still locked, for a different reason. `pulseLock()`
 (§5.1) returns the single winning reason so this can't drift between surfaces.
+
+**Status: the plan half is not wired, deliberately.** `PulsePage` passes
+`planLocked = false`, because PL4's over-limit lock doesn't exist yet *and cannot be derived
+from a Pulse page*: it needs the org's Pulses ordered by `createdAt`, and there is no `list`
+rule on the top-level `pulses` collection to fetch them (that rule arrives with Teams,
+`Collaboration-Spec.md` §4). The precedence logic and its unit tests are complete for both
+reasons, so PL4 changes exactly one line. Two things for whoever builds it: the over-limit
+set counts **archived Pulses too** (PL12/HA8), and the affordance is **delete or upgrade** —
+never "archive something to make room".
 
 ### 5.7 The last owner may not leave (HA10)
 
@@ -691,8 +711,8 @@ Phases 2–4 can ship in one release; phase 1 should not share one with them.
 - Archiving anything smaller than a Pulse (an epic, a task).
 - A workspace/Team-level archive — Teams don't exist yet (`Collaboration-Spec.md` §3.2).
 - Export-on-archive, cold storage, or any change to where archived data lives.
-- Server-side cascade delete (§4.4) — noted as the eventual right answer, deferred with the
-  rest of `functions/`.
+- Changing how Pulse deletion is orchestrated. The server-side cascade already exists and is
+  deployed (SF6, §4.4); reordering the client pass around it is a separate change.
 - Any change to who can *read* a Pulse.
 
 ## 13. Decisions (HA1–HA10)

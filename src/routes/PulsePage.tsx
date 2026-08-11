@@ -111,7 +111,15 @@ export function PulsePage() {
   // in HERE — the one place edit rights are derived — freezes every disabled
   // state, drag guard, hidden control and keyboard shortcut at once
   // (Hide-and-Archive-Spec §5.1). Nothing downstream needs to know why.
-  const lock = pulseLock(pulse, false);
+  // PL4's over-limit lock (Plans-Spec §5.1) isn't built yet, and can't be from
+  // here: it needs the org's Pulses ordered by `createdAt`, and there is no
+  // `list` rule on the top-level `pulses` collection to fetch them (the one in
+  // Collaboration-Spec §4 arrives with Teams). So this is always false today.
+  // When PL4 lands, pass the derived value — pulseLock() already resolves the
+  // precedence (archived wins, Hide-and-Archive-Spec §5.6) and is unit-tested
+  // for both, so this is the only line that changes.
+  const planLocked = false;
+  const lock = pulseLock(pulse, planLocked);
   const editScope = effectiveEditScope(myMember ? capsOf(myMember).editScope : "none", lock);
   const canEdit = editScope === "all";
   const archived = lock === "archived";
