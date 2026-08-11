@@ -5,6 +5,9 @@ import { useT } from "@/i18n";
 export interface Option {
   id: string;
   name: string;
+  /** Optional swatch (epic colour, status colour). Rendered as a dot before the
+   * name in the menu, and on the button when it is the single selection. */
+  color?: string;
 }
 
 /** Compact multi-select dropdown used for every canvas/panel filter. Empty
@@ -42,12 +45,15 @@ export function MultiSelectFilter({
     onChange(next);
   };
 
+  const only = selected.size === 1 ? options.find((o) => selected.has(o.id)) : undefined;
   const summary =
     selected.size === 0
       ? t("filter.all", { label })
       : selected.size === 1
-        ? options.find((o) => selected.has(o.id))?.name ?? t("filter.count", { count: 1, label })
+        ? only?.name ?? t("filter.count", { count: 1, label })
         : t("filter.count", { count: selected.size, label });
+
+  const dot = (color: string) => <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />;
 
   return (
     <div className="relative">
@@ -60,6 +66,7 @@ export function MultiSelectFilter({
             : { borderColor: selected.size ? "#EE7240" : "#E2DFD9", background: selected.size ? "#FFF7F1" : "#FFFFFF", color: "#334155", maxWidth: 150 }
         }
       >
+        {only?.color && dot(only.color)}
         <span className="truncate">{summary}</span>
         <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={13} style={{ color: dark ? "#F0A875" : "#94A3B8" }} />
       </button>
@@ -83,6 +90,7 @@ export function MultiSelectFilter({
               {filtered.map((o) => (
                 <button key={o.id} onClick={() => toggle(o.id)} className="text-xs w-full text-left px-2 py-1 flex items-center gap-2" style={{ background: selected.has(o.id) ? "#FFF7F1" : undefined }}>
                   <input type="checkbox" readOnly checked={selected.has(o.id)} style={{ accentColor: "#EE7240", pointerEvents: "none", flexShrink: 0 }} />
+                  {o.color && dot(o.color)}
                   <span className="truncate" style={{ color: "#334155" }}>{o.name}</span>
                 </button>
               ))}

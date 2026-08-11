@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
-import type { Feature, Resource, Subtask } from "@/types";
+import type { Feature, Resource, StatusDef, Subtask } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { confirmAt } from "@/stores/confirmStore";
 import {
@@ -102,33 +102,50 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
 
   return (
     <div className="p-4 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>{t("details.taskDetails")}</span>
-        {canEditProp && (
-          <div className="flex items-center gap-1.5">
-            <button
-              title={t("details.duplicateTask")}
-              onClick={onDuplicate}
-              className="rounded"
-              style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
-            >
-              <Icon name="content_copy" size={13} style={{ color: "#64748B" }} />
-            </button>
-            <button
-              title={t("details.deleteTask")}
-              onClick={async (e) => {
-                if (await confirmAt(e, { message: t("details.deleteTaskMsg", { title: feature.title || t("details.thisTask") }), detail: t("details.deleteTaskDetail"), confirmLabel: t("common.delete") })) {
-                  void removeFeature(feature.id);
-                  onClose();
-                }
-              }}
-              className="rounded"
-              style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
-            >
-              <Icon name="delete" size={13} style={{ color: "#9F1D23" }} />
-            </button>
-          </div>
-        )}
+      {/* Header + title stay pinned to the top of the scrolling panel: the form
+       * is long enough that you lose track of which task you are editing. The
+       * negative margins let the opaque background cover the container's p-4,
+       * so content scrolls under it rather than beside it. */}
+      <div
+        className="sticky flex flex-col gap-2"
+        style={{ top: 0, zIndex: 30, background: "#FFFFFF", margin: "-16px -16px 0", padding: "16px 16px 8px", borderBottom: "1px solid #F1F5F9" }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>{t("details.taskDetails")}</span>
+          {canEditProp && (
+            <div className="flex items-center gap-1.5">
+              <button
+                title={t("details.duplicateTask")}
+                onClick={onDuplicate}
+                className="rounded"
+                style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}
+              >
+                <Icon name="content_copy" size={13} style={{ color: "#64748B" }} />
+              </button>
+              <button
+                title={t("details.deleteTask")}
+                onClick={async (e) => {
+                  if (await confirmAt(e, { message: t("details.deleteTaskMsg", { title: feature.title || t("details.thisTask") }), detail: t("details.deleteTaskDetail"), confirmLabel: t("common.delete") })) {
+                    void removeFeature(feature.id);
+                    onClose();
+                  }
+                }}
+                className="rounded"
+                style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#FDEBEC" }}
+              >
+                <Icon name="delete" size={13} style={{ color: "#9F1D23" }} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <input
+          value={title}
+          disabled={!canEdit}
+          onChange={(e) => onTitleChange(e.target.value)}
+          className="text-sm font-semibold border rounded px-2 py-1.5"
+          style={{ borderColor: "#E2DFD9" }}
+        />
       </div>
 
       {locked && (
@@ -137,14 +154,6 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           <span>{t("details.doneLocked")}</span>
         </div>
       )}
-
-      <input
-        value={title}
-        disabled={!canEdit}
-        onChange={(e) => onTitleChange(e.target.value)}
-        className="text-sm font-semibold border rounded px-2 py-1.5"
-        style={{ borderColor: "#E2DFD9" }}
-      />
 
       <div className="flex gap-2">
         <div className="flex-1">
@@ -178,6 +187,37 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           </select>
           {(feature.resources || []).length === 0 && <div className="mono text-xs mt-1" style={{ color: "#78859A" }}>{t("details.assignFirst")}</div>}
         </div>
+      </div>
+
+      <div>
+        <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.status")}</span>
+        <div className="mt-1">
+          <StatusSelect
+            statuses={statuses}
+            value={feature.status}
+            disabled={!canEditProp}
+            onChange={(id) => void setFeatureStatus(feature.id, id as Feature["status"])}
+          />
+        </div>
+        {(feature.status === "done" || feature.finishedAt) && (
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{t("details.finished")}</span>
+            <input
+              type="date"
+              disabled={!canEditProp}
+              value={feature.finishedAt || ""}
+              onChange={(e) => void patchFeature(feature.id, { finishedAt: e.target.value || null })}
+              title="Actual completion date (set automatically when marked done, editable)"
+              className="text-sm border rounded px-1.5 py-1"
+              style={{ borderColor: "#E2DFD9", color: "#334155" }}
+            />
+            {feature.finishedAt && canEditProp && (
+              <button onClick={() => void patchFeature(feature.id, { finishedAt: null })} title="Clear finished date">
+                <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
@@ -482,40 +522,6 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       </div>
 
       <div>
-        <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.status")}</span>
-        <select
-          value={feature.status}
-          disabled={!canEditProp}
-          onChange={(e) => void setFeatureStatus(feature.id, e.target.value as Feature["status"])}
-          className="mt-1 w-full text-sm border rounded px-2 py-1.5"
-          style={{ borderColor: "#E2DFD9" }}
-        >
-          {statuses.map((s) => (
-            <option key={s.id} value={s.id}>{s.label}</option>
-          ))}
-        </select>
-        {(feature.status === "done" || feature.finishedAt) && (
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{t("details.finished")}</span>
-            <input
-              type="date"
-              disabled={!canEditProp}
-              value={feature.finishedAt || ""}
-              onChange={(e) => void patchFeature(feature.id, { finishedAt: e.target.value || null })}
-              title="Actual completion date (set automatically when marked done, editable)"
-              className="text-sm border rounded px-1.5 py-1"
-              style={{ borderColor: "#E2DFD9", color: "#334155" }}
-            />
-            {feature.finishedAt && canEditProp && (
-              <button onClick={() => void patchFeature(feature.id, { finishedAt: null })} title="Clear finished date">
-                <Icon name="close" size={12} style={{ color: "#94A3B8" }} />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div>
         <span className="mono text-xs" style={{ color: "#64748B" }}>{t("details.labelColor")} <span style={{ opacity: 0.7 }}>{t("details.groupRelated")}</span></span>
         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
           {LABEL_COLORS.map((lc) => {
@@ -583,6 +589,66 @@ function SubtaskTitleInput({ title, disabled, done, onCommit }: { title: string;
       className="text-xs font-medium flex-1 bg-transparent"
       style={{ border: "none", outline: "none", color: done ? "#94A3B8" : "#334155", textDecoration: done ? "line-through" : "none", minWidth: 0 }}
     />
+  );
+}
+
+/** Status picker in the panel's standard dropdown shape (button + panel, same
+ * as ResponsibleSelect) instead of a native <select>: a native option list
+ * can't carry the status colour, and the colour is how the board is read. */
+function StatusSelect({
+  statuses,
+  value,
+  disabled,
+  onChange,
+}: {
+  statuses: StatusDef[];
+  value: string;
+  disabled: boolean;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = statusMetaOf(value, statuses);
+  const dot = (color: string) => <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />;
+  return (
+    <div className="relative">
+      <button
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 w-full text-sm border rounded px-2 py-1.5"
+        style={{ borderColor: "#E2DFD9", background: disabled ? "#F8FAFC" : "#FFFFFF", minWidth: 0 }}
+      >
+        {dot(current.border)}
+        <span className="truncate" style={{ color: "#334155" }}>{current.label}</span>
+        <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={15} style={{ marginLeft: "auto", color: "#94A3B8" }} />
+      </button>
+      {open && !disabled && (
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 40 }} onClick={() => setOpen(false)} />
+          <div
+            className="absolute rounded border"
+            style={{ top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.18)" }}
+          >
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {statuses.map((s) => {
+                const m = statusMetaOf(s.id, statuses);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => { onChange(s.id); setOpen(false); }}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-left"
+                    style={{ background: s.id === value ? "#FFF7F1" : undefined }}
+                  >
+                    {dot(m.border)}
+                    <span className="text-sm truncate" style={{ color: "#334155" }}>{m.label}</span>
+                    {s.id === value && <Icon name="check" size={14} style={{ marginLeft: "auto", color: "#EE7240" }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

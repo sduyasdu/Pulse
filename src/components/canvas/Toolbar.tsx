@@ -6,7 +6,7 @@ import { clamp } from "@/domain/constants";
 import { toDateInputValue, dayIndexFromDateInputValue } from "@/domain/dateUtils";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { useT } from "@/i18n";
-import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
+import { MultiSelectFilter, type Option } from "@/components/shared/MultiSelectFilter";
 import { Icon } from "@/components/shared/Icon";
 import { PulseLockup } from "@/components/shared/Logo";
 
@@ -44,8 +44,8 @@ interface ToolbarProps {
   myPulse: boolean;
   onToggleMyPulse: () => void;
   canMyPulse: boolean;
-  epicOptions: { id: string; name: string }[];
-  statusOptions: { id: string; name: string }[];
+  epicOptions: Option[];
+  statusOptions: Option[];
   showDelays: boolean;
   setShowDelays: (v: boolean) => void;
   epicsShrunk: boolean;

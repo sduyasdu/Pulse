@@ -421,7 +421,7 @@ export const en = {
   "details.deleteTaskMsg": "Delete \"{title}\"?",
   "details.thisTask": "this task",
   "details.deleteTaskDetail": "You can undo this (⌘Z).",
-  "details.doneLocked": "Done — locked. Change its status below to edit this task.",
+  "details.doneLocked": "Done — locked. Change status to edit.",
   "details.epic": "EPIC",
   "details.teamLeader": "TEAM LEADER",
   "details.assignFirst": "assign someone first",

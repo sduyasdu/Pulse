@@ -415,7 +415,7 @@ export const de: Dict = {
   "details.deleteTaskMsg": "„{title}“ löschen?",
   "details.thisTask": "diese Aufgabe",
   "details.deleteTaskDetail": "Du kannst dies rückgängig machen (⌘Z).",
-  "details.doneLocked": "Fertig — gesperrt. Ändere unten den Status, um diese Aufgabe zu bearbeiten.",
+  "details.doneLocked": "Fertig — gesperrt. Status ändern.",
   "details.epic": "EPIC",
   "details.teamLeader": "TEAMLEITER",
   "details.assignFirst": "weise zuerst jemanden zu",

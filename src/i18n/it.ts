@@ -415,7 +415,7 @@ export const it: Dict = {
   "details.deleteTaskMsg": "Eliminare «{title}»?",
   "details.thisTask": "questa attività",
   "details.deleteTaskDetail": "Puoi annullare (⌘Z).",
-  "details.doneLocked": "Fatto — bloccata. Cambia il suo stato qui sotto per modificare questa attività.",
+  "details.doneLocked": "Fatto — bloccata. Cambia lo stato.",
   "details.epic": "EPIC",
   "details.teamLeader": "CAPO TEAM",
   "details.assignFirst": "assegna prima qualcuno",

@@ -377,7 +377,7 @@ export function PulsePage() {
         myPulse={myTasksOnly}
         onToggleMyPulse={() => setMyTasksOnly((v) => !v)}
         canMyPulse={myResourceIds.length > 0}
-        epicOptions={epics.map((e) => ({ id: e.id, name: e.name || t("pulse.untitledEpic") }))}
+        epicOptions={epics.map((e) => ({ id: e.id, name: e.name || t("pulse.untitledEpic"), color: e.color }))}
         statusOptions={statusesOf(pulse).map((s) => ({ id: s.id, name: s.label }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
