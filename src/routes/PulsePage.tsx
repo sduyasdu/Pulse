@@ -3,7 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { useUndoStore } from "@/stores/undoStore";
-import { removeMyPulseEntry } from "@/services/firestore/pulses";
+import { removeMyPulseEntry, setPulseArchived, updateMyPulseArchivedAt } from "@/services/firestore/pulses";
+import { logDirectActivity } from "@/domain/activityRecorder";
 import { syncMyMemberPhoto } from "@/services/firestore/memberships";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
@@ -12,8 +13,10 @@ import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { roleMeta, capsOf } from "@/domain/permissions";
+import { effectiveEditScope, pulseLock } from "@/domain/pulseLock";
 import { useT } from "@/i18n";
 import type { Feature } from "@/types";
+import { ArchivedBanner } from "@/components/shared/ArchivedBanner";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { KanbanView } from "@/components/kanban/KanbanView";
@@ -104,8 +107,14 @@ export function PulsePage() {
   // owner/editor). A Task Lead (editScope 'lead') can't add/config, but can edit
   // the tasks they lead — `canEditFeature` gates those per-feature.
   const myMember = uid ? members.find((m) => m.uid === uid) : undefined;
-  const editScope = myMember ? capsOf(myMember).editScope : "none";
+  // An archived Pulse is read-only for everyone, owners included. Folding that
+  // in HERE — the one place edit rights are derived — freezes every disabled
+  // state, drag guard, hidden control and keyboard shortcut at once
+  // (Hide-and-Archive-Spec §5.1). Nothing downstream needs to know why.
+  const lock = pulseLock(pulse, false);
+  const editScope = effectiveEditScope(myMember ? capsOf(myMember).editScope : "none", lock);
   const canEdit = editScope === "all";
+  const archived = lock === "archived";
   const canEditFeature = useCallback(
     (f: Feature | null | undefined) => !!f && (editScope === "all" || (editScope === "lead" && !!uid && (f.leadUid ?? null) === uid)),
     [editScope, uid],
@@ -286,6 +295,19 @@ export function PulsePage() {
     await canvasRef.current?.addEpicAtCenter();
   };
 
+  // Unarchive from the banner. Owner-only (the button only renders for owners,
+  // and the rule re-checks). The Pulse doc is a live subscription, so every
+  // member's controls come back without a reload.
+  const handleUnarchive = async () => {
+    if (!pulseId || !uid) return;
+    await setPulseArchived(pulseId, uid, false);
+    await updateMyPulseArchivedAt(uid, pulseId, null);
+    logDirectActivity(pulseId, {
+      entityKind: "pulse", entityId: pulseId, entityName: pulse?.name ?? "", verb: "unarchive",
+      summary: "unarchived the Pulse",
+    });
+  };
+
   // Collapsing the sidebar frees ~290px on the left of the canvas. Shift the
   // canvas content by that (screen) amount so it stays put on screen and the
   // freed space "uncovers" the earlier part of the roadmap, rather than the
@@ -308,7 +330,7 @@ export function PulsePage() {
 
   // Phones get the dedicated touch UI; the canvas layout below is desktop/tablet.
   if (isMobile) {
-    return <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} />;
+    return <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} onUnarchive={() => void handleUnarchive()} />;
   }
 
   return (
@@ -362,7 +384,10 @@ export function PulsePage() {
         helpOpen={helpOpen}
         onToggleHelp={() => { setHelpOpen((v) => !v); if (!helpOpen) setCommentsOpen(false); }}
         roleLabel={roleMeta(myRole).label}
+        archived={archived}
       />
+
+      {archived && <ArchivedBanner isOwner={myRole === "owner"} onUnarchive={() => void handleUnarchive()} />}
 
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <div className="flex overflow-hidden relative" style={{ flex: 1, minHeight: 0 }}>

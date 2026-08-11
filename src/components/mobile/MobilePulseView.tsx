@@ -16,6 +16,8 @@ import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
 import { MobileTaskList } from "@/components/mobile/MobileTaskList";
 import { MobileBoard } from "@/components/mobile/MobileBoard";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
+import { ArchivedBanner } from "@/components/shared/ArchivedBanner";
+import { isArchived } from "@/domain/pulseLock";
 import { useT } from "@/i18n";
 
 interface MobilePulseViewProps {
@@ -25,11 +27,12 @@ interface MobilePulseViewProps {
   canEditFeature: (f: Feature) => boolean;
   myRole: PulseRole;
   uid: string;
+  onUnarchive: () => void;
 }
 
 type Tab = "tasks" | "team" | "capacity" | "activity";
 
-export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }: MobilePulseViewProps) {
+export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, onUnarchive }: MobilePulseViewProps) {
   const t = useT();
   const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: "tasks", label: t("mobile.tasks"), icon: "checklist" },
@@ -90,6 +93,10 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid }:
           </button>
         )}
       </header>
+
+      {/* Same explanation as desktop — an archived Pulse's dead controls have to
+          say why (Hide-and-Archive-Spec §5.5). */}
+      {isArchived(pulse) && <ArchivedBanner isOwner={myRole === "owner"} onUnarchive={onUnarchive} />}
 
       {/* List/Board switch for the Tasks tab (kept out of the scroll area so it
           stays put above whichever view is scrolling). */}

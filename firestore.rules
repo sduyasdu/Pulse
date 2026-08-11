@@ -57,6 +57,31 @@ service cloud.firestore {
     function isPulseOwner(pulseId) {
       return isPulseMember(pulseId) && pulseRole(pulseId) == 'owner';
     }
+    // Is this Pulse un-archived (i.e. writable)? An archived Pulse is read-only
+    // for EVERY member, owners included, until an owner unarchives
+    // (Hide-and-Archive-Spec §4). There is no single chokepoint to hang this on:
+    // epics/resources go through canEditPulse, features/costs through
+    // callerEditScope, comments through isPulseMember — so each write gate ANDs
+    // this in for itself. Cost is one extra document read (the pulse doc) on
+    // subcollection writes; inside match /pulses/{pulseId} use resource.data
+    // directly instead, which is free.
+    function isPulseActive(pulseId) {
+      return get(/databases/$(database)/documents/pulses/$(pulseId)).data.get('archivedAt', null) == null;
+    }
+    // May the caller write content right now? The archive-aware replacement for
+    // canEditPulse at every content call-site.
+    function canWriteContent(pulseId) {
+      return canEditPulse(pulseId) && isPulseActive(pulseId);
+    }
+    // Deletes survive the freeze for OWNERS ONLY, because deletePulse() is a
+    // client-side cascade: it removes every subcollection doc before the pulse
+    // doc, so freezing deletes would make an archived Pulse undeletable — and
+    // deleting an archived Pulse is the intended way to reclaim a plan slot
+    // (Plans-Spec §5.1, PL12). This grants nothing new: an owner can already
+    // delete the whole Pulse. Archive stops quiet mutation, not destruction.
+    function canDeleteContent(pulseId) {
+      return canEditPulse(pulseId) && (isPulseActive(pulseId) || pulseRole(pulseId) == 'owner');
+    }
     // Granular edit scope (Permissions-Spec §4): 'all' (owner/editor), 'lead'
     // (Task Lead — only tasks they lead), or 'none'. Derived from the ROLE for
     // the fixed presets (so a link-joiner can't self-set `caps` to escalate);
@@ -165,13 +190,35 @@ service cloud.firestore {
     // ---- pulses ----
     match /pulses/{pulseId} {
       allow read: if isPulseMember(pulseId);
-      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
-      // An invite link may only ever grant viewer/editor — never owner — so an
-      // editor can't mint an owner-granting link (owner promotion stays
-      // owner-only via setMemberRole).
-      allow update: if canEditPulse(pulseId)
-        && (request.resource.data.get('invite', null) == null
-            || request.resource.data.invite.role in ['viewer', 'editor', 'taskLead', 'myBeatViewer']);
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid
+        // Never born archived — so duplicating an archived Pulse yields an
+        // active copy (Hide-and-Archive-Spec §4.3).
+        && request.resource.data.get('archivedAt', null) == null;
+      allow update: if
+        // (a) The archive / unarchive write itself — owner-only, and the ONLY
+        // write permitted to cross the freeze. hasOnly() stops a rename or a
+        // config change riding along; the ternary pins archivedBy to the caller
+        // when archiving and to null when clearing, so the banner can't be
+        // forged or left stale (Hide-and-Archive-Spec §4.3).
+        (isPulseOwner(pulseId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['archivedAt', 'archivedBy', 'updatedAt'])
+          && (request.resource.data.get('archivedAt', null) == null
+                ? request.resource.data.get('archivedBy', null) == null
+                : request.resource.data.get('archivedBy', null) == request.auth.uid))
+        ||
+        // (b) Every other update: frozen while archived, and the archive fields
+        // are pinned so this path can never set them. An invite link may only
+        // ever grant viewer/editor — never owner — so an editor can't mint an
+        // owner-granting link (owner promotion stays owner-only via
+        // setMemberRole).
+        (canEditPulse(pulseId)
+          && resource.data.get('archivedAt', null) == null
+          && request.resource.data.get('archivedAt', null) == resource.data.get('archivedAt', null)
+          && request.resource.data.get('archivedBy', null) == resource.data.get('archivedBy', null)
+          && (request.resource.data.get('invite', null) == null
+              || request.resource.data.invite.role in ['viewer', 'editor', 'taskLead', 'myBeatViewer']));
+      // Unchanged: archive is not a delete guard (Hide-and-Archive-Spec §2.4).
       allow delete: if isPulseOwner(pulseId);
 
       match /pulseMembers/{memberUid} {
@@ -189,8 +236,12 @@ service cloud.firestore {
             get(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())).data.role == request.resource.data.role)
           ||
           // Case 3: joining via a valid copy-link (token + role match the
-          // Pulse's active `invite`).
-          joinLinkOk(pulseId, request.resource.data)
+          // Pulse's active `invite`). Not while archived: a link circulating
+          // before the freeze would otherwise keep growing the roster of a
+          // finished project, silently and unactionably — and it can't be
+          // rotated or revoked while the pulse doc is frozen, so inert is the
+          // only coherent state (Hide-and-Archive-Spec §4.6, HA3).
+          (joinLinkOk(pulseId, request.resource.data) && isPulseActive(pulseId))
         );
         // The owner may change anything; a member may update their OWN doc but
         // only fields that don't affect access — uid/role/email/joinedAt are
@@ -203,8 +254,36 @@ service cloud.firestore {
               && request.resource.data.joinedAt == resource.data.joinedAt
               // Can't self-escalate: only the owner may change caps.
               && request.resource.data.get('caps', null) == resource.data.get('caps', null));
-        // The owner may remove anyone; anyone may remove THEMSELVES (leave).
-        allow delete: if isPulseOwner(pulseId) || memberUid == request.auth.uid;
+        // The owner may remove anyone; anyone may remove THEMSELVES (leave) —
+        // EXCEPT an owner, who may never self-delete. A Pulse must always keep
+        // at least one owner, because archive/unarchive/delete/promote all
+        // require one and an ownerless *archived* Pulse would be frozen,
+        // undeletable and still holding a plan slot forever
+        // (Hide-and-Archive-Spec §5.7, HA10). An owner's exits are archive,
+        // delete, or transfer-then-leave (self-demote via the update rule above,
+        // or have a co-owner remove them).
+        //
+        // This is deliberately STRICTER than "the last owner may not leave":
+        // rules can't count a collection, so "does another owner exist?" isn't
+        // expressible without a denormalized counter. The client enforces the
+        // exact rule off the live roster (CollaboratorsDialog); this backstop
+        // fails safe, and holds against a concurrent double-leave that the
+        // client-side count cannot see.
+        // NOTE the `memberUid != request.auth.uid` on the owner clause: without
+        // it, "an owner may remove anyone" silently re-permits an owner removing
+        // THEMSELVES, and the invariant is worth nothing.
+        //
+        // The third clause is the TEAR-DOWN carve-out. deletePulse() is a
+        // client-side cascade that removes the pulse doc and then every
+        // pulseMembers doc, the caller's own included — so without this, an
+        // owner could no longer finish deleting their own Pulse. Once the pulse
+        // doc is gone the roster is orphaned bookkeeping and there is no owner
+        // left to protect, so this can't be used to strand anything: while the
+        // Pulse still exists, an owner's self-delete is denied.
+        allow delete: if (isPulseOwner(pulseId) && memberUid != request.auth.uid)
+          || (memberUid == request.auth.uid && pulseRole(pulseId) != 'owner')
+          || (memberUid == request.auth.uid
+              && !exists(/databases/$(database)/documents/pulses/$(pulseId)));
       }
 
       match /invites/{emailId} {
@@ -247,7 +326,8 @@ service cloud.firestore {
 
       match /epics/{epicId} {
         allow read: if isPulseMember(pulseId);
-        allow write: if canEditPulse(pulseId);
+        allow create, update: if canWriteContent(pulseId);
+        allow delete: if canDeleteContent(pulseId);
       }
 
       match /features/{featureId} {
@@ -261,8 +341,13 @@ service cloud.firestore {
         // Create/delete stay editor-scope. Update is allowed for editors, and
         // for a Task Lead only on a task they currently lead — and they can't
         // hand the lead off to escape scope (leadUid pinned). (Permissions-Spec §4.4)
-        allow create, delete: if isPulseMember(pulseId) && callerEditScope(pulseId) == 'all';
-        allow update: if isPulseMember(pulseId) && (
+        // Archived freezes create/update for everyone; delete keeps the owner
+        // exemption so the cascade in deletePulse() still works (§4.4).
+        allow create: if isPulseMember(pulseId) && callerEditScope(pulseId) == 'all'
+          && isPulseActive(pulseId);
+        allow delete: if isPulseMember(pulseId) && callerEditScope(pulseId) == 'all'
+          && (isPulseActive(pulseId) || pulseRole(pulseId) == 'owner');
+        allow update: if isPulseMember(pulseId) && isPulseActive(pulseId) && (
           callerEditScope(pulseId) == 'all'
           || (callerEditScope(pulseId) == 'lead'
               && resource.data.get('leadUid', null) == request.auth.uid
@@ -273,25 +358,41 @@ service cloud.firestore {
       // Comments (task-level via targetId, Pulse-level when targetId is null,
       // replies via parentId). Any member (viewers included) may comment;
       // authors edit their own; the owner or the author may delete.
+      // Comments freeze with everything else while archived (HA2): "read-only
+      // for all members" has to be true without a footnote, and a thread nobody
+      // can act on is a worse affordance than a clean freeze. Existing comments
+      // stay readable; discussion resumes on unarchive.
       match /comments/{commentId} {
         allow read: if isPulseMember(pulseId);
-        allow create: if isPulseMember(pulseId) && request.resource.data.authorUid == request.auth.uid;
+        allow create: if isPulseMember(pulseId) && request.resource.data.authorUid == request.auth.uid
+          && isPulseActive(pulseId);
         allow update: if isSignedIn() && resource.data.authorUid == request.auth.uid
-          && request.resource.data.authorUid == resource.data.authorUid;
-        allow delete: if isPulseOwner(pulseId) || (isSignedIn() && resource.data.authorUid == request.auth.uid);
+          && request.resource.data.authorUid == resource.data.authorUid
+          && isPulseActive(pulseId);
+        allow delete: if (isPulseOwner(pulseId))
+          || (isSignedIn() && resource.data.authorUid == request.auth.uid && isPulseActive(pulseId));
       }
 
       match /resources/{resourceId} {
         allow read: if isPulseMember(pulseId);
-        allow write: if canEditPulse(pulseId);
+        allow create, update: if canWriteContent(pulseId);
+        allow delete: if canDeleteContent(pulseId);
       }
 
       // Hourly rates (Costs-Spec §8.3) — the one genuinely sensitive collection in
       // a Pulse. Admin-only, read AND write: a member who can't read a rate can't
       // derive labour cost either, so people costing fails closed by construction
       // rather than by the UI remembering to hide something.
+      // NOTE: read and write are split (they were one `read, write` rule) so the
+      // archive freeze can apply to writes ONLY — cost reporting on a finished
+      // project is a reason to keep it, so freezing the read would break the
+      // thing archiving is for (Hide-and-Archive-Spec §4.1).
       match /rates/{resourceId} {
-        allow read, write: if isPulseMember(pulseId) && canViewPeopleCost(pulseId);
+        allow read: if isPulseMember(pulseId) && canViewPeopleCost(pulseId);
+        allow create, update: if isPulseMember(pulseId) && canViewPeopleCost(pulseId)
+          && isPulseActive(pulseId);
+        allow delete: if isPulseMember(pulseId) && canViewPeopleCost(pulseId)
+          && (isPulseActive(pulseId) || pulseRole(pulseId) == 'owner');
       }
 
       // Costs (Costs-Spec.md §7). A cost has no capability of its own — it
@@ -308,13 +409,17 @@ service cloud.firestore {
         // can't re-parent a cost onto a task outside their scope.
         allow create: if isPulseMember(pulseId)
           && request.resource.data.featureId is string
+          && isPulseActive(pulseId)
           && (callerEditScope(pulseId) == 'all'
               || (callerEditScope(pulseId) == 'lead' && leadsFeature(pulseId, request.resource.data.featureId)));
         allow update: if isPulseMember(pulseId)
           && request.resource.data.featureId == resource.data.featureId
+          && isPulseActive(pulseId)
           && (callerEditScope(pulseId) == 'all'
               || (callerEditScope(pulseId) == 'lead' && leadsFeature(pulseId, resource.data.featureId)));
+        // Owner exemption on delete only — see canDeleteContent().
         allow delete: if isPulseMember(pulseId)
+          && (isPulseActive(pulseId) || pulseRole(pulseId) == 'owner')
           && (callerEditScope(pulseId) == 'all'
               || (callerEditScope(pulseId) == 'lead' && leadsFeature(pulseId, resource.data.featureId)));
       }

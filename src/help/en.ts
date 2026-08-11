@@ -103,7 +103,7 @@ export const help: HelpDoc = {
       title: "Working together",
       body:
         "Share a Pulse with a link, and everyone sees changes as they happen.",
-      keywords: ["invite", "share", "permission", "role", "viewer", "editor", "owner", "comment", "mention", "history", "who changed"],
+      keywords: ["invite", "share", "permission", "role", "viewer", "editor", "owner", "comment", "mention", "history", "who changed", "hide", "archive", "read-only", "finished", "retire"],
       bullets: [
         { term: "Invite", text: "Create a link and send it. The role you pick is what joiners get." },
         { term: "Owner / Editor", text: "Owner manages people and settings; Editor changes everything else." },
@@ -112,6 +112,8 @@ export const help: HelpDoc = {
         { term: "Task Lead", text: "Edits just the tasks they lead, reads the rest." },
         { term: "Comments", text: "On any task, with @ to mention a person or link a task." },
         { term: "Activity", text: "A durable log of who changed what, and when." },
+        { term: "Hide", text: "Moves a Pulse off your own dashboard. Nobody else notices, and nothing else changes." },
+        { term: "Archive", text: "Owner only. Makes a finished Pulse read-only for everyone until an owner unarchives it. Nothing is deleted, and it doesn't free a plan slot." },
       ],
     },
     {
