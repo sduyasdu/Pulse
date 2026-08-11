@@ -5,6 +5,7 @@ import { joinPulseViaLink } from "@/services/firestore/joinLinks";
 import { logDirectActivity } from "@/domain/activityRecorder";
 import { roleMeta } from "@/domain/permissions";
 import { useT } from "@/i18n";
+import { Spinner } from "@/components/shared/Spinner";
 import type { PulseRole } from "@/types";
 
 // Roles a copy-link may grant — must match the invite allow-list the security
@@ -51,7 +52,7 @@ export function JoinPage() {
             <Link to="/" className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg" style={{ background: "#D85A28" }}>{t("join.goToDashboard")}</Link>
           </>
         ) : (
-          <span className="font-display text-sm text-yasdu-muted">{t("join.joining")}</span>
+          <Spinner size={24} label={t("join.joining")} />
         )}
       </div>
     </div>

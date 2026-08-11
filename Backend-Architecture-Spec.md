@@ -278,24 +278,28 @@ this doc's completeness:
 Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF3` and `Plans-Spec.md
 §4–§5, §8 PL8`. Summary:
 
-- **Owns:** `billing/{ownerUid} = { tier, status, currentPeriodEnd, seats?, source, updatedAt }`,
-  the **only** writer. `Pulse.billingOwnerUid` selects whose billing doc gates a Pulse.
+- **Owns:** `billing/{orgId} = { tier, status, currentPeriodEnd, seats?, source, updatedAt,
+  stripeCustomerId, stripeSubscriptionId, country, currency }`, the **only** writer. Keyed by
+  **Organization**, and **`orgId === workspaceId`** (Plans-Spec §1, PL6) — a Pulse's org is its
+  `workspaceId`, which selects whose billing doc gates the Pulse.
 - **Why server-side (mandatory):** the plan is a **hard security boundary** — a client-writable
   plan lets anyone self-upgrade to Pro. **No client interim for *writing* the plan exists**; until
   SF3 ships, absent doc ⇒ Free (Plans-Spec §4), i.e. paid tiers don't exist and the account-menu
   entry stays a stub (`AccountMenu.tsx:92`).
-- **Trigger:** HTTPS webhook (`onRequest`) the payment provider (Stripe/RevenueCat, PL8) calls on
-  subscription create/update/cancel/renew. **Verify the provider signature**, map to
-  `{ tier, status, currentPeriodEnd }`, write via Admin SDK.
+- **Trigger:** HTTPS webhook (`onRequest`) **Stripe** (PL8 — decided) calls on subscription
+  create/update/cancel/renew (and tax/invoice events, Plans-Spec §9). **Verify the Stripe
+  signature**, map to `{ tier, status, currentPeriodEnd }`, write via Admin SDK; resolve the org
+  from the Stripe Customer (`Workspace.stripeCustomerId` ↔ `orgId`).
 - **Idempotency:** recompute the doc from the event's *current* subscription state; ignore
   out-of-order/duplicate deliveries by event id / `updatedAt`. `minInstances: 1` so a cold start
   doesn't force a provider retry.
-- **Rules interaction:** `billing/{uid}` is `read: if self; write: if false`; rules `get()` it
-  (bypassing its read rule) to gate Pulse actions on `pulse.billingOwnerUid` — the
-  `entitlement ∧ capability` seam (Permissions-Spec §6.5, Plans-Spec §5).
-- **Dependencies:** SF11 (quota counters) pairs with it; ownership-transfer moving
-  `billingOwnerUid` (PL7) must not orphan entitlements.
-- **Acceptance:** every provider event lands as the correct `billing/{uid}` state within one call;
+- **Rules interaction:** `billing/{orgId}` is `read: if isOrgAdmin(orgId)` (an `owner` in that
+  workspace's `WorkspaceMember`)`; write: if false`; rules `get()` it (bypassing its read rule) to
+  gate Pulse actions on `pulse.workspaceId` — the `entitlement ∧ capability` seam
+  (Permissions-Spec §6.5, Plans-Spec §5).
+- **Dependencies:** SF11 (quota counters) pairs with it; ownership-transfer moving a Pulse's
+  `workspaceId` (PL7) must not orphan entitlements.
+- **Acceptance:** every provider event lands as the correct `billing/{orgId}` state within one call;
   replays/out-of-order deliveries never regress a newer state; an unsigned/invalid request is
   rejected and logged.
 
@@ -478,24 +482,22 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 
 #### SF11 — Entitlement / quota counters
 
-- **Owns/does:** maintain the collection counts Firestore rules **cannot** compute (rules can't
-  count a collection) so quota gates are cheap: e.g. `pulses` per billing owner, members per Pulse,
-  resources per Pulse (Plans-Spec §3.2), and **seat counts** for seat-based billing (feeds SF3's
-  `billing.seats`).
-- **Why server-side:** Plans-Spec §5/PL5 — "counts across a collection can't be done in rules." A
-  maintained counter lets a rule do `count < quota` in O(1). Fail-closed: if the counter lags high,
-  a create is wrongly blocked (annoying, safe); it never wrongly *allows* over-quota in a way that
-  grants entitlement (and the plan flag itself, the real boundary, is SF3).
-- **Trigger:** `onDocumentWritten` on the counted collections (pulses/pulseMembers/resources),
-  incrementing/decrementing a counter doc **inside a transaction that reconciles**, not a blind
-  increment (idempotency: guard with the event id or recompute from the collection on drift).
-- **Interim (fail-closed):** Plans-Spec PL5 recommends **client-guard only for v1** — the client
-  checks the count it already has in memory before allowing a create, and shows the upsell. Safe
-  because the client can only under-allow relative to what rules would enforce; a determined client
-  bypassing the guard is still bounded by the plan flag (SF3) for *feature* gates, though *quota*
-  numbers would need SF11's rule-level counter to be truly enforced.
-- **Rules interaction:** rules read the counter doc to enforce the quota at the point of growth
-  (Plans-Spec §5). Ships **with SF3** (both are the plan layer).
+- **Owns/does (PL5 = Option b, decided):** maintain the counters Firestore rules **cannot** compute
+  so quota gates are cheap: `workspace.pulseCount`, `workspace.collaboratorUids[]`, and
+  `pulse.resourceCount` (Plans-Spec §3.2/§5). **Not editor seats** — those are the owner-managed
+  `Workspace.editorUids[]` array, capped directly in rules (PL9 option B).
+- **Why server-side:** rules can't count a collection; a maintained counter lets a rule do
+  `count < quota` in O(1) via `get()`. Server-maintained only — a client-written counter could be
+  forged. Fail-closed on lag-high (wrongly blocks a create — annoying, safe), and the plan tier
+  itself (the real boundary) is SF3.
+- **Trigger:** `onDocumentWritten` on the counted collections (pulses / pulseMembers / resources),
+  updating the counter **in a transaction that reconciles** (recompute-from-source on drift; guard by
+  event id) rather than a blind increment. The `editorUids`/`collaboratorUids` sets are recomputed
+  from the org's pulseMembers so distinct-user counting stays correct.
+- **Async note:** the counter lags the write it counts, so a rapid burst can transiently allow **one**
+  over the limit; it converges and blocks steady-state — acceptable for a commercial quota.
+- **Rules interaction:** rules read the counter (+ tier cap from `billing/{ws}`) to gate growth
+  (Plans-Spec §5). Ships **with SF3 in Phase 3** — both are the plan layer.
 - **Dependencies:** SF3 (tier ⇒ quota numbers); ownership transfer (PL7) reassigns which owner's
   counters apply.
 - **Acceptance:** each counter equals the true collection count within one invocation of a
@@ -693,9 +695,9 @@ Each carries a **recommended default** so nothing blocks on it.
    deletion until ownership is transferred? *Recommend:* on account deletion, **delete** Pulses the
    user solely owns (they're the billing owner and no one else can own them) and cascade; surface a
    pre-deletion warning listing them. Confirm vs a transfer-first policy.
-8. **Quota enforcement depth (PL5).** Client-guard only (v1) vs rule-enforced counters (SF11)?
-   *Recommend:* **client-guard for v1**, add SF11 rule-level counters when quotas must be truly
-   enforceable (with SF3). Confirm the v1 client-guard is acceptable for the launch quotas.
+8. **Quota enforcement depth (PL5). → DECIDED: rule-enforced counters (SF11), Option b.**
+   SF11 maintains `workspace.pulseCount` / `editorUids[]` / `collaboratorUids[]` /
+   `pulse.resourceCount`; rules gate growth against them. Ships **with SF3 in Phase 3**.
 9. **Cost ceilings / alerting.** Set a monthly functions budget alert and per-function error-rate
    alerts. *Recommend:* budget alert on the whole project; hard alert on SF3 signature failures and
    any function error rate > 1%. Confirm thresholds with infra.

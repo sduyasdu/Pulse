@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 172 48" width="172" height="48" role="img" aria-label="Pulse">
+  <title>Pulse</title>
+  <defs><mask id="bk2"><rect x="0" y="0" width="48" height="48" fill="#fff"></rect><path fill="none" stroke="#000" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" d="M2,24 L17,24 L21,15 L27,33 L31,24 L46,24"></path></mask></defs><g mask="url(#bk2)"><circle cx="24" cy="24" r="21.5" fill="none" stroke="#000B1B" stroke-width="2.5"></circle><circle cx="24" cy="24" r="15.5" fill="#000B1B"></circle></g>
+  <text x="60" y="35.5" font-family="&#34;Space Grotesk&#34;, &#34;Trebuchet MS&#34;, ui-sans-serif, system-ui, sans-serif" font-size="38" font-weight="700" letter-spacing="-1.35" fill="#000B1B">Pulse</text>
+</svg>

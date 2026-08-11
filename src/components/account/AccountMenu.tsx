@@ -5,6 +5,7 @@ import { useI18nStore } from "@/stores/i18nStore";
 import { useT, LANG_ENDONYMS, SUPPORTED_LANGS, type Lang } from "@/i18n";
 import { Avatar } from "./Avatar";
 import { AccountDialog } from "./AccountDialog";
+import { BillingDialog } from "./BillingDialog";
 
 /** Avatar button in the dashboard toolbar. Clicking it opens the account menu
  * (My account, the language override, billing later), and "My account" opens
@@ -21,6 +22,7 @@ export function AccountMenu() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
+  const [billing, setBilling] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
 
   const name = userDoc?.displayName?.trim() || "";
@@ -89,7 +91,7 @@ export function AccountMenu() {
                 </div>
               )}
 
-              <MenuItem icon="credit_card" label={t("account.billing")} soon soonLabel={t("account.soon")} />
+              <MenuItem icon="credit_card" label={t("account.billing")} onClick={() => { setOpen(false); setBilling(true); }} />
             </div>
 
             <div className="border-t py-1" style={{ borderColor: "#F1F5F9" }}>
@@ -100,6 +102,7 @@ export function AccountMenu() {
       )}
 
       {account && <AccountDialog onClose={() => setAccount(false)} />}
+      {billing && <BillingDialog onClose={() => setBilling(false)} />}
     </div>
   );
 }

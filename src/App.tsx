@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { RequireAuth } from "@/routes/RequireAuth";
 import { ConfirmPopover } from "@/components/shared/ConfirmPopover";
+import { Spinner } from "@/components/shared/Spinner";
 import { installActivityRecorder } from "@/domain/activityRecorder";
 
 // Register the activity-log recorder as the undo engine's sink (Changelog-Spec).
@@ -20,7 +21,9 @@ const JoinPage = lazy(() => import("@/routes/JoinPage").then((m) => ({ default: 
 function RouteFallback() {
   return (
     <div className="flex h-screen w-full items-center justify-center" style={{ background: "#FDFCF8" }}>
-      <span className="font-display text-sm" style={{ color: "#6E7180" }}>Loading…</span>
+      {/* Not translated: this renders while a route chunk is still downloading,
+          which can precede the dictionary being ready. */}
+      <Spinner size={24} label="Loading…" color="#6E7180" />
     </div>
   );
 }

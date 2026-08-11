@@ -144,6 +144,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // everything (thin/short tasks) — see the collapsed feature-box body.
   const [hoverCard, setHoverCard] = useState<{ x: number; y: number; box: Feature } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  // True mid-drag when, in compact/Layout mode, the user tries to move a box
+  // vertically (blocked — the layout auto-packs Y). Drives a not-allowed cursor.
+  const [vertBlocked, setVertBlocked] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panArmed, setPanArmed] = useState(false);
   const [dragOverBoxId, setDragOverBoxId] = useState<string | null>(null);
@@ -407,7 +410,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   }, [handleWheel, handleGestureStart, handleGestureChange, handleGestureEnd]);
 
   // ---- box drag/resize ----
-  const dragRef = useRef<{ kind: DragKind; id: string; startX: number; startY: number; orig: Feature; dayWidth: number; viewZoom: number; lastWrite: number } | null>(null);
+  const dragRef = useRef<{ kind: DragKind; id: string; startX: number; startY: number; orig: Feature; dayWidth: number; viewZoom: number; lastWrite: number; xOnly?: boolean } | null>(null);
   const latestPatchRef = useRef<Partial<Feature> | null>(null);
 
   const fmtDate = useCallback(
@@ -426,7 +429,17 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const deltaDays = Math.round(dx / d.dayWidth);
       let patch: Partial<Feature> = {};
 
-      if (d.kind === "move") {
+      if (d.kind === "move" && d.xOnly) {
+        // Compact/Layout mode: dates only. Vertical drag is ignored (the layout
+        // auto-packs Y); surface that with a not-allowed cursor + hint when the
+        // user tries to move up/down.
+        const nx = d.orig.x + deltaDays;
+        const span = `${fmtDate(nx)} → ${fmtDate(nx + d.orig.duration)}`;
+        const tryingVertical = Math.abs(dy) > graph.stepPx;
+        setVertBlocked(tryingVertical);
+        patch = { x: nx };
+        setDimHint({ x: e.clientX, y: e.clientY, text: tryingVertical ? `${span} · ↕ turn off Layout to move rows` : `${span} · ⟷ dates only` });
+      } else if (d.kind === "move") {
         const nx = d.orig.x + deltaDays;
         const ny = Math.max(6, d.orig.y + dy);
         const span = `${fmtDate(nx)} → ${fmtDate(nx + d.orig.duration)}`;
@@ -504,13 +517,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     dragRef.current = null;
     latestPatchRef.current = null;
     setDragId(null);
+    setVertBlocked(false);
     setDimHint(null);
     setDragOverlay(null);
     window.removeEventListener("pointermove", handleDragMove);
     window.removeEventListener("pointerup", handleDragUp);
   }, [handleDragMove, patchFeature]);
 
-  const startDrag = (kind: DragKind, box: Feature, e: React.PointerEvent) => {
+  const startDrag = (kind: DragKind, box: Feature, e: React.PointerEvent, xOnly = false) => {
     // Selection must happen for everyone (viewers included) and must stop the
     // event before it bubbles to the canvas's deselect handler — do both first,
     // then gate the actual drag. A viewer or a locked/done task can be selected
@@ -519,7 +533,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     onSelect(box.id);
     if (!canEditFeature(box) || box.status === "done") return;
     setDragId(box.id);
-    dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
+    // `xOnly` = compact/Layout mode: the vertical layout is auto-packed, so a
+    // move may only change dates (x); vertical reposition / epic-reassign are
+    // blocked (see handleDragMove).
+    dragRef.current = { kind, id: box.id, startX: e.clientX, startY: e.clientY, orig: box, dayWidth, viewZoom, lastWrite: performance.now(), xOnly };
     window.addEventListener("pointermove", handleDragMove);
     window.addEventListener("pointerup", handleDragUp);
   };
@@ -528,15 +545,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // selects it (opens the details panel), and a drag past a small threshold
   // moves it. On mouse, fall back to the normal press-to-select/drag.
   const startBoxInteraction = (box: Feature, e: React.PointerEvent) => {
-    // In compact-filter mode the layout is view-only and repacks on every
-    // change, so a drag would fight the reflow — allow selection only.
-    if (compactFilterActive) {
-      e.stopPropagation();
-      onSelect(box.id);
-      return;
-    }
+    // In compact/Layout mode the vertical layout is auto-packed, so a move may
+    // only change dates (x) — vertical reposition/epic-reassign fight the reflow
+    // and are blocked with feedback (handleDragMove). Resize handles work as
+    // normal (they call startDrag directly). Horizontal-only when compact.
+    const xOnly = compactFilterActive;
     if (!coarse) {
-      startDrag("move", box, e);
+      startDrag("move", box, e, xOnly);
       return;
     }
     e.stopPropagation();
@@ -560,7 +575,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       if (canEditFeature(box) && box.status !== "done") {
         onSelect(box.id);
         setDragId(box.id);
-        dragRef.current = { kind: "move", id: box.id, startX, startY, orig: box, dayWidth, viewZoom, lastWrite: performance.now() };
+        dragRef.current = { kind: "move", id: box.id, startX, startY, orig: box, dayWidth, viewZoom, lastWrite: performance.now(), xOnly: compactFilterActive };
         window.addEventListener("pointermove", handleDragMove);
         window.addEventListener("pointerup", handleDragUp);
       }
@@ -819,36 +834,30 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               );
             })}
 
-            {/* Delay lines */}
+            {/* Baseline "ghost": where each task was planned, drawn on the box's
+                OWN row (behind the box) so a slip reads as a left/right shift.
+                The delay figure rides on the box as a badge (rendered after the
+                boxes, below) — nothing is drawn in the gap between rows, which is
+                what used to make ownership ambiguous and overlap neighbours. */}
             {showDelays &&
               displayFeatures
                 .filter((b) => b.plannedX != null && b.plannedDuration != null)
                 .map((b) => {
                   const pStart = b.plannedX as number;
                   const pEnd = pStart + (b.plannedDuration as number);
-                  const aStart = b.x;
-                  const aEnd = b.x + b.duration;
-                  const planLeft = xForDay(pStart);
-                  const planW = Math.max(2, (pEnd - pStart) * dayWidth);
-                  const boxBottom = b.y + (epicsShrunk ? 26 : boxHeight(b, graph));
-                  const lineY = boxBottom + 10;
-                  const dStart = aStart - pStart;
-                  const dEnd = aEnd - pEnd;
-                  const startColor = dStart > 0 ? "#E5484D" : dStart < 0 ? "#0F6B5C" : "#64748B";
-                  const endColor = dEnd > 0 ? "#E5484D" : "#0F6B5C";
-                  const aStartX = xForDay(aStart);
-                  const aEndX = xForDay(aEnd);
+                  const dStart = b.x - pStart;
+                  const dEnd = b.x + b.duration - pEnd;
+                  if (dStart === 0 && dEnd === 0) return null; // no slip → no ghost
+                  const ghostLeft = xForDay(pStart);
+                  const ghostW = Math.max(3, (pEnd - pStart) * dayWidth);
+                  const h = epicsShrunk ? 26 : boxHeight(b, graph);
                   return (
-                    <div key={`dl${b.id}`} style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 4 }}>
-                      <div style={{ position: "absolute", left: planLeft, top: lineY - 1.5, width: planW, height: 3, background: "repeating-linear-gradient(90deg,#94A3B8 0,#94A3B8 5px,transparent 5px,transparent 9px)" }} />
-                      <span className="mono" style={{ position: "absolute", left: planLeft + 3, top: lineY + 4, fontSize: 8, color: "#64748B", whiteSpace: "nowrap" }}>plan</span>
-                      <div style={{ position: "absolute", left: planLeft - 1, top: lineY - 6, width: 2, height: 12, background: "#94A3B8" }} />
-                      <div style={{ position: "absolute", left: planLeft + planW - 1, top: lineY - 6, width: 2, height: 12, background: "#94A3B8" }} />
-                      <div style={{ position: "absolute", left: Math.min(planLeft, aStartX), top: lineY - 6, width: Math.abs(aStartX - planLeft), height: 0, borderTop: `2px dotted ${startColor}` }} />
-                      <div style={{ position: "absolute", left: Math.min(planLeft + planW, aEndX), top: lineY - 6, width: Math.abs(aEndX - (planLeft + planW)), height: 0, borderTop: `2px dotted ${endColor}` }} />
-                      {dStart !== 0 && <span className="mono" style={{ position: "absolute", left: Math.min(planLeft, aStartX) + 2, top: lineY - 20, fontSize: 9, fontWeight: 700, color: startColor, whiteSpace: "nowrap", background: "rgba(255,255,255,0.85)", padding: "0 3px", borderRadius: 2 }}>start {dStart > 0 ? `+${dStart}d` : `${dStart}d`}</span>}
-                      {dEnd !== 0 && <span className="mono" style={{ position: "absolute", left: Math.min(planLeft + planW, aEndX) + 2, top: lineY - 20, fontSize: 9, fontWeight: 700, color: endColor, whiteSpace: "nowrap", background: "rgba(255,255,255,0.85)", padding: "0 3px", borderRadius: 2 }}>end {dEnd > 0 ? `+${dEnd}d` : `${dEnd}d`}</span>}
-                      {dStart > 0 && dEnd < dStart && <span className="mono" style={{ position: "absolute", left: aEndX + 4, top: lineY - 6, fontSize: 8, fontWeight: 700, color: "#0F6B5C", whiteSpace: "nowrap" }}>▲ {dStart - dEnd}d recovered</span>}
+                    <div
+                      key={`ghost${b.id}`}
+                      title={`Planned ${fmtDate(pStart)} → ${fmtDate(pEnd)}`}
+                      style={{ position: "absolute", left: ghostLeft, top: b.y, width: ghostW, height: h, borderRadius: 8, border: "1.5px dashed #AEB6C2", background: "rgba(148,163,184,0.10)", zIndex: 3, pointerEvents: "none" }}
+                    >
+                      <span className="mono" style={{ position: "absolute", top: 1, left: 4, fontSize: 8, color: "#8B94A3", letterSpacing: 0.3 }}>plan</span>
                     </div>
                   );
                 })}
@@ -880,6 +889,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               // md/allocation figures are always reachable. Expanded boxes are
               // excluded — they already list their subtasks and assignees inline.
               const showHover = !expanded;
+              // Schedule-delay chips (shown inside the box's top-right when the
+              // delays toggle is on and there's a baseline that has slipped).
+              const hasBaseline = box.plannedX != null && box.plannedDuration != null;
+              const dStart = hasBaseline ? box.x - (box.plannedX as number) : 0;
+              const dEnd = hasBaseline ? box.x + box.duration - ((box.plannedX as number) + (box.plannedDuration as number)) : 0;
+              const showDelayChips = showDelays && hasBaseline && (dStart !== 0 || dEnd !== 0);
+              const fmtD = (n: number) => (n > 0 ? `+${n}d` : `${n}d`);
+              const deltaColor = (n: number) => (n > 0 ? "#E5484D" : n < 0 ? "#0F6B5C" : "#94A3B8");
 
               return (
                 <div
@@ -913,7 +930,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     border: `2px ${unassigned ? "dashed" : "solid"} ${dragOver ? "#EE7240" : meta.border}`,
                     borderRadius: 8,
                     boxShadow: dragOver ? "0 0 0 3px rgba(34,211,238,0.35)" : selected ? "0 0 0 2px #EE7240, 0 6px 14px rgba(15,23,42,.15)" : "0 1px 3px rgba(15,23,42,.08)",
-                    cursor: dragId === box.id ? "grabbing" : "grab",
+                    cursor: dragId === box.id ? (vertBlocked ? "not-allowed" : "grabbing") : "grab",
                     zIndex: dragId === box.id ? 30 : selected ? 20 : 10,
                     userSelect: "none",
                     overflow: "hidden",
@@ -932,6 +949,12 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       {resourceById[filterResource]?.initials ?? filterResource}
                     </div>
                   )}
+                  {showDelayChips && (
+                    <div className="mono" style={{ position: "absolute", top: 2, right: 2, display: "flex", gap: 2, zIndex: 3, pointerEvents: "none" }}>
+                      <span title={`Started ${fmtD(dStart)} vs plan`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dStart), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>S{fmtD(dStart)}</span>
+                      <span title={`Ended ${fmtD(dEnd)} vs plan`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dEnd), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>E{fmtD(dEnd)}</span>
+                    </div>
+                  )}
                   {unassigned && <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.18) 0 6px, transparent 6px 12px)", pointerEvents: "none" }} />}
                   {box.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, background: box.labelColor, pointerEvents: "none" }} />}
                   <div className="flex items-center justify-between px-2" style={{ height: 28, borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
@@ -945,7 +968,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       {box.labelColor && <span style={{ width: 10, height: 10, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
                       <span className="text-xs font-semibold truncate" title={box.title} style={{ color: "#1F2330" }}>{box.title}</span>
                     </div>
-                    {box.plannedX != null && <Icon name="keep" size={12} title="Baseline plan set" className="flex-shrink-0" />}
+                    {box.plannedX != null && !showDelayChips && <Icon name="keep" size={12} title="Baseline plan set" className="flex-shrink-0" />}
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{box.attachments!.length}</span>}
                     {box.ai && <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} className="flex-shrink-0" />}
                     {box.status === "done" && <Icon name="lock" size={13} title="Done — locked. Change its status to edit." className="flex-shrink-0" />}

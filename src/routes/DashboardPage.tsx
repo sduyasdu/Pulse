@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
+import { PulseLockup } from "@/components/shared/Logo";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
@@ -8,6 +9,8 @@ import { confirmAt } from "@/stores/confirmStore";
 import type { MyPulseIndexEntry } from "@/types";
 import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
+import { PlanBanner } from "@/components/shared/PlanBanner";
+import { Spinner } from "@/components/shared/Spinner";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { CreatePulseDialog } from "@/components/dashboard/CreatePulseDialog";
@@ -125,7 +128,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
-        <span className="font-display text-base font-semibold text-white">Pulse</span>
+        <PulseLockup variant="dark" size={16} />
         <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         <div className="flex-1" />
         {/* Same help as inside a Pulse — arguably more useful here, where a
@@ -143,6 +146,10 @@ export function DashboardPage() {
         </button>
         <AccountMenu />
       </header>
+
+      {/* Delinquency notice (Plans-Spec §5.1). Renders nothing unless the
+          signed-in user owns an org whose payment has failed. */}
+      <PlanBanner />
 
       {helpOpen && <HelpDrawer onClose={() => setHelpOpen(false)} placement={isMobile ? "fullScreen" : "fixed"} />}
 
@@ -174,7 +181,7 @@ export function DashboardPage() {
         </div>
 
         {pulses === null ? (
-          <p className="text-sm text-yasdu-muted">{t("common.loading")}</p>
+          <Spinner size={22} label={t("common.loading")} className="py-10" />
         ) : noResults ? (
           <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
             <p className="text-sm text-yasdu-muted">{t("dashboard.noMatch", { query: query.trim() })}</p>

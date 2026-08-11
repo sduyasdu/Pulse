@@ -138,6 +138,21 @@ service cloud.firestore {
       }
     }
 
+    // ---- billing / plan (Plans-Spec §4) — server-authoritative ----
+    // orgId === workspaceId (PL6). Read by org admins (workspace owners) for the
+    // billing UI; NEVER client-writable — the tier is set only by the Stripe
+    // webhook (SF3) via the Admin SDK, which bypasses these rules. Feature-gating
+    // rules will get() this doc (get() bypasses the read rule).
+    //
+    // NOTE: no entitlement *enforcement* gates ship here yet. Enforcing
+    // "absent doc ⇒ Free" today would revoke already-shipped features (scoped
+    // roles) for everyone, since no billing doc exists. Gating lands with real
+    // billing data + frozen PL2 (Billing-and-Backend-Build-Plan Phase 3).
+    match /billing/{orgId} {
+      allow read: if isWorkspaceMember(orgId) && workspaceRole(orgId) == 'owner';
+      allow write: if false;
+    }
+
     // ---- invite discovery index (pre-membership, keyed by email) ----
     match /inviteIndex/{emailId} {
       match /pending/{pulseId} {

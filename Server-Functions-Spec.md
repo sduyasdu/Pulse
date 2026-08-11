@@ -2,6 +2,10 @@
 
 Status: **Registry — open** · Owner: product + eng · Related: `Permissions-Spec.md`, `Plans-Spec.md`, `Collaboration-Spec.md`, `Changelog-Spec.md`
 
+**Shipped so far:** SF1 (feature denorm), the SF6–SF9 delete cascades (architecture-spec
+numbering — see the note in §2), and SF3 (billing). All deployed to `us-central1`. Everything
+else in the registry below is still deferred.
+
 ## 0. Purpose
 
 Pulse ships **fully serverless today**: a React client talking directly to Firestore
@@ -37,13 +41,23 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 
 | ID | Function | Owns | Trigger | Referenced by | Status |
 |---|---|---|---|---|---|
-| **SF1** | Feature denormalization maintainer | `Feature.assignedUids`, `Feature.leadUid` | write of features / resources / subtasks | `Permissions-Spec.md` §4.2, §7, P2/P12 | Deferred (client-maintained interim shipping) |
+| **SF1** | Feature denormalization maintainer | `Feature.assignedUids`, `Feature.leadUid` | write of features / resources / subtasks | `Permissions-Spec.md` §4.2, §7, P2/P12 | **Shipped & deployed** (`onFeatureWriteDenorm`, `onResourceWriteFanout`; client reconcile removed) |
 | **SF2** | Assignment & comment notifications | server-authored `notifications/*` (dedupe, batching, email later) | write of features (assignment) / comments | `Collaboration-Spec.md` §3.6 | Deferred (client-created notifications interim) |
-| **SF3** | Billing / plan sync | `billing/{uid}` (tier, status, period) — the **only** writer | payment-provider webhook (HTTPS) | `Plans-Spec.md` §4, §8 (PL8) | Deferred (no billing yet; account menu stub) |
+| **SF3** | Billing / plan sync | `billing/{orgId}` (tier, status, period, Stripe ids) — the **only** writer | **Stripe** webhook (HTTPS) + two callables | `Plans-Spec.md` §4, §8 (PL8 decided), §9 | **Shipped & deployed** (`stripeWebhook`, `createCheckoutSession`, `createPortalSession`; quota *enforcement* still pending — see §SF3) |
 | **SF4** | Activity-log authoring (authoritative) | `pulses/{p}/activity/*` (server-written audit entries) | write of features / epics / resources / pulseMembers / pulse doc | `Changelog-Spec.md` §4.3, §4.5, CL4 | Deferred (client-emitted activity-log interim) |
 | **SF5** | Storage OAuth broker | the provider refresh token (Secret Manager / `storageSecrets/{pulseId}`) + `storage/connection.status` — the **only** reader/writer of credentials | HTTPS (OAuth redirect, disconnect, token refresh) | `Storage-Spec.md` §4 | Deferred (**no client interim possible**) |
 | **SF6** | Storage folder-tree reconciler | `pulses/{p}/storageNodes/*` and the remote folder tree | write of features / epics / pulse doc; `storageJobs/*` | `Storage-Spec.md` §5, §6 | Deferred (**no client interim possible**) |
 | **SF7** | Attachment upload/download broker | issues per-file upload sessions; membership-checked downloads | HTTPS (callable) | `Storage-Spec.md` §7, §10 | Deferred (**no client interim possible**) |
+
+> ⚠️ **Numbering conflict — unresolved.** This registry numbers the Storage functions
+> **SF5–SF7**, but `Backend-Architecture-Spec.md` §B numbers **SF6** Pulse-cascade-delete,
+> **SF7** membership-removal, **SF8** resource-delete, **SF9** epic-delete and **SF11**
+> quota counters. **The deployed code follows the architecture spec's numbering** —
+> `functions/src/cascade.ts` exports SF6–SF9 as the delete cascades, and they are live in
+> `us-central1`. So SF6/SF7 mean two different things across the two documents. The four
+> cascade functions are deliberately **not** added to the table above, because doing so
+> would collide with the Storage rows. Pick one scheme and renumber both docs (plus the
+> code comments) before adding more entries.
 
 ---
 
@@ -110,29 +124,65 @@ share the features-write trigger.
 
 ### SF3 — Billing / plan sync
 
-**Owns:** the `billing/{ownerUid}` doc (`{ tier, status, currentPeriodEnd, seats?,
-source, updatedAt }`) that `Plans-Spec.md` reads to gate features/quotas. This is the
-**only writer** of that doc.
+**Owns:** the `billing/{orgId}` doc (`{ tier, status, currentPeriodEnd, seats?, source,
+updatedAt, stripeCustomerId, stripeSubscriptionId, country, currency }`) that
+`Plans-Spec.md` reads to gate features/quotas. Keyed by **Organization** (the billing
+entity — Plans-Spec §1), not by user. This is the **only writer** of that doc.
 
 **Why server-side (mandatory, not just hardening):** the plan is a **security boundary** —
-if the client could write it, any user would set themselves to Pro. So unlike SF1/SF2,
-there is **no acceptable client interim** for *writing* the plan. Until SF3 ships,
-everyone is effectively **Free** (absent `billing` doc = Free, per Plans-Spec §4); paid
-tiers simply don't exist yet. The account-menu "Billing & payment" entry stays a stub
-until then.
+if the client could write it, any user would set themselves to Business. So unlike SF1/SF2,
+there is **no acceptable client interim** for *writing* the plan.
 
-**Trigger:** an HTTPS webhook endpoint the payment provider (Stripe / RevenueCat / …,
-PL8) calls on subscription create/update/cancel/renew. Verify the provider signature,
-map the event to `{ tier, status, currentPeriodEnd }`, and write `billing/{uid}` via the
-Admin SDK (bypasses rules). Idempotent: recompute the doc from the event's current
-subscription state; ignore out-of-order/duplicate deliveries by `updatedAt`/event id.
+**Status — shipped and deployed.** `functions/src/billing.ts` exports three functions:
+`stripeWebhook` (this spec), plus `createCheckoutSession` / `createPortalSession`, which
+mint hosted Stripe URLs so card details never touch the app (Plans-Spec §6). Neither
+callable writes `billing/{orgId}` — a subscription change always arrives back through the
+webhook, keeping it the single writer. The account-menu "Billing & payment" entry is now
+the real screen (`BillingDialog.tsx`), not a stub.
 
-**Rules interaction:** `billing/{uid}` is `read: if self; write: if false`; security
-rules `get()` it (bypassing the read rule) to gate Pulse actions on the Pulse's
-`billingOwnerUid`. See `Plans-Spec.md` §4–§5.
+**What is NOT yet enforced.** Paid tiers exist and resolve correctly, but the quota gates
+are **client-side only**: `firestore.rules` still has no `editorUids` cap and no
+Pulse/collaborator/resource limits, and **SF11** counters don't exist. Until both land, a
+determined client can exceed a *commercial* limit — not a security boundary, since the
+plan doc itself remains `write: if false`.
 
-**Related future functions (not yet SF-numbered):** collection-count quota counters
-(Plans-Spec PL5) if quotas need server-maintained counts.
+**Trigger:** an HTTPS webhook endpoint **Stripe** (PL8 — decided) calls on subscription
+create/update/cancel/renew (and tax/invoice events, Plans-Spec §9). Verify the Stripe
+signature **over the raw body**, then **refetch the subscription from Stripe** and
+recompute `{ tier, status, currentPeriodEnd, seats, … }` from its current state before
+writing via the Admin SDK (bypasses rules). Recomputing rather than reading the event
+payload is what makes at-least-once and out-of-order delivery converge; on top of that a
+replayed `event.id` is a no-op and a strictly older `event.created` is dropped
+(`stripeEventId` / `stripeEventCreated` on the doc).
+
+The org is resolved most-authoritative-first: subscription metadata → Customer metadata →
+reverse lookup on `Workspace.stripeCustomerId` (**`orgId === workspaceId`**, PL6). Checkout
+stamps `workspaceId` on all three, so the first path normally hits; the reverse lookup is
+the self-heal for subscriptions created straight from the Stripe dashboard.
+
+**Two 2025 Stripe API moves this depends on** (verified against `stripe@22`, not memory —
+both silently read `undefined` otherwise): `current_period_end` and seat `quantity` live on
+the subscription **item**, not the subscription; and `Invoice.subscription` is now
+`invoice.parent.subscription_details.subscription`.
+
+**PL4 downgrade (Plans-Spec §5.1).** When an org *flips off* a paid plan, SF3 demotes every
+editor/owner across the org's Pulses except `workspace.ownerId` to full viewer and collapses
+`editorUids` to `[ownerId]`. Nothing is deleted; collaborators are untouched. `past_due`
+does **not** demote — it rides Stripe's dunning, and the client grants a matching **15-day**
+grace window (`DELINQUENCY_GRACE_DAYS`) measured from `pastDueSince`, which SF3 stamps on the
+first failed charge and carries across retries. Both sides of the flip test the same
+"still holds its seats" predicate; testing only active/trialing on the *previous* state
+would mean `active → past_due → canceled` — the usual involuntary-churn path — never demoted.
+
+**Rules interaction:** `billing/{orgId}` is `read: if isOrgAdmin(orgId); write: if false`
+(admin = an `owner` in that workspace's `WorkspaceMember`); security rules `get()` it
+(bypassing the read rule) to gate Pulse actions on the Pulse's `workspaceId`. See
+`Plans-Spec.md` §4–§5.
+
+**Related future functions:** **SF11** quota counters (`workspace.pulseCount`,
+`collaboratorUids[]`, `pulse.resourceCount`) — PL5 chose maintained counters, and the rules
+gates above depend on them. Numbered in `Backend-Architecture-Spec.md` §B, not in the
+registry here (see the numbering note under §2).
 
 ### SF4 — Change-log authoring (authoritative)
 

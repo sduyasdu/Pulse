@@ -8,6 +8,7 @@ import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { useT } from "@/i18n";
 import { MultiSelectFilter } from "@/components/shared/MultiSelectFilter";
 import { Icon } from "@/components/shared/Icon";
+import { PulseLockup } from "@/components/shared/Logo";
 
 interface ToolbarProps {
   pulseName: string;
@@ -125,7 +126,7 @@ export function Toolbar({
     <div className="flex flex-col flex-shrink-0 border-b" style={{ background: "#123359", borderColor: "#24406B" }}>
       <div className="flex items-center gap-3 px-4" style={{ height: 34, borderBottom: "1px solid #24406B" }}>
         <Link to="/" className="flex items-center gap-2" title={t("toolbar.backToDashboard")}>
-          <span className="font-display text-white" style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.02em" }}>Pulse</span>
+          <PulseLockup variant="dark" size={15} />
           <span className="mono" style={{ fontSize: 8, color: "#EE7240", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>{t("auth.by")}</span>
         </Link>
         <div className="flex items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>

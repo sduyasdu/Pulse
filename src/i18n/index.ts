@@ -16,7 +16,14 @@ export type TFn = (key: TranslationKey, params?: TParams) => string;
  */
 export function useT(): TFn {
   const lang = useI18nStore((s) => s.lang);
-  return useMemo<TFn>(() => (key, params) => translate(lang, key, params), [lang]);
+  // Re-memo when the active dictionary finishes loading (non-English dicts are
+  // dynamically imported), so strings swap from the English fallback to the real
+  // translation without a manual refresh.
+  const dictVersion = useI18nStore((s) => s.dictVersion);
+  return useMemo<TFn>(() => {
+    void dictVersion; // dep only: re-create `t` when a lazy dictionary loads
+    return (key, params) => translate(lang, key, params);
+  }, [lang, dictVersion]);
 }
 
 /**
