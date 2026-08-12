@@ -179,7 +179,6 @@ export function DashboardPage() {
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
         <PulseLockup variant="dark" size={16} />
-        <span className="mono text-[9px] uppercase tracking-wide text-yasdu-primary">{t("auth.by")}</span>
         <div className="flex-1" />
         {/* Same help as inside a Pulse — arguably more useful here, where a
             newcomer hasn't opened one yet. Full-screen on mobile, a pinned
