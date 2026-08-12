@@ -163,6 +163,7 @@ export const pt: Dict = {
   "account.menuAria": "Menu da conta",
   "account.myAccount": "Minha conta",
   "account.billing": "Faturamento e pagamento",
+  "account.about": "Sobre",
   "account.soon": "Em breve",
 
   "plan.pastDue": "Falha no pagamento. Atualize o seu cartão em {days} dias para manter o {tier}.",
@@ -512,4 +513,11 @@ export const pt: Dict = {
   "share.copyTitle": "Copiar um link para este Pulse",
   "share.pulseTitle": "Entre neste Pulse",
   "share.text": "Dê uma olhada em “{name}” no Pulse",
+
+  // ── sobre ───────────────────────────────────────────────────────────────────
+  "about.title": "Sobre o Pulse",
+  "about.aYasduProduct": "Pulse é um produto da Yasdu.",
+  "about.version": "{commit} · compilado em {date}",
+  "about.visitYasdu": "Visitar yasdu.com",
+  "about.copyright": "© {year} {entity}",
 };

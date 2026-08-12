@@ -6,6 +6,7 @@ import { useT, LANG_ENDONYMS, SUPPORTED_LANGS, type Lang } from "@/i18n";
 import { Avatar } from "./Avatar";
 import { AccountDialog } from "./AccountDialog";
 import { BillingDialog } from "./BillingDialog";
+import { AboutDialog } from "./AboutDialog";
 
 /** Avatar button in the dashboard toolbar. Clicking it opens the account menu
  * (My account, the language override, billing later), and "My account" opens
@@ -23,6 +24,7 @@ export function AccountMenu() {
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
   const [billing, setBilling] = useState(false);
+  const [about, setAbout] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
 
   const name = userDoc?.displayName?.trim() || "";
@@ -92,6 +94,9 @@ export function AccountMenu() {
               )}
 
               <MenuItem icon="credit_card" label={t("account.billing")} onClick={() => { setOpen(false); setBilling(true); }} />
+              {/* Last of the options; Sign out keeps the bottom of the menu
+                  below the divider (About-Spec AB1). */}
+              <MenuItem icon="info" label={t("account.about")} onClick={() => { setOpen(false); setAbout(true); }} />
             </div>
 
             <div className="border-t py-1" style={{ borderColor: "#F1F5F9" }}>
@@ -103,6 +108,7 @@ export function AccountMenu() {
 
       {account && <AccountDialog onClose={() => setAccount(false)} />}
       {billing && <BillingDialog onClose={() => setBilling(false)} />}
+      {about && <AboutDialog onClose={() => setAbout(false)} />}
     </div>
   );
 }

@@ -2,10 +2,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { execSync } from "node:child_process";
 import path from "node:path";
+
+/** Short SHA of the build's commit — what the About box reports (About-Spec §4,
+ * AB7). package.json's version has sat at 0.0.0 forever, so the commit is the
+ * only field that actually identifies a build in a repo that deploys from main
+ * several times a day. Falls back for builds outside a git checkout. */
+function gitShortSha(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_COMMIT__: JSON.stringify(gitShortSha()),
+    // Build date, not the viewer's clock: the copyright year has to state when
+    // the artefact was produced (AB8).
+    __APP_BUILT__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

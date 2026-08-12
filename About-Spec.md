@@ -1,7 +1,7 @@
 # Pulse — About Spec
 
-Status: **Ready to build — AB1–AB9 resolved; AB10 (legal entity name) blocks the
-copyright string and needs a one-line answer from the owner.** · Owner: product + eng ·
+Status: **Built and shipped — AB1–AB10 all resolved.** ·
+Owner: product + eng ·
 Related: `Yasdu-Site-Pulse-Listing-Spec.md` (the Pulse↔Yasdu relationship as told to
 the public), `Help-Spec.md` (the other "what is this?" surface), `Plans-Spec.md`
 (the billing entry that About sits beside in the same menu)
@@ -130,16 +130,18 @@ and a fallback for `npm run dev` outside a git checkout.
 
 ## 5. The copyright line
 
-Format:
+As shipped, on two lines:
 
-> © {year} {entity}. Pulse is a Yasdu product.
+> Pulse is a Yasdu product.
+> © 2026 Yasdu Innovación y Servicios SA de CV · México
 
 - **`{year}` is the build year, stamped by `__APP_BUILT__` — not
   `new Date().getFullYear()` (AB8).** Reading the year off the viewer's clock
   asserts a copyright date from a machine whose clock may be wrong, or deliberately
   set to 2031. A build constant states when this artefact was actually produced.
-- **`{entity}` is unresolved — see AB10.** "Yasdu" is the brand; the notice should
-  name whatever legal entity owns the copyright. This spec does not guess it.
+- **`{entity}` is the registered company name plus its domicile (AB10)**, held as
+  the `LEGAL_ENTITY` constant in `AboutDialog.tsx` and interpolated into
+  `about.copyright`. Untranslated in all six locales.
 - **No "All rights reserved."** It is legally inert in every Berne signatory and
   has been since 2000; it adds a line of noise. Include it only if counsel asks.
 
@@ -209,8 +211,12 @@ so a locale can reorder it.
    was produced.
 9. **AB9 — Translating brand names. ✅ RESOLVED: never.** Matches the existing
    convention in `en.ts`.
-10. **AB10 — The legal entity in the copyright notice. ⛔ OPEN — blocks the
-    copyright string.** Is it "Yasdu", or a registered company name that differs
-    from the brand? Everything else in this spec can be built while this is
-    outstanding; the notice cannot be written without it, and it must not be
-    guessed.
+10. **AB10 — The legal entity in the copyright notice. ✅ RESOLVED:
+    "Yasdu Innovación y Servicios SA de CV · México".** The registered name
+    differs from the brand, which is exactly why this was not guessed. The
+    domicile rides along in the same string: a copyright notice naming a Mexican
+    company is more useful with the jurisdiction attached.
+    *Rejected: translating it, or splitting name and country into separate keys*
+    — a registered company name is a proper noun, and a legal notice that reads
+    differently in six languages is six notices (AB9). It lives as one constant,
+    `LEGAL_ENTITY` in `AboutDialog.tsx`, interpolated into `about.copyright`.

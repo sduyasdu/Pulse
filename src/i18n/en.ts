@@ -167,6 +167,7 @@ export const en = {
   "account.menuAria": "Account menu",
   "account.myAccount": "My account",
   "account.billing": "Billing & payment",
+  "account.about": "About",
   "account.soon": "Soon",
 
   // ── plan / billing notices (Plans-Spec §5.1) ──────────────────────────────
@@ -518,6 +519,13 @@ export const en = {
   "share.copyTitle": "Copy a link to this Pulse",
   "share.pulseTitle": "Join this Pulse",
   "share.text": "Take a look at “{name}” on Pulse",
+
+  // ── about ───────────────────────────────────────────────────────────────────
+  "about.title": "About Pulse",
+  "about.aYasduProduct": "Pulse is a Yasdu product.",
+  "about.version": "{commit} · built {date}",
+  "about.visitYasdu": "Visit yasdu.com",
+  "about.copyright": "© {year} {entity}",
 };
 
 /** The shape every other-language dictionary must match exactly. */
