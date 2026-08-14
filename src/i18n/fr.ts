@@ -447,6 +447,7 @@ export const fr: Dict = {
   "details.setPlanTitle": "Figer les dates actuelles comme plan (elles ne bougent pas au glisser)",
   "details.unsetPlanTitle": "Plan défini — cliquez pour effacer le plan figé",
   "details.planSetTitle": "Un plan de référence est défini pour cette tâche",
+  "details.noPlanSetTitle": "Aucun plan de référence défini pour cette tâche",
   "details.finished": "terminée :",
   "details.created": "créée :",
   "details.planned": "prévue :",

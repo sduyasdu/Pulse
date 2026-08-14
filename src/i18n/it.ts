@@ -447,6 +447,7 @@ export const it: Dict = {
   "details.setPlanTitle": "Congela le date attuali come piano (non si spostano al trascinamento)",
   "details.unsetPlanTitle": "Piano impostato — clicca per cancellare il piano congelato",
   "details.planSetTitle": "Questa attività ha un piano di riferimento impostato",
+  "details.noPlanSetTitle": "Nessun piano di riferimento impostato per questa attività",
   "details.finished": "completata:",
   "details.created": "creata:",
   "details.planned": "pianificata:",

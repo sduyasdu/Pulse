@@ -447,6 +447,7 @@ export const de: Dict = {
   "details.setPlanTitle": "Aktuelle Daten als Plan einfrieren (bewegen sich beim Ziehen nicht)",
   "details.unsetPlanTitle": "Plan gesetzt — klicken, um den eingefrorenen Plan zu löschen",
   "details.planSetTitle": "Für diese Aufgabe ist ein Referenzplan gesetzt",
+  "details.noPlanSetTitle": "Für diese Aufgabe ist kein Referenzplan gesetzt",
   "details.finished": "abgeschlossen:",
   "details.created": "erstellt:",
   "details.planned": "geplant:",

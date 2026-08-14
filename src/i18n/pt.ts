@@ -447,6 +447,7 @@ export const pt: Dict = {
   "details.setPlanTitle": "Congele as datas atuais como plano (não se movem ao arrastar)",
   "details.unsetPlanTitle": "Plano definido — clique para limpar o plano congelado",
   "details.planSetTitle": "Esta tarefa tem um plano de referência definido",
+  "details.noPlanSetTitle": "Esta tarefa não tem um plano de referência definido",
   "details.finished": "concluída:",
   "details.created": "criada:",
   "details.planned": "planejada:",

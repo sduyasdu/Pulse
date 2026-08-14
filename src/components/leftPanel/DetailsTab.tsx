@@ -103,7 +103,15 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
       feature.id,
       planSet ? { plannedX: null, plannedDuration: null } : { plannedX: feature.x, plannedDuration: feature.duration },
     );
-  const planTitle = planSet ? t("details.unsetPlanTitle") : t("details.setPlanTitle");
+  // Both plan controls stay visible on a locked task, so the tooltip has to
+  // describe the state rather than invite a click that won't be accepted.
+  const planTooltip = canEdit
+    ? planSet
+      ? t("details.unsetPlanTitle")
+      : t("details.setPlanTitle")
+    : planSet
+      ? t("details.planSetTitle")
+      : t("details.noPlanSetTitle");
 
   const todayISO = () => {
     const d = new Date();
@@ -136,21 +144,25 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>{t("details.taskDetails")}</span>
           {canEditProp && (
             <div className="flex items-center gap-1.5">
-              {/* Gated on canEdit, not canEditProp: freezing a baseline is a
-                  content edit, so a done/locked task shouldn't offer it — same
-                  rule the SCHEDULE & EFFORT control follows. */}
-              {canEdit && (
-                <button
-                  title={planTitle}
-                  aria-label={planTitle}
-                  aria-pressed={planSet}
-                  onClick={togglePlan}
-                  className="rounded"
-                  style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", ...(planSet ? PLAN_ON : PLAN_OFF) }}
-                >
-                  <Icon name="keep" size={13} />
-                </button>
-              )}
+              {/* Always rendered, disabled rather than hidden when the task is
+                  locked (status done). Whether a baseline exists is information
+                  a reader still wants; hiding the control removed the answer
+                  along with the ability to change it. Colours stay at full
+                  strength for that reason — `disabled` alone carries the
+                  not-actionable part, since index.css already gives disabled
+                  buttons a default cursor and excludes them from the hover
+                  scale/brightness. */}
+              <button
+                title={planTooltip}
+                aria-label={planTooltip}
+                aria-pressed={planSet}
+                disabled={!canEdit}
+                onClick={togglePlan}
+                className="rounded"
+                style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", ...(planSet ? PLAN_ON : PLAN_OFF) }}
+              >
+                <Icon name="keep" size={13} />
+              </button>
               <button
                 title={t("details.duplicateTask")}
                 onClick={onDuplicate}
@@ -408,21 +420,21 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             <label className="flex items-center gap-1 mono text-xs cursor-pointer" style={{ color: feature.useWeekends ? "#D85A28" : "#94A3B8" }} title="Count weekends as working days (urgent)">
               <input type="checkbox" disabled={!canEdit} checked={!!feature.useWeekends} onChange={(e) => void patchFeature(feature.id, { useWeekends: e.target.checked })} /> weekends
             </label>
-            {canEdit ? (
-              <button
-                onClick={togglePlan}
-                title={planTitle}
-                aria-pressed={planSet}
-                className="mono text-xs px-2 py-0.5 rounded"
-                style={planSet ? PLAN_ON : PLAN_OFF}
-              >
-                <Icon name="keep" size={13} /> {planSet ? t("details.planSet") : t("details.setPlan")}
-              </button>
-            ) : (
-              planSet && (
-                <span className="mono text-xs px-2 py-0.5 rounded" title={t("details.planSetTitle")} style={PLAN_ON}><Icon name="keep" size={12} /> {t("details.planSet")}</span>
-              )
-            )}
+            {/* Same rule as the header icon: always rendered, disabled rather
+                than swapped for a chip. It used to render a static chip when
+                locked, and only when a plan existed — so a locked task with no
+                baseline showed nothing at all, which reads as "no such feature"
+                rather than "not set". */}
+            <button
+              onClick={togglePlan}
+              title={planTooltip}
+              aria-pressed={planSet}
+              disabled={!canEdit}
+              className="mono text-xs px-2 py-0.5 rounded"
+              style={planSet ? PLAN_ON : PLAN_OFF}
+            >
+              <Icon name="keep" size={13} /> {planSet ? t("details.planSet") : t("details.setPlan")}
+            </button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">

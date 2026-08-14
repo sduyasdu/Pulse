@@ -447,6 +447,7 @@ export const es: Dict = {
   "details.setPlanTitle": "Congelá las fechas actuales como plan (no se mueven al arrastrar)",
   "details.unsetPlanTitle": "Plan fijado — clic para borrar el plan congelado",
   "details.planSetTitle": "Esta tarea tiene un plan de referencia fijado",
+  "details.noPlanSetTitle": "Esta tarea no tiene un plan de referencia fijado",
   "details.finished": "finalizada:",
   "details.created": "creada:",
   "details.planned": "planificada:",

@@ -453,6 +453,7 @@ export const en = {
   "details.setPlanTitle": "Freeze the current dates as the plan (won't move when you drag)",
   "details.unsetPlanTitle": "Baseline set — click to clear the frozen plan",
   "details.planSetTitle": "A baseline plan has been set for this task",
+  "details.noPlanSetTitle": "No baseline plan set for this task",
   "details.finished": "finished:",
   "details.created": "created:",
   "details.planned": "planned:",
