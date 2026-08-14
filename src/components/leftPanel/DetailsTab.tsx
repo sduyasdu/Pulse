@@ -36,6 +36,14 @@ interface DetailsTabProps {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
+/** Baseline-plan state colours, shared by the header icon and the SCHEDULE &
+ * EFFORT control so "set" reads identically in both. Orange-on-ink is the
+ * toolbar's active-button palette (`Toolbar.tsx` — `#EE7240` / `#0A1428`);
+ * `#0A1428` rather than white because small text on this orange needs the
+ * contrast. Grey matches the neighbouring duplicate button. */
+const PLAN_ON = { background: "#EE7240", color: "#0A1428" } as const;
+const PLAN_OFF = { background: "#F1F5F9", color: "#64748B" } as const;
+
 export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate, hideComments }: DetailsTabProps) {
   // A "done" task is locked: every content field is read-only. Only the status
   // (so it can be reopened) and the duplicate/delete actions stay on the real
@@ -83,6 +91,20 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
     if (duration != null) void patchFeature(feature.id, { duration });
   };
 
+  // Baseline plan. Both controls (the header icon and the one in SCHEDULE &
+  // EFFORT) drive this same toggle: setting freezes today's dates, and clicking
+  // again *clears* them. Before this there was no unset — the button only ever
+  // re-froze the baseline to the current dates, so the only way to remove one
+  // was the small × in the PLAN (frozen) block, which isn't visible until a plan
+  // exists.
+  const planSet = feature.plannedX != null;
+  const togglePlan = () =>
+    void patchFeature(
+      feature.id,
+      planSet ? { plannedX: null, plannedDuration: null } : { plannedX: feature.x, plannedDuration: feature.duration },
+    );
+  const planTitle = planSet ? t("details.unsetPlanTitle") : t("details.setPlanTitle");
+
   const todayISO = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -114,6 +136,21 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           <span className="text-xs font-semibold mono" style={{ color: "#64748B" }}>{t("details.taskDetails")}</span>
           {canEditProp && (
             <div className="flex items-center gap-1.5">
+              {/* Gated on canEdit, not canEditProp: freezing a baseline is a
+                  content edit, so a done/locked task shouldn't offer it — same
+                  rule the SCHEDULE & EFFORT control follows. */}
+              {canEdit && (
+                <button
+                  title={planTitle}
+                  aria-label={planTitle}
+                  aria-pressed={planSet}
+                  onClick={togglePlan}
+                  className="rounded"
+                  style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", ...(planSet ? PLAN_ON : PLAN_OFF) }}
+                >
+                  <Icon name="keep" size={13} />
+                </button>
+              )}
               <button
                 title={t("details.duplicateTask")}
                 onClick={onDuplicate}
@@ -373,16 +410,17 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             </label>
             {canEdit ? (
               <button
-                onClick={() => void patchFeature(feature.id, { plannedX: feature.x, plannedDuration: feature.duration })}
-                title={feature.plannedX != null ? "Baseline set — click to re-freeze the plan to the current dates" : "Freeze the current dates as the plan (won't move when you drag)"}
+                onClick={togglePlan}
+                title={planTitle}
+                aria-pressed={planSet}
                 className="mono text-xs px-2 py-0.5 rounded"
-                style={feature.plannedX != null ? { background: "#4338CA", color: "#FFFFFF" } : { background: "#EEF2FF", color: "#4338CA" }}
+                style={planSet ? PLAN_ON : PLAN_OFF}
               >
-                <Icon name="keep" size={13} /> {feature.plannedX != null ? "baseline set" : "set plan"}
+                <Icon name="keep" size={13} /> {planSet ? t("details.planSet") : t("details.setPlan")}
               </button>
             ) : (
-              feature.plannedX != null && (
-                <span className="mono text-xs px-2 py-0.5 rounded" title="A baseline plan has been set for this task" style={{ background: "#4338CA", color: "#FFFFFF" }}><Icon name="keep" size={12} /> baseline set</span>
+              planSet && (
+                <span className="mono text-xs px-2 py-0.5 rounded" title={t("details.planSetTitle")} style={PLAN_ON}><Icon name="keep" size={12} /> {t("details.planSet")}</span>
               )
             )}
           </div>
