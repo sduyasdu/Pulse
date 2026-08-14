@@ -26,6 +26,14 @@ firestore-debug.log
 ui-debug.log
 *.tsbuildinfo
 
+# Service account keys — full project admin in a single file. Admin scripts
+# (functions/scripts/) need one; it must never reach a commit. Keep it outside
+# the repo if you can, and delete it when the script is done.
+*serviceAccount*.json
+*service-account*.json
+*-adminsdk-*.json
+gcp-key*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
