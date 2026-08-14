@@ -162,10 +162,25 @@ card.
 
 ## 7. Rollback
 
-If live billing misbehaves, put the test secrets back and redeploy functions
-(§3). That stops live charges immediately. It does **not** unwind money already
-taken — refund in the Stripe dashboard — and it does **not** restore any
+If live billing misbehaves, set the secrets back to test keys and redeploy
+functions (§3). That stops live charges immediately. It does **not** unwind money
+already taken — refund in the Stripe dashboard — and it does **not** restore any
 `billing/{orgId}` doc the live webhook overwrote.
+
+> ⚠️ **You cannot roll back by reverting to the previous secret version.**
+> `functions:secrets:set` **destroys** the prior version rather than disabling it —
+> confirmed on the 2026-08-13 cutover, where both secrets went to version 2
+> ENABLED with version 1 `DESTROYED`. The old test values are gone from Secret
+> Manager, so rolling back means fetching the **test** `sk_test_…` and its
+> test-mode `whsec_…` from the Stripe dashboard again and setting them as a new
+> version. Budget a few minutes for that; it is not a one-command undo.
+>
+> The same mechanic makes the §3 redeploy **time-critical**, not merely required:
+> between `secrets:set` and the redeploy, the deployed functions are still pinned
+> to a version that no longer exists, so any cold start of `stripeWebhook`,
+> `createCheckoutSession` or `createPortalSession` fails to mount its secret.
+> Warm instances keep serving, which makes the window easy to miss. Run the
+> redeploy immediately after setting the secrets.
 
 ## 8. Known sharp edges (not blockers)
 
