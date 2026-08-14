@@ -240,7 +240,11 @@ export function Toolbar({
             <button onClick={onAddEpic} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold" style={{ background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}>
               <Icon name="view_agenda" size={14} /> {t("toolbar.addEpic")}
             </button>
-            <button onClick={onAddTask} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold" style={{ background: "#EE7240", color: "#FDFDFD" }}>
+            {/* #0A1428 like every other orange-filled button in this toolbar
+                (view switch, help, effort scale, compact filter) — this was the
+                only one on near-white, which also read at ~2.9:1 against the
+                orange versus ~7:1 for the ink. */}
+            <button onClick={onAddTask} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold" style={{ background: "#EE7240", color: "#0A1428" }}>
               {t("toolbar.addTask")}
             </button>
           </div>
