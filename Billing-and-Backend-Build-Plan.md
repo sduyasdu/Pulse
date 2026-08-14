@@ -66,12 +66,18 @@ parallel with Phase 0–2, so Phase 3 isn't blocked when it's ready.
 - **PL1–PL3 — DONE.** Tiers/prices/quotas are decided (Plans-Spec §2/§3): Starter/Pro/Business,
   $0/$6/$12 per **editor seat**/mo (USD), quota-only (no feature gating). Encoded in
   `entitlements.ts`.
-- **Stripe account** — *mostly done.* The two per-seat products ("Pulse Pro" $6, "Pulse
-  Business" $12) exist **with `tier` metadata** (which is how SF3 and the Checkout callable
-  both resolve a tier), and `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` are in Secret
+- **Stripe account** — *mostly done, **in test mode only**.* The two per-seat products
+  ("Pulse Pro" $6, "Pulse Business" $12) exist **with `tier` metadata** (which is how SF3 and
+  the Checkout callable both resolve a tier — on the **Product**, mirrored to the Price; see
+  Plans-Spec §9.6 B), and `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` are in Secret
   Manager and bound to the deployed functions. **Still open:** point the webhook endpoint at
   the deployed URL (it was created with a placeholder), save the **Customer Portal**
   configuration once, and confirm **Stripe Tax** is active. Full checklist: Plans-Spec §9.6.
+
+  > ⚠️ **None of that carries to live mode.** Catalog, webhook endpoint, Portal config and
+  > Tax settings are all per-mode, and the test-mode `cus_…` ids already written into
+  > production Firestore are invalid against a live key. The cutover is its own procedure:
+  > **`Stripe-Go-Live-Runbook.md`**.
 - **Mexico tax registration** — a finance/legal task. Note per PL10-a there is **no PAC and
   no invoicing code**: the SAT *factura global* is filed **manually, out of band** from the
   Stripe dashboard (Plans-Spec §9.5). The only "invoicing" prerequisite is that a human

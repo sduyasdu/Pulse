@@ -457,12 +457,13 @@ const ALLOWED_RETURN_ORIGINS = [
  * `ALLOWED_RETURN_ORIGINS[0]`, so reordering the list above can't silently
  * repoint the fallback.
  *
- * ⚠️ Still the Firebase URL on purpose: it is the origin known to resolve today.
- * **Switch it to `https://pulse.yasdu.com` once that domain is live and serving a
- * valid certificate** — pointing the fallback at a hostname that doesn't resolve
- * yet would turn a recoverable redirect into a dead end.
+ * Now the branded domain: `pulse.yasdu.com` resolves (CNAME to
+ * `pulse-b9d96.web.app`) and serves a valid certificate, which was the condition
+ * for moving it off the Firebase URL — a fallback pointing at a hostname that
+ * doesn't resolve turns a recoverable redirect into a dead end. The Firebase
+ * origins stay in the allowlist above, so a returnUrl from either still works.
  */
-const DEFAULT_RETURN_ORIGIN = "https://pulse-b9d96.web.app";
+const DEFAULT_RETURN_ORIGIN = "https://pulse.yasdu.com";
 
 export function safeReturnUrl(raw: unknown): string {
   if (typeof raw !== "string" || !raw) return DEFAULT_RETURN_ORIGIN;

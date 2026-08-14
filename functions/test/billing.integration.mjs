@@ -217,9 +217,14 @@ assert(carryForward({ pastDueSince: 100 }, "canceled", 500) === null, "clock: ca
 // attacker bounce a user from a page they trust to one they shouldn't.
 // ---------------------------------------------------------------------------
 
+// Two different things that used to share one constant: FALLBACK is where a
+// rejected or absent value lands (DEFAULT_RETURN_ORIGIN), APP is merely *an*
+// allowed origin. They diverged when the fallback moved to the branded domain,
+// and conflating them would let a future repoint pass unnoticed.
+const FALLBACK = "https://pulse.yasdu.com";
 const APP = "https://pulse-b9d96.web.app";
-assert(safeReturnUrl(`${APP}/`) === `${APP}/`, "returnUrl: the app origin is allowed");
-// Pre-authorised for the DNS cutover, so no code change is needed on the day.
+
+assert(safeReturnUrl(`${APP}/`) === `${APP}/`, "returnUrl: the Firebase app origin is still allowed");
 assert(
   safeReturnUrl("https://pulse.yasdu.com/") === "https://pulse.yasdu.com/",
   "returnUrl: the branded domain pulse.yasdu.com is allowed",
@@ -229,20 +234,25 @@ assert(
   "returnUrl: branded domain keeps its query string",
 );
 // A lookalike of the branded domain must still be rejected.
-assert(safeReturnUrl("https://pulse.yasdu.com.evil.com/") === APP, "returnUrl: branded-domain lookalike rejected");
-assert(safeReturnUrl("https://evil.pulse.yasdu.com/") === APP, "returnUrl: subdomain of the branded host rejected");
-assert(safeReturnUrl("http://pulse.yasdu.com/") === APP, "returnUrl: http on the branded domain rejected");
+assert(safeReturnUrl("https://pulse.yasdu.com.evil.com/") === FALLBACK, "returnUrl: branded-domain lookalike rejected");
+assert(safeReturnUrl("https://evil.pulse.yasdu.com/") === FALLBACK, "returnUrl: subdomain of the branded host rejected");
+assert(safeReturnUrl("http://pulse.yasdu.com/") === FALLBACK, "returnUrl: http on the branded domain rejected");
 assert(safeReturnUrl("https://pulse-b9d96.firebaseapp.com/x") === "https://pulse-b9d96.firebaseapp.com/x", "returnUrl: alternate Firebase domain allowed");
 assert(safeReturnUrl("http://localhost:5173/") === "http://localhost:5173/", "returnUrl: local dev allowed");
-assert(safeReturnUrl("https://evil.example.com/steal") === APP, "returnUrl: foreign origin rejected");
+assert(safeReturnUrl("https://evil.example.com/steal") === FALLBACK, "returnUrl: foreign origin rejected");
 // The classic bypasses: a lookalike host and a scheme swap on the real host.
-assert(safeReturnUrl("https://pulse-b9d96.web.app.evil.com/") === APP, "returnUrl: suffix-lookalike host rejected");
-assert(safeReturnUrl("http://pulse-b9d96.web.app/") === APP, "returnUrl: http on the https origin rejected");
-assert(safeReturnUrl("javascript:alert(1)") === APP, "returnUrl: javascript: scheme rejected");
-assert(safeReturnUrl("//evil.example.com") === APP, "returnUrl: protocol-relative rejected");
-assert(safeReturnUrl("not a url") === APP, "returnUrl: unparseable falls back");
-assert(safeReturnUrl(undefined) === APP && safeReturnUrl(null) === APP, "returnUrl: absent falls back");
-assert(safeReturnUrl(42) === APP, "returnUrl: non-string falls back");
+assert(safeReturnUrl("https://pulse-b9d96.web.app.evil.com/") === FALLBACK, "returnUrl: suffix-lookalike host rejected");
+assert(safeReturnUrl("http://pulse-b9d96.web.app/") === FALLBACK, "returnUrl: http on the https origin rejected");
+assert(safeReturnUrl("javascript:alert(1)") === FALLBACK, "returnUrl: javascript: scheme rejected");
+assert(safeReturnUrl("//evil.example.com") === FALLBACK, "returnUrl: protocol-relative rejected");
+assert(safeReturnUrl("not a url") === FALLBACK, "returnUrl: unparseable falls back");
+assert(safeReturnUrl(undefined) === FALLBACK && safeReturnUrl(null) === FALLBACK, "returnUrl: absent falls back");
+assert(safeReturnUrl(42) === FALLBACK, "returnUrl: non-string falls back");
+// The fallback itself must be an allowed origin, or every rejection would send
+// the customer somewhere the guard would reject on the way back. Note the
+// result carries a trailing slash the constant doesn't: an accepted value is
+// returned as `new URL(...).toString()`, which normalises a bare origin.
+assert(safeReturnUrl(FALLBACK) === `${FALLBACK}/`, "returnUrl: the fallback origin is itself allowed");
 
 const seatsThrows = (v) => {
   try {

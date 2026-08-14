@@ -488,9 +488,18 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
   **$12 USD / editor / month**.
 - **No Starter product** — Starter is the free default (absence of a subscription; 1 editor).
 - Monthly billing **in arrears** (usage/quantity finalized at period end — "mass billing").
-- On **every Price**, set metadata **`tier`** (`pro`|`business` — lowercase) so SF3 maps a
-  subscription's price → our tier without hard-coding Price ids. The subscription
-  `quantity` = editor seats (PL11).
+- On **both the Product and its Price**, set metadata **`tier`** (`pro`|`business` —
+  lowercase) so SF3 maps a subscription → our tier without hard-coding Price ids. The
+  subscription `quantity` = editor seats (PL11).
+
+  > ⚠️ **The Product is the load-bearing one — this said "every Price" until 2026-08-13
+  > and was wrong in a way that fails closed.** The two code paths read it differently:
+  > `priceForTier` (`functions/src/billing.ts:501`), which Checkout uses to *find* the
+  > price, matches on **product metadata only**; `licensedItem` (`:102`), which the
+  > webhook uses to read the tier *back*, tries product first and falls back to price.
+  > So a catalog tagged only on the Price makes `priceForTier` return `null` and
+  > **Checkout fails outright** — "No active Stripe price is tagged with tier". Tag both:
+  > the Product because Checkout requires it, the Price as the webhook's fallback.
 
 **C. Integration surfaces — eng**
 - **Checkout (hosted)** — a callable creates a Checkout Session: `mode: "subscription"`,
@@ -504,7 +513,7 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
   `checkout.session.completed`, `customer.subscription.created`,
   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`,
   `invoice.payment_failed`. SF3 verifies the signature, maps the subscription's
-  price-metadata → `{ tier, status, currentPeriodEnd, seats, currency, … }`, and writes
+  product-metadata (price-metadata as fallback) → `{ tier, status, currentPeriodEnd, seats, currency, … }`, and writes
   `billing/{workspaceId}` (workspace resolved from the Customer). Idempotent by event id
   (at-least-once delivery).
 
@@ -516,5 +525,6 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
 
 **E. Data mapping — already scaffolded (Phase 3 groundwork)**
 - `Workspace.stripeCustomerId` / `stripeSubscriptionId` (types shipped).
-- Customer metadata `workspaceId` ↔ our workspace; Price metadata `tier` ↔ our tier.
+- Customer metadata `workspaceId` ↔ our workspace; **Product** metadata `tier` ↔ our tier
+  (mirrored onto the Price as the webhook's fallback — see §9.6 B).
 - Seats (PL11): subscription `quantity` = unique users across the org's Pulses.
