@@ -155,6 +155,25 @@ export async function removeMyPulseEntry(uid: string, pulseId: string): Promise<
   await deleteDoc(doc(db, "users", uid, "myPulses", pulseId)).catch(() => {});
 }
 
+/** The restoring half of the dashboard-index self-heal (Collaboration-Spec
+ * §1.6, D14): write the entry back when the caller is a confirmed member but
+ * their index has no entry for the Pulse. Every other writer of this doc
+ * (createPulse, duplicatePulse, joinPulseViaLink, resolvePendingInvites) only
+ * fires at the moment access is *granted*, so without this a single spurious
+ * removeMyPulseEntry() hid a live Pulse from its own owner's dashboard forever
+ * — an owner never clicks their own join link, and no other client may write
+ * their index.
+ *
+ * Reads before writing so it can't clobber the entry's per-user state (`hidden`)
+ * on every Pulse open, and so it stays a no-op in the overwhelmingly common
+ * case. Returns whether it actually restored anything. */
+export async function ensureMyPulseEntry(uid: string, entry: MyPulseIndexEntry): Promise<boolean> {
+  const ref = doc(db, "users", uid, "myPulses", entry.pulseId);
+  if ((await getDoc(ref)).exists()) return false;
+  await setDoc(ref, stripUndefined(entry));
+  return true;
+}
+
 /** Per-user hide toggle (Hide-and-Archive-Spec §2.2). Lives on the user's own
  * myPulses index entry (which only they can write), so it moves the Pulse into
  * their dashboard's Hidden section without touching the shared Pulse or anyone

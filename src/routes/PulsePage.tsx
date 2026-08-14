@@ -3,9 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { useUndoStore } from "@/stores/undoStore";
-import { removeMyPulseEntry, setPulseArchived, updateMyPulseArchivedAt } from "@/services/firestore/pulses";
+import { ensureMyPulseEntry, getPulse, removeMyPulseEntry, setPulseArchived, updateMyPulseArchivedAt } from "@/services/firestore/pulses";
 import { logDirectActivity } from "@/domain/activityRecorder";
-import { syncMyMemberPhoto } from "@/services/firestore/memberships";
+import { fetchMembership, syncMyMemberPhoto } from "@/services/firestore/memberships";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
@@ -165,14 +165,59 @@ export function PulsePage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [canEdit, undo, redo]);
 
-  // Self-heal: this Pulse was deleted, or our membership was revoked —
-  // bounce back to the dashboard and drop the stale index entry.
+  const indexCheckedFor = useRef<string | null>(null);
+
+  // Self-heal the dashboard index, BOTH ways (Collaboration-Spec §1.6, D14).
+  //
+  // Removal: this Pulse was deleted, or our membership was revoked — drop the
+  // stale entry and bounce to the dashboard. But the listeners are NOT evidence
+  // of that on their own: `notFound` and an empty roster can equally come from a
+  // cache-served snapshot (offline, flaky reconnect, a listener torn down by an
+  // error), and neither subscribePulse nor subscribePulseMembers inspects
+  // `metadata.fromCache` or takes an error callback. So confirm with direct
+  // reads first — both throw when the client is offline, and the caller's own
+  // pulseMembers doc is always self-readable — and delete only on a definitive
+  // "gone". A false positive here is unrecoverable (see ensureMyPulseEntry).
+  //
+  // Restoration: the confirmed-good case writes the entry back if it's missing,
+  // so a Pulse that already fell out of a dashboard returns the next time its
+  // member opens it.
   useEffect(() => {
-    if (!loading && uid && pulseId && (notFound || myRole === null)) {
-      void removeMyPulseEntry(uid, pulseId);
-      navigate("/", { replace: true });
-    }
-  }, [loading, uid, pulseId, notFound, myRole, navigate]);
+    if (loading || !uid || !pulseId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (notFound || myRole === null) {
+          const [livePulse, membership] = await Promise.all([getPulse(pulseId), fetchMembership(pulseId, uid)]);
+          if (cancelled) return;
+          // Confirmed present after all — the listeners were stale, not the
+          // data. Leave the index alone; they'll deliver the real snapshot.
+          if (livePulse !== null && membership !== null) return;
+          await removeMyPulseEntry(uid, pulseId);
+          navigate("/", { replace: true });
+        } else if (myMember && pulse && indexCheckedFor.current !== pulseId) {
+          // `pulse`/`myMember` are fresh objects on every snapshot, so pin the
+          // check to one read per Pulse load rather than one per edit. Marked
+          // done only on success, so an offline attempt still retries; the
+          // write itself is idempotent, so an overlapping run costs nothing.
+          await ensureMyPulseEntry(uid, {
+            pulseId,
+            name: pulse.name ?? "",
+            workspaceId: pulse.workspaceId ?? "",
+            role: myMember.role,
+            joinedAt: myMember.joinedAt,
+            archivedAt: pulse.archivedAt ?? null,
+          });
+          indexCheckedFor.current = pulseId;
+        }
+      } catch {
+        // Transient / offline — change nothing; a later load retries.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, uid, pulseId, notFound, myRole, myMember, pulse, navigate]);
 
   useEffect(() => {
     document.title = pulse?.name?.trim() ? `${pulse.name.trim()} — Pulse` : "Pulse — Visual Project Planning";

@@ -1,6 +1,6 @@
 # Pulse — Collaboration Specification
 
-Status: **Decisions confirmed (D1–D12) — ready to build** · Scope: documents today's shipped
+Status: **Decisions confirmed (D1–D14) — ready to build** · Scope: documents today's shipped
 collaboration model, then proposes enhancements. Two directions are now **chosen,
 not optional**: (1) activate the dormant workspace layer into real **Teams** that
 own Pulses; (2) replace emailed invites with a **copy-link join** model. Both are
@@ -152,10 +152,13 @@ Pulse was deleted) and must be **self-healed by the affected user's own client**
   `removeMyPulseEntry` drops the dangling card (`pulses.ts:153-155`); if the role
   differs, `updateMyPulseRole` reconciles the cached label (`pulses.ts:168-170`).
   Only acts on a definitive read; transient errors are left for a later retry.
-- `PulsePage` effect (`PulsePage.tsx:116-121`): if the opened Pulse is `notFound`
-  or `myRole === null`, drop the entry and bounce to the dashboard. `load()`
-  carefully waits for **both** the pulse doc and the members roster before
-  clearing `loading`, so this check never misfires on a half-loaded state
+- `PulsePage` effect (`PulsePage.tsx:170-220`): heals **both directions** (D14).
+  If the opened Pulse looks `notFound` or `myRole === null`, it re-reads the
+  pulse doc and the caller's own membership directly and drops the entry **only
+  on a definitive "gone"**; if the caller is a confirmed member whose index has
+  no entry, `ensureMyPulseEntry` (`pulses.ts:170-175`) writes it back. `load()`
+  additionally waits for **both** the pulse doc and the members roster before
+  clearing `loading`, so the check never misfires on a half-loaded state
   (`pulseStore.ts:96-122`).
 
 This self-owned-index / self-heal pattern is a load-bearing invariant that **every
@@ -925,3 +928,29 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     (`Plans-Spec.md` **PL12**, which revises §5.1 accordingly). Existing
     `myPulses.archived` migrates to `hidden`, never to the shared state.
     *Still to confirm:* owner-only, or may editors archive too?
+14. **D14 — The index self-heal restores as well as removes (§1.6). ✅ DECIDED.**
+    A removal is taken **only from a definitive direct read** (`getPulse` +
+    `fetchMembership`), never from a listener snapshot: `notFound` and an empty
+    roster are also what a cache-served or error-torn-down listener looks like,
+    and neither `subscribePulse` nor `subscribePulseMembers` checks
+    `metadata.fromCache` or takes an error callback. And the confirmed-good case
+    **writes a missing entry back** (`ensureMyPulseEntry`), reading first so it
+    can't clobber `hidden`.
+    *Why:* removal used to be one-way and unrecoverable. Every other writer of
+    the index (`createPulse`, `duplicatePulse`, `joinPulseViaLink`,
+    `resolvePendingInvites`) fires only when access is *granted*, so a single
+    spurious delete hid a live Pulse from its dashboard permanently — the member
+    could still open it by URL, and the page would load, edit and log activity
+    without ever restoring the card. Owners are the worst case: they never click
+    their own join link, and no other client may write their index. This is not
+    hypothetical — `EEbetLzJ7PHCtJA0I0ku` ("Product Roadmap") was invisible to
+    its own owner while `pulses/…/pulseMembers/{owner}` was intact; the entry was
+    restored by hand on 2026-08-14.
+    *Rejected:* (a) *unconditional write-back on every Pulse open* — cheaper than
+    a read but it would resurrect an entry the user is entitled to have gone, and
+    overwrite per-user state on every load; (b) *checking `metadata.fromCache` in
+    the store's listeners* — narrower (it doesn't cover a listener torn down by an
+    error) and it spreads snapshot-plumbing concerns into every subscriber;
+    (c) *a server-side reconciler* — the index is self-owned by construction
+    (§1.6) and a member's own client is already at the exact spot where both
+    facts are known.
