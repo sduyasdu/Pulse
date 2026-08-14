@@ -1,7 +1,8 @@
 # Pulse — Stripe Go-Live Runbook
 
-Status: **Not started — steps 1–7 are the cutover; §0 lists two decisions to make
-before taking real money.** · Owner: product + eng ·
+Status: **Live as of 2026-08-14 — §2–§5 done; §6 (verify with a real card) is the
+only remaining step, and it is also the first time the webhook will ever have run
+end to end. §0's two decisions are still open.** · Owner: product + eng ·
 Related: `Plans-Spec.md` (tiers, PL1–PL12), `Billing-and-Backend-Build-Plan.md`
 (Phase 3 — what is built and what isn't), `Server-Functions-Spec.md` (SF3)
 
@@ -117,6 +118,16 @@ see `CLAUDE.md`.
 
 ## 4. Data cleanup — the step with teeth
 
+> ✅ **Done 2026-08-14.** `functions/scripts/stripe-cutover-cleanup.mjs --apply`
+> cleared `stripeCustomerId` from one workspace (`personal-R9oq…`, test customer
+> `cus_V1sQ7J0rSlHk6M`). There were **no** `billing/{orgId}` docs, no stale
+> subscription ids, and no collapsed `editorUids`. A re-run reports all zeros.
+>
+> The zeros were the more informative result: a customer existed with **no**
+> subscription and **no** billing doc, which says a test Checkout was opened and
+> never completed. So `checkout.session.completed` never fired and
+> `syncSubscription` has **never run against a real Stripe delivery** — see §6.
+
 Test-mode identifiers are already in production Firestore and are **invalid**
 against a live key. Left alone, they produce failures that look like bugs.
 
@@ -148,6 +159,15 @@ from `APP`, which had been the same constant.
 
 Stripe **test clocks do not exist in live mode**, so verification means a real
 card.
+
+> ⚠️ **This is not a re-check of something known to work — it is the first
+> end-to-end run of the webhook, with real money.** §4 established that no test
+> Checkout ever completed, so signature verification, `syncSubscription`, the org
+> resolution chain and the `billing/{orgId}` write have never been exercised by an
+> actual Stripe delivery. Do it with the Stripe **webhook log open** and read the
+> delivery response rather than assuming success. A throw returns 500 and Stripe
+> retries, so a failure is recoverable and visible — but only if someone is
+> watching.
 
 1. Subscribe a throwaway workspace to **Pro, 1 seat** ($6) with a real card.
 2. Confirm the webhook delivered `200` in the Stripe dashboard, and that
