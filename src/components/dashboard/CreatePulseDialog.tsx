@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { useT } from "@/i18n";
 
 interface CreatePulseDialogProps {
@@ -7,9 +8,14 @@ interface CreatePulseDialogProps {
   /** The plan's Pulse cap, for the message shown if the rules refuse the
    * create. `null` = unlimited, in which case a denial isn't about quota. */
   limit?: number | null;
+  /** The org looks full. Warned about up front rather than used to block —
+   * the counter is async, so this can be stale in either direction and the
+   * rules are what actually decide. */
+  atLimit?: boolean;
+  used?: number;
 }
 
-export function CreatePulseDialog({ onClose, onCreate, limit }: CreatePulseDialogProps) {
+export function CreatePulseDialog({ onClose, onCreate, limit, atLimit, used = 0 }: CreatePulseDialogProps) {
   const t = useT();
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +51,12 @@ export function CreatePulseDialog({ onClose, onCreate, limit }: CreatePulseDialo
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="font-display mb-4 text-base font-semibold text-yasdu-fg">{t("dialog.newPulse")}</h2>
+        {atLimit && (
+          <div className="mb-3 flex items-start gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#FFF7F1", border: "1px solid #FBD3BE", color: "#9A3412" }}>
+            <Icon name="info" size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{t("plan.pulseLimitReached", { used, limit: String(limit) })}</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             autoFocus

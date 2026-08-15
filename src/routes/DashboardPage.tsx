@@ -21,6 +21,7 @@ import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
+import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 
 export function DashboardPage() {
   const { firebaseUser, userDoc } = useAuthStore();
@@ -229,36 +230,20 @@ export function DashboardPage() {
               <button onClick={() => setQuery("")} aria-label={t("dashboard.clearSearch")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: 15, lineHeight: 1 }}><Icon name="close" size={15} /></button>
             )}
           </div>
+          {/* Never disabled. `pulseCount` is maintained asynchronously (PL5),
+              so a stale-high counter would block a create the server would have
+              allowed — the rules are the authority, and they answer in one
+              round-trip. The banner and the dialog explain the limit instead. */}
           <button
             onClick={() => setCreating(true)}
-            disabled={quota.atLimit}
-            title={quota.atLimit ? t("plan.pulseLimitTitle", { used: quota.used, limit: String(quota.limit) }) : undefined}
-            className="order-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-end sm:ml-auto sm:self-auto disabled:opacity-50"
+            className="order-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-end sm:ml-auto sm:self-auto"
             style={{ background: "#D85A28" }}
           >
             {t("dashboard.newPulse")}
           </button>
         </div>
 
-        {/* Why the button is dead, and what to do about it. A disabled control
-            with no explanation is the failure mode this whole gate exists to
-            avoid. */}
-        {quota.atLimit && (
-          <div
-            className="mb-4 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2.5 text-xs"
-            style={{ background: "#FFF7F1", border: "1px solid #FBD3BE", color: "#9A3412" }}
-          >
-            <Icon name="info" size={15} />
-            <span>{t("plan.pulseLimitReached", { used: quota.used, limit: String(quota.limit) })}</span>
-            <button
-              onClick={() => setBillingOpen(true)}
-              className="ml-auto rounded px-2.5 py-1 font-semibold"
-              style={{ background: "#EE7240", color: "#0A1428" }}
-            >
-              {t("plan.upgrade")}
-            </button>
-          </div>
-        )}
+        <PulseQuotaBanner quota={quota} workspaceId={userDoc?.personalWorkspaceId ?? null} onUpgrade={() => setBillingOpen(true)} />
 
         {pulses === null ? (
           <Spinner size={22} label={t("common.loading")} className="py-10" />
@@ -310,6 +295,8 @@ export function DashboardPage() {
       {creating && (
         <CreatePulseDialog
           limit={quota.limit}
+          atLimit={quota.atLimit}
+          used={quota.used}
           onClose={() => setCreating(false)}
           onCreate={async (name) => {
             const workspaceId = userDoc?.personalWorkspaceId;
