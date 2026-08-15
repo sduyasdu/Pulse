@@ -4,9 +4,12 @@ import { useT } from "@/i18n";
 interface CreatePulseDialogProps {
   onClose: () => void;
   onCreate: (name: string) => Promise<void>;
+  /** The plan's Pulse cap, for the message shown if the rules refuse the
+   * create. `null` = unlimited, in which case a denial isn't about quota. */
+  limit?: number | null;
 }
 
-export function CreatePulseDialog({ onClose, onCreate }: CreatePulseDialogProps) {
+export function CreatePulseDialog({ onClose, onCreate, limit }: CreatePulseDialogProps) {
   const t = useT();
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -20,7 +23,16 @@ export function CreatePulseDialog({ onClose, onCreate }: CreatePulseDialogProps)
     try {
       await onCreate(name.trim());
     } catch (err) {
-      setError((err as Error).message || t("dialog.createError"));
+      // The soft gate on the dashboard normally prevents this, but the counter
+      // is async (PL5) — so a create can still be refused by the rules after the
+      // button looked live. "Missing or insufficient permissions" is the wrong
+      // thing to show someone who has just hit a paywall.
+      const code = (err as { code?: string } | null)?.code;
+      setError(
+        code === "permission-denied"
+          ? t("plan.pulseLimitError", { limit: String(limit ?? "") })
+          : (err as Error).message || t("dialog.createError"),
+      );
     } finally {
       setSubmitting(false);
     }

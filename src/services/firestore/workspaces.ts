@@ -1,4 +1,4 @@
-import { doc, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Workspace, WorkspaceMember } from "@/types";
 
@@ -27,4 +27,18 @@ export async function createPersonalWorkspace(uid: string, displayName: string |
   await setDoc(doc(db, "workspaces", workspaceRef.id, "workspaceMembers", uid), member);
 
   return workspaceRef.id;
+}
+
+/**
+ * Live workspace doc — used for the server-maintained quota counters SF11
+ * writes (`pulseCount`). Maps a permission-denied to `null` rather than
+ * throwing, exactly as `subscribeBilling` does: a non-member has nothing to
+ * show, and a quota display is not worth an unhandled rejection.
+ */
+export function subscribeWorkspace(workspaceId: string, cb: (ws: Workspace | null) => void): () => void {
+  return onSnapshot(
+    doc(db, "workspaces", workspaceId),
+    (snap) => cb(snap.exists() ? ({ id: snap.id, ...snap.data() } as Workspace) : null),
+    () => cb(null),
+  );
 }

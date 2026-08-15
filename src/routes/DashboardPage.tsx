@@ -10,7 +10,9 @@ import { hiddenOf, type MyPulseIndexEntry } from "@/types";
 import { logDirectActivity } from "@/domain/activityRecorder";
 import { useT } from "@/i18n";
 import { AccountMenu } from "@/components/account/AccountMenu";
+import { BillingDialog } from "@/components/account/BillingDialog";
 import { PlanBanner } from "@/components/shared/PlanBanner";
+import { usePulseQuota } from "@/hooks/usePulseQuota";
 import { Spinner } from "@/components/shared/Spinner";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -32,6 +34,13 @@ export function DashboardPage() {
   const [renamingPulse, setRenamingPulse] = useState<MyPulseIndexEntry | null>(null);
   const [duplicatingPulse, setDuplicatingPulse] = useState<MyPulseIndexEntry | null>(null);
   const [query, setQuery] = useState("");
+  // Soft gate on the plan's Pulse cap. UX only — firestore.rules is the
+  // boundary; without this, hitting the cap surfaces as a bare permissions
+  // error with no mention of plans (Plans-Spec §5).
+  const quota = usePulseQuota();
+  // Its own mount rather than reaching into AccountMenu's: the upsell has to be
+  // actionable from here, and only one dialog is ever open at a time.
+  const [billingOpen, setBillingOpen] = useState(false);
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -222,12 +231,34 @@ export function DashboardPage() {
           </div>
           <button
             onClick={() => setCreating(true)}
-            className="order-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-end sm:ml-auto sm:self-auto"
+            disabled={quota.atLimit}
+            title={quota.atLimit ? t("plan.pulseLimitTitle", { used: quota.used, limit: String(quota.limit) }) : undefined}
+            className="order-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg flex-shrink-0 self-end sm:ml-auto sm:self-auto disabled:opacity-50"
             style={{ background: "#D85A28" }}
           >
             {t("dashboard.newPulse")}
           </button>
         </div>
+
+        {/* Why the button is dead, and what to do about it. A disabled control
+            with no explanation is the failure mode this whole gate exists to
+            avoid. */}
+        {quota.atLimit && (
+          <div
+            className="mb-4 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2.5 text-xs"
+            style={{ background: "#FFF7F1", border: "1px solid #FBD3BE", color: "#9A3412" }}
+          >
+            <Icon name="info" size={15} />
+            <span>{t("plan.pulseLimitReached", { used: quota.used, limit: String(quota.limit) })}</span>
+            <button
+              onClick={() => setBillingOpen(true)}
+              className="ml-auto rounded px-2.5 py-1 font-semibold"
+              style={{ background: "#EE7240", color: "#0A1428" }}
+            >
+              {t("plan.upgrade")}
+            </button>
+          </div>
+        )}
 
         {pulses === null ? (
           <Spinner size={22} label={t("common.loading")} className="py-10" />
@@ -274,8 +305,11 @@ export function DashboardPage() {
         )}
       </main>
 
+      {billingOpen && <BillingDialog onClose={() => setBillingOpen(false)} />}
+
       {creating && (
         <CreatePulseDialog
+          limit={quota.limit}
           onClose={() => setCreating(false)}
           onCreate={async (name) => {
             const workspaceId = userDoc?.personalWorkspaceId;
