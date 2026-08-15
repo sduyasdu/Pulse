@@ -18,13 +18,17 @@ interface Props {
   selectedFeatureId?: string | null;
   selectedResourceId?: string | null;
   onSelectResource?: (resourceId: string | null) => void;
+  /** "My Beat" from the toolbar. Turning it on switches the mentions-me filter
+   * on to match (and off when it goes off); the in-panel toggle can still
+   * override it afterwards, until My Beat next changes. */
+  myBeat?: boolean;
 }
 
 /** The Comments drawer: a context-aware composer (attaches to the selected
  * task/resource, with @-mention autocomplete), a content/target filter, and one
  * flat conversation feed — every comment in the Pulse, each showing the
  * task/resource it's about as a chip. */
-export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, selectedResourceId, onSelectResource }: Props) {
+export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, selectedResourceId, onSelectResource, myBeat = false }: Props) {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const email = useAuthStore((s) => s.firebaseUser?.email ?? "");
   const isOwner = usePulseStore((s) => (uid ? s.roleOf(uid) === "owner" : false));
@@ -41,6 +45,20 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   // Filter state.
   const [q, setQ] = useState("");
   const [scopeSel, setScopeSel] = useState("all"); // "all" | "pulse" | "task:<id>" | "resource:<id>"
+  const [onlyMine, setOnlyMine] = useState(false);
+
+  // You @-mention a *resource*, never a person directly, so "mentions me" means
+  // "mentions a resource linked to my account" — the same definition My Beat
+  // uses for tasks (PulsePage/MobilePulseView derive `myResourceIds` this way).
+  // Someone with no linked resource can never match, which is why the toggle
+  // disables rather than silently emptying the feed.
+  const myResourceIds = useMemo(() => (uid ? resources.filter((r) => r.linkedUid === uid).map((r) => r.id) : []), [resources, uid]);
+  const canFilterMine = myResourceIds.length > 0;
+
+  // My Beat drives the filter rather than merely seeding it: flipping it in the
+  // toolbar switches this on and off to match. The in-panel toggle still wins
+  // afterwards, until My Beat next changes.
+  useEffect(() => setOnlyMine(myBeat), [myBeat]);
 
   useEffect(() => subscribeAllComments(pulseId, setAll), [pulseId]);
   // Re-attach the composer to whatever is now selected on the canvas.
@@ -111,6 +129,10 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
     const [k, id] = scopeSel.split(":");
     return refersTo(c, k, id);
   };
+  // `refersTo` deliberately, not mentions alone: a comment posted *on* my
+  // resource is addressed to me just as much as one that @-tags it, and this is
+  // the same equivalence the scope dropdown above already draws.
+  const mentionsMe = (c: Comment) => myResourceIds.some((id) => refersTo(c, "resource", id));
 
   const visible = useMemo(() => {
     const tops = all.filter((c) => !c.parentId);
@@ -118,11 +140,14 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
     const out: Comment[] = [];
     for (const top of tops) {
       const thread = [top, ...repliesOf(top.id)];
-      if (thread.some(matchScope) && thread.some(matchContent)) out.push(...thread);
+      // Thread-preserving, like the other two filters: a hit anywhere in the
+      // thread keeps the whole thread, so a reply that tags you doesn't arrive
+      // stripped of the conversation it belongs to.
+      if (thread.some(matchScope) && thread.some(matchContent) && (!onlyMine || thread.some(mentionsMe))) out.push(...thread);
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, ql, scopeSel]);
+  }, [all, ql, scopeSel, onlyMine, myResourceIds]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const del = async (c: Comment, e: { clientX: number; clientY: number }) => {
@@ -172,6 +197,24 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter comments…" className="bg-transparent text-xs py-1 flex-1" style={{ color: "#334155", outline: "none", minWidth: 0 }} />
           {q && <button onClick={() => setQ("")} title="Clear"><Icon name="close" size={12} style={{ color: "#94A3B8" }} /></button>}
         </div>
+        <button
+          onClick={() => setOnlyMine((v) => !v)}
+          disabled={!canFilterMine}
+          aria-pressed={onlyMine}
+          title={canFilterMine ? (onlyMine ? "Showing only comments that mention you — click to show all" : "Show only comments that mention you") : "Link a resource to your account to use this filter"}
+          aria-label="Only comments that mention me"
+          className="rounded flex items-center justify-center flex-shrink-0"
+          style={{
+            width: 26,
+            height: 26,
+            background: onlyMine ? "#EE7240" : "#FFFFFF",
+            color: onlyMine ? "#0A1428" : "#64748B",
+            border: "1px solid " + (onlyMine ? "#EE7240" : "#E2DFD9"),
+            opacity: canFilterMine ? 1 : 0.45,
+          }}
+        >
+          <Icon name="alternate_email" size={14} />
+        </button>
         <select value={scopeSel} onChange={(e) => setScopeSel(e.target.value)} className="text-xs rounded px-1.5 py-1" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF", color: "#334155", maxWidth: 130 }} title="Filter by task or resource">
           <option value="all">All comments</option>
           {hasPulse && <option value="pulse">Pulse-level only</option>}
@@ -192,7 +235,11 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
       <div ref={feedRef} className="flex-1 overflow-y-auto p-3" style={{ minHeight: 0 }}>
         {visible.length === 0 ? (
           <span className="text-xs" style={{ color: "#94A3B8" }}>
-            {all.length === 0 ? "No comments yet. Select a task or resource and comment below, or comment on the Pulse." : "No comments match this filter."}
+            {all.length === 0
+              ? "No comments yet. Select a task or resource and comment below, or comment on the Pulse."
+              : onlyMine
+                ? "No comments mention you. Turn off the @ filter to see the rest."
+                : "No comments match this filter."}
           </span>
         ) : (
           <CommentThread comments={visible} currentUid={uid} canModerate={isOwner} composer={false} suggestions={suggestions} onAdd={onReply} onDelete={del} onEdit={edit} onRefClick={onRefClick} targetOf={targetOf} />

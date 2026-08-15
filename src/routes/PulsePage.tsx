@@ -643,6 +643,7 @@ export function PulsePage() {
                 selectedFeatureId={selectedId}
                 selectedResourceId={filterResource}
                 onSelectResource={setFilterResource}
+                myBeat={myTasksOnly}
               />
             </div>
           </div>

@@ -198,6 +198,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
               pulseId={pulse.id}
               onSelectTask={(id) => { setShowComments(false); setSelectedId(id); }}
               selectedFeatureId={selectedId}
+              myBeat={myTasksOnly}
             />
           </div>
         </div>
