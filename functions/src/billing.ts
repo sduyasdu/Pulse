@@ -598,6 +598,40 @@ export const listPlans = onCall({ secrets: [STRIPE_SECRET_KEY] }, async () => {
   }
 });
 
+/**
+ * Expire this customer's still-open Checkout sessions before starting another.
+ *
+ * A Stripe Customer's **presentment currency is pinned by the first live object
+ * attached to it — an open Checkout session counts.** With multi-currency prices
+ * (`currency_options`, PL13) that has a nasty consequence: someone who opens
+ * Checkout and backs out has silently locked their customer to whatever currency
+ * that session used, so every later attempt is forced into it regardless of where
+ * they are. Stripe then refuses outright with "You cannot combine currencies on a
+ * single customer" if the catalog has since changed.
+ *
+ * Abandoned sessions are worthless — they hold a currency hostage for 24h and
+ * nothing else — so clearing them restores the intended behaviour: Stripe
+ * geolocates the buyer, uses the matching `currency_options` entry, and falls
+ * back to the price's default currency when there isn't one.
+ *
+ * Best-effort: a failure here must not block the purchase, which is the whole
+ * point of the request. Worst case the customer keeps its pinned currency, which
+ * is exactly today's behaviour.
+ */
+async function expireOpenSessions(stripe: Stripe, customerId: string): Promise<void> {
+  try {
+    const open = await stripe.checkout.sessions.list({ customer: customerId, status: "open", limit: 100 });
+    for (const session of open.data) {
+      await stripe.checkout.sessions.expire(session.id).catch(() => {
+        /* already expired or completed in a race — nothing to do */
+      });
+    }
+    if (open.data.length) log(FN, "expired abandoned checkout sessions", { customerId, count: open.data.length });
+  } catch (err) {
+    logError(FN, "could not expire open sessions — continuing", err, { customerId });
+  }
+}
+
 /** Reuse the org's Stripe Customer, creating one (once) if it has never had one. */
 async function ensureCustomer(db: Db, stripe: Stripe, workspaceId: string, workspace: Data, email: string | undefined): Promise<string> {
   const existing = workspace.stripeCustomerId;
@@ -655,6 +689,7 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
     throw new HttpsError("failed-precondition", `No active Stripe price is tagged with tier "${tier}".`);
   }
   const customerId = await ensureCustomer(db, stripe, workspaceId, workspace, request.auth?.token?.email);
+  await expireOpenSessions(stripe, customerId);
 
   try {
     const session = await stripe.checkout.sessions.create({

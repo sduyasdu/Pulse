@@ -489,6 +489,19 @@ failures during the 2026-08 live cutover motivated it:
   the first live object attached to it, and an **open Checkout session counts**.
   So a currency switch strands every customer with an unexpired session in the
   old currency until it expires (24h) or the Customer is replaced.
+
+  > This is not only a migration problem — it is permanent, and it defeats
+  > `currency_options` in normal use. Anyone who opens Checkout and backs out has
+  > pinned their customer to that session's currency, so their next attempt is
+  > forced into it no matter where they are. Observed 2026-08-15: an Argentine
+  > buyer on a fresh customer correctly got ARS, while a Mexican buyer whose
+  > customer carried abandoned USD sessions was held in USD — which looked like
+  > per-country behaviour and was not.
+  >
+  > **`createCheckoutSession` therefore expires the customer's open sessions
+  > before creating a new one** (`expireOpenSessions`). An abandoned session has
+  > no value and holds a currency hostage for 24h. Best-effort: a failure there
+  > must never block the purchase.
 - **The list price and the charged price can disagree** — see PL14.
 
 #### Where the "region" of a Stripe page actually comes from
@@ -509,8 +522,13 @@ page does nothing for Amex; presenting MXN does.
 
 #### The decisions
 
-13. **PL13 — Currency presentment. → DECIDED: keep USD as the list price, and add
-    a `currency_options` entry per supported local currency (MXN first).**
+13. **PL13 — Currency presentment. → DECIDED: one Price per tier carrying a
+    `currency_options` entry per supported currency, with USD as the default.**
+    The intended selection, which is what Stripe does unaided once no currency is
+    pinned: **use the entry matching the buyer's own currency if one exists,
+    otherwise fall back to the price's default (USD)**. `createCheckoutSession`
+    deliberately passes no `currency`, so Stripe geolocates and applies exactly
+    that rule.
     Adaptive Pricing (Stripe converts at its own FX rate) is the alternative and
     is rejected as the default: it produces unroundable figures (\$6 → \$118.43)
     and hands pricing to a daily-moving rate. `currency_options` keeps
