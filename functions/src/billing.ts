@@ -593,9 +593,14 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
   } catch (err) {
     if (err instanceof HttpsError) throw err;
     logError(FN, "checkout session failed", err, { workspaceId, tier, seats });
-    // Most likely cause on a fresh account is Stripe Tax not being activated,
-    // which `automatic_tax` requires — say so rather than a bare "internal".
-    throw new HttpsError("internal", "Could not start Stripe Checkout. Check that Stripe Tax is enabled for this account.");
+    // Report what Stripe actually said rather than guessing at a cause. This
+    // message used to assert "check that Stripe Tax is enabled" — the likeliest
+    // cause on a fresh account — and it then misdirected twice on live setup:
+    // once when the key was invalid, once on a currency mismatch. Stripe's
+    // own text for an invalid-request error names the real problem and is
+    // configuration detail, not customer data, so it is safe to pass through.
+    const detail = err instanceof Stripe.errors.StripeError ? err.message : null;
+    throw new HttpsError("internal", detail ? `Stripe could not start Checkout: ${detail}` : "Could not start Stripe Checkout. Check the function logs for the cause.");
   }
 });
 
@@ -644,6 +649,8 @@ export const createPortalSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, asyn
     // identical from the client: a portal never configured in this mode, and a
     // configuration id that belongs to the other mode.
     logError(FN, "portal session failed", err, { workspaceId, customerId, configuration: PORTAL_CONFIGURATION_ID });
-    throw new HttpsError("internal", "Could not open the Stripe billing portal. Check that the Customer Portal is configured for this Stripe mode.");
+    // Same reasoning as Checkout above: Stripe's own message beats our guess.
+    const detail = err instanceof Stripe.errors.StripeError ? err.message : null;
+    throw new HttpsError("internal", detail ? `Stripe could not open the billing portal: ${detail}` : "Could not open the Stripe billing portal. Check the function logs for the cause.");
   }
 });
