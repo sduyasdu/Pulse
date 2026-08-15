@@ -35,4 +35,4 @@ export { onPulseCreateCount, onPulseDeleteCount } from "./counters";
 // SF3 — billing / plan sync (Phase 3). The only writer of `billing/{orgId}`, and
 // the server-side half of the PL4 downgrade. The two callables mint hosted
 // Stripe URLs (Checkout / Customer Portal); payment details never touch the app.
-export { stripeWebhook, createCheckoutSession, createPortalSession } from "./billing";
+export { stripeWebhook, createCheckoutSession, createPortalSession, listPlans } from "./billing";

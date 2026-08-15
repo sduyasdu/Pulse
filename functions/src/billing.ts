@@ -511,6 +511,54 @@ async function priceForTier(stripe: Stripe, tier: PlanTier): Promise<Stripe.Pric
   return null;
 }
 
+/**
+ * SF3b — the live catalog, for the plans form (Plans-Spec PL14).
+ *
+ * `TIER_PRICE_USD` in the app was a hardcoded 6/12, and it drifted the moment the
+ * live catalog moved to MXN: the plans form advertised "$6 USD" while Checkout
+ * charged pesos — a mismatch in both amount *and* currency, on the screen
+ * immediately before payment. This makes Stripe the single source of truth for
+ * what is displayed, exactly as it already is for what is charged.
+ *
+ * Reads the same prices `priceForTier` resolves, so the figure shown is the
+ * figure billed by construction rather than by discipline.
+ *
+ * Public pricing, so this needs no auth — it exposes nothing a checkout page
+ * wouldn't. It is still a callable rather than a client-side Stripe read because
+ * the secret key must not reach the browser.
+ *
+ * Amounts are returned in **minor units** (600 = $6.00) exactly as Stripe holds
+ * them; the client formats with Intl.NumberFormat, which needs the currency code
+ * anyway. Zero-decimal currencies (JPY and friends) therefore come out right
+ * without a special case here.
+ */
+export const listPlans = onCall({ secrets: [STRIPE_SECRET_KEY] }, async () => {
+  const stripe = new Stripe(STRIPE_SECRET_KEY.value());
+  try {
+    const prices = await stripe.prices.list({ active: true, type: "recurring", limit: 100, expand: ["data.product"] });
+    const plans: { tier: PlanTier; currency: string; unitAmount: number | null }[] = [];
+    for (const price of prices.data) {
+      const product = price.product;
+      if (typeof product !== "object" || product === null) continue;
+      if ("deleted" in product && product.deleted) continue;
+      const p = product as Stripe.Product;
+      if (!p.active) continue;
+      const tier = readTier(p.metadata) ?? readTier(price.metadata);
+      // First price wins per tier, matching priceForTier — so the plans form and
+      // Checkout can't disagree about which price a tier means.
+      if (!tier || plans.some((x) => x.tier === tier)) continue;
+      plans.push({ tier, currency: price.currency, unitAmount: price.unit_amount });
+    }
+    log(FN, "listed plans", { count: plans.length });
+    return { plans };
+  } catch (err) {
+    logError(FN, "listPlans failed", err);
+    // Non-fatal by design: the client falls back to its built-in figures rather
+    // than rendering an empty plan picker.
+    throw new HttpsError("internal", "Could not read the plan catalog from Stripe.");
+  }
+});
+
 /** Reuse the org's Stripe Customer, creating one (once) if it has never had one. */
 async function ensureCustomer(db: Db, stripe: Stripe, workspaceId: string, workspace: Data, email: string | undefined): Promise<string> {
   const existing = workspace.stripeCustomerId;

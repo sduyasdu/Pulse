@@ -56,3 +56,22 @@ export async function createPortalUrl(): Promise<string> {
   const { data } = await call({ returnUrl: returnUrl() });
   return data.url;
 }
+
+/** One tier's live price, straight from Stripe (Plans-Spec PL14). `unitAmount`
+ * is in **minor units** (600 = $6.00) as Stripe stores it. */
+export interface PlanPrice {
+  tier: PlanTier;
+  currency: string;
+  unitAmount: number | null;
+}
+
+/**
+ * The live catalog, so the plans form shows what Checkout will actually charge
+ * rather than a hardcoded constant that drifts the moment Stripe is edited.
+ * Public pricing — no auth needed.
+ */
+export async function listPlanPrices(): Promise<PlanPrice[]> {
+  const call = httpsCallable<Record<string, never>, { plans: PlanPrice[] }>(functions, "listPlans");
+  const { data } = await call({});
+  return data.plans ?? [];
+}

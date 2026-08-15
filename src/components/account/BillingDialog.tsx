@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { InlineSpinner } from "@/components/shared/Spinner";
 import { useBilling } from "@/hooks/useBilling";
+import { usePlanPrices } from "@/hooks/usePlanPrices";
 import { createCheckoutUrl, createPortalUrl } from "@/services/firestore/billing";
 import {
   ALL_TIERS,
   TIER_ENTITLEMENTS,
-  TIER_PRICE_USD,
   DELINQUENCY_GRACE_DAYS,
   delinquency,
   editorSeatLimit,
@@ -44,6 +44,7 @@ function PlanColumn({
   current,
   subscribed,
   busy,
+  price,
   onChoose,
   t,
 }: {
@@ -51,11 +52,13 @@ function PlanColumn({
   current: boolean;
   subscribed: boolean;
   busy: boolean;
+  /** Already formatted, and sourced from Stripe where available (PL14) — the
+   * column no longer decides what a tier costs. */
+  price: string;
   onChoose: () => void;
   t: TFn;
 }) {
   const limits = TIER_ENTITLEMENTS[tier];
-  const price = TIER_PRICE_USD[tier];
 
   // The action depends on whether a subscription already exists, NOT on which
   // tier was clicked: sending an existing subscriber through Checkout would open
@@ -88,7 +91,7 @@ function PlanColumn({
       </div>
 
       <div className="mt-1 flex items-baseline gap-1">
-        <span className="font-display text-xl font-semibold" style={{ color: "#1F2330" }}>${price}</span>
+        <span className="font-display text-xl font-semibold" style={{ color: "#1F2330" }}>{price}</span>
         <span className="text-[11px]" style={{ color: "#94A3B8" }}>{t("billing.perEditorMonth")}</span>
       </div>
 
@@ -129,6 +132,8 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState<PlanTier | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seats, setSeats] = useState(1);
+  // Live prices, so what this form advertises is what Checkout charges (PL14).
+  const prices = usePlanPrices(lang);
 
   const now = Date.now();
   const current = tierOf(billing, now);
@@ -206,6 +211,7 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
               current={tier === current}
               subscribed={subscribed}
               busy={busy === tier || (subscribed && busy === "portal")}
+              price={prices[tier].formatted}
               onChoose={() => void choose(tier)}
               t={t}
             />
