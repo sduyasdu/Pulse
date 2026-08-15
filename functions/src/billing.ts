@@ -723,6 +723,12 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
       // address, collected by whichever branch above applies.
       automatic_tax: { enabled: true },
       allow_promotion_codes: true,
+      // Stripe's default session lifetime is 24h, and closing the browser tab
+      // tells it nothing — the session stays `open` server-side, holding a
+      // reference to the price and (for an existing Customer) its currency.
+      // 30 minutes is Stripe's floor and far past any real checkout, so an
+      // abandoned attempt frees its locks in half an hour instead of a day.
+      expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_TTL_SECONDS,
       success_url: `${returnUrl}?billing=success`,
       cancel_url: `${returnUrl}?billing=cancelled`,
     });
@@ -755,6 +761,11 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
  * the account default.
  */
 const PORTAL_CONFIGURATION_ID = "bpc_1U4ACFIlKqCVxfmVO5vwpkxN";
+
+/** How long a Checkout session stays open. Stripe's minimum is 30 minutes and
+ * its default is 24 hours; the default is far too long for a session that holds
+ * a price reference and pins a Customer's currency the moment it is created. */
+const CHECKOUT_TTL_SECONDS = 30 * 60;
 
 /**
  * Create a Stripe Customer Portal session — where an existing subscriber updates
