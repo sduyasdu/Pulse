@@ -9,6 +9,7 @@ import { CommentThread } from "./CommentThread";
 import { MentionTextarea } from "./MentionTextarea";
 import { detectMentions, type MentionSuggestion } from "./mentions";
 import { notifyParticipants } from "./notify";
+import { useT } from "@/i18n";
 
 interface Props {
   pulseId: string;
@@ -29,6 +30,7 @@ interface Props {
  * flat conversation feed — every comment in the Pulse, each showing the
  * task/resource it's about as a chip. */
 export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, selectedResourceId, onSelectResource, myBeat = false }: Props) {
+  const t = useT();
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const email = useAuthStore((s) => s.firebaseUser?.email ?? "");
   const isOwner = usePulseStore((s) => (uid ? s.roleOf(uid) === "owner" : false));
@@ -72,26 +74,28 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   const resourceName = (r: { name: string; initials: string }) => r.name?.trim() || r.initials;
   const nameFor = (kind: "task" | "resource", id: string): string =>
     kind === "task"
-      ? features.find((f) => f.id === id)?.title || "Untitled task"
-      : (() => { const r = resources.find((x) => x.id === id); return r ? resourceName(r) : "Unknown resource"; })();
+      ? features.find((f) => f.id === id)?.title || t("common.untitledTask")
+      : (() => { const r = resources.find((x) => x.id === id); return r ? resourceName(r) : t("comments.unknownResource"); })();
 
   const suggestions: MentionSuggestion[] = useMemo(
     () => [
-      ...features.map((f) => ({ kind: "task" as const, id: f.id, label: f.title || "Untitled task" })),
+      ...features.map((f) => ({ kind: "task" as const, id: f.id, label: f.title || t("common.untitledTask") })),
       ...resources.map((r) => ({ kind: "resource" as const, id: r.id, label: resourceName(r) })),
     ],
-    [features, resources],
+    // `t` is memoized on [lang, dictVersion], so this only recomputes on a real
+    // language change — without it the fallback labels would stay in the old one.
+    [features, resources, t],
   );
 
   // What a new comment attaches to, from the current canvas selection.
   const context: CommentRef | null = useMemo(() => {
     if (detach) return null;
     const f = selectedFeatureId ? features.find((x) => x.id === selectedFeatureId) : null;
-    if (f) return { kind: "task", id: f.id, label: f.title || "Untitled task" };
+    if (f) return { kind: "task", id: f.id, label: f.title || t("common.untitledTask") };
     const r = selectedResourceId ? resources.find((x) => x.id === selectedResourceId) : null;
     if (r) return { kind: "resource", id: r.id, label: resourceName(r) };
     return null;
-  }, [detach, selectedFeatureId, selectedResourceId, features, resources]);
+  }, [detach, selectedFeatureId, selectedResourceId, features, resources, t]);
   const hasSelection = !!(selectedFeatureId || selectedResourceId);
 
   // The task this comment is attached to (task/resource), for the feed chips.
@@ -151,7 +155,7 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const del = async (c: Comment, e: { clientX: number; clientY: number }) => {
-    if (await confirmAt(e, { message: "Delete this comment?", confirmLabel: "Delete" })) await deleteComment(pulseId, c.id).catch(() => {});
+    if (await confirmAt(e, { message: t("comments.deleteConfirm"), confirmLabel: t("common.delete") })) await deleteComment(pulseId, c.id).catch(() => {});
   };
   const edit = async (c: Comment, newText: string) => {
     const mentions = detectMentions(newText, suggestions).map((m) => ({ kind: m.kind, id: m.id, label: m.label }));
@@ -160,17 +164,17 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   const onRefClick = (r: CommentRef) => (r.kind === "task" ? onSelectTask(r.id) : onSelectResource?.(r.id));
 
   const post = async () => {
-    const t = text.trim();
-    if (!t || busy || !uid) return;
+    const body = text.trim();
+    if (!body || busy || !uid) return;
     setBusy(true);
     const targetId = context?.id ?? null;
     const targetKind = context?.kind ?? "task";
-    const mentions = detectMentions(t, suggestions).map((m) => ({ kind: m.kind, id: m.id, label: m.label }));
-    const label = context ? context.label : "the Pulse";
+    const mentions = detectMentions(body, suggestions).map((m) => ({ kind: m.kind, id: m.id, label: m.label }));
+    const label = context ? context.label : t("comments.thePulse");
     setText("");
     try {
-      await addComment(pulseId, targetId, null, uid, email, t, { targetKind, mentions });
-      await notifyParticipants({ pulseId, targetId, threadComments: all.filter((c) => c.targetId === targetId), actorUid: uid, actorEmail: email, memberUids: members.map((m) => m.uid), featureTitle: label, text: t });
+      await addComment(pulseId, targetId, null, uid, email, body, { targetKind, mentions });
+      await notifyParticipants({ pulseId, targetId, threadComments: all.filter((c) => c.targetId === targetId), actorUid: uid, actorEmail: email, memberUids: members.map((m) => m.uid), featureTitle: label, text: body });
     } finally {
       setBusy(false);
     }
@@ -183,7 +187,7 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
     const targetId = parent?.targetId ?? null;
     const targetKind = parent?.targetKind ?? "task";
     const mentions = detectMentions(body, suggestions).map((m) => ({ kind: m.kind, id: m.id, label: m.label }));
-    const label = targetId ? nameFor(targetKind, targetId) : "the Pulse";
+    const label = targetId ? nameFor(targetKind, targetId) : t("comments.thePulse");
     await addComment(pulseId, targetId, parentId, uid, email, body, { targetKind, mentions });
     await notifyParticipants({ pulseId, targetId, threadComments: all.filter((c) => c.targetId === targetId), actorUid: uid, actorEmail: email, memberUids: members.map((m) => m.uid), featureTitle: label, text: body });
   };
@@ -194,15 +198,15 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
       <div className="flex items-center gap-1.5 px-3 py-2 border-b flex-shrink-0" style={{ borderColor: "#E2DFD9" }}>
         <div className="flex items-center gap-1 rounded px-1.5 flex-1" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF" }}>
           <Icon name="search" size={13} style={{ color: "#94A3B8" }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter comments…" className="bg-transparent text-xs py-1 flex-1" style={{ color: "#334155", outline: "none", minWidth: 0 }} />
-          {q && <button onClick={() => setQ("")} title="Clear"><Icon name="close" size={12} style={{ color: "#94A3B8" }} /></button>}
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("comments.filterPlaceholder")} className="bg-transparent text-xs py-1 flex-1" style={{ color: "#334155", outline: "none", minWidth: 0 }} />
+          {q && <button onClick={() => setQ("")} title={t("comments.clear")}><Icon name="close" size={12} style={{ color: "#94A3B8" }} /></button>}
         </div>
         <button
           onClick={() => setOnlyMine((v) => !v)}
           disabled={!canFilterMine}
           aria-pressed={onlyMine}
-          title={canFilterMine ? (onlyMine ? "Showing only comments that mention you — click to show all" : "Show only comments that mention you") : "Link a resource to your account to use this filter"}
-          aria-label="Only comments that mention me"
+          title={canFilterMine ? (onlyMine ? t("comments.onlyMineOn") : t("comments.onlyMineOff")) : t("comments.onlyMineUnavailable")}
+          aria-label={t("comments.onlyMine")}
           className="rounded flex items-center justify-center flex-shrink-0"
           style={{
             width: 26,
@@ -215,16 +219,16 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
         >
           <Icon name="alternate_email" size={14} />
         </button>
-        <select value={scopeSel} onChange={(e) => setScopeSel(e.target.value)} className="text-xs rounded px-1.5 py-1" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF", color: "#334155", maxWidth: 130 }} title="Filter by task or resource">
-          <option value="all">All comments</option>
-          {hasPulse && <option value="pulse">Pulse-level only</option>}
+        <select value={scopeSel} onChange={(e) => setScopeSel(e.target.value)} className="text-xs rounded px-1.5 py-1" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF", color: "#334155", maxWidth: 130 }} title={t("comments.scopeTitle")}>
+          <option value="all">{t("comments.allComments")}</option>
+          {hasPulse && <option value="pulse">{t("comments.pulseLevel")}</option>}
           {refTasks.length > 0 && (
-            <optgroup label="Tasks">
+            <optgroup label={t("comments.tasks")}>
               {refTasks.map((t) => <option key={t.id} value={`task:${t.id}`}>{t.name}</option>)}
             </optgroup>
           )}
           {refResources.length > 0 && (
-            <optgroup label="Resources">
+            <optgroup label={t("comments.resources")}>
               {refResources.map((r) => <option key={r.id} value={`resource:${r.id}`}>{r.name}</option>)}
             </optgroup>
           )}
@@ -236,10 +240,10 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
         {visible.length === 0 ? (
           <span className="text-xs" style={{ color: "#94A3B8" }}>
             {all.length === 0
-              ? "No comments yet. Select a task or resource and comment below, or comment on the Pulse."
+              ? t("comments.empty")
               : onlyMine
-                ? "No comments mention you. Turn off the @ filter to see the rest."
-                : "No comments match this filter."}
+                ? t("comments.emptyMine")
+                : t("comments.emptyFiltered")}
           </span>
         ) : (
           <CommentThread comments={visible} currentUid={uid} canModerate={isOwner} composer={false} suggestions={suggestions} onAdd={onReply} onDelete={del} onEdit={edit} onRefClick={onRefClick} targetOf={targetOf} />
@@ -250,24 +254,24 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
           task/resource, with @-mention autocomplete. */}
       <div className="p-3 border-t flex-shrink-0" style={{ borderColor: "#E2DFD9", background: "#FBFAF7" }}>
         <div className="flex items-center gap-1.5 mb-1.5" style={{ minHeight: 20 }}>
-          <span className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>Comment on</span>
+          <span className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{t("comments.commentOn")}</span>
           {context ? (
             <span className="mono inline-flex items-center gap-0.5 rounded px-1.5 py-0.5" style={{ fontSize: 10, background: context.kind === "task" ? "#FCEEE4" : "#E7F6F1", color: context.kind === "task" ? "#C2410C" : "#0F766E" }}>
               <Icon name={context.kind === "task" ? "checklist" : "group"} size={11} /> @{context.label}
-              <button onClick={() => setDetach(true)} title="Comment on the Pulse instead" style={{ display: "flex", marginLeft: 2 }}><Icon name="close" size={11} /></button>
+              <button onClick={() => setDetach(true)} title={t("comments.pulseInstead")} style={{ display: "flex", marginLeft: 2 }}><Icon name="close" size={11} /></button>
             </span>
           ) : (
             <>
-              <span className="text-xs font-semibold" style={{ color: "#334155" }}>the Pulse</span>
+              <span className="text-xs font-semibold" style={{ color: "#334155" }}>{t("comments.thePulse")}</span>
               {hasSelection && detach && (
-                <button onClick={() => setDetach(false)} className="mono hover:underline" style={{ fontSize: 9, color: "#1B3A63" }}>attach to selection</button>
+                <button onClick={() => setDetach(false)} className="mono hover:underline" style={{ fontSize: 9, color: "#1B3A63" }}>{t("comments.attachToSelection")}</button>
               )}
             </>
           )}
         </div>
         <div className="flex items-end gap-1.5">
-          <MentionTextarea value={text} onChange={setText} suggestions={suggestions} onSubmit={() => void post()} placeholder="Add a comment… type @ to tag a task or resource (⌘↵)" />
-          <button onClick={() => void post()} disabled={!text.trim() || busy} title="Send" aria-label="Send" className="rounded flex items-center justify-center flex-shrink-0 disabled:opacity-40" style={{ width: 32, height: 32, background: "#D85A28", color: "#fff" }}>
+          <MentionTextarea value={text} onChange={setText} suggestions={suggestions} onSubmit={() => void post()} placeholder={t("comments.composerPlaceholder")} />
+          <button onClick={() => void post()} disabled={!text.trim() || busy} title={t("comments.send")} aria-label={t("comments.send")} className="rounded flex items-center justify-center flex-shrink-0 disabled:opacity-40" style={{ width: 32, height: 32, background: "#D85A28", color: "#fff" }}>
             <Icon name="send" size={16} />
           </button>
         </div>
