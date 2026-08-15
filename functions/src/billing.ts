@@ -600,6 +600,19 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
 });
 
 /**
+ * The Customer Portal configuration to open, pinned rather than left to Stripe's
+ * account default.
+ *
+ * ⚠️ **This id is live-mode only.** Stripe configurations, like every other
+ * object, do not cross modes — so if the secrets are ever rolled back to test
+ * keys (Stripe-Go-Live-Runbook §7), this call fails with "No such configuration"
+ * until the id is swapped for a test-mode one. That is the cost of pinning; the
+ * benefit is that the portal can't silently change because someone re-pointed
+ * the account default.
+ */
+const PORTAL_CONFIGURATION_ID = "bpc_1U4ACFIlKqCVxfmVO5vwpkxN";
+
+/**
  * Create a Stripe Customer Portal session — where an existing subscriber updates
  * their card, changes seat quantity, or cancels. Requires a Customer, so it is
  * only reachable once the org has been through Checkout at least once.
@@ -619,12 +632,18 @@ export const createPortalSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, asyn
 
   const stripe = new Stripe(STRIPE_SECRET_KEY.value());
   try {
-    const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnUrl });
-    log(FN, "created portal session", { workspaceId, customerId });
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      configuration: PORTAL_CONFIGURATION_ID,
+      return_url: returnUrl,
+    });
+    log(FN, "created portal session", { workspaceId, customerId, configuration: PORTAL_CONFIGURATION_ID });
     return { url: session.url };
   } catch (err) {
-    logError(FN, "portal session failed", err, { workspaceId, customerId });
-    // The portal 400s until its configuration is saved once in the dashboard.
-    throw new HttpsError("internal", "Could not open the Stripe billing portal. Check that the Customer Portal is configured.");
+    // The configuration id is logged because the two likely causes look
+    // identical from the client: a portal never configured in this mode, and a
+    // configuration id that belongs to the other mode.
+    logError(FN, "portal session failed", err, { workspaceId, customerId, configuration: PORTAL_CONFIGURATION_ID });
+    throw new HttpsError("internal", "Could not open the Stripe billing portal. Check that the Customer Portal is configured for this Stripe mode.");
   }
 });

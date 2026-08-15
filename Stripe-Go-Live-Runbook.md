@@ -195,6 +195,13 @@ already taken — refund in the Stripe dashboard — and it does **not** restore
 > test-mode `whsec_…` from the Stripe dashboard again and setting them as a new
 > version. Budget a few minutes for that; it is not a one-command undo.
 >
+> **The portal configuration is pinned to a live-mode id**
+> (`PORTAL_CONFIGURATION_ID` in `functions/src/billing.ts`) so it can't change
+> under you if someone re-points the account default. Rolling back to test keys
+> therefore also means swapping that id for a test-mode one, or
+> `createPortalSession` fails with "No such configuration". The failure is
+> logged with the id, so it is quick to recognise.
+>
 > The same mechanic makes the §3 redeploy **time-critical**, not merely required:
 > between `secrets:set` and the redeploy, the deployed functions are still pinned
 > to a version that no longer exists, so any cold start of `stripeWebhook`,
