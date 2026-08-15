@@ -28,6 +28,10 @@ export { onFeatureWriteDenorm, onResourceWriteFanout } from "./denorm";
 // SF6–SF9 — cross-user integrity & cleanup on delete (Phase 2).
 export { onPulseDelete, onMemberRemoved, onResourceDelete, onEpicDelete } from "./cascade";
 
+// SF11 — quota counters (Phase 3). The only writer of `workspace.pulseCount`,
+// which the Pulse-create rule gates on.
+export { onPulseCreateCount, onPulseDeleteCount } from "./counters";
+
 // SF3 — billing / plan sync (Phase 3). The only writer of `billing/{orgId}`, and
 // the server-side half of the PL4 downgrade. The two callables mint hosted
 // Stripe URLs (Checkout / Customer Portal); payment details never touch the app.

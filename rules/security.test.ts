@@ -325,6 +325,13 @@ describe("activity log (Changelog-Spec)", () => {
 
 describe("Pulse creation", () => {
   it("lets a signed-in user create a Pulse, grant themselves owner, and index it in their own dashboard list", async () => {
+    // The Pulse-create rule now requires membership of the target workspace and
+    // reads its quota counter, so the org has to exist for this to be a
+    // realistic create (Plans-Spec §5, PL5).
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", "w1"), { id: "w1", name: "Alice", isPersonal: true, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", "w1", "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: Date.now() });
+    });
     const alice = dbAs("alice", "alice@example.com");
     await assertSucceeds(
       setDoc(doc(alice, "pulses", "new1"), {
@@ -986,5 +993,115 @@ describe("hide & archive (Hide-and-Archive-Spec)", () => {
     const alice = dbAs("alice", "alice@example.com");
     await assertSucceeds(updateDoc(doc(alice, "pulses", "p1", "pulseMembers", "alice"), { role: "editor" }));
     await assertSucceeds(deleteDoc(doc(alice, "pulses", "p1", "pulseMembers", "alice")));
+  });
+});
+
+describe("plan quotas — Pulse count (Plans-Spec §3.2/§5, PL5)", () => {
+  const WS = "wq";
+
+  /** An org with `pulseCount` already materialized by SF11, optionally on a paid
+   * plan. `pulseCount` is seeded directly because only the server may write it. */
+  async function seedOrg(pulseCount: number | undefined, billing?: { tier: string; status: string }) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), {
+        id: WS, name: "Acme", isPersonal: false, ownerId: "owner", createdAt: Date.now(),
+        ...(pulseCount === undefined ? {} : { pulseCount }),
+      });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "owner"), { uid: "owner", role: "owner", joinedAt: Date.now() });
+      if (billing) await setDoc(doc(db, "billing", WS), { ...billing, source: "stripe", updatedAt: Date.now() });
+    });
+  }
+
+  const newPulse = (db: Firestore, id: string) =>
+    setDoc(doc(db, "pulses", id), {
+      workspaceId: WS, name: "New", createdBy: "owner", createdAt: Date.now(), updatedAt: Date.now(),
+      graphConfig: { stepPx: 16, workPerStep: 1 },
+    });
+
+  // ── the allow side — where a quota gate is most likely to break something ──
+  it("allows creating under the Starter cap", async () => {
+    await seedOrg(2); // 2 of 3
+    await assertSucceeds(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  it("blocks the create that would exceed the Starter cap", async () => {
+    await seedOrg(3); // at 3 of 3
+    await assertFails(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  it("lets a paid org past the Starter cap, up to its own", async () => {
+    await seedOrg(3, { tier: "pro", status: "active" }); // Starter would block; Pro allows 5
+    await assertSucceeds(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  it("blocks a Pro org at its own cap of 5", async () => {
+    await seedOrg(5, { tier: "pro", status: "active" });
+    await assertFails(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  it("never blocks Business (unlimited)", async () => {
+    await seedOrg(999, { tier: "business", status: "active" });
+    await assertSucceeds(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  it("treats a cancelled subscription as Starter", async () => {
+    await seedOrg(3, { tier: "pro", status: "canceled" });
+    await assertFails(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  it("keeps the paid tier while past_due — dunning decides, not the quota", async () => {
+    await seedOrg(4, { tier: "pro", status: "past_due" });
+    await assertSucceeds(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  // Deleting is how an over-quota org gets back under its cap, so the gate must
+  // not touch it (CLAUDE.md — check every new write gate against the cascade).
+  it("still allows deleting a Pulse while over quota", async () => {
+    await seedOrg(9, { tier: "pro", status: "active" }); // 9 > 5, well over
+    // Belongs to the over-quota org specifically — seedPulse would pin it to
+    // "w1" and quietly test nothing.
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", "pdel"), {
+        workspaceId: WS, name: "Doomed", createdBy: "alice", createdAt: Date.now(), updatedAt: Date.now(),
+        graphConfig: { stepPx: 16, workPerStep: 1 },
+      });
+      await setDoc(doc(db, "pulses", "pdel", "pulseMembers", "alice"), { uid: "alice", email: "alice@example.com", role: "owner", joinedAt: Date.now() });
+    });
+    // Deleting is how an org gets back under its cap, so it must stay ungated.
+    await assertSucceeds(deleteDoc(doc(dbAs("alice", "alice@example.com"), "pulses", "pdel")));
+  });
+
+  it("denies creating a Pulse in an org you don't belong to", async () => {
+    await seedOrg(0); // room to spare — membership is what fails, not the count
+    await assertFails(newPulse(dbAs("outsider"), "psneak"));
+  });
+
+  it("an org with no counter yet is not locked out", async () => {
+    await seedOrg(undefined); // pre-SF11 workspace: field absent ⇒ 0
+    await assertSucceeds(newPulse(dbAs("owner"), "pnew"));
+  });
+
+  // ── the counter itself must be server-only, or the gate is decoration ──
+  it("denies a workspace owner writing pulseCount", async () => {
+    await seedOrg(3);
+    await assertFails(updateDoc(doc(dbAs("owner"), "workspaces", WS), { pulseCount: 0 }));
+  });
+
+  it("denies smuggling pulseCount alongside a legitimate field", async () => {
+    await seedOrg(3);
+    await assertFails(updateDoc(doc(dbAs("owner"), "workspaces", WS), { name: "Renamed", pulseCount: 0 }));
+  });
+
+  it("still allows an ordinary workspace update", async () => {
+    await seedOrg(3);
+    await assertSucceeds(updateDoc(doc(dbAs("owner"), "workspaces", WS), { name: "Renamed" }));
+  });
+
+  it("denies creating a workspace with a forged counter", async () => {
+    await assertFails(
+      setDoc(doc(dbAs("mallory"), "workspaces", "wforge"), {
+        name: "Mine", isPersonal: true, ownerId: "mallory", createdAt: Date.now(), pulseCount: 0,
+      }),
+    );
   });
 });

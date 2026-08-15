@@ -39,6 +39,9 @@ export interface Workspace {
    * the tier's editor-seat limit (`editorSeatLimit`). Absent ⇒ just the owner
    * (Pro, 1 seat). Collaborators are NOT here — they're free, per-Pulse. */
   editorUids?: string[];
+  /** Server-maintained quota counter — see WorkspaceCounters. Read by the
+   * Pulse-create rule; rejected on any client write. */
+  pulseCount?: number;
 }
 
 export type WorkspaceRole = "owner" | "member";
@@ -107,6 +110,17 @@ export interface Entitlements {
   maxPulses: number | null;
   maxCollaborators: number | null;
   maxResourcesPerPulse: number | null;
+}
+
+/** Quota counters materialized onto the workspace doc by SF11
+ * (`functions/src/counters.ts`), because security rules can't count a
+ * collection. **Server-owned** — `firestore.rules` rejects any client write to
+ * them, since a client that could set its own counter could set it to 0 and the
+ * quota gate would be decoration. Absent on workspaces that predate SF11 and on
+ * any that have never had a Pulse created or deleted since. */
+export interface WorkspaceCounters {
+  /** Every Pulse the org holds, archived and hidden included (PL12). */
+  pulseCount?: number;
 }
 
 export interface Pulse {

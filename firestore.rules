@@ -34,6 +34,49 @@ service cloud.firestore {
       return ('email' in request.auth.token) ? request.auth.token.email.lower() : '';
     }
 
+    // ---- quotas (Plans-Spec §5, PL5 option b) ----
+    // Counters SF11 owns and clients may never write. Named once so the
+    // workspace create/update rules and any future counter stay in step.
+    function SERVER_COUNTERS() { return ['pulseCount']; }
+
+    // The org's plan, defaulting to Starter when no billing doc exists — the
+    // free tier IS the absence of a subscription (Plans-Spec §4). `past_due`
+    // deliberately keeps its paid tier here: the client-side grace window
+    // (DELINQUENCY_GRACE_DAYS) can't be expressed in rules, and the generous
+    // reading is the correct one for a quota — a failed card is usually an
+    // expired card, not a decision to stop paying. SF3 emits
+    // `customer.subscription.deleted` when dunning is exhausted, and that is
+    // what drops the tier for real.
+    function planTierOf(orgId) {
+      return !exists(/databases/$(database)/documents/billing/$(orgId))
+        ? 'starter'
+        : (get(/databases/$(database)/documents/billing/$(orgId)).data.get('status', 'canceled') in ['active', 'trialing', 'past_due']
+            ? get(/databases/$(database)/documents/billing/$(orgId)).data.get('tier', 'starter')
+            : 'starter');
+    }
+
+    // Mirrors TIER_ENTITLEMENTS.maxPulses in src/domain/entitlements.ts — keep
+    // the two in step. -1 stands for "unlimited" (rules have no null-safe max).
+    function maxPulsesFor(orgId) {
+      let tier = planTierOf(orgId);
+      return tier == 'business' ? -1 : (tier == 'pro' ? 5 : 3);
+    }
+
+    // Room for one more Pulse in this org?
+    //
+    // `pulseCount` is absent until SF11 first writes it, so it defaults to 0 —
+    // meaning an org that predates SF11 gets one free create before the counter
+    // materializes and the cap starts biting. That is the same transient
+    // over-allow PL5 already accepts for the async counter, and it self-heals:
+    // SF11 recounts on every create. Run the backfill script to close it
+    // immediately (functions/scripts/backfill-pulse-counts.mjs).
+    function withinPulseQuota(orgId) {
+      let limit = maxPulsesFor(orgId);
+      return limit < 0 ||
+        !exists(/databases/$(database)/documents/workspaces/$(orgId)) ||
+        get(/databases/$(database)/documents/workspaces/$(orgId)).data.get('pulseCount', 0) < limit;
+    }
+
     // ---- workspaces ----
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() &&
@@ -150,8 +193,15 @@ service cloud.firestore {
       allow read: if isWorkspaceMember(workspaceId);
       // The creator becomes the sole owner in the same client-side bootstrap
       // transaction that also writes their workspaceMembers/{uid} doc below.
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid
+        // A workspace can't be born with a forged counter either.
+        && !request.resource.data.keys().hasAny(SERVER_COUNTERS());
+      // `pulseCount` is SF11's (functions/src/counters.ts). An owner who could
+      // write it could write 0 and the quota gate below would be decoration, so
+      // it is excluded here; the Admin SDK bypasses rules, which is how SF11
+      // still maintains it.
+      allow update: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner'
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(SERVER_COUNTERS());
       allow delete: if false; // not supported in v1
 
       match /workspaceMembers/{memberUid} {
@@ -193,7 +243,17 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid
         // Never born archived — so duplicating an archived Pulse yields an
         // active copy (Hide-and-Archive-Spec §4.3).
-        && request.resource.data.get('archivedAt', null) == null;
+        && request.resource.data.get('archivedAt', null) == null
+        // Plan quota (Plans-Spec §3.2/§5). Only creates are gated: this is the
+        // one write that can raise the count. Deleting a Pulse is how you
+        // reclaim a slot, so it must stay ungated — gating it would make an
+        // over-quota org unable to get back under its cap (CLAUDE.md: any new
+        // write gate must be checked against the deletePulse cascade).
+        // Must be an org you actually belong to. Without this the quota is
+        // trivially dodged by pointing workspaceId at a made-up id (no doc, no
+        // counter, no limit) or at someone else's org (spending their quota).
+        && isWorkspaceMember(request.resource.data.workspaceId)
+        && withinPulseQuota(request.resource.data.workspaceId);
       allow update: if
         // (a) The archive / unarchive write itself — owner-only, and the ONLY
         // write permitted to cross the freeze. hasOnly() stops a rename or a
