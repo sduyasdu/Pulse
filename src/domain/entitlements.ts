@@ -28,11 +28,18 @@ export const ALL_TIERS: PlanTier[] = ["starter", "pro", "business"];
 /**
  * Monthly USD list price **per editor seat** (Plans-Spec §2, PL1 — decided).
  *
- * ⚠️ Display only. **Stripe is the source of truth for what is actually
- * charged**: Checkout bills the price attached to the product carrying the
- * matching `tier` metadata, not this number. They agree today; if the Stripe
- * price is ever edited without updating this, the picker will advertise a stale
- * figure. Sourcing it from Stripe would need a `listPlans` callable.
+ * ⚠️ Display only, and **known to be drifting**. Stripe is the source of truth
+ * for what is actually charged: Checkout bills the price attached to the product
+ * carrying the matching `tier` metadata, not this number.
+ *
+ * They no longer agree. The live catalog moved to MXN during the 2026-08
+ * cutover (American Express will not authorise cross-currency in Mexico), so the
+ * plans form advertises "$6 USD" while Checkout charges pesos — a mismatch in
+ * both amount and currency, on the screen immediately before payment.
+ *
+ * **Plans-Spec PL14 decides the fix: a `listPlans` callable, rendering the plans
+ * form from Stripe's own prices.** Until that ships, treat these numbers as
+ * indicative and expect the billing dialog to be wrong for MX customers.
  */
 export const TIER_PRICE_USD: Record<PlanTier, number> = { starter: 0, pro: 6, business: 12 };
 

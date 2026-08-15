@@ -1,6 +1,6 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **All decisions resolved (PL1–PL12)** · Owner: product + eng ·
+Status: **PL1–PL12 resolved; PL13–PL16 (transaction acceptance) decided 2026-08-15, not yet implemented** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
@@ -8,6 +8,11 @@ Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3
 **$0/$6/$12 per editor seat/mo** (PL1) with the §3.2 quotas (PL3); a seat = an **editor**
 (PL11); launch **Mexico**, invoicing manual (PL10/10-a); **archived Pulses count against the
 Pulses quota** — delete or upgrade to free a slot, never archive (PL12). See §2–§3, §8.
+
+**Acceptance (§9.5b, PL13–16):** USD stays the list price with per-currency
+`currency_options` (**not** a second Price — see PL13); the plans form must read prices
+from Stripe rather than a constant (PL14); local rails and Stripe's own churn-recovery
+features are configuration, not code (PL15/16).
 
 ## 0. What this is (and isn't)
 
@@ -87,6 +92,11 @@ entitlement.
 feature**. Price is **per editor seat, per month**, in **USD**, billed **monthly in
 arrears** ("mass" billing at month end) via Stripe. For Mexican customers the price is
 **VAT-inclusive** (IVA 16% via Stripe Tax); the SAT factura global stays manual (§9.5).
+
+> **USD is the *list* currency, not necessarily the charged one.** Per PL13 a customer may
+> be presented and charged in a local currency via `currency_options` — required for
+> American Express in Mexico, which will not authorise a cross-currency charge at all. The
+> figures in this table are the USD reference amounts; §9.5b owns what is actually shown.
 
 | Tier | $/editor/mo | Editor seats | Pulses/org | Collaborators/org | Resources/Pulse |
 |---|---|---|---|---|---|
@@ -461,6 +471,100 @@ Pulse launches billing in **Mexico only**. Concretely:
   launch.
 - **No new server function for MX at launch.** The only billing function is **SF3**
   (Stripe subscription → `billing/{orgId}` sync). There is no scheduled invoicer.
+
+### 9.5b Acceptance rate: currency, locale and payment methods (PL13–PL16)
+
+Everything in this sub-section exists because a payment that Stripe never gets to
+attempt is indistinguishable, commercially, from one it declines. Three real
+failures during the 2026-08 live cutover motivated it:
+
+- **American Express refused outright** — *"American Express no es compatible con
+  esta transacción"*. Amex is a closed-loop network that acquires directly, and
+  for merchants in several countries (Mexico among them) it will only authorise
+  in the **account's local currency**. A Mexican-acquired merchant charging USD
+  cannot take Amex at all. Visa/Mastercard have no such rule, which is why only
+  Amex failed.
+- **A currency change collided with abandoned sessions** — *"You cannot combine
+  currencies on a single customer"*. A Stripe Customer's currency is pinned by
+  the first live object attached to it, and an **open Checkout session counts**.
+  So a currency switch strands every customer with an unexpired session in the
+  old currency until it expires (24h) or the Customer is replaced.
+- **The list price and the charged price can disagree** — see PL14.
+
+#### Where the "region" of a Stripe page actually comes from
+
+Four different things get called region, and they have four different sources.
+`createCheckoutSession` sets **none** of the first two, which is why the page
+appeared in Spanish without anyone configuring it:
+
+| What | Source | Set by us? |
+| --- | --- | --- |
+| **Page language** | the `locale` param; absent ⇒ Stripe auto-detects from the browser's `Accept-Language` | no — auto |
+| **Currency** | the Price (`currency`, or the matching `currency_options` entry) | no — implicit in the Price |
+| **Tax jurisdiction** | the Customer's address, collected by `customer_update: { address: 'auto' }` and consumed by `automatic_tax` | yes (`billing.ts:584`) |
+| **Which payment methods appear** | account country × customer location × currency, per the dashboard's payment-method settings | no — dashboard |
+
+The practical consequence: **currency is the lever**, not locale. Translating the
+page does nothing for Amex; presenting MXN does.
+
+#### The decisions
+
+13. **PL13 — Currency presentment. → DECIDED: keep USD as the list price, and add
+    a `currency_options` entry per supported local currency (MXN first).**
+    Adaptive Pricing (Stripe converts at its own FX rate) is the alternative and
+    is rejected as the default: it produces unroundable figures (\$6 → \$118.43)
+    and hands pricing to a daily-moving rate. `currency_options` keeps
+    round numbers we choose. *Rejected: switching the catalog wholesale to MXN* —
+    it fixes Amex but forces pesos on every non-Mexican customer, which is a
+    worse trade than the one it solves.
+
+    > ⚠️ **Implementation constraint — one Price per tier, not one per currency.**
+    > `priceForTier` (`functions/src/billing.ts:501`) returns the **first** active
+    > recurring price whose product carries the tier. Two Price objects both
+    > tagged `tier: pro` therefore resolve arbitrarily, and would present as an
+    > intermittent wrong-currency bug. Multi-currency **must** be
+    > `currency_options` on a single Price. If separate Prices are ever needed,
+    > `priceForTier` has to take a currency argument first.
+    >
+    > `tax_behavior: inclusive` is per **currency option**. Set on the default
+    > currency only, the MXN amount is not IVA-inclusive and PL1's "the price
+    > already includes IVA" quietly stops being true.
+
+14. **PL14 — One source of truth for displayed price. → DECIDED: the plans form
+    must read Stripe, not a constant.** `TIER_PRICE_USD`
+    (`src/domain/entitlements.ts`) is a hardcoded 6/12 and its own comment
+    already warns it will drift. It now has: the catalog moved to MXN while the
+    billing dialog still advertised **\$6 USD**, so the plans form and the
+    collection page disagreed about both amount *and* currency — the exact
+    mismatch that produces abandoned checkouts and card disputes. Add a
+    `listPlans` callable returning `{ tier, currency, unitAmount }` per active
+    price (cacheable, unauthenticated-safe — it is public pricing), and render
+    from that. *Rejected: mirroring the number into config* — that is the same
+    drift with more steps.
+
+15. **PL15 — Local payment methods. → DECIDED: enable the local rails Stripe
+    offers for the launch country, and let Stripe decide which to show.**
+    For Mexico that means at minimum **card + OXXO** (cash voucher, still a
+    material share of Mexican consumer payment) and evaluating **SPEI** and
+    **card instalments / meses sin intereses**, which are close to an expectation
+    for higher-ticket Mexican purchases. This is dashboard configuration, not
+    code: `createCheckoutSession` deliberately does **not** set
+    `payment_method_types`, so whatever is enabled appears automatically.
+    *Caveat to check before enabling:* OXXO and SPEI are asynchronous — the
+    customer pays hours or days later — which does not fit `mode: "subscription"`
+    the way a card does. Confirm Stripe's support for each in a subscription
+    context before turning it on; the recurring path may remain card-only even
+    when one-off purchases are not.
+
+16. **PL16 — Involuntary churn. → DECIDED: turn on the recovery features rather
+    than build them.** Stripe's **Smart Retries** (ML-timed dunning) and **card
+    account updater** (issuer-pushed replacements for expired/reissued cards)
+    both reduce failed recurring charges with no code. The 15-day
+    `DELINQUENCY_GRACE_DAYS` window (§5.1) already assumes Stripe is retrying —
+    with retries off, one failed charge cancels immediately and the whole grace
+    design never runs. Also set a clear **statement descriptor**: an
+    unrecognisable line item is a common cause of chargebacks, which cost more
+    than the transaction.
 
 ### 9.6 Stripe setup — concrete requirements
 
