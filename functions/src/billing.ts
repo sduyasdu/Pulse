@@ -86,6 +86,25 @@ export function readTier(meta: Stripe.Metadata | null | undefined): PlanTier | n
 }
 
 /**
+ * The tier a Price declares, for reading an **existing** subscription back:
+ * product metadata first, price metadata as a legacy fallback.
+ *
+ * The fallback is tolerance, not a requirement. The catalog is resolved from
+ * products (`tierCatalog`), so nothing needs `tier` on a Price any more — but a
+ * subscription sold before that change may have been created against a
+ * price-tagged catalog, and failing to resolve its tier would leave a paying
+ * customer with no plan.
+ *
+ * Deliberately no `active` check: an existing subscription must still resolve
+ * its tier after its product has been deactivated.
+ */
+export function tierOfPrice(price: Stripe.Price): PlanTier | null {
+  const product = price.product;
+  const expanded = typeof product === "object" && product !== null && !("deleted" in product && product.deleted);
+  return (expanded ? readTier((product as Stripe.Product).metadata) : null) ?? readTier(price.metadata);
+}
+
+/**
  * The **licensed** subscription item: the first item whose product (preferred) or
  * price metadata declares a `tier`. Everything we surface hangs off this item —
  * `quantity` is the purchased editor seats (PL9: the seat count Stripe bills) and
@@ -97,9 +116,7 @@ export function readTier(meta: Stripe.Metadata | null | undefined): PlanTier | n
  */
 export function licensedItem(sub: Stripe.Subscription): { item: Stripe.SubscriptionItem; tier: PlanTier } | null {
   for (const item of sub.items.data) {
-    const product = item.price.product;
-    const expanded = typeof product === "object" && product !== null && !("deleted" in product && product.deleted);
-    const tier = (expanded ? readTier((product as Stripe.Product).metadata) : null) ?? readTier(item.price.metadata);
+    const tier = tierOfPrice(item.price);
     if (tier) return { item, tier };
   }
   return null;
@@ -494,21 +511,50 @@ async function requireOwnedWorkspace(db: Db, uid: string, requested: unknown): P
 }
 
 /**
- * The active recurring price for a tier, found by the `tier` metadata on its
- * product — the same metadata SF3 reads back off the subscription, so the two
- * directions can't drift. Listing and filtering rather than using the Search API
- * because search is eventually consistent and would miss a just-created price.
+ * The sellable catalog: for each **product** carrying a `tier` tag, that
+ * product's **default price**.
+ *
+ * Products are the unit of tagging, not prices. A product declares which tier it
+ * is, and Stripe's own `default_price` says which price to charge for it — so a
+ * price needs no metadata at all, and adding a currency or running a promo price
+ * doesn't mean re-tagging anything. It also removes the ambiguity of the old
+ * "first active price matching the tier" scan, where two prices under one tier
+ * resolved arbitrarily.
+ *
+ * Listing rather than the Search API because search is eventually consistent and
+ * would miss a just-created product.
+ *
+ * Both the Checkout lookup and the plans form read this, so what is advertised
+ * and what is charged come from one resolution (PL14).
  */
-async function priceForTier(stripe: Stripe, tier: PlanTier): Promise<Stripe.Price | null> {
-  const prices = await stripe.prices.list({ active: true, type: "recurring", limit: 100, expand: ["data.product"] });
-  for (const price of prices.data) {
-    const product = price.product;
-    if (typeof product !== "object" || product === null) continue;
-    if ("deleted" in product && product.deleted) continue;
-    const p = product as Stripe.Product;
-    if (p.active && readTier(p.metadata) === tier) return price;
+async function tierCatalog(stripe: Stripe): Promise<{ tier: PlanTier; price: Stripe.Price }[]> {
+  const products = await stripe.products.list({ active: true, limit: 100, expand: ["data.default_price"] });
+  const out: { tier: PlanTier; price: Stripe.Price }[] = [];
+  for (const product of products.data) {
+    const tier = readTier(product.metadata);
+    if (!tier) continue;
+    const price = product.default_price;
+    if (typeof price !== "object" || price === null) {
+      // Tagged for a tier but unsellable — worth saying out loud, because the
+      // symptom downstream is "no price for tier" with no clue why.
+      log(FN, "tier product has no default price set", { productId: product.id, tier });
+      continue;
+    }
+    if (!price.active || price.type !== "recurring") continue;
+    // Two products claiming one tier is a catalog mistake; take the first and
+    // say so rather than picking silently.
+    if (out.some((x) => x.tier === tier)) {
+      log(FN, "duplicate tier product ignored", { productId: product.id, tier });
+      continue;
+    }
+    out.push({ tier, price });
   }
-  return null;
+  return out;
+}
+
+/** The price Checkout should bill for a tier — its product's default price. */
+async function priceForTier(stripe: Stripe, tier: PlanTier): Promise<Stripe.Price | null> {
+  return (await tierCatalog(stripe)).find((x) => x.tier === tier)?.price ?? null;
 }
 
 /**
@@ -535,20 +581,13 @@ async function priceForTier(stripe: Stripe, tier: PlanTier): Promise<Stripe.Pric
 export const listPlans = onCall({ secrets: [STRIPE_SECRET_KEY] }, async () => {
   const stripe = new Stripe(STRIPE_SECRET_KEY.value());
   try {
-    const prices = await stripe.prices.list({ active: true, type: "recurring", limit: 100, expand: ["data.product"] });
-    const plans: { tier: PlanTier; currency: string; unitAmount: number | null }[] = [];
-    for (const price of prices.data) {
-      const product = price.product;
-      if (typeof product !== "object" || product === null) continue;
-      if ("deleted" in product && product.deleted) continue;
-      const p = product as Stripe.Product;
-      if (!p.active) continue;
-      const tier = readTier(p.metadata) ?? readTier(price.metadata);
-      // First price wins per tier, matching priceForTier — so the plans form and
-      // Checkout can't disagree about which price a tier means.
-      if (!tier || plans.some((x) => x.tier === tier)) continue;
-      plans.push({ tier, currency: price.currency, unitAmount: price.unit_amount });
-    }
+    // The same catalog Checkout bills from, so the advertised price and the
+    // charged price cannot disagree.
+    const plans = (await tierCatalog(stripe)).map(({ tier, price }) => ({
+      tier,
+      currency: price.currency,
+      unitAmount: price.unit_amount,
+    }));
     log(FN, "listed plans", { count: plans.length });
     return { plans };
   } catch (err) {

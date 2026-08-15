@@ -518,13 +518,12 @@ page does nothing for Amex; presenting MXN does.
     it fixes Amex but forces pesos on every non-Mexican customer, which is a
     worse trade than the one it solves.
 
-    > ⚠️ **Implementation constraint — one Price per tier, not one per currency.**
-    > `priceForTier` (`functions/src/billing.ts:501`) returns the **first** active
-    > recurring price whose product carries the tier. Two Price objects both
-    > tagged `tier: pro` therefore resolve arbitrarily, and would present as an
-    > intermittent wrong-currency bug. Multi-currency **must** be
-    > `currency_options` on a single Price. If separate Prices are ever needed,
-    > `priceForTier` has to take a currency argument first.
+    > ⚠️ **Implementation constraint — put the currencies on the product's
+    > default price.** The catalog resolves a tier to its product's
+    > `default_price` (§9.6 B), so multi-currency belongs in `currency_options`
+    > on *that* price. A second Price object is simply never looked at, however
+    > it is tagged — which is safer than the old price-scan (it fails visibly
+    > rather than picking arbitrarily), but still not a way to add a currency.
     >
     > `tax_behavior: inclusive` is per **currency option**. Set on the default
     > currency only, the MXN amount is not IVA-inclusive and PL1's "the price
@@ -592,18 +591,25 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
   **$12 USD / editor / month**.
 - **No Starter product** — Starter is the free default (absence of a subscription; 1 editor).
 - Monthly billing **in arrears** (usage/quantity finalized at period end — "mass billing").
-- On **both the Product and its Price**, set metadata **`tier`** (`pro`|`business` —
-  lowercase) so SF3 maps a subscription → our tier without hard-coding Price ids. The
-  subscription `quantity` = editor seats (PL11).
+- On the **Product**, set metadata **`tier`** (`pro`|`business` — lowercase), and set the
+  product's **default price**. That pair is the whole contract: the tag says which tier the
+  product is, and Stripe's own `default_price` says what to charge for it. The subscription
+  `quantity` = editor seats (PL11).
 
-  > ⚠️ **The Product is the load-bearing one — this said "every Price" until 2026-08-13
-  > and was wrong in a way that fails closed.** The two code paths read it differently:
-  > `priceForTier` (`functions/src/billing.ts:501`), which Checkout uses to *find* the
-  > price, matches on **product metadata only**; `licensedItem` (`:102`), which the
-  > webhook uses to read the tier *back*, tries product first and falls back to price.
-  > So a catalog tagged only on the Price makes `priceForTier` return `null` and
-  > **Checkout fails outright** — "No active Stripe price is tagged with tier". Tag both:
-  > the Product because Checkout requires it, the Price as the webhook's fallback.
+  > **Prices need no metadata** (changed 2026-08-15). `tierCatalog`
+  > (`functions/src/billing.ts`) lists active **products**, reads `tier` off each, and takes
+  > that product's `default_price` — so adding a currency, or swapping in a promo price, is
+  > a default-price change with nothing to re-tag. Both Checkout and the plans form read
+  > this one resolver, so what is advertised and what is charged cannot disagree (PL14).
+  >
+  > *Previously* the catalog was scanned price-by-price, which needed the tag on the Price
+  > and resolved arbitrarily when a tier had more than one. `tierOfPrice` still accepts
+  > price-level metadata, but **only** when reading an existing subscription back — a
+  > subscription sold against the old price-tagged catalog must not lose its plan.
+  >
+  > ⚠️ **A tier product with no default price is invisible.** It is skipped and logged
+  > ("tier product has no default price set"); the symptom downstream is Checkout reporting
+  > no price for the tier.
 
 **C. Integration surfaces — eng**
 - **Checkout (hosted)** — a callable creates a Checkout Session: `mode: "subscription"`,

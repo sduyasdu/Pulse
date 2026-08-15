@@ -65,8 +65,13 @@ configuration and tax settings are all per-mode and must be recreated.
    - **Tax-inclusive** is PL1: the $6 already contains the 16% IVA. Left exclusive
      or unspecified, a Mexican customer is charged $6.96 and the published price is
      wrong.
-3. **The `tier` metadata goes on the Product *and* the Price**, and the Product is
-   the one that matters. `priceForTier` (`billing.ts:501`), which Checkout uses to
+3. **The `tier` metadata goes on the Product, and the product needs a default
+   price set.** *(Changed 2026-08-15 — prices no longer need a tag at all; the
+   catalog is resolved from products via `default_price`. The table above keeps
+   the Price row only because tagging both is harmless and helps a subscription
+   sold against the older catalog read back correctly.)*
+
+   Historical note, still true of the pre-2026-08-15 code: `priceForTier` (`billing.ts:501`), which Checkout uses to
    *find* the price, matches on **product metadata only** — tag just the Price and
    Checkout fails outright with *"No active Stripe price is tagged with tier"*.
    `licensedItem` (`:102`), which the webhook uses to read the tier back, tries

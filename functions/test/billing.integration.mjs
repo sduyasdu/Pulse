@@ -21,6 +21,7 @@ import {
   applyProDowngrade,
   safeReturnUrl,
   requireSeats,
+  tierOfPrice,
 } from "../lib/billing.js";
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-pulse-rules-test" });
@@ -253,6 +254,29 @@ assert(safeReturnUrl(42) === FALLBACK, "returnUrl: non-string falls back");
 // result carries a trailing slash the constant doesn't: an accepted value is
 // returned as `new URL(...).toString()`, which normalises a bare origin.
 assert(safeReturnUrl(FALLBACK) === `${FALLBACK}/`, "returnUrl: the fallback origin is itself allowed");
+
+// ---------------------------------------------------------------------------
+// 4b. Reading a tier back off an existing subscription
+//
+// The catalog is now resolved from PRODUCTS and their default_price, so nothing
+// needs `tier` on a Price. tierOfPrice is the read-back path only: it keeps a
+// price-metadata fallback so a subscription sold against the older
+// price-tagged catalog still resolves to a plan instead of silently losing it.
+// ---------------------------------------------------------------------------
+
+const priceWith = (productMeta, priceMeta) => ({
+  currency: "usd",
+  unit_amount: 600,
+  metadata: priceMeta ?? {},
+  product: productMeta === null ? "prod_unexpanded" : { active: true, metadata: productMeta },
+});
+
+assert(tierOfPrice(priceWith({ tier: "pro" }, {})) === "pro", "readback: product metadata resolves");
+assert(tierOfPrice(priceWith({ tier: "business" }, { tier: "pro" })) === "business", "readback: product wins over price");
+assert(tierOfPrice(priceWith({}, { tier: "pro" })) === "pro", "readback: legacy price-tagged subscription still resolves");
+assert(tierOfPrice(priceWith({}, {})) === null, "readback: untagged resolves to null");
+assert(tierOfPrice(priceWith({ tier: "teams" }, {})) === "pro", "readback: legacy 'teams' alias maps to pro");
+assert(tierOfPrice(priceWith(null, { tier: "pro" })) === "pro", "readback: unexpanded product falls back to price metadata");
 
 const seatsThrows = (v) => {
   try {
