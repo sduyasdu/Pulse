@@ -381,12 +381,21 @@ export function subscriptionIdFor(event: Stripe.Event): string | null {
  * carries no metadata. The workspace comes from what the Checkout callable put
  * on the session (`metadata.workspaceId`, else `client_reference_id`).
  */
-async function linkCheckoutSession(db: Db, session: Stripe.Checkout.Session): Promise<void> {
+async function linkCheckoutSession(db: Db, stripe: Stripe, session: Stripe.Checkout.Session): Promise<void> {
   const orgId = session.metadata?.workspaceId?.trim() || session.client_reference_id?.trim();
   const customer = session.customer;
   const customerId = typeof customer === "string" ? customer : (customer?.id ?? null);
   if (!orgId || !customerId) return;
   await db.doc(`workspaces/${orgId}`).set({ stripeCustomerId: customerId }, { merge: true });
+  // Stamp the org onto the Customer too. This used to happen at creation time;
+  // now that Checkout creates the Customer, this is the only chance — and
+  // `resolveOrgId` reads Customer metadata as its second fallback, for
+  // subscriptions later made straight from the Stripe dashboard, which carry no
+  // metadata of their own. Best-effort: the link above already covers the
+  // reverse lookup, so a failure here costs a fallback, not the resolution.
+  await stripe.customers.update(customerId, { metadata: { workspaceId: orgId } }).catch((err) => {
+    logError(FN, "could not stamp workspaceId on customer", err, { orgId, customerId });
+  });
   log(FN, "linked workspace to Stripe customer", { orgId, customerId });
 }
 
@@ -421,7 +430,7 @@ export const stripeWebhook = onRequest(
 
     try {
       if (event.type === "checkout.session.completed") {
-        await linkCheckoutSession(getFirestore(), event.data.object as Stripe.Checkout.Session);
+        await linkCheckoutSession(getFirestore(), stripe, event.data.object as Stripe.Checkout.Session);
       }
       const subscriptionId = subscriptionIdFor(event);
       if (!subscriptionId) {
@@ -632,26 +641,23 @@ async function expireOpenSessions(stripe: Stripe, customerId: string): Promise<v
   }
 }
 
-/** Reuse the org's Stripe Customer, creating one (once) if it has never had one. */
-async function ensureCustomer(db: Db, stripe: Stripe, workspaceId: string, workspace: Data, email: string | undefined): Promise<string> {
+/**
+ * The org's existing Stripe Customer, or null if it has never subscribed.
+ *
+ * **Deliberately does not create one.** A Customer's presentment currency is
+ * pinned by the first live object attached to it and is **immutable once set** —
+ * Stripe offers no way to change it. Creating the Customer at the moment someone
+ * *clicks* upgrade therefore locked the org into whatever currency that click
+ * resolved to, permanently, before any money changed hands. Observed on
+ * `cus_V4KxTPRImyty89`: nine abandoned USD sessions left the org unable to ever
+ * be quoted in MXN, and expiring the sessions could not undo it.
+ *
+ * Checkout creates the Customer itself, on completion, so the currency is
+ * decided by an actual purchase rather than by a page view (PL13).
+ */
+function existingCustomerId(workspace: Data): string | null {
   const existing = workspace.stripeCustomerId;
-  if (typeof existing === "string" && existing) return existing;
-
-  const customer = await stripe.customers.create(
-    {
-      email,
-      name: typeof workspace.name === "string" ? workspace.name : undefined,
-      // Read first by SF3's resolveOrgId — without it a dashboard-created
-      // subscription could only be matched by the reverse lookup below.
-      metadata: { workspaceId },
-    },
-    // Keyed on the workspace so a double-click (or a retry) reuses the same
-    // Customer instead of silently creating a second one.
-    { idempotencyKey: `pulse-customer-${workspaceId}` },
-  );
-  await db.doc(`workspaces/${workspaceId}`).set({ stripeCustomerId: customer.id }, { merge: true });
-  log(FN, "created Stripe customer", { workspaceId, customerId: customer.id });
-  return customer.id;
+  return typeof existing === "string" && existing ? existing : null;
 }
 
 export function requireSeats(raw: unknown): number {
@@ -688,23 +694,34 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
     logError(FN, "no active price for tier", new Error("missing price"), { tier });
     throw new HttpsError("failed-precondition", `No active Stripe price is tagged with tier "${tier}".`);
   }
-  const customerId = await ensureCustomer(db, stripe, workspaceId, workspace, request.auth?.token?.email);
-  await expireOpenSessions(stripe, customerId);
+  // Reuse the Customer only if the org already has one; a first-time subscriber
+  // gets theirs created by Checkout, on completion (see existingCustomerId).
+  const customerId = existingCustomerId(workspace);
+  if (customerId) await expireOpenSessions(stripe, customerId);
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer: customerId,
+      // Returning subscriber → the same Customer, so cards and history carry
+      // over. First-timer → an email to prefill, and Stripe mints the Customer
+      // when they actually pay. `customer_update` is only valid alongside
+      // `customer`, so the new-customer branch asks Checkout to collect the
+      // address instead — Stripe Tax needs one either way.
+      ...(customerId
+        ? { customer: customerId, customer_update: { address: "auto" as const, name: "auto" as const } }
+        : {
+            ...(request.auth?.token?.email ? { customer_email: request.auth.token.email } : {}),
+            billing_address_collection: "required" as const,
+          }),
       line_items: [{ price: price.id, quantity: seats }],
       client_reference_id: workspaceId,
       metadata: { workspaceId },
       // Read first by SF3 — the most direct org resolution there is.
       subscription_data: { metadata: { workspaceId } },
       // Stripe Tax computes IVA for MX customers, VAT-inclusive (Plans-Spec §9.5,
-      // Billing-and-Backend-Build-Plan "Mexico specifics"). Needs a customer
-      // address, which `customer_update` lets Checkout collect and save.
+      // Billing-and-Backend-Build-Plan "Mexico specifics"). It needs a customer
+      // address, collected by whichever branch above applies.
       automatic_tax: { enabled: true },
-      customer_update: { address: "auto", name: "auto" },
       allow_promotion_codes: true,
       success_url: `${returnUrl}?billing=success`,
       cancel_url: `${returnUrl}?billing=cancelled`,

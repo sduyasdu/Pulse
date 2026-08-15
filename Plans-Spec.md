@@ -502,6 +502,23 @@ failures during the 2026-08 live cutover motivated it:
   > before creating a new one** (`expireOpenSessions`). An abandoned session has
   > no value and holds a currency hostage for 24h. Best-effort: a failure there
   > must never block the purchase.
+  >
+  > **That was not enough, and the real fix is not creating the Customer so
+  > early.** `customer.currency` is **immutable once set** — Stripe exposes no
+  > way to change it — and expiring the nine abandoned sessions on
+  > `cus_V4KxTPRImyty89` did not release it. Creating the Customer when someone
+  > *clicks* upgrade therefore pinned the org's currency before any money moved,
+  > permanently. **Checkout now creates it instead, on completion**
+  > (`existingCustomerId` no longer creates; the new-customer branch passes
+  > `customer_email` and lets Stripe mint one). The currency is decided by a
+  > purchase rather than a page view, and an org that abandons Checkout is left
+  > with no Customer at all — nothing to pin.
+  >
+  > Returning subscribers still reuse their Customer, so cards and history carry
+  > over; their currency is genuinely settled by then. The `workspaceId` stamp
+  > that customer creation used to apply moved to `linkCheckoutSession`, which is
+  > now the only place we see the new Customer — `resolveOrgId` reads it as the
+  > fallback for subscriptions created straight from the Stripe dashboard.
 - **The list price and the charged price can disagree** — see PL14.
 
 #### Where the "region" of a Stripe page actually comes from
