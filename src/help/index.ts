@@ -4,13 +4,22 @@
 // actually opens the panel, rather than riding along in the always-loaded i18n
 // bundle.
 //
-// v1 ships English only and every other language falls back to it (HL2). Adding a
-// locale is one module plus one line here — the drawer, the search and this loader
-// don't change.
+// All six supported languages now have their own help, so `hasLocalizedHelp` is
+// true everywhere and the "English only" notice no longer appears (HL2 resolved,
+// 2026-08). Adding a locale is still one module plus one line here — the drawer,
+// the search and this loader don't change.
+//
+// Each locale is its own chunk, so a reader downloads the prose for their
+// language and no other.
 import type { HelpDoc, HelpSection } from "./types";
 
 const LOADERS: Record<string, () => Promise<{ help: HelpDoc }>> = {
   en: () => import("./en"),
+  es: () => import("./es"),
+  pt: () => import("./pt"),
+  fr: () => import("./fr"),
+  it: () => import("./it"),
+  de: () => import("./de"),
 };
 
 /** Languages with their own help content. Anything else is served English, and the
