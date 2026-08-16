@@ -112,3 +112,45 @@ a live system, check the live system: call the endpoint, read the logs, list the
 deployed functions, query the real data. In this project that habit caught a
 webhook URL that differed from every document, a catalog whose currency wasn't
 what everyone assumed, and a "fix" that had never actually run.
+
+## 1.7 Vendor domains leak into your product — decide which ones you brand
+
+Managed services run on **their** hostnames by default, and several of those are
+visible to users even when your app is on your own domain. Audit them early; each
+one is usually a config change and an afterthought later.
+
+Common leaks:
+
+| Surface | Default | Where a user sees it |
+| --- | --- | --- |
+| **Auth** | `<project>.<vendor>.com` | status bar while the auth iframe loads; the address bar of the sign-in popup |
+| **File storage** | bucket host | any link you hand out to a stored file |
+| **Transactional email** | shared sending domain | "via …" in the recipient's client, plus deliverability |
+| **Hosted payment pages** | provider domain | mid-checkout, at the least trusting moment |
+
+The auth one is the least obvious, so it is the worth-knowing example. A managed
+auth SDK typically loads a hidden iframe at `<authDomain>/__/auth/iframe` on
+startup and opens sign-in on that same origin. Nothing redirects, so the address
+bar is clean and the app looks fine — but the vendor host flashes in the status
+bar on every load. Pointing `authDomain` at a domain you already serve fixes it,
+and the provider usually serves the auth endpoints on any attached domain
+already: check for a 200 on the handler path before changing anything.
+
+Three things that make this bite harder than it should:
+
+- **It fails closed, on the front door.** Changing the auth domain means the
+  OAuth client's **authorised redirect URIs** must include the new
+  `.../__/auth/handler`, or every social sign-in dies with
+  `redirect_uri_mismatch`. Do that first, keep the old entry registered as the
+  rollback, and test in a fresh incognito session — an already-authenticated
+  reload does not exercise the redirect path at all.
+- **It is build-time config, not source.** The value is baked into the bundle
+  from an env var, so it is not in git: another machine or a CI pipeline will
+  quietly build with whatever *it* has. Document the variable in the example env
+  file, or a future deploy reverts it without anyone editing a line.
+- **Preconnect/prefetch hints have to move with it.** A hint pointing at the old
+  host warms a connection nothing uses and leaves the real one cold — on the
+  sign-in path, which is exactly where the latency is worst felt.
+
+Verify against the shipped artefact, not the config: grep the built bundle for
+the old hostname and confirm it is gone.
