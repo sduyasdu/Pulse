@@ -1,8 +1,8 @@
 # Pulse — Stripe Go-Live Runbook
 
-Status: **Live as of 2026-08-14 — §2–§5 done; §6 (verify with a real card) is the
-only remaining step, and it is also the first time the webhook will ever have run
-end to end. §0's two decisions are still open.** · Owner: product + eng ·
+Status: **Complete as of 2026-08-16 — §2–§6 all done, verified by a real
+purchase. GL1 resolved (quota enforcement shipped); GL2 (CFDI invoicing) is the
+only decision still open.** · Owner: product + eng ·
 Related: `Plans-Spec.md` (tiers, PL1–PL12), `Billing-and-Backend-Build-Plan.md`
 (Phase 3 — what is built and what isn't), `Server-Functions-Spec.md` (SF3)
 
@@ -165,6 +165,16 @@ from `APP`, which had been the same constant.
 Stripe **test clocks do not exist in live mode**, so verification means a real
 card.
 
+> ✅ **Done 2026-08-16 — the chain works.** A real Pro purchase drove
+> `customer.subscription.created`, `invoice.payment_succeeded`, `invoice.paid`
+> and `customer.subscription.updated`; all four synced the same
+> `billing/{orgId}` to `tier: pro, status: active, seats: 1`, which is the
+> at-least-once idempotency doing its job rather than four different outcomes.
+> `linkCheckoutSession` stamped a **fresh** customer (`cus_V5490faDmTWKyi`),
+> confirming the deferred-creation path. No signature failures.
+>
+> The warning below stands for anyone repeating this on a new account.
+>
 > ⚠️ **This is not a re-check of something known to work — it is the first
 > end-to-end run of the webhook, with real money.** §4 established that no test
 > Checkout ever completed, so signature verification, `syncSubscription`, the org
@@ -236,12 +246,14 @@ already taken — refund in the Stripe dashboard — and it does **not** restore
 
 ## 9. Decisions
 
-1. **GL1 — Ship live billing before rules-side quota enforcement?** ⛔ **OPEN.**
-   Everything in §2–§6 works without it; what's missing is that a paid limit is
-   advisory. *Recommendation: acceptable at launch only if the first customers are
-   known and few — the exposure is an org quietly exceeding its tier, not a
-   security hole (the plan itself is already unwritable). It should not outlive
-   the first handful of paying orgs.*
+1. **GL1 — Ship live billing before rules-side quota enforcement? ✅ RESOLVED
+   2026-08-15: enforcement shipped, so the question lapsed.** SF11
+   (`functions/src/counters.ts`) maintains `workspace.pulseCount` by recount, the
+   Pulse-create rule gates on it against the plan, and the dashboard explains the
+   limit rather than leaving a bare permissions error. Quotas are no longer
+   advisory. *The original recommendation — acceptable briefly, but not past the
+   first handful of paying orgs — was never tested, because enforcement landed
+   before the first real purchase.*
 2. **GL2 — CFDI invoicing before the first Mexican customer?** ⛔ **OPEN — needs
    an answer from outside engineering.** Not a code question; PL10-a deferred
    invoicing and that deferral was never revisited against the reality of billing
