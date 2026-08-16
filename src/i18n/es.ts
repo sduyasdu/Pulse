@@ -179,6 +179,7 @@ export const es: Dict = {
   "billing.perSeat": "Por licencia comprada",
   "billing.currentPlan": "Plan actual",
   "billing.selectPlan": "Elegir este plan",
+  "billing.buyInCurrency": "Comprar en {currency}",
   "billing.switchPlan": "Cambiar a este plan",
   "billing.youAreOn": "Estás en {tier}",
   "billing.free": "Gratis",

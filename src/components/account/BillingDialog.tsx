@@ -46,6 +46,7 @@ function PlanColumn({
   busy,
   price,
   onChoose,
+  onChooseMxn,
   t,
 }: {
   tier: PlanTier;
@@ -56,6 +57,9 @@ function PlanColumn({
    * column no longer decides what a tier costs. */
   price: string;
   onChoose: () => void;
+  /** Temporary: starts Checkout forced to MXN, to verify the price's
+   * `currency_options` entry resolves. Absent on Starter. */
+  onChooseMxn?: () => void;
   t: TFn;
 }) {
   const limits = TIER_ENTITLEMENTS[tier];
@@ -121,6 +125,21 @@ function PlanColumn({
       >
         {busy ? <InlineSpinner /> : label}
       </button>
+
+      {/* TEST BUTTON — forces currency=mxn instead of letting Stripe geolocate,
+          so the MXN currency_options entry can be verified end to end. Remove
+          once multi-currency is confirmed, or promote it to the "pay in another
+          currency" escape hatch. */}
+      {onChooseMxn && !current && !subscribed && (
+        <button
+          onClick={onChooseMxn}
+          disabled={busy}
+          className="hoverable mt-2 rounded-lg border px-3 py-2 text-xs font-semibold disabled:cursor-default disabled:opacity-55"
+          style={{ borderColor: "#D85A28", color: "#D85A28", background: "#FFFFFF" }}
+        >
+          {busy ? <InlineSpinner /> : t("billing.buyInCurrency", { currency: "MXN" })}
+        </button>
+      )}
     </div>
   );
 }
@@ -154,11 +173,11 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const choose = (tier: PlanTier) => {
+  const choose = (tier: PlanTier, currency?: string) => {
     // Already paying? Every change — up, down, or cancel — belongs in the portal.
     if (subscribed) return goto(createPortalUrl, "portal");
     if (tier === "starter") return; // the free default; nothing to buy
-    return goto(() => createCheckoutUrl(tier, seats), tier);
+    return goto(() => createCheckoutUrl(tier, seats, currency), tier);
   };
 
   return (
@@ -213,6 +232,7 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
               busy={busy === tier || (subscribed && busy === "portal")}
               price={prices[tier].formatted}
               onChoose={() => void choose(tier)}
+              onChooseMxn={tier === "starter" ? undefined : () => void choose(tier, "mxn")}
               t={t}
             />
           ))}

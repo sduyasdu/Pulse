@@ -185,6 +185,7 @@ export const en = {
   "billing.perSeat": "Per seat bought",
   "billing.currentPlan": "Current plan",
   "billing.selectPlan": "Choose this plan",
+  "billing.buyInCurrency": "Buy in {currency}",
   "billing.switchPlan": "Switch to this plan",
   "billing.youAreOn": "You're on {tier}",
   "billing.free": "Free",

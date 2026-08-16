@@ -40,12 +40,18 @@ const returnUrl = () => `${window.location.origin}/`;
  * Start Checkout for a paid tier and hand back the Stripe URL to redirect to.
  * `seats` is the number of paid editor seats (the billed quantity, PL9).
  */
-export async function createCheckoutUrl(tier: Exclude<PlanTier, "starter">, seats: number): Promise<string> {
-  const call = httpsCallable<{ tier: string; seats: number; returnUrl: string }, { url: string }>(
+export async function createCheckoutUrl(
+  tier: Exclude<PlanTier, "starter">,
+  seats: number,
+  /** Force a presentment currency (a `currency_options` entry must exist for
+   * it). Omit to let Stripe geolocate the buyer — the normal path. */
+  currency?: string,
+): Promise<string> {
+  const call = httpsCallable<{ tier: string; seats: number; returnUrl: string; currency?: string }, { url: string }>(
     functions,
     "createCheckoutSession",
   );
-  const { data } = await call({ tier, seats, returnUrl: returnUrl() });
+  const { data } = await call({ tier, seats, returnUrl: returnUrl(), ...(currency ? { currency } : {}) });
   return data.url;
 }
 

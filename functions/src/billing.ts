@@ -660,6 +660,23 @@ function existingCustomerId(workspace: Data): string | null {
   return typeof existing === "string" && existing ? existing : null;
 }
 
+/**
+ * An explicit presentment currency, or null to let Stripe decide.
+ *
+ * Passing one overrides the geolocation Stripe would otherwise do, and it only
+ * works if the price carries a matching `currency_options` entry — Stripe errors
+ * plainly if it doesn't, which surfaces through the message passthrough. Shape
+ * is validated here so a malformed value fails as a bad request rather than as
+ * an opaque Stripe error.
+ */
+export function requireCurrency(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string" || !/^[a-z]{3}$/i.test(raw)) {
+    throw new HttpsError("invalid-argument", "Currency must be a three-letter ISO code, e.g. \"mxn\".");
+  }
+  return raw.toLowerCase();
+}
+
 export function requireSeats(raw: unknown): number {
   const seats = raw === undefined || raw === null ? 1 : Number(raw);
   if (!Number.isInteger(seats) || seats < 1 || seats > 999) {
@@ -684,6 +701,7 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
   }
   const seats = requireSeats(request.data?.seats);
   const returnUrl = safeReturnUrl(request.data?.returnUrl);
+  const currency = requireCurrency(request.data?.currency);
 
   const db = getFirestore();
   const { workspaceId, workspace } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
@@ -713,6 +731,10 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
             ...(request.auth?.token?.email ? { customer_email: request.auth.token.email } : {}),
             billing_address_collection: "required" as const,
           }),
+      // Explicit currency overrides Stripe's geolocation; omitted, Stripe picks
+      // the `currency_options` entry matching the buyer and falls back to the
+      // price's default (PL13).
+      ...(currency ? { currency } : {}),
       line_items: [{ price: price.id, quantity: seats }],
       client_reference_id: workspaceId,
       metadata: { workspaceId },
@@ -733,11 +755,11 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
       cancel_url: `${returnUrl}?billing=cancelled`,
     });
     if (!session.url) throw new HttpsError("internal", "Stripe returned a session without a URL.");
-    log(FN, "created checkout session", { workspaceId, tier, seats, sessionId: session.id });
+    log(FN, "created checkout session", { workspaceId, tier, seats, sessionId: session.id, currency: currency ?? "auto", presented: session.currency });
     return { url: session.url };
   } catch (err) {
     if (err instanceof HttpsError) throw err;
-    logError(FN, "checkout session failed", err, { workspaceId, tier, seats });
+    logError(FN, "checkout session failed", err, { workspaceId, tier, seats, currency: currency ?? "auto" });
     // Report what Stripe actually said rather than guessing at a cause. This
     // message used to assert "check that Stripe Tax is enabled" — the likeliest
     // cause on a fresh account — and it then misdirected twice on live setup:
