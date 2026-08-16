@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+# …and anything derived from them: `*.local` matches the exact suffix only, so
+# a hand-made `.env.local.bak` would otherwise be committed, API key and all.
+.env.local*
 
 # Cloud Functions build output
 functions/lib

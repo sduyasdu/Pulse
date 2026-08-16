@@ -18,7 +18,10 @@
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
     <link rel="dns-prefetch" href="https://securetoken.googleapis.com" />
-    <link rel="dns-prefetch" href="https://pulse-b9d96.firebaseapp.com" />
+    <!-- The auth iframe/handler origin (VITE_FIREBASE_AUTH_DOMAIN). Keep these
+         in step: prefetching the wrong host warms a connection nothing uses,
+         and leaves the real one cold on the critical sign-in path. -->
+    <link rel="dns-prefetch" href="https://pulse.yasdu.com" />
     <title>Pulse — Visual Project Planning</title>
     <style>
       /* Instant splash shown before the JS bundle boots (replaced by React on
