@@ -129,33 +129,28 @@ function PlanColumn({
 }
 
 /**
- * A card-brand marker for American Express.
+ * The American Express card-brand mark (`public/brand/Amex_logo_color.svg`).
  *
- * Deliberately a typographic badge in Amex's blue rather than the official
- * logo: that mark is a trademarked asset with its own usage rules, and an
- * approximation drawn from memory would be both wrong and worse than not using
- * it. This reads unambiguously at 10px and claims nothing. Swap in the real
- * artwork if it is ever licensed and vendored into `public/brand/`.
+ * An `<img>` rather than inline SVG: the file carries an Illustrator `<style>`
+ * block with a generic `.st0` class, which inlining would leak into the page and
+ * let any other `.st0` recolour the logo. As an image it is self-contained.
+ *
+ * Decorative — the adjacent copy already names American Express — so it is
+ * hidden from assistive tech rather than repeating that. The artwork sits in a
+ * square canvas with the mark across the middle band, hence a height taller than
+ * the visible glyph; explicit dimensions keep the row from reflowing as it
+ * loads.
  */
 function AmexMark() {
   return (
-    <span
+    <img
+      src="/brand/Amex_logo_color.svg"
+      alt=""
       aria-hidden
-      className="mono"
-      style={{
-        background: "#006FCF",
-        color: "#FFFFFF",
-        fontWeight: 800,
-        fontSize: 10,
-        letterSpacing: "0.06em",
-        padding: "3px 6px",
-        borderRadius: 3,
-        flexShrink: 0,
-        lineHeight: 1,
-      }}
-    >
-      AMEX
-    </span>
+      width={34}
+      height={34}
+      style={{ flexShrink: 0, display: "block" }}
+    />
   );
 }
 
