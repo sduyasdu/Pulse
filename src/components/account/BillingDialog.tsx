@@ -128,6 +128,37 @@ function PlanColumn({
   );
 }
 
+/**
+ * A card-brand marker for American Express.
+ *
+ * Deliberately a typographic badge in Amex's blue rather than the official
+ * logo: that mark is a trademarked asset with its own usage rules, and an
+ * approximation drawn from memory would be both wrong and worse than not using
+ * it. This reads unambiguously at 10px and claims nothing. Swap in the real
+ * artwork if it is ever licensed and vendored into `public/brand/`.
+ */
+function AmexMark() {
+  return (
+    <span
+      aria-hidden
+      className="mono"
+      style={{
+        background: "#006FCF",
+        color: "#FFFFFF",
+        fontWeight: 800,
+        fontSize: 10,
+        letterSpacing: "0.06em",
+        padding: "3px 6px",
+        borderRadius: 3,
+        flexShrink: 0,
+        lineHeight: 1,
+      }}
+    >
+      AMEX
+    </span>
+  );
+}
+
 export function BillingDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const lang = useI18nStore((s) => s.lang);
@@ -217,28 +248,6 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
           </label>
         )}
 
-        {/* Currency. Not a question every customer has to answer — the form
-            opens in the right one for where they appear to be, and this is only
-            an escape hatch for the Amex case (PL17). */}
-        {!subscribed && showAmexSwitch && (
-          <button
-            onClick={() => setCurrency(MXN)}
-            className="mt-3 text-xs underline"
-            style={{ color: "#1B3A63" }}
-          >
-            {t("billing.amexSwitch")}
-          </button>
-        )}
-        {!subscribed && inMxnForAmex && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#FFF7F1", border: "1px solid #FBD3BE", color: "#9A3412" }}>
-            <Icon name="info" size={14} style={{ flexShrink: 0 }} />
-            <span>{t("billing.amexNotice")}</span>
-            <button onClick={() => setCurrency(USD)} className="ml-auto underline" style={{ color: "#9A3412" }}>
-              {t("billing.backToUsd")}
-            </button>
-          </div>
-        )}
-
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {ALL_TIERS.map((tier) => (
             <PlanColumn
@@ -253,6 +262,30 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
             />
           ))}
         </div>
+
+        {/* Currency, under the plans it applies to. Not a question every
+            customer answers — the form opens in the right one for where they
+            appear to be, and this is only the Amex escape hatch (PL17). */}
+        {!subscribed && showAmexSwitch && (
+          <button
+            onClick={() => setCurrency(MXN)}
+            className="hoverable mt-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-semibold"
+            style={{ borderColor: "#CBD5E1", background: "#FFFFFF", color: "#1B3A63" }}
+          >
+            <AmexMark />
+            <span>{t("billing.amexSwitch")}</span>
+            <Icon name="chevron_right" size={16} style={{ marginLeft: "auto", color: "#94A3B8" }} />
+          </button>
+        )}
+        {!subscribed && inMxnForAmex && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2.5 text-xs" style={{ background: "#FFF7F1", border: "1px solid #FBD3BE", color: "#9A3412" }}>
+            <AmexMark />
+            <span className="flex-1" style={{ minWidth: 180 }}>{t("billing.amexNotice")}</span>
+            <button onClick={() => setCurrency(USD)} className="underline" style={{ color: "#9A3412" }}>
+              {t("billing.backToUsd")}
+            </button>
+          </div>
+        )}
 
         {subscribed && (
           <button
