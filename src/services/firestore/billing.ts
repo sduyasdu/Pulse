@@ -63,12 +63,14 @@ export async function createPortalUrl(): Promise<string> {
   return data.url;
 }
 
-/** One tier's live price, straight from Stripe (Plans-Spec PL14). `unitAmount`
- * is in **minor units** (600 = $6.00) as Stripe stores it. */
+/** One tier's live prices, straight from Stripe (Plans-Spec PL14/PL17).
+ * `amounts` is keyed by lowercase ISO currency and holds **minor units**
+ * (600 = $6.00) as Stripe stores them — every currency the price is configured
+ * for, not only the default. A tier may not offer every currency. */
 export interface PlanPrice {
   tier: PlanTier;
-  currency: string;
-  unitAmount: number | null;
+  defaultCurrency: string;
+  amounts: Record<string, number | null>;
 }
 
 /**

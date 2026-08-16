@@ -20,19 +20,20 @@ export function formatMinorUnits(minor: number, currency: string, lang: string):
 }
 
 /**
- * Live plan prices for the plans form (Plans-Spec PL14).
+ * Live plan prices for the plans form (Plans-Spec PL14/PL17).
  *
- * The dialog used to render `TIER_PRICE_USD`, a hardcoded 6/12. That drifted the
- * moment the live catalog moved to MXN — the form advertised "$6 USD" while
- * Checkout charged pesos, on the screen immediately before payment.
+ * The dialog used to render `TIER_PRICE_USD`, a hardcoded 6/12, which drifted
+ * the moment the live catalog changed. Stripe is now the source for what is
+ * displayed, exactly as it already is for what is charged — and the displayed
+ * currency is then passed to Checkout, so the two cannot disagree.
  *
  * Stripe is asked once per mount. **Failure is not fatal**: an unreachable
  * catalog falls back to the built-in USD figures rather than rendering a plan
  * picker with blank prices, and `fromStripe` says which the caller is looking
- * at. Starter is always free and never a Stripe product, so it is formatted from
- * the constant either way.
+ * at. Starter is always free and never a Stripe product, so it is formatted
+ * from the constant either way.
  */
-export function usePlanPrices(lang: string): Record<PlanTier, DisplayPrice> {
+export function usePlanPrices(lang: string) {
   const [plans, setPlans] = useState<PlanPrice[] | null>(null);
 
   useEffect(() => {
@@ -48,12 +49,29 @@ export function usePlanPrices(lang: string): Record<PlanTier, DisplayPrice> {
     fromStripe: false,
   });
 
-  const of = (tier: PlanTier): DisplayPrice => {
+  /** Is this tier actually purchasable in this currency? A tier may be
+   * configured for fewer currencies than another — Business has no ARS today —
+   * and offering one Stripe would reject is worse than not offering it. */
+  const has = (tier: PlanTier, currency: string): boolean =>
+    tier !== "starter" && typeof plans?.find((p) => p.tier === tier)?.amounts?.[currency] === "number";
+
+  /** The price to show for a tier in a currency, falling back to the built-in
+   * USD figure when Stripe is unreachable or the currency isn't configured. */
+  const priceOf = (tier: PlanTier, currency: string): DisplayPrice => {
     if (tier === "starter") return fallback("starter"); // free by definition, never in Stripe
-    const hit = plans?.find((p) => p.tier === tier);
-    if (!hit || hit.unitAmount == null) return fallback(tier);
-    return { formatted: formatMinorUnits(hit.unitAmount, hit.currency, lang), fromStripe: true };
+    const amount = plans?.find((p) => p.tier === tier)?.amounts?.[currency];
+    if (typeof amount !== "number") return fallback(tier);
+    return { formatted: formatMinorUnits(amount, currency, lang), fromStripe: true };
   };
 
-  return { starter: of("starter"), pro: of("pro"), business: of("business") };
+  /** Currencies every paid tier can be bought in — the ones a currency switch
+   * may safely offer. */
+  const currencies = (): string[] => {
+    const paid: PlanTier[] = ["pro", "business"];
+    const all = new Set<string>();
+    for (const p of plans ?? []) for (const c of Object.keys(p.amounts)) all.add(c);
+    return [...all].filter((c) => paid.every((tier) => has(tier, c)));
+  };
+
+  return { priceOf, has, currencies, loaded: plans !== null };
 }

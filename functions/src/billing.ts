@@ -537,7 +537,14 @@ async function requireOwnedWorkspace(db: Db, uid: string, requested: unknown): P
  * and what is charged come from one resolution (PL14).
  */
 async function tierCatalog(stripe: Stripe): Promise<{ tier: PlanTier; price: Stripe.Price }[]> {
-  const products = await stripe.products.list({ active: true, limit: 100, expand: ["data.default_price"] });
+  // `currency_options` is NOT returned by default — without expanding it, a
+  // multi-currency price looks single-currency and the plans form would offer
+  // only the default (PL17).
+  const products = await stripe.products.list({
+    active: true,
+    limit: 100,
+    expand: ["data.default_price.currency_options"],
+  });
   const out: { tier: PlanTier; price: Stripe.Price }[] = [];
   for (const product of products.data) {
     const tier = readTier(product.metadata);
@@ -591,12 +598,17 @@ export const listPlans = onCall({ secrets: [STRIPE_SECRET_KEY] }, async () => {
   const stripe = new Stripe(STRIPE_SECRET_KEY.value());
   try {
     // The same catalog Checkout bills from, so the advertised price and the
-    // charged price cannot disagree.
-    const plans = (await tierCatalog(stripe)).map(({ tier, price }) => ({
-      tier,
-      currency: price.currency,
-      unitAmount: price.unit_amount,
-    }));
+    // charged price cannot disagree. Every configured currency is returned, not
+    // just the default: the plans form renders one of them and then asks
+    // Checkout for that exact currency, so what is shown is what is billed
+    // (PL17).
+    const plans = (await tierCatalog(stripe)).map(({ tier, price }) => {
+      const amounts: Record<string, number | null> = { [price.currency]: price.unit_amount };
+      for (const [code, option] of Object.entries(price.currency_options ?? {})) {
+        amounts[code] = option.unit_amount;
+      }
+      return { tier, defaultCurrency: price.currency, amounts };
+    });
     log(FN, "listed plans", { count: plans.length });
     return { plans };
   } catch (err) {

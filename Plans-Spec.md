@@ -1,6 +1,6 @@
 # Pulse — Plans & Entitlements Spec
 
-Status: **PL1–PL12 resolved; PL13–PL16 (transaction acceptance) decided 2026-08-15, not yet implemented** · Owner: product + eng ·
+Status: **PL1–PL12 resolved; PL13–PL16 decided 2026-08-15; PL17 (currency presentment + Amex switch) built 2026-08-16** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
@@ -599,6 +599,43 @@ page does nothing for Amex; presenting MXN does.
     design never runs. Also set a clear **statement descriptor**: an
     unrecognisable line item is a common cause of chargebacks, which cost more
     than the transaction.
+
+17. **PL17 — What currency the plans form quotes, and the Amex escape hatch.
+    → DECIDED: quote in one currency chosen for the customer, pass that same
+    currency to Checkout, and offer pesos as an opt-in for Amex.**
+
+    Concretely:
+
+    - The plans form renders **USD or MXN**, both read from Stripe
+      (`listPlans` returns every configured `currency_options` entry, not just
+      the default).
+    - It **opens in MXN for customers who look Mexican**, USD for everyone else.
+      The signal is the browser's IANA timezone (`domain/presentmentCurrency.ts`).
+    - **The quoted currency is passed to Checkout** (`currency` on the session).
+      The number on the plans form is therefore a promise, not a guess: Stripe
+      does not re-geolocate and quote something else. This is what finally closes
+      the display-vs-charge gap PL14 opened.
+    - Customers quoted in **USD** get one quiet link — *"Paying with American
+      Express? Click here"* — which switches the form to MXN and explains why:
+      Amex cannot be charged in USD on a Mexican account (§9.5b), so pesos are
+      the only way it will authorise. A **"Back to USD"** control returns.
+      Customers already in MXN never see it; they have no Amex problem.
+
+    *Rejected: a currency selector shown to everyone.* It taxes every customer
+    with a decision to serve the minority who need it — most people just want to
+    pay, and a currency question before a price is a reason to leave.
+
+    *Rejected: IP geolocation for the default.* It means a third-party request on
+    the billing screen, a dependency and a privacy question, to improve a default
+    that is one click from corrected. A timezone is a **heuristic** and will be
+    wrong for VPNs and travellers; that is tolerable precisely because the form
+    shows what it will charge and offers the alternative — a wrong guess is
+    visible, not silent.
+
+    ⚠️ **A currency is only offered when every paid tier has it.** Today Pro
+    carries `usd/ars/mxn` and Business only `usd/mxn`, so offering ARS in the
+    switch would advertise a Business price Stripe would refuse. `usePlanPrices`
+    filters to the intersection.
 
 ### 9.6 Stripe setup — concrete requirements
 

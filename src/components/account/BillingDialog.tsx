@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Icon } from "@/components/shared/Icon";
 import { InlineSpinner } from "@/components/shared/Spinner";
 import { useBilling } from "@/hooks/useBilling";
 import { usePlanPrices } from "@/hooks/usePlanPrices";
+import { MXN, USD, defaultPresentmentCurrency } from "@/domain/presentmentCurrency";
 import { createCheckoutUrl, createPortalUrl } from "@/services/firestore/billing";
 import {
   ALL_TIERS,
@@ -46,7 +48,6 @@ function PlanColumn({
   busy,
   price,
   onChoose,
-  onChooseMxn,
   t,
 }: {
   tier: PlanTier;
@@ -57,9 +58,6 @@ function PlanColumn({
    * column no longer decides what a tier costs. */
   price: string;
   onChoose: () => void;
-  /** Temporary: starts Checkout forced to MXN, to verify the price's
-   * `currency_options` entry resolves. Absent on Starter. */
-  onChooseMxn?: () => void;
   t: TFn;
 }) {
   const limits = TIER_ENTITLEMENTS[tier];
@@ -126,20 +124,6 @@ function PlanColumn({
         {busy ? <InlineSpinner /> : label}
       </button>
 
-      {/* TEST BUTTON — forces currency=mxn instead of letting Stripe geolocate,
-          so the MXN currency_options entry can be verified end to end. Remove
-          once multi-currency is confirmed, or promote it to the "pay in another
-          currency" escape hatch. */}
-      {onChooseMxn && !current && !subscribed && (
-        <button
-          onClick={onChooseMxn}
-          disabled={busy}
-          className="hoverable mt-2 rounded-lg border px-3 py-2 text-xs font-semibold disabled:cursor-default disabled:opacity-55"
-          style={{ borderColor: "#D85A28", color: "#D85A28", background: "#FFFFFF" }}
-        >
-          {busy ? <InlineSpinner /> : t("billing.buyInCurrency", { currency: "MXN" })}
-        </button>
-      )}
     </div>
   );
 }
@@ -153,6 +137,15 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
   const [seats, setSeats] = useState(1);
   // Live prices, so what this form advertises is what Checkout charges (PL14).
   const prices = usePlanPrices(lang);
+  // Which currency this form is quoting in. Seeded from the browser's timezone
+  // (Mexico → pesos), then whatever the customer picks. It is passed straight
+  // to Checkout, so the quote is a promise rather than a guess (PL17).
+  const [currency, setCurrency] = useState(defaultPresentmentCurrency);
+  const canOfferMxn = prices.has("pro", MXN) && prices.has("business", MXN);
+  // The Amex escape hatch is only meaningful for someone being quoted in USD:
+  // a customer already in pesos has no Amex problem to solve.
+  const showAmexSwitch = currency === USD && canOfferMxn;
+  const inMxnForAmex = currency === MXN && defaultPresentmentCurrency() !== MXN;
 
   const now = Date.now();
   const current = tierOf(billing, now);
@@ -173,10 +166,12 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const choose = (tier: PlanTier, currency?: string) => {
+  const choose = (tier: PlanTier) => {
     // Already paying? Every change — up, down, or cancel — belongs in the portal.
     if (subscribed) return goto(createPortalUrl, "portal");
     if (tier === "starter") return; // the free default; nothing to buy
+    // The currency on screen is the currency billed — never let Stripe
+    // re-geolocate and quote something the customer wasn't shown (PL17).
     return goto(() => createCheckoutUrl(tier, seats, currency), tier);
   };
 
@@ -222,6 +217,28 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
           </label>
         )}
 
+        {/* Currency. Not a question every customer has to answer — the form
+            opens in the right one for where they appear to be, and this is only
+            an escape hatch for the Amex case (PL17). */}
+        {!subscribed && showAmexSwitch && (
+          <button
+            onClick={() => setCurrency(MXN)}
+            className="mt-3 text-xs underline"
+            style={{ color: "#1B3A63" }}
+          >
+            {t("billing.amexSwitch")}
+          </button>
+        )}
+        {!subscribed && inMxnForAmex && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#FFF7F1", border: "1px solid #FBD3BE", color: "#9A3412" }}>
+            <Icon name="info" size={14} style={{ flexShrink: 0 }} />
+            <span>{t("billing.amexNotice")}</span>
+            <button onClick={() => setCurrency(USD)} className="ml-auto underline" style={{ color: "#9A3412" }}>
+              {t("billing.backToUsd")}
+            </button>
+          </div>
+        )}
+
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {ALL_TIERS.map((tier) => (
             <PlanColumn
@@ -230,9 +247,8 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
               current={tier === current}
               subscribed={subscribed}
               busy={busy === tier || (subscribed && busy === "portal")}
-              price={prices[tier].formatted}
+              price={prices.priceOf(tier, currency).formatted}
               onChoose={() => void choose(tier)}
-              onChooseMxn={tier === "starter" ? undefined : () => void choose(tier, "mxn")}
               t={t}
             />
           ))}
