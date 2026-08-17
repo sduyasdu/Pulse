@@ -6,6 +6,12 @@
          tile rather than the bare mark: at 16px a 1px bezel disappears and the
          disc reads as a dot, so the tile carries the shape. SVG for browsers
          that take it, PNGs for the ones that ask for a raster. -->
+    <!-- /favicon.ico first, and it must be a real file: anything that fetches
+         the conventional path rather than parsing this HTML — link previewers,
+         MCP clients, feed readers — otherwise hits the SPA catch-all, gets
+         index.html with a 200, fails to decode it as an image, and falls back
+         to the parent domain's icon. -->
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/pulse-favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/brand/pulse-favicon-16.png" />
