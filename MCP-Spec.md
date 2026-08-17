@@ -382,3 +382,27 @@ assistant relays.
     ends up at the parent domain's mark. Real files now sit at both root paths.
     *Rejected: a rewrite rule excluding image extensions* — Hosting expresses
     that awkwardly, and two copied files have no failure mode.
+17. **MC17 — A stale tool list is announced on a tool call's own response
+    stream → DECIDED (`functions/src/mcpServer.ts`).** The connection document
+    remembers the `SERVER_INFO.version` it last served a `tools/list` at. When a
+    tool is called and that differs, the reply is a Streamable-HTTP SSE stream
+    carrying `notifications/tools/list_changed` ahead of the result; the client
+    re-lists, the field is updated, and it stops. `capabilities.tools.listChanged`
+    is now declared, because it is now true. This is what makes MC15's
+    reconnect-per-tool-change unnecessary from here on, and it is why `version`
+    must track the tool surface rather than the code — it *is* the staleness
+    signal. *Rejected: an explicit `refresh_tools` tool* — same mechanism, but it
+    only fires when someone thinks to call it, and a maintenance tool in a
+    customer-facing list is clutter that has to be explained. *Rejected: a
+    long-lived SSE stream over GET* — the general solution, and it means holding
+    connections open on Cloud Run for the lifetime of every session, billed by
+    duration, plus a resume story, to serve a notification sent a few times a
+    year (cf. MC11 on cost).
+    Two limits, both structural. The client can only honour this if it was
+    connected when the mechanism already existed, so it fixes the **next**
+    surface change and never the one that introduces it — **the Phase 2 write
+    tools will still need one reconnect.** And it only streams when the client's
+    `Accept` header offers `text/event-stream`; otherwise the plain JSON reply is
+    returned unchanged and the connection stays marked stale for the next call.
+    That guard is the lesson from MC15 applied: never answer in a shape the
+    client has not said it can read.

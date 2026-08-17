@@ -55,6 +55,11 @@ interface Caller {
   connectionId: string;
   scope: string;
   idToken: string;
+  /** The `SERVER_INFO.version` in force the last time we served this connection
+   * a `tools/list` — i.e. what its client's cached tool list corresponds to.
+   * Null until it has ever listed. Read off the connection doc `authenticate`
+   * already fetches, so knowing whether a client is stale costs nothing. */
+  toolsVersion: string | null;
 }
 
 /**
@@ -85,6 +90,7 @@ async function authenticate(authorization: string | undefined): Promise<Caller |
     connectionId,
     scope: typeof decoded.scope === "string" ? decoded.scope : "read",
     idToken,
+    toolsVersion: typeof connection.toolsVersion === "string" ? connection.toolsVersion : null,
   };
 }
 
@@ -544,6 +550,62 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
 const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 const rpcResult = (id: unknown, result: unknown) => ({ jsonrpc: "2.0", id, result });
 
+// ---------------------------------------------------------------------------
+// Telling a client its tool list is stale, without a standing connection
+//
+// A client caches the tool list when it connects, so adding a tool used to mean
+// asking every customer to reconnect. The protocol's answer is
+// `notifications/tools/list_changed`, which we cannot push from a stateless
+// function — there is no open channel to push down.
+//
+// But Streamable HTTP also lets a POST be answered with an SSE stream carrying
+// several messages, and notifications may precede the response. That stream
+// lives for the one request, so the notification rides back on a tool call the
+// client already made. No long-lived connections, no standing Cloud Run cost.
+//
+// The connection doc remembers which `SERVER_INFO.version` it last listed at,
+// so this converges by itself: notify on a call while stale, clear the flag when
+// the client re-lists, and stop. That is also why `version` must track the tool
+// surface rather than the code (MC15) — it is the staleness signal.
+//
+// The chicken-and-egg is worth stating: a client can only honour this if it was
+// connected when the mechanism already existed, so it fixes the NEXT surface
+// change, never the one that introduces it.
+// ---------------------------------------------------------------------------
+
+/** Whether this client said it can read an event stream. The spec has clients
+ * send both types on POST; we require the header rather than assume it, because
+ * answering SSE to a client expecting JSON breaks the call outright — the same
+ * class of failure as sending a member from a revision we did not announce. */
+const acceptsEventStream = (accept: string | undefined) => (accept ?? "").includes("text/event-stream");
+
+/** Write JSON-RPC messages as one SSE response and close. Ordering matters:
+ * notifications first, the response last, since the client stops reading once
+ * it has the answer to its request. */
+function sseRespond(res: { set: (h: Record<string, string>) => void; status: (n: number) => void; write: (s: string) => void; end: () => void }, messages: unknown[]) {
+  res.status(200);
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+  });
+  for (const m of messages) res.write(`event: message\ndata: ${JSON.stringify(m)}\n\n`);
+  res.end();
+}
+
+const TOOLS_CHANGED = { jsonrpc: "2.0", method: "notifications/tools/list_changed" };
+
+/** Remember what the client's cached list now corresponds to. Best effort: a
+ * missed write only costs a redundant notification on the next call. */
+async function recordToolsVersion(uid: string, connectionId: string): Promise<void> {
+  await getFirestore()
+    .doc(`users/${uid}/connections/${connectionId}`)
+    .set({ toolsVersion: SERVER_INFO.version }, { merge: true })
+    .catch(() => {
+      /* never fail a customer's request over bookkeeping */
+    });
+}
+
 export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res) => {
   // Discovery: point an unauthenticated client at where to get a token, in the
   // header OAuth clients look for. Without this they cannot start the flow.
@@ -588,7 +650,10 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
         downgraded: asked !== protocolVersion,
         serverVersion: SERVER_INFO.version,
       });
-      res.json(rpcResult(id, { protocolVersion, capabilities: { tools: {} }, serverInfo: SERVER_INFO }));
+      // `listChanged` is declared only because we can now actually send it, on
+      // the response stream of a tool call. Declaring a capability we could not
+      // honour would promise a notification that never arrives.
+      res.json(rpcResult(id, { protocolVersion, capabilities: { tools: { listChanged: true } }, serverInfo: SERVER_INFO }));
       return;
     }
     if (isNotification) {
@@ -614,6 +679,8 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
       // The count answers "did this client actually see the new tools?" without
       // anyone having to reproduce it — the question that started this.
       log(FN, "tools listed", { uid: caller.uid, connectionId: caller.connectionId, tools: TOOLS.length });
+      // Its cache is fresh as of now, so stop telling it otherwise.
+      if (caller.toolsVersion !== SERVER_INFO.version) void recordToolsVersion(caller.uid, caller.connectionId);
       res.json(rpcResult(id, { tools: TOOLS }));
       return;
     }
@@ -632,7 +699,24 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
       log(FN, "tool called", { uid: caller.uid, connectionId: caller.connectionId, tool: name });
       // Tool results are content blocks, not raw JSON — text is what every
       // client renders, and the assistant reads JSON in it perfectly well.
-      res.json(rpcResult(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] }));
+      const result = rpcResult(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] });
+
+      // The one path that streams. Both conditions must hold: the client's list
+      // is out of date AND it said it can read a stream. Otherwise this returns
+      // the same plain JSON it always has, and we leave the connection marked
+      // stale so the next call tries again.
+      const stale = caller.toolsVersion !== SERVER_INFO.version;
+      if (stale && acceptsEventStream(req.header("accept"))) {
+        log(FN, "announcing tool-list change", {
+          uid: caller.uid,
+          connectionId: caller.connectionId,
+          had: caller.toolsVersion,
+          now: SERVER_INFO.version,
+        });
+        sseRespond(res, [TOOLS_CHANGED, result]);
+        return;
+      }
+      res.json(result);
       return;
     }
 
