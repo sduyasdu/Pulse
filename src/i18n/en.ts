@@ -574,6 +574,26 @@ export const en = {
   "comments.openTask": "Open this task",
   "comments.filterByResource": "Filter by this resource",
   "comments.deleteConfirm": "Delete this comment?",
+
+  // ── MCP: connecting an AI assistant (MCP-Spec §2) ───────────────────────────
+  "mcp.title": "Connect {client} to Pulse?",
+  "mcp.anAssistant": "this assistant",
+  "mcp.signedInAs": "Signed in as {email}",
+  "mcp.willBeAbleTo": "What it will be able to do",
+  "mcp.canRead": "Read your Pulses — tasks, dates, people, epics and comments.",
+  "mcp.canSeeSame": "See exactly what you can see, and nothing more.",
+  "mcp.cannotWrite": "It cannot create, change or delete anything.",
+  "mcp.cannotBilling": "It cannot see billing, or invite anyone.",
+  "mcp.nameLabel": "Name this connection",
+  "mcp.namePlaceholder": "e.g. Claude on my laptop",
+  "mcp.nameHint": "So you can recognise it later in your list of connected assistants.",
+  "mcp.defaultName": "AI assistant",
+  "mcp.approve": "Connect",
+  "mcp.deny": "Cancel",
+  "mcp.approveError": "Couldn't connect the assistant — try again.",
+  "mcp.revokeNote": "You can disconnect it at any time from Account → Connected assistants.",
+  "mcp.badRequestTitle": "Something's missing from this request",
+  "mcp.badRequestBody": "This link didn't include everything Pulse needs to connect an assistant safely. Start the connection again from your assistant.",
 };
 
 /** The shape every other-language dictionary must match exactly. */

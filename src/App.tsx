@@ -17,6 +17,7 @@ const LoginPage = lazy(() => import("@/routes/LoginPage").then((m) => ({ default
 const DashboardPage = lazy(() => import("@/routes/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PulsePage = lazy(() => import("@/routes/PulsePage").then((m) => ({ default: m.PulsePage })));
 const JoinPage = lazy(() => import("@/routes/JoinPage").then((m) => ({ default: m.JoinPage })));
+const AuthorizePage = lazy(() => import("@/routes/AuthorizePage").then((m) => ({ default: m.AuthorizePage })));
 
 function RouteFallback() {
   return (
@@ -59,6 +60,18 @@ function App() {
             element={
               <RequireAuth>
                 <JoinPage />
+              </RequireAuth>
+            }
+          />
+          {/* MCP consent (MCP-Spec §2). Behind RequireAuth like everything
+              else — and RequireAuth preserves the query string, so a signed-out
+              customer logs in and returns here with the OAuth parameters
+              intact. */}
+          <Route
+            path="/oauth/authorize"
+            element={
+              <RequireAuth>
+                <AuthorizePage />
               </RequireAuth>
             }
           />
