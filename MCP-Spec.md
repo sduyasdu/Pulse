@@ -181,6 +181,8 @@ Pulse v1 is resources plus read-shaped tools.
 | `get_schedule` | tool | tasks in a date window with dates, effort and assignees |
 | `get_people_load` | tool | per-person allocation over a window, against capacity |
 | `get_costs` | tool | cost summary by model / person / task — **admins only**, mirroring `viewPeopleCost` |
+| `search_resources` | tool | resource detail: type, capacity, linked Pulse account, hourly rate where the role permits |
+| `search_comments` | tool | comments, newest first, with what each is attached to and whether it is a reply |
 | `get_activity` | tool | recent changes on a Pulse |
 
 **Every one is bounded.** No tool returns "everything": each takes a limit with a
@@ -406,3 +408,22 @@ assistant relays.
     returned unchanged and the connection stays marked stale for the next call.
     That guard is the lesson from MC15 applied: never answer in a shape the
     client has not said it can read.
+18. **MC18 — `search_resources` and `search_comments` (v0.3.0).** Resource
+    detail and discussion were the two things no tool reached. Both read through
+    the customer's own credentials like everything else, so their sensitive
+    parts gate themselves: hourly rates live in `pulses/{id}/rates`, admin-only
+    (Costs-Spec §8.3), and a member who may not see them gets a 403 that
+    `listAsUser` turns into `[]` — no rate reaches the assistant, enforced by the
+    rule rather than by a check in the tool. Where that produces an empty result
+    it carries the same note `get_costs` does, because an absent rate is not
+    evidence of a free resource. *Rejected: folding resource detail into
+    `get_pulse`* — it already returns name and capacity for every person, and
+    widening it would make the common call more expensive to serve the rare one.
+    *Rejected: reporting per-resource task load here* — `get_people_load` answers
+    that against a window, and duplicating it would cost a 200-document read on
+    every resource lookup. `search_comments` resolves `targetId` to the task or
+    resource name, treats a missing `targetKind` as a task (pre-resource-comment
+    data), and returns null for Pulse-level comments — which means unattached,
+    not orphaned.
+    Version moved 0.2.0 → 0.3.0, which is what MC17 keys on: this is the first
+    surface change to announce itself to already-connected clients.

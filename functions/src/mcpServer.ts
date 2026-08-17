@@ -42,7 +42,7 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  * icon is worth stating rather than leaving to `/favicon.ico`, which is now a
  * correct fallback but was the fallback that produced the Yasdu mark.
  */
-const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.2.0" };
+const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.3.0" };
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -342,6 +342,46 @@ export const TOOLS = [
     },
   },
   {
+    name: "search_resources",
+    description:
+      "The people and resources defined in a Pulse, in detail: type, capacity, the Pulse account each " +
+      "one is linked to (if any), and hourly rate where the user's role permits seeing it. " +
+      "For how busy they are, use get_people_load instead.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pulseId: { type: "string" },
+        query: { type: "string", description: "Text to find in the name or initials." },
+        type: { type: "string", description: "Resource type, e.g. 'developer'." },
+        linked: {
+          type: "boolean",
+          description: "True for only resources linked to a Pulse account, false for only unlinked ones.",
+        },
+        limit: { type: "number" },
+      },
+      required: ["pulseId"],
+    },
+  },
+  {
+    name: "search_comments",
+    description:
+      "Comments in a Pulse — the discussion, newest first. Each one says what it is attached to " +
+      "(a task, a resource, or the Pulse itself) and whether it is a reply. Filter by text, author, " +
+      "what it is about, or date.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pulseId: { type: "string" },
+        query: { type: "string", description: "Text to find in the comment body." },
+        author: { type: "string", description: "Author's email, or part of it." },
+        about: { type: "string", description: "Name of the task or resource the comment is attached to." },
+        since: { type: "string", description: "ISO date — only comments on or after it." },
+        limit: { type: "number", description: `Default 50, max ${MAX_LIMIT}.` },
+      },
+      required: ["pulseId"],
+    },
+  },
+  {
     name: "get_activity",
     description: "Recent changes in a Pulse — who changed what, and when. Newest first.",
     inputSchema: {
@@ -518,6 +558,110 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         // An empty result is ambiguous, and the ambiguity matters: costs are
         // role-gated, so say so rather than letting it read as "nothing spent".
         note: costs.length === 0 ? "No costs returned. This may mean none are recorded, or that your role cannot see them." : undefined,
+      };
+    }
+
+    case "search_resources": {
+      const limit = clampLimit(args.limit, 50);
+      const [resources, members, rates] = await Promise.all([
+        listAsUser(caller, `pulses/${pulseId}/resources`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${pulseId}/pulseMembers`, MAX_LIMIT),
+        // Admin-only in rules (Costs-Spec §8.3), so a member who may not see
+        // rates gets [] from the 403 and no rate reaches the assistant. The
+        // gate is the rule, not this code — which is the whole point of
+        // reading as the customer.
+        listAsUser(caller, `pulses/${pulseId}/rates`, MAX_LIMIT),
+      ]);
+      const account = new Map(members.map((m) => [String(m.uid ?? m.id), m]));
+      const rate = new Map(rates.map((r) => [String(r.resourceId ?? r.id), Number(r.hourlyCost ?? 0)]));
+
+      const q = fold(args.query);
+      const wantType = fold(args.type);
+      const hits = resources.filter((r) => {
+        if (q && !fold(r.name).includes(q) && !fold(r.initials).includes(q)) return false;
+        if (wantType && !fold(r.type).includes(wantType)) return false;
+        if (typeof args.linked === "boolean" && !!r.linkedUid !== args.linked) return false;
+        return true;
+      });
+
+      return {
+        resources: hits.slice(0, limit).map((r) => {
+          const linked = r.linkedUid ? account.get(String(r.linkedUid)) : null;
+          return {
+            resourceId: r.id,
+            name: r.name || r.initials || r.id,
+            initials: r.initials ?? null,
+            type: r.type ?? null,
+            capacityPercent: Number(r.capacity ?? 100),
+            // A resource is either a stand-in for a real collaborator or a
+            // placeholder for one. Which it is changes what an assistant should
+            // say about it, so state it rather than leaving it to be inferred
+            // from a null.
+            linkedAccount: linked ? { email: linked.email ?? null, role: linked.role ?? null } : null,
+            hourlyCostUsd: rate.has(String(r.id)) ? rate.get(String(r.id)) : null,
+          };
+        }),
+        matched: hits.length,
+        truncated: hits.length > limit ? `${hits.length} matched; showing ${limit}.` : undefined,
+        // Same ambiguity as get_costs, and the same fix: an absent rate is not
+        // evidence of a free resource.
+        note: rates.length === 0
+          ? "No hourly rates returned. This may mean none are set, or that your role cannot see them."
+          : undefined,
+      };
+    }
+
+    case "search_comments": {
+      const limit = clampLimit(args.limit, 50);
+      const look = await loadLookups(caller, pulseId);
+      const [comments, features] = await Promise.all([
+        listAsUser(caller, `pulses/${pulseId}/comments`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT),
+      ]);
+      const titles = new Map(features.map((f) => [String(f.id), String(f.title ?? "Untitled task")]));
+
+      /** What a comment hangs off. `targetKind` is absent on comments written
+       * before resource comments existed, and those are all tasks. */
+      const subjectOf = (c: Record<string, unknown>) => {
+        if (!c.targetId) return null;
+        const id = String(c.targetId);
+        return c.targetKind === "resource"
+          ? { kind: "resource", name: look.resources.get(id)?.name ?? id }
+          : { kind: "task", name: titles.get(id) ?? id };
+      };
+
+      const q = fold(args.query);
+      const wantAuthor = fold(args.author);
+      const wantAbout = fold(args.about);
+      const sinceMs = typeof args.since === "string" ? Date.parse(`${args.since}T00:00:00Z`) : null;
+
+      const hits = comments.filter((c) => {
+        if (q && !fold(c.text).includes(q)) return false;
+        if (wantAuthor && !fold(c.authorEmail).includes(wantAuthor)) return false;
+        if (wantAbout && !fold(subjectOf(c)?.name).includes(wantAbout)) return false;
+        if (sinceMs != null && Number(c.createdAt ?? 0) < sinceMs) return false;
+        return true;
+      });
+
+      return {
+        comments: hits
+          .sort((a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0))
+          .slice(0, limit)
+          .map((c) => ({
+            commentId: c.id,
+            when: c.createdAt ? new Date(Number(c.createdAt)).toISOString() : null,
+            editedAt: c.editedAt ? new Date(Number(c.editedAt)).toISOString() : null,
+            author: c.authorEmail ?? c.authorUid ?? "someone",
+            text: c.text ?? "",
+            // Null means a Pulse-level comment, not an orphan.
+            about: subjectOf(c),
+            replyToId: c.parentId ?? null,
+            mentions: Array.isArray(c.mentions)
+              ? (c.mentions as { label?: string }[]).map((m) => m.label).filter(Boolean)
+              : [],
+          })),
+        matched: hits.length,
+        truncated: hits.length > limit ? `${hits.length} matched; showing ${limit}.` : undefined,
       };
     }
 
