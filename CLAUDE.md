@@ -97,7 +97,8 @@ from `@material-symbols/svg-400` in `node_modules` rather than drawing them —
 
 Feature-per-spec markdown at the repo root (`Kanban-Spec.md`, `Costs-Spec.md`,
 `Plans-Spec.md`, `Hide-and-Archive-Spec.md`, …), cross-referenced by section.
-Each ends in a coded decision list — `HA1–HA10`, `PL1–PL17`, `CO15`, `D13` — and
+Each ends in a coded decision list — `HA1–HA10`, `PL1–PL17`, `MC1–MC13`, `CO15`,
+`D13` — and
 other specs cite those codes rather than restating the reasoning.
 
 `Stripe-Go-Live-Runbook.md` is the one exception in kind: a **runbook**, not a
