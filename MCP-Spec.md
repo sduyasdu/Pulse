@@ -1,6 +1,6 @@
 # Pulse — MCP Server Spec
 
-Status: **Design agreed — MC1–MC10 decided; MC11–MC13 open with recommendations
+Status: **Design agreed — MC1–MC10 and MC14 decided; MC11–MC13 open with recommendations
 (none blocking). v1 is read-only, customer-facing, and hosted by Pulse.
 MC2/MC4/MC6 were revised 2026-08-17 when remote replaced local — see each.**
 · Owner: product + eng ·
@@ -72,12 +72,36 @@ AI client                    Pulse (hosted MCP + auth)          Customer's brows
  └─ every MCP call: Authorization: Bearer <ID token>
 ```
 
-**Pulse stores no long-lived customer credential.** The refresh token is handed
-to the AI client and lives there; Pulse's `/oauth/token` endpoint refreshes by
-proxying to Firebase's secure-token endpoint. A breach of Pulse's servers
-therefore does not yield a set of customer credentials — which was the main
-argument against hosting this, and it is answered by design rather than accepted
-as a risk.
+### 2.1 Pulse re-mints on every refresh (MC14)
+
+`/oauth/token` is a real endpoint, not a proxy to Firebase's. On refresh it:
+
+1. verifies the presented refresh token against its stored **hash**,
+2. loads the connection — **revoked or missing ⇒ `401`, and it cannot renew**,
+3. mints a *fresh* custom token with `{ connectionId, scope }` read from that
+   connection record,
+4. exchanges it and returns a new one-hour access token.
+
+This exists because the claims are what identify a connection and carry its
+scope, and **a claim that silently stopped surviving a refresh would fail in the
+worst possible shape**: correct in testing on a fresh token, broken about an hour
+later, intermittent thereafter, and — for the Phase-2 write gate — failing closed,
+so writes stop with nothing changed. Re-minting means the claims are never older
+than an hour whatever the SDK does, so the behaviour does not depend on the
+answer.
+
+Two things fall out of it that are worth having regardless:
+
+- **Revocation bites at refresh**, not only per request. A revoked connection
+  cannot renew, which is what actually ends a session.
+- **Scope can change without re-approval**, because it is read from the
+  connection record each time rather than frozen at first mint. Phase 2 can
+  upgrade a read connection to write from the consent screen alone.
+
+**Pulse still stores no usable customer credential.** What it holds is
+`{ refreshTokenHash, uid, connectionId, scope }` — a hash is not a token, so a
+breach yields nothing that can be replayed. The argument that kept this off
+Pulse's servers (§6) therefore still holds.
 
 **Every request is made *as the customer*.** The MCP server verifies the bearer
 ID token, then reads Firestore **through the REST API using that same token**, so
@@ -85,15 +109,15 @@ ID token, then reads Firestore **through the REST API using that same token**, s
 never uses the Admin SDK for customer data — only to mint the custom token at
 authorize time.
 
-> ⚠️ **Verify before building:** that additional claims attached via
-> `createCustomToken` survive a token *refresh*. If they do not, `connectionId`
-> must be carried another way — the fallback is §3, which does not depend on the
-> claim at all. Confirm empirically against the SDK; do not take this paragraph's
-> word for it.
+> **Worth ten minutes anyway:** sign in with a custom token carrying an extra
+> claim, force a refresh, and inspect the new ID token. It tells you whether §2.1
+> is load-bearing or belt-and-braces — useful to know, and it costs nothing.
+> Do not skip §2.1 on the strength of a good result; the cheap insurance is worth
+> more than the saved half-day.
 
 The **device-code flow is retained for the optional local server** (MC6), where
-no browser is available. It produces the same connection record and the same
-revocation behaviour, so §3 covers both.
+no browser is available. It produces the same connection record, the same
+re-minting refresh and the same revocation behaviour, so §2.1 and §3 cover both.
 
 ## 3. Connections and revocation (MC4, revised)
 
@@ -218,9 +242,10 @@ assistant relays.
   functions. Verifies the bearer token, checks the connection, reads Firestore
   through the REST API as the customer.
 - **OAuth endpoints** — `/.well-known/` discovery, `/oauth/authorize` (a new app
-  route with the consent screen), `/oauth/token` (issue + refresh by proxying to
-  Firebase). The consent screen names the scope **before** the Approve button,
-  not after.
+  route with the consent screen), and `/oauth/token`, which **issues and re-mints
+  rather than proxying** (§2.1): verify the refresh-token hash, load the
+  connection, refuse if revoked, mint fresh claims, exchange. The consent screen
+  names the scope **before** the Approve button, not after.
 - **Account → Connected assistants**, with per-connection revoke and "last used".
 - **Entitlement check wired but open (MC10)** — the tier check exists in the
   authorize path from day one, configured to allow every tier, so turning gating
@@ -302,6 +327,7 @@ assistant relays.
     place a mistake locks existing customers out of a connection they already
     approved. What tier it lands on, and whether existing free connections are
     grandfathered, are deliberately left to when there is usage data.
+
 11. **MC11 — Rate limiting per connection?** *Recommend: yes, a simple per-connection
     ceiling in the callable, once Phase 0 shows the real shape of traffic.* An
     assistant in a loop is the plausible failure, and it spends the customer's
@@ -314,3 +340,13 @@ assistant relays.
     `viewPeopleCost`, so admins see people cost and others don't. *Recommend:
     keep it mirrored rather than adding a separate MCP-level toggle — a second
     permission axis for the same data is how the two drift.*
+14. **MC14 — Pulse re-mints the token on every refresh → DECIDED (§2.1).**
+    The claims carrying `connectionId` and `scope` are re-issued hourly from the
+    connection record, so nothing depends on whether Firebase preserves custom
+    -token claims across a refresh. *Rejected: proxying refresh straight to
+    Firebase* — cheaper to build, but it stakes per-connection revocation and the
+    Phase-2 write gate on undocumented behaviour, and the failure would be
+    delayed by an hour and intermittent. *Rejected: deciding this at Phase 2* —
+    it shapes the token endpoint, and retrofitting it means changing a flow
+    customers have already authorized. Bonus, not incidental: revocation bites at
+    refresh, and scope becomes changeable without re-approval.
