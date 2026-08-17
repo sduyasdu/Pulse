@@ -53,6 +53,78 @@ export function isAllowedRedirect(uri: unknown): boolean {
   return typeof uri === "string" && ALLOWED_REDIRECT_PREFIXES.some((p) => uri.startsWith(p));
 }
 
+// ---------------------------------------------------------------------------
+// Entitlement (MC10)
+//
+// Connecting an assistant is open to every tier today. The check exists anyway,
+// wired into the consent path from the start, because the alternative is adding
+// it later — and the consent path is the one place a mistake locks customers out
+// of a connection they have already approved.
+//
+// **To gate it, edit MCP_TIERS. That is the whole change.**
+//
+// Note the tension to resolve before doing so: Plans-Spec §3 says every tier has
+// every feature and tiers differ only by quantity. A tier allow-list here would
+// be the first feature gate in the product. A per-tier **limit on connected
+// assistants** would fit the existing model instead, and this function gives you
+// the tier either way.
+// ---------------------------------------------------------------------------
+
+type Tier = "starter" | "pro" | "business";
+
+/** Which tiers may connect an assistant. Every tier, deliberately (MC10). */
+const MCP_TIERS: Tier[] = ["starter", "pro", "business"];
+
+const TIER_RANK: Record<Tier, number> = { starter: 0, pro: 1, business: 2 };
+
+/** A subscription only confers its tier while it is holding. Mirrors
+ * `planTierOf` in firestore.rules — keep the two in step. */
+const ACTIVE_STATUSES = ["active", "trialing", "past_due"];
+
+/** How many distinct workspaces we will price-check for one user. Far above any
+ * real roster; present so an unusual account cannot turn consent into a hundred
+ * reads. */
+const MAX_WORKSPACES_CHECKED = 25;
+
+/**
+ * The best tier this user has access to, across every workspace they belong to.
+ *
+ * **Best, not personal.** A connection is per-user and its tools span every Pulse
+ * the user can reach, which may cross workspaces — so someone on a paid team
+ * should not be judged by their own free personal workspace. Generosity is also
+ * the safer error here: wrongly denying consent breaks a feature the customer is
+ * entitled to, wrongly allowing it costs bounded reads (§5).
+ *
+ * Workspaces are enumerated from the user's own dashboard index rather than a
+ * collection-group query, so this needs no extra Firestore index.
+ */
+export async function bestTierFor(db: Db, uid: string): Promise<Tier> {
+  const [userSnap, myPulses] = await Promise.all([
+    db.doc(`users/${uid}`).get(),
+    db.collection(`users/${uid}/myPulses`).limit(200).get(),
+  ]);
+
+  const workspaceIds = new Set<string>();
+  const personal = userSnap.data()?.personalWorkspaceId;
+  if (typeof personal === "string" && personal) workspaceIds.add(personal);
+  for (const d of myPulses.docs) {
+    const ws = d.data()?.workspaceId;
+    if (typeof ws === "string" && ws) workspaceIds.add(ws);
+  }
+
+  const ids = [...workspaceIds].slice(0, MAX_WORKSPACES_CHECKED);
+  const billing = await Promise.all(ids.map((id) => db.doc(`billing/${id}`).get()));
+
+  let best: Tier = "starter";
+  for (const snap of billing) {
+    const d = snap.data();
+    if (!d || !ACTIVE_STATUSES.includes(String(d.status ?? "canceled"))) continue;
+    const tier = String(d.tier ?? "starter") as Tier;
+    if (TIER_RANK[tier] > TIER_RANK[best]) best = tier;
+  }
+  return best;
+}
+
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 /** Base64url, because PKCE's S256 challenge is compared in that encoding. */
@@ -105,6 +177,18 @@ export const approveMcpConnection = onCall(async (request) => {
   }
 
   const db = getFirestore();
+
+  // MC10. Passes for everyone today; the point is that the code path, the log
+  // line and the error shape all exist before they are ever needed.
+  const tier = await bestTierFor(db, uid);
+  if (!MCP_TIERS.includes(tier)) {
+    log(FN, "connection refused — tier", { uid, tier });
+    // When this becomes reachable it needs an i18n key: AuthorizePage renders
+    // the server's message verbatim, and an untranslated sentence on the consent
+    // screen is a customer-facing English string in a six-language product.
+    throw new HttpsError("permission-denied", "Connecting an AI assistant is not included in your plan.");
+  }
+
   const connectionRef = db.collection(`users/${uid}/connections`).doc();
   const code = randomBytes(32).toString("base64url");
 
@@ -127,7 +211,7 @@ export const approveMcpConnection = onCall(async (request) => {
     expiresAt: Date.now() + AUTH_CODE_TTL_MS,
   });
 
-  log(FN, "connection approved", { uid, connectionId: connectionRef.id, scope });
+  log(FN, "connection approved", { uid, connectionId: connectionRef.id, scope, tier });
   return { code };
 });
 

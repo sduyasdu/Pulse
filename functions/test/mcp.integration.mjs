@@ -9,7 +9,7 @@
 // issue — which is the part that must not be wrong.
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { isAllowedRedirect, liveConnection, sha256, sha256b64url } from "../lib/mcp.js";
+import { bestTierFor, isAllowedRedirect, liveConnection, sha256, sha256b64url } from "../lib/mcp.js";
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-pulse-rules-test" });
 const db = getFirestore();
@@ -67,9 +67,6 @@ assert((await liveConnection(db, UID, "nope")) === null, "revocation: a missing 
 // The one that matters for §2.1: refresh reads scope from the CONNECTION, so a
 // stale scope on an old token can never widen access.
 assert((await liveConnection(db, UID, "alive")).scope === "read", "revocation: scope is read from the record, not the token");
-
-console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
-process.exit(failed ? 1 : 0);
 
 // ---------------------------------------------------------------------------
 // 4. The MCP service — the pieces where being wrong is silent
@@ -144,3 +141,45 @@ assert(overlaps(task, isoToDay("2026-09-11"), isoToDay("2026-09-20")), "window: 
 assert(overlaps(task, isoToDay("2026-08-01"), isoToDay("2026-09-01")), "window: inclusive at the start");
 assert(!overlaps(task, isoToDay("2026-09-12"), isoToDay("2026-09-20")), "window: a task that ended before it is excluded");
 assert(!overlaps(task, isoToDay("2026-08-01"), isoToDay("2026-08-31")), "window: a task starting after it is excluded");
+
+
+// ---------------------------------------------------------------------------
+// MC10 — the entitlement resolver.
+//
+// Unreachable as a denial today (every tier is allowed), which is exactly why it
+// is worth testing: the day someone edits MCP_TIERS, this is the logic that
+// decides who keeps their connection. "Best across workspaces" is the part that
+// must not regress — a paid team member judged by their free personal workspace
+// would be refused a feature they pay for.
+// ---------------------------------------------------------------------------
+{
+  const mk = async (uid, personalWs, pulses, billing) => {
+    await db.doc(`users/${uid}`).set({ uid, personalWorkspaceId: personalWs });
+    for (const [pid, ws] of pulses) await db.doc(`users/${uid}/myPulses/${pid}`).set({ pulseId: pid, workspaceId: ws });
+    for (const [ws, doc] of billing) await db.doc(`billing/${ws}`).set(doc);
+  };
+
+  await mk("t_solo", "ws_solo", [], []);
+  assert((await bestTierFor(db, "t_solo")) === "starter", "tier: no billing doc is starter");
+
+  await mk("t_paid", "ws_paid", [], [["ws_paid", { tier: "pro", status: "active" }]]);
+  assert((await bestTierFor(db, "t_paid")) === "pro", "tier: an active subscription confers its tier");
+
+  // The case the resolver exists for: free personally, on a paid team.
+  await mk("t_guest", "ws_free", [["p1", "ws_team"]], [
+    ["ws_free", { tier: "starter", status: "active" }],
+    ["ws_team", { tier: "business", status: "active" }],
+  ]);
+  assert((await bestTierFor(db, "t_guest")) === "business", "tier: the best workspace wins, not the personal one");
+
+  await mk("t_lapsed", "ws_lapsed", [], [["ws_lapsed", { tier: "business", status: "canceled" }]]);
+  assert((await bestTierFor(db, "t_lapsed")) === "starter", "tier: a canceled subscription confers nothing");
+
+  // past_due still holds — mirrors planTierOf in firestore.rules. Cutting a
+  // customer off mid-dunning is a support incident, not enforcement.
+  await mk("t_due", "ws_due", [], [["ws_due", { tier: "pro", status: "past_due" }]]);
+  assert((await bestTierFor(db, "t_due")) === "pro", "tier: past_due still holds its tier");
+}
+
+console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
+process.exit(failed ? 1 : 0);

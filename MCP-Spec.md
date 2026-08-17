@@ -476,3 +476,34 @@ assistant relays.
     is the only exception — which happens to be exactly who is affected.
     `search_resources` also now maps `""` to null, because an empty string
     reaching an assistant reads as an address rather than as an absence.
+22. **MC22 — MC10's entitlement hook was never built; now it is
+    (`functions/src/mcp.ts`).** MC10 decided the MCP is open to every tier *and*
+    that the check would ship in the consent path from day one, so gating later
+    would be configuration rather than a retrofit. Phase 0 shipped without it —
+    the spec asserted it in two places and `approveMcpConnection` had no tier
+    lookup at all — which left the product in exactly the state MC10 rejected.
+    `bestTierFor()` now resolves the tier and `MCP_TIERS` decides; today it lists
+    every tier, so nothing is denied. **To gate it, edit `MCP_TIERS`.**
+    Resolution is **best-across-workspaces**, not personal: a connection is
+    per-user and its tools span every Pulse that user can reach, so someone on a
+    paid team must not be judged by their free personal workspace. Wrongly
+    denying consent breaks a paid feature; wrongly allowing it costs bounded
+    reads. Workspaces are enumerated from the user's own dashboard index, so this
+    needs no collection-group index, and the count checked is capped.
+    **Flagged for whoever turns it on.** Plans-Spec §3 says every tier has every
+    feature and tiers differ only by quantity — a tier allow-list here would be
+    the product's first feature gate. A per-tier **limit on connected assistants**
+    fits the existing model, and `bestTierFor()` serves either shape. The denial
+    message also needs an i18n key before it can be reached: `AuthorizePage`
+    renders the server's message verbatim, and an English sentence on the consent
+    screen of a six-language product is a regression.
+23. **MC23 — `functions/test/mcp.integration.mjs` exited halfway through.**
+    A `process.exit()` sat at line 72, so **everything after it had never run** —
+    the REST decoding, limit clamping, protocol-version, date, working-day,
+    search-folding and window-overlap assertions. All of it reported green,
+    because the process left before reaching any of it. Found only because a
+    newly added test produced no output. The exit now runs once, at the end.
+    Twenty-four assertions began executing for the first time; all pass, so
+    nothing was hiding behind it — this time. Worth generalising: a suite that
+    reports success is not evidence it ran, and `&&`-chained scripts make an
+    early exit look like a pass.

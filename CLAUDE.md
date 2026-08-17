@@ -96,6 +96,15 @@ The suites in `functions/test/*.mjs` import `functions/lib/*.js`, not `src/`. Ru
 `npx tsc -p functions` first, or you are testing the previous build — and it will
 pass. This produced a confident all-green against code that did not exist yet.
 
+**And a passing suite is not evidence it ran.** `mcp.integration.mjs` had a
+`process.exit()` at line 72 of ~190, so two thirds of its assertions had never
+executed once — decoding, limit clamping, dates, working days, search folding,
+window overlap. Every run reported "All MCP assertions passed". It surfaced only
+because a newly added test printed nothing. The suites are `&&`-chained, so an
+early exit with status 0 reads as a pass all the way up. When you add a case,
+**check your assertion appears in the output** rather than checking the exit
+code.
+
 ## `Icon` renders nothing for a name it doesn't have
 
 `src/components/shared/icons.ts` is a fixed set of baked Material Symbols paths,
