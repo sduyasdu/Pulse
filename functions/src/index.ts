@@ -43,4 +43,4 @@ export { approveMcpConnection, mcpOauthToken } from "./mcp";
 
 // The MCP service itself (MCP-Spec §1/§5). JSON-RPC over HTTP, reading Firestore
 // as the customer through the REST API so security rules still apply.
-export { mcp } from "./mcpServer";
+export { mcp, mcpMetadata } from "./mcpServer";

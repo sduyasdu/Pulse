@@ -251,3 +251,69 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
     res.status(500).json(rpcError(id, INTERNAL_ERROR, "Internal error"));
   }
 });
+
+// ---------------------------------------------------------------------------
+// OAuth discovery (MCP-Spec §8)
+//
+// A client that gets our 401 follows `WWW-Authenticate` to these documents to
+// learn where to send the customer and where to exchange the code. Without them
+// the 401 is a dead end — which is exactly what it was until the live probe
+// showed this URL returning the SPA's index.html.
+//
+// Served from a function rather than `public/.well-known/`, because hosting's
+// ignore rule (`**/.*`) silently drops dot-directories from the deploy: the
+// files would exist in the repo, pass review, and never ship.
+// ---------------------------------------------------------------------------
+
+const ISSUER = "https://pulse.yasdu.com";
+const MCP_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/mcp`;
+const TOKEN_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/mcpOauthToken`;
+const REGISTER_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/mcpMetadata/register`;
+
+export const mcpMetadata = onRequest({ invoker: "public", cors: true }, (req, res) => {
+  res.set("Cache-Control", "public, max-age=3600");
+
+  if (req.path.endsWith("/oauth-protected-resource")) {
+    res.json({ resource: MCP_URL, authorization_servers: [ISSUER], scopes_supported: ["read"] });
+    return;
+  }
+
+  if (req.path.endsWith("/oauth-authorization-server")) {
+    res.json({
+      issuer: ISSUER,
+      authorization_endpoint: `${ISSUER}/oauth/authorize`,
+      token_endpoint: TOKEN_URL,
+      registration_endpoint: REGISTER_URL,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      // S256 only. Advertising `plain` would let a client downgrade PKCE to
+      // nothing, which is the whole protection on a code that travels through a
+      // browser redirect.
+      code_challenge_methods_supported: ["S256"],
+      token_endpoint_auth_methods_supported: ["none"],
+      scopes_supported: ["read"],
+    });
+    return;
+  }
+
+  // Dynamic client registration (RFC 7591). Stubbed on purpose: client identity
+  // is not a boundary here — consent, PKCE and the redirect allowlist are — and
+  // we already accept any client_id. Issuing one without storing it is therefore
+  // honest rather than lax, and it is what lets clients that require DCR
+  // complete discovery at all.
+  if (req.path.endsWith("/register")) {
+    const body = (req.body ?? {}) as { redirect_uris?: unknown; client_name?: unknown };
+    res.status(201).json({
+      client_id: `pulse-mcp-${Date.now().toString(36)}`,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      redirect_uris: Array.isArray(body.redirect_uris) ? body.redirect_uris : [],
+      client_name: typeof body.client_name === "string" ? body.client_name : undefined,
+    });
+    return;
+  }
+
+  res.status(404).json({ error: "not_found" });
+});

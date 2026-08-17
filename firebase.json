@@ -14,7 +14,18 @@
   "hosting": {
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [
+      {
+        "comment": "OAuth discovery for the MCP server. MUST precede the SPA catch-all — rewrites match in order, and `**` would otherwise answer these with index.html, which is exactly what it did before this existed. Served by a function rather than from public/.well-known/, because the ignore rule `**/.*` above drops dot-directories from the deploy without saying so.",
+        "source": "/.well-known/oauth-protected-resource",
+        "function": { "functionId": "mcpMetadata", "region": "us-central1" }
+      },
+      {
+        "source": "/.well-known/oauth-authorization-server",
+        "function": { "functionId": "mcpMetadata", "region": "us-central1" }
+      },
+      { "source": "**", "destination": "/index.html" }
+    ],
     "headers": [
       {
         "comment": "Default: always revalidate, so a new deploy is picked up immediately. This MUST be `**` rather than `/index.html` — header rules match the path the browser REQUESTED, not the rewrite destination, and no real visitor ever requests `/index.html`. They request `/` or an SPA route (`/p/:id`, `/login`, `/join/…`), all of which merely rewrite to index.html and so previously fell through to Hosting's default `max-age=3600` — leaving returning users on the previous bundle for up to an hour after every deploy. Overridden for hashed assets below.",
