@@ -40,3 +40,7 @@ export { stripeWebhook, createCheckoutSession, createPortalSession, listPlans } 
 // MCP — the OAuth half (MCP-Spec.md §2/§2.1, Phase 0). The MCP service itself
 // acts as the customer; the Admin SDK appears here only to mint their token.
 export { approveMcpConnection, mcpOauthToken } from "./mcp";
+
+// The MCP service itself (MCP-Spec §1/§5). JSON-RPC over HTTP, reading Firestore
+// as the customer through the REST API so security rules still apply.
+export { mcp } from "./mcpServer";

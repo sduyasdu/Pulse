@@ -1,4 +1,5 @@
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { defineString } from "firebase-functions/params";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -18,6 +19,15 @@ import { log, logError } from "./lib/conventions";
 type Db = FirebaseFirestore.Firestore;
 
 const FN = "MCP.oauth";
+
+/** The Firebase **Web** API key — the one already shipped in the browser bundle
+ * and therefore public. Needed to exchange a custom token for an ID token
+ * (`issueTokens`), because Identity Toolkit's REST endpoint is keyed. Declared
+ * as a param rather than hardcoded so it travels with configuration, not code.
+ *
+ * `PULSE_` not `FIREBASE_`: the latter is a reserved prefix and makes the entire
+ * functions .env fail to load. */
+const WEB_API_KEY = defineString("PULSE_WEB_API_KEY");
 
 /** How long an unused authorization code lives. Short on purpose: it is a
  * single-use bearer that sits in a redirect URL, i.e. in browser history. */
@@ -141,8 +151,28 @@ export async function liveConnection(db: Db, uid: string, connectionId: string) 
  */
 async function issueTokens(db: Db, uid: string, connectionId: string, scope: string) {
   const customToken = await getAuth().createCustomToken(uid, { connectionId, scope, mcp: true });
-  const refreshToken = randomBytes(48).toString("base64url");
 
+  // Exchange it for an **ID token**, because that is what the client will send
+  // back as a Bearer and what `verifyIdToken` accepts. An earlier draft returned
+  // the custom token itself, reasoning that the client could exchange it via the
+  // Firebase SDK — but an MCP client knows nothing about Firebase. It would have
+  // sent the custom token verbatim and been rejected on every call.
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${WEB_API_KEY.value()}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`custom-token exchange failed: ${res.status} ${await res.text()}`);
+  }
+  const { idToken } = (await res.json()) as { idToken: string };
+
+  // Our own refresh token, not Firebase's: it rotates on every use (§2.1) and is
+  // stored only as a hash, so what Pulse holds cannot be replayed.
+  const refreshToken = randomBytes(48).toString("base64url");
   await db.doc(`mcpRefreshTokens/${sha256(refreshToken)}`).set({
     uid,
     connectionId,
@@ -151,10 +181,7 @@ async function issueTokens(db: Db, uid: string, connectionId: string, scope: str
   });
 
   return {
-    // The client exchanges this for an ID token via the Firebase SDK. Handing
-    // over a custom token rather than an ID token keeps this endpoint free of
-    // the API key, and the client is already a Firebase-capable consumer.
-    access_token: customToken,
+    access_token: idToken,
     token_type: "Bearer",
     expires_in: ACCESS_TOKEN_TTL_S,
     refresh_token: refreshToken,

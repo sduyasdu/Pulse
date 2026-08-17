@@ -70,3 +70,40 @@ assert((await liveConnection(db, UID, "alive")).scope === "read", "revocation: s
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
 process.exit(failed ? 1 : 0);
+
+// ---------------------------------------------------------------------------
+// 4. The MCP service — the pieces where being wrong is silent
+//
+// The JSON-RPC handler itself needs a signed ID token to exercise, which this
+// harness cannot mint (same limit as §3). What is covered is the decoding and
+// bounding that every tool result passes through, plus the protocol versions we
+// claim to speak.
+// ---------------------------------------------------------------------------
+
+const { decode, decodeFields, clampLimit, SUPPORTED_PROTOCOLS, TOOLS } = await import("../lib/mcpServer.js");
+
+// Firestore REST type tags. Getting integerValue wrong is the sharp one: it
+// arrives as a STRING, so a missed Number() turns 3 into "3" and every
+// comparison an assistant makes on it silently goes wrong.
+assert(decode({ stringValue: "hi" }) === "hi", "decode: string");
+assert(decode({ integerValue: "42" }) === 42, "decode: integer arrives as a string and is converted");
+assert(decode({ booleanValue: false }) === false, "decode: boolean false survives (not coerced away)");
+assert(decode({ nullValue: null }) === null, "decode: null");
+assert(JSON.stringify(decode({ arrayValue: { values: [{ stringValue: "a" }, { integerValue: "2" }] } })) === '["a",2]',
+  "decode: array decodes elementwise");
+assert(JSON.stringify(decode({ arrayValue: {} })) === "[]", "decode: an empty array has no `values` key at all");
+assert(JSON.stringify(decodeFields({ n: { stringValue: "x" }, k: { integerValue: "1" } })) === '{"n":"x","k":1}',
+  "decode: fields map to plain JSON");
+
+// Bounding. An assistant will ask for everything; the ceiling is what stops a
+// single question costing thousands of billed reads.
+assert(clampLimit(undefined, 50) === 50, "limit: default when absent");
+assert(clampLimit(10, 50) === 10, "limit: honoured when sane");
+assert(clampLimit(99999, 50) === 200, "limit: capped at the ceiling");
+assert(clampLimit(0, 50) === 1 && clampLimit(-5, 50) === 1, "limit: never below 1");
+assert(clampLimit("abc", 50) === 50, "limit: non-numeric falls back rather than becoming NaN");
+
+assert(SUPPORTED_PROTOCOLS.length > 0 && SUPPORTED_PROTOCOLS.every((v) => /^\d{4}-\d{2}-\d{2}$/.test(v)),
+  "protocol: advertised versions are dated identifiers");
+assert(TOOLS.every((t) => t.name && t.description && t.inputSchema?.type === "object"),
+  "tools: every tool declares a name, a description and an object schema");
