@@ -9,6 +9,9 @@ Six things are cheap before the first user and painful afterwards:
 **architecture**, **translation**, **billing**, **collaboration**, **mobile** and
 **explanation**.
 
+**Naming, domains and brand assets come first** — those are `product-kickoff`,
+which ends where this skill begins.
+
 **This file routes; it does not brief.** The one-line summaries below are enough
 to tell you which foundation you are touching and nothing like enough to build
 it — every one of them has a failure mode that looks fine in review, passes
