@@ -25,10 +25,11 @@ export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) 
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const [rows, setRows] = useState<McpConnection[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) return;
-    return subscribeMcpConnections(uid, setRows);
+    return subscribeMcpConnections(uid, (r) => { setRows(r); setError(null); }, setError);
   }, [uid]);
 
   const when = (ms?: number | null) =>
@@ -56,7 +57,13 @@ export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) 
         <h2 className="font-display text-base font-semibold text-yasdu-fg">{t("account.connectedAssistants")}</h2>
         <p className="mt-1 text-xs" style={{ color: "#64748B" }}>{t("mcp.listIntro")}</p>
 
-        {rows === null ? (
+        {error ? (
+          // Distinct from "none connected" on purpose — see the note on
+          // subscribeMcpConnections. An unreadable list is a fault, not a state.
+          <p className="mt-5 rounded-lg px-3 py-2 text-xs" style={{ background: "#FDECEA", border: "1px solid #F3C7C1", color: "#8C2F22" }}>
+            {t("mcp.listError")}
+          </p>
+        ) : rows === null ? (
           <Spinner size={20} label={t("common.loading")} className="py-8" />
         ) : rows.length === 0 ? (
           <p className="mt-5 text-sm" style={{ color: "#94A3B8" }}>{t("mcp.listEmpty")}</p>

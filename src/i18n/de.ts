@@ -573,6 +573,7 @@ export const de: Dict = {
   "account.connectedAssistants": "Verbundene Assistenten",
   "mcp.listIntro": "KI-Assistenten, denen du erlaubt hast, deine Pulses zu lesen. Trennst du einen, hört er sofort auf zu funktionieren.",
   "mcp.listEmpty": "Keine Assistenten verbunden. Du kannst einen in deiner KI-App über die Connector-URL von Pulse verbinden.",
+  "mcp.listError": "Deine verbundenen Assistenten konnten nicht geladen werden. Lade die Seite neu; wenn es weiter auftritt, wende dich an den Support.",
   "mcp.scopeRead": "nur lesen",
   "mcp.scopeWrite": "kann Änderungen vornehmen",
   "mcp.lastUsed": "zuletzt genutzt am {date}",

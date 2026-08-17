@@ -573,6 +573,7 @@ export const it: Dict = {
   "account.connectedAssistants": "Assistenti collegati",
   "mcp.listIntro": "Assistenti IA a cui hai permesso di leggere i tuoi Pulse. Se ne scolleghi uno, smette di funzionare subito.",
   "mcp.listEmpty": "Nessun assistente collegato. Puoi collegarne uno dalla tua app IA con l'URL del connettore di Pulse.",
+  "mcp.listError": "Non è stato possibile caricare gli assistenti collegati. Ricarica la pagina e, se continua, contatta l'assistenza.",
   "mcp.scopeRead": "sola lettura",
   "mcp.scopeWrite": "può apportare modifiche",
   "mcp.lastUsed": "ultimo utilizzo il {date}",

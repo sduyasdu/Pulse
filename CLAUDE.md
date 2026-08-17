@@ -59,6 +59,19 @@ Two real bugs in the hide/archive work were green everywhere else and caught
 only here. Add cases to `rules/security.test.ts` for anything a rule now denies
 *and* anything it must still allow (the allow side is where the cascade breaks).
 
+## A swallowed `onSnapshot` error looks exactly like an empty collection
+
+Passing `() => cb([])` as the error handler turns "denied" into "nothing here".
+The Connected assistants dialog shipped that way, the `users/{uid}/connections`
+rules were never deployed (see above — `npm run deploy` is hosting only), and the
+result was a working-looking feature listing zero of three live connections. No
+console error the customer would see, no failing test.
+
+**Give every subscription an error path that reaches the screen**, distinct from
+the empty state — `subscribeMcpConnections`
+(`src/services/firestore/users.ts:99`) now takes an `onError` and the dialog
+renders it. A read that fails is a fault; a read that returns nothing is a state.
+
 ## Secret versions bind at deploy, and `secrets:set` destroys the old one
 
 Setting a secret changes nothing until you redeploy — the running revision stays

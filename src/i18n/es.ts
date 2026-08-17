@@ -573,6 +573,7 @@ export const es: Dict = {
   "account.connectedAssistants": "Asistentes conectados",
   "mcp.listIntro": "Asistentes de IA a los que permitiste leer tus Pulses. Si desconectás uno, deja de funcionar al instante.",
   "mcp.listEmpty": "No hay asistentes conectados. Podés conectar uno desde tu app de IA con la URL del conector de Pulse.",
+  "mcp.listError": "No se pudieron cargar tus asistentes conectados. Recargá la página y, si sigue pasando, escribinos.",
   "mcp.scopeRead": "solo lectura",
   "mcp.scopeWrite": "puede hacer cambios",
   "mcp.lastUsed": "último uso {date}",

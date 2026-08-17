@@ -89,8 +89,18 @@ export async function resolvePendingInvites(uid: string, email: string): Promise
 // `scope` could widen its own assistant's access.
 // ---------------------------------------------------------------------------
 
-/** Live list of the user's connected assistants, newest first. */
-export function subscribeMcpConnections(uid: string, cb: (rows: McpConnection[]) => void): () => void {
+/** Live list of the user's connected assistants, newest first.
+ *
+ * `onError` is not optional politeness. Collapsing a failed read into an empty
+ * list makes "nothing is connected" and "I cannot read this" identical on
+ * screen — which is exactly how an undeployed rules change hid itself here: the
+ * list was denied, rendered as empty, and looked like a working feature with no
+ * data. */
+export function subscribeMcpConnections(
+  uid: string,
+  cb: (rows: McpConnection[]) => void,
+  onError?: (message: string) => void,
+): () => void {
   return onSnapshot(
     collection(db, "users", uid, "connections"),
     (snap) => {
@@ -98,7 +108,7 @@ export function subscribeMcpConnections(uid: string, cb: (rows: McpConnection[])
       rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
       cb(rows);
     },
-    () => cb([]),
+    (err) => onError?.(err.message),
   );
 }
 
