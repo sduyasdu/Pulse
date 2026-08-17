@@ -24,6 +24,19 @@
         "source": "/.well-known/oauth-authorization-server",
         "function": { "functionId": "mcpMetadata", "region": "us-central1" }
       },
+      {
+        "comment": "The rest of the OAuth surface, same-origin. An authorization server whose issuer is pulse.yasdu.com but whose token and registration endpoints live on cloudfunctions.net is a cross-origin arrangement some clients refuse outright — and it would show customers a URL that is not the product. NOTE /oauth/authorize is deliberately absent: it is an SPA route and must keep falling through to the catch-all below.",
+        "source": "/oauth/register",
+        "function": { "functionId": "mcpMetadata", "region": "us-central1" }
+      },
+      {
+        "source": "/oauth/token",
+        "function": { "functionId": "mcpOauthToken", "region": "us-central1" }
+      },
+      {
+        "source": "/mcp",
+        "function": { "functionId": "mcp", "region": "us-central1" }
+      },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [

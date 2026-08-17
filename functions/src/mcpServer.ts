@@ -265,10 +265,14 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
 // files would exist in the repo, pass review, and never ship.
 // ---------------------------------------------------------------------------
 
+// Everything on ONE origin. Hosting rewrites map these to the functions, so a
+// client sees a single authorization server and a customer sees only the
+// product's own domain. An issuer whose token endpoint lives somewhere else is
+// an arrangement some clients reject rather than follow.
 const ISSUER = "https://pulse.yasdu.com";
-const MCP_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/mcp`;
-const TOKEN_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/mcpOauthToken`;
-const REGISTER_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/mcpMetadata/register`;
+const MCP_URL = `${ISSUER}/mcp`;
+const TOKEN_URL = `${ISSUER}/oauth/token`;
+const REGISTER_URL = `${ISSUER}/oauth/register`;
 
 export const mcpMetadata = onRequest({ invoker: "public", cors: true }, (req, res) => {
   res.set("Cache-Control", "public, max-age=3600");
