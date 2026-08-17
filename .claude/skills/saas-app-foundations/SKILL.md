@@ -1,13 +1,13 @@
 ---
 name: saas-app-foundations
-description: Use when starting a new multi-tenant SaaS web app, or when adding one of its six foundations to an existing one — architecture/stack choice, internationalization, billing with plan limits, multi-user collaboration (roles, sharing, presence), the mobile version, or in-app help and empty states. Front-loads the decisions that are cheap on day one and expensive to retrofit, and carries the failure modes that pass every green check and still ship broken. Written from building Pulse (React + Firebase + Stripe, six languages, three tiers, mobile-first views).
+description: Use when starting a new multi-tenant SaaS web app, or when adding one of its seven foundations to an existing one — architecture/stack choice, internationalization, billing with plan limits, multi-user collaboration (roles, sharing, presence), the mobile version, in-app help and empty states, or exposing the product to AI assistants over MCP. Front-loads the decisions that are cheap on day one and expensive to retrofit, and carries the failure modes that pass every green check and still ship broken. Written from building Pulse (React + Firebase + Stripe, six languages, three tiers, mobile-first views, a customer-facing MCP server).
 ---
 
 # Foundations of a multi-tenant SaaS app
 
-Six things are cheap before the first user and painful afterwards:
-**architecture**, **translation**, **billing**, **collaboration**, **mobile** and
-**explanation**.
+Seven things are cheap before the first user and painful afterwards:
+**architecture**, **translation**, **billing**, **collaboration**, **mobile**,
+**explanation** and **AI access**.
 
 **Naming, domains and brand assets come first** — those are `product-kickoff`,
 which ends where this skill begins.
@@ -26,13 +26,15 @@ are about to work on before you start.** If you are touching two, read two.
 | Collaboration | `collaboration.md` | roles, sharing, invites, presence, anything a second user can see |
 | Mobile | `mobile.md` | phone/tablet layout, touch, hover, viewport |
 | Help & empty states | `help.md` | help content, empty states, disabled controls, error copy |
+| AI access (MCP) | `mcp.md` | exposing the product to AI assistants — OAuth, consent, tools, revocation |
 
 ## The bias underneath all six
 
 **The boundary is the server; everything on the client is UX.** Most of the
 expensive bugs collected in these files are a version of forgetting that — a
 plan the client could write, a counter the client could forge, a gate that only
-existed in a React component, a price the client decided.
+existed in a React component, a price the client decided, an AI integration
+that read with admin credentials and filtered afterwards.
 
 Two habits that follow, and that apply whichever file you are in:
 
@@ -82,5 +84,8 @@ whether it affected them.
 6. **Explanation** — help outside the permission gate, translated or explicitly
    single-language but never partial, no dead control without a reason attached,
    empty states that distinguish "nothing yet" from "nothing matches".
-7. **Verified against the live system**, not just the source — and the check that
+7. **AI access** — the service reads as the customer through the existing rules,
+   the access token works from a bare `curl`, discovery and endpoints share one
+   origin, revocation is enforced at refresh, and the handshake is logged.
+8. **Verified against the live system**, not just the source — and the check that
    validates the thing you changed was actually the one you ran.
