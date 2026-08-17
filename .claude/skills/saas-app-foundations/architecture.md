@@ -154,3 +154,52 @@ Three things that make this bite harder than it should:
 
 Verify against the shipped artefact, not the config: grep the built bundle for
 the old hostname and confirm it is gone.
+
+## 1.8 Pick one icon set, and vendor it
+
+**Default to Google Material Symbols** unless the project already has a set —
+then use that one, and do not mix. Mismatched stroke weights and optical sizes
+are immediately visible side by side, and no amount of CSS reconciles two
+families drawn to different grids.
+
+Material Symbols earns the default: Apache-2.0, several thousand glyphs across
+one grid, actively maintained, and available as plain SVG paths rather than only
+as a font or a component library.
+
+**Vendor the paths; don't load an icon font or pull a runtime component
+package.** Generate a single map from the upstream package —
+
+```ts
+// AUTO-GENERATED from @material-symbols/svg-400 (outlined). viewBox 0 -960 960 960.
+export const ICONS: Record<string, string> = { "check": "<path d=\"…\"/>", … };
+```
+
+— and render it as real `<path>` elements inside your own `<svg>` wrapper. That
+buys four things at once: no runtime font request and no flash of missing
+glyphs, `currentColor` inheritance so an icon takes the colour of its button, any
+size without a second asset, and **no `dangerouslySetInnerHTML`**, so the icon
+layer never becomes an injection surface.
+
+Keep the generator comment at the top of the file. The next person needs to know
+where new glyphs come from — otherwise someone hand-draws one, and hand-drawn
+glyphs never quite match.
+
+### The trap: a name-keyed lookup fails silently
+
+An `<Icon name="…" />` API looks up a string. A name that isn't in the map is not
+a type error, not a runtime error, and not a failed build — the component returns
+nothing and you get **a button with no content, no width, and nothing to click**.
+It looks like a layout bug, and it is easy to reintroduce every time someone
+reaches for a glyph the set doesn't have yet.
+
+This happened three times in Pulse. Choose one of:
+
+- **Type the names** — generate a union type from the map's keys, so a wrong name
+  fails at `tsc`. Cheapest fix, and the one to prefer.
+- **Fail loudly in development** — render a visible placeholder and warn, so it
+  is caught the first time it renders rather than the first time someone tries to
+  click it.
+
+Whichever you pick, when you need a glyph the set lacks, **extract it from the
+upstream package in `node_modules`** rather than drawing one. And never
+approximate a third party's brand mark this way — see `product-kickoff` §4.5.

@@ -20,7 +20,7 @@ are about to work on before you start.** If you are touching two, read two.
 
 | Foundation | Read | When |
 | --- | --- | --- |
-| Architecture & setup | `architecture.md` | choosing a stack, dev/prod split, deploy commands, secrets, vendor domains a user can see, what validates what |
+| Architecture & setup | `architecture.md` | choosing a stack, dev/prod split, deploy commands, secrets, vendor domains a user can see, the icon set, what validates what |
 | Translation | `translation.md` | any user-visible string, at any point in the project's life |
 | Billing & limits | `billing.md` | plans, quotas, webhooks, prices, anything a customer pays for |
 | Collaboration | `collaboration.md` | roles, sharing, invites, presence, anything a second user can see |
