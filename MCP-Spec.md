@@ -350,22 +350,35 @@ assistant relays.
     it shapes the token endpoint, and retrofitting it means changing a flow
     customers have already authorized. Bonus, not incidental: revocation bites at
     refresh, and scope becomes changeable without re-approval.
-15. **MC15 — `serverInfo` states our identity; it does not leave it to be
-    inferred → DECIDED (`functions/src/mcpServer.ts:25`).** `initialize` returns
-    `title`, `websiteUrl` and `icons` alongside `name`/`version`, and `version`
-    tracks the **tool surface** rather than the code — it is bumped when a tool
-    is added, removed or changes shape, and not otherwise. Both halves come from
-    the same incident: six new tools and a corrected favicon were live and
-    invisible, because a client caches the tool list and the icon from the
-    moment the connector is added, and nothing in our responses had changed to
-    invalidate either. *Rejected: relying on `/favicon.ico` alone* — it is a
-    fallback that already failed once (served as SPA HTML, so the client walked
-    up to the parent domain and showed Yasdu's mark), and a fallback that fails
-    silently is worth replacing with a statement. *Rejected: declaring
-    `capabilities.tools.listChanged`* — we are stateless HTTP with no open
-    channel to push `notifications/tools/list_changed` down, so advertising it
-    would promise a notification that never arrives. Note the honest limit: the
-    `icons` member is optional and newer than some clients, and neither field
-    invalidates a cache that has already been populated. **A tool-surface change
-    still requires the customer to reconnect the connector to see it** — say so
-    in release notes rather than assuming rollout is automatic.
+15. **MC15 — `serverInfo` carries only what the announced protocol revision
+    defines → DECIDED (`functions/src/mcpServer.ts:25`).** `initialize` returns
+    `name`, `title` and `version`; `version` tracks the **tool surface** rather
+    than the code, so it moves when a tool is added, removed or changes shape,
+    and not otherwise. Six new tools stayed invisible partly because `0.1.0`
+    never moved and a client has nothing else to notice a change by.
+    *Rejected: also sending `icons` and `websiteUrl`* — they state our identity
+    outright instead of leaving a client to sniff `/favicon.ico`, which is the
+    fallback that produced the Yasdu mark, and they were tried. They belong to a
+    later draft than the 2025-06-18 we negotiate, and sending them **broke
+    connection setup**: token exchange succeeded, three requests returned 2xx,
+    the server logged nothing at all, and the client refused the session. The
+    rule that generalises is the value here — *announce a revision, then answer
+    with only that revision's members* — and they can return if the negotiated
+    version moves up. *Rejected: declaring `capabilities.tools.listChanged`* —
+    stateless HTTP has no open channel to push `notifications/tools/list_changed`
+    down, so it would promise a notification that never arrives.
+    Consequences to state plainly rather than rediscover: **a tool-surface change
+    needs the customer to reconnect the connector**, and neither the favicon fix
+    nor anything else we serve can invalidate an icon a client has already
+    cached — every icon Pulse serves was verified correct (the ICO decoded to
+    the Pulse mark at 16px and 32px) while a stale one was still on screen.
+16. **MC16 — Icon-probe paths get real files, not the SPA → DECIDED.** Firebase
+    Hosting's catch-all rewrite answered `/apple-touch-icon.png` and
+    `/apple-touch-icon-precomposed.png` with `200 text/html`, the same shape as
+    the `/favicon.ico` bug in `46172d0`. A `<link rel="apple-touch-icon">` points
+    well-behaved clients at `/brand/`, but the convention is to probe the root
+    when no link is found, and a 200 of undecodable HTML is worse than a 404 —
+    it reads as "an icon exists here" and fails at decode, which is how a client
+    ends up at the parent domain's mark. Real files now sit at both root paths.
+    *Rejected: a rewrite rule excluding image extensions* — Hosting expresses
+    that awkwardly, and two copied files have no failure mode.

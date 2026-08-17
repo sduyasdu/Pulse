@@ -29,26 +29,20 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  * does — a client that caches tools has nothing else to notice a change by, and
  * `0.1.0` never moving is part of why the six new tools stayed invisible.
  *
- * `title`, `websiteUrl` and `icons` are additive: a client that predates them
- * ignores unknown members, and one that reads them stops having to guess our
- * identity from `/favicon.ico`. Guessing is what produced the Yasdu icon — the
- * favicon was being served as SPA HTML, so the client walked up to the parent
- * domain. That is fixed, but stating the icon outright is strictly better than
- * relying on a fallback that failed once already. Absolute URLs, because the
- * client resolving them has no base to resolve against.
+ * `title` is here because `Implementation` extends `BaseMetadata` as of
+ * 2025-06-18, the revision we negotiate. `icons` and `websiteUrl` are NOT — they
+ * belong to a later draft, and sending them broke connection setup outright: the
+ * token exchange succeeded, three requests returned 2xx, the server logged
+ * nothing, and the client refused the session anyway. Announcing 2025-06-18 and
+ * then answering with a newer revision's members is our inconsistency, not the
+ * client's bug.
+ *
+ * **Only send members that exist in the revision this response announces.** If
+ * the negotiated version moves up, they can come back — see MC15 for why the
+ * icon is worth stating rather than leaving to `/favicon.ico`, which is now a
+ * correct fallback but was the fallback that produced the Yasdu mark.
  */
-const SERVER_INFO = {
-  name: "pulse",
-  title: "Pulse",
-  version: "0.2.0",
-  websiteUrl: "https://pulse.yasdu.com",
-  icons: [
-    { src: "https://pulse.yasdu.com/brand/pulse-favicon-32.png", mimeType: "image/png", sizes: "32x32" },
-    { src: "https://pulse.yasdu.com/brand/pulse-apple-touch-180.png", mimeType: "image/png", sizes: "180x180" },
-    { src: "https://pulse.yasdu.com/brand/pulse-favicon-512.png", mimeType: "image/png", sizes: "512x512" },
-    { src: "https://pulse.yasdu.com/favicon.svg", mimeType: "image/svg+xml", sizes: "any" },
-  ],
-};
+const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.2.0" };
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
