@@ -570,6 +570,17 @@ export const fr: Dict = {
   "comments.deleteConfirm": "Supprimer ce commentaire ?",
 
   // ── MCP : connecter un assistant IA (MCP-Spec §2) ───────────────────────────
+  "account.connectedAssistants": "Assistants connectés",
+  "mcp.listIntro": "Les assistants IA autorisés à lire vos Pulses. Si vous en déconnectez un, il cesse de fonctionner immédiatement.",
+  "mcp.listEmpty": "Aucun assistant connecté. Vous pouvez en connecter un depuis votre app IA avec l'URL du connecteur Pulse.",
+  "mcp.scopeRead": "lecture seule",
+  "mcp.scopeWrite": "peut modifier",
+  "mcp.lastUsed": "dernière utilisation le {date}",
+  "mcp.neverUsed": "jamais utilisé",
+  "mcp.revoked": "Déconnecté",
+  "mcp.revokeAction": "Déconnecter",
+  "mcp.revokeConfirm": "Déconnecter « {name} » ?",
+  "mcp.revokeDetail": "Il ne pourra plus lire vos Pulses immédiatement, et ne pourra pas se reconnecter sans votre accord.",
   "mcp.title": "Connecter {client} à Pulse ?",
   "mcp.anAssistant": "cet assistant",
   "mcp.signedInAs": "Connecté en tant que {email}",

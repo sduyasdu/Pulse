@@ -7,6 +7,7 @@ import { Avatar } from "./Avatar";
 import { AccountDialog } from "./AccountDialog";
 import { BillingDialog } from "./BillingDialog";
 import { AboutDialog } from "./AboutDialog";
+import { ConnectedAssistantsDialog } from "./ConnectedAssistantsDialog";
 
 /** Avatar button in the dashboard toolbar. Clicking it opens the account menu
  * (My account, the language override, billing later), and "My account" opens
@@ -25,6 +26,7 @@ export function AccountMenu() {
   const [account, setAccount] = useState(false);
   const [billing, setBilling] = useState(false);
   const [about, setAbout] = useState(false);
+  const [assistants, setAssistants] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
 
   const name = userDoc?.displayName?.trim() || "";
@@ -94,6 +96,11 @@ export function AccountMenu() {
               )}
 
               <MenuItem icon="credit_card" label={t("account.billing")} onClick={() => { setOpen(false); setBilling(true); }} />
+              {/* The revocation surface the MCP token design exists to support
+                  (MCP-Spec §3) — reachable whether or not anything is connected,
+                  because "is anything connected to my account?" is a question
+                  worth being able to answer. */}
+              <MenuItem icon="smart_toy" label={t("account.connectedAssistants")} onClick={() => { setOpen(false); setAssistants(true); }} />
               {/* Last of the options; Sign out keeps the bottom of the menu
                   below the divider (About-Spec AB1). */}
               <MenuItem icon="info" label={t("account.about")} onClick={() => { setOpen(false); setAbout(true); }} />
@@ -109,6 +116,7 @@ export function AccountMenu() {
       {account && <AccountDialog onClose={() => setAccount(false)} />}
       {billing && <BillingDialog onClose={() => setBilling(false)} />}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
+      {assistants && <ConnectedAssistantsDialog onClose={() => setAssistants(false)} />}
     </div>
   );
 }

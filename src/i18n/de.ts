@@ -570,6 +570,17 @@ export const de: Dict = {
   "comments.deleteConfirm": "Diesen Kommentar löschen?",
 
   // ── MCP: einen KI-Assistenten verbinden (MCP-Spec §2) ───────────────────────
+  "account.connectedAssistants": "Verbundene Assistenten",
+  "mcp.listIntro": "KI-Assistenten, denen du erlaubt hast, deine Pulses zu lesen. Trennst du einen, hört er sofort auf zu funktionieren.",
+  "mcp.listEmpty": "Keine Assistenten verbunden. Du kannst einen in deiner KI-App über die Connector-URL von Pulse verbinden.",
+  "mcp.scopeRead": "nur lesen",
+  "mcp.scopeWrite": "kann Änderungen vornehmen",
+  "mcp.lastUsed": "zuletzt genutzt am {date}",
+  "mcp.neverUsed": "nie genutzt",
+  "mcp.revoked": "Getrennt",
+  "mcp.revokeAction": "Trennen",
+  "mcp.revokeConfirm": "„{name}“ trennen?",
+  "mcp.revokeDetail": "Er kann deine Pulses sofort nicht mehr lesen und sich ohne deine Zustimmung nicht wieder verbinden.",
   "mcp.title": "{client} mit Pulse verbinden?",
   "mcp.anAssistant": "diesen Assistenten",
   "mcp.signedInAs": "Angemeldet als {email}",

@@ -576,6 +576,17 @@ export const en = {
   "comments.deleteConfirm": "Delete this comment?",
 
   // ── MCP: connecting an AI assistant (MCP-Spec §2) ───────────────────────────
+  "account.connectedAssistants": "Connected assistants",
+  "mcp.listIntro": "AI assistants you've allowed to read your Pulses. Disconnect one and it stops working immediately.",
+  "mcp.listEmpty": "No assistants connected. You can connect one from your AI app using Pulse's connector URL.",
+  "mcp.scopeRead": "read-only",
+  "mcp.scopeWrite": "can make changes",
+  "mcp.lastUsed": "last used {date}",
+  "mcp.neverUsed": "never used",
+  "mcp.revoked": "Disconnected",
+  "mcp.revokeAction": "Disconnect",
+  "mcp.revokeConfirm": "Disconnect “{name}”?",
+  "mcp.revokeDetail": "It stops being able to read your Pulses right away, and can't reconnect without your approval.",
   "mcp.title": "Connect {client} to Pulse?",
   "mcp.anAssistant": "this assistant",
   "mcp.signedInAs": "Signed in as {email}",

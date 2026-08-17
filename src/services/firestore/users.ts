@@ -1,6 +1,6 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { MyPulseIndexEntry, PendingInviteEntry, PulseMember, UserDoc } from "@/types";
+import type { McpConnection, MyPulseIndexEntry, PendingInviteEntry, PulseMember, UserDoc } from "@/types";
 
 /** Update the signed-in user's own profile fields (name / avatar / language).
  * `language: null` clears the stored override (revert to browser detection). */
@@ -78,4 +78,33 @@ export async function resolvePendingInvites(uid: string, email: string): Promise
     }
   }
   return resolved;
+}
+
+// ---------------------------------------------------------------------------
+// MCP connections (MCP-Spec §3) — AI assistants the user has connected.
+//
+// Read-only from the client except for revoking. The OAuth flow creates them
+// server-side and the MCP service maintains `lastUsedAt`; rules reject any
+// client write other than setting `revokedAt`, because a client that could edit
+// `scope` could widen its own assistant's access.
+// ---------------------------------------------------------------------------
+
+/** Live list of the user's connected assistants, newest first. */
+export function subscribeMcpConnections(uid: string, cb: (rows: McpConnection[]) => void): () => void {
+  return onSnapshot(
+    collection(db, "users", uid, "connections"),
+    (snap) => {
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as McpConnection);
+      rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      cb(rows);
+    },
+    () => cb([]),
+  );
+}
+
+/** Revoke. The connection is kept rather than deleted, so the list can show it
+ * was revoked rather than silently losing it — and the MCP service refuses the
+ * next request and every refresh after it (§2.1). */
+export async function revokeMcpConnection(uid: string, connectionId: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "connections", connectionId), { revokedAt: Date.now() });
 }
