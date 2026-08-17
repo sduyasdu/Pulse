@@ -107,3 +107,40 @@ assert(SUPPORTED_PROTOCOLS.length > 0 && SUPPORTED_PROTOCOLS.every((v) => /^\d{4
   "protocol: advertised versions are dated identifiers");
 assert(TOOLS.every((t) => t.name && t.description && t.inputSchema?.type === "object"),
   "tools: every tool declares a name, a description and an object schema");
+
+// ---------------------------------------------------------------------------
+// 5. Shaping — where a wrong answer is worse than an error
+//
+// These tools exist so an assistant can reason about a roadmap. A date it
+// cannot convert, or a "working days" count that disagrees with the app, is not
+// a broken feature — it is a confidently wrong answer to a customer's question.
+// ---------------------------------------------------------------------------
+
+const { dayToISO, isoToDay, businessDays, fold, overlaps } = await import("../lib/mcpServer.js");
+
+// Day indices are offsets from 2020-01-01 UTC. An assistant seeing `x: 2400`
+// has no way to convert, so every date crosses the boundary as ISO.
+assert(dayToISO(0) === "2020-01-01", "dates: day 0 is the epoch");
+assert(dayToISO(366) === "2021-01-01", "dates: 2020 was a leap year — 366 days, not 365");
+assert(isoToDay("2020-01-01") === 0 && isoToDay(dayToISO(1234)) === 1234, "dates: the round trip is exact");
+
+// 2026-08-17 is a Monday, so a 7-day span from it holds 5 weekdays.
+const mon = isoToDay("2026-08-17");
+assert(businessDays(mon, 7, false) === 5, "elapsed: a calendar week is five working days");
+assert(businessDays(mon, 7, true) === 7, "elapsed: weekends count when the task opts in");
+assert(businessDays(isoToDay("2026-08-22"), 2, false) === 0, "elapsed: a pure weekend is zero working days");
+
+// Search folding, so "analisis" finds "análisis" — same rule as the help panel.
+assert(fold("Análisis") === "analisis", "search: accents fold");
+assert(fold("BLOCKED") === "blocked", "search: case folds");
+assert(fold(null) === "" && fold(undefined) === "", "search: absent values fold to empty, not 'null'");
+
+// Window overlap is inclusive at both ends: a task finishing on the first day
+// of the window is still in it, and excluding it would silently hide work that
+// is finishing right now — the thing most likely to be asked about.
+const task = { x: isoToDay("2026-09-01"), duration: 10 };
+assert(overlaps(task, isoToDay("2026-09-05"), isoToDay("2026-09-06")), "window: a task spanning the window is included");
+assert(overlaps(task, isoToDay("2026-09-11"), isoToDay("2026-09-20")), "window: inclusive at the end — finishing today counts");
+assert(overlaps(task, isoToDay("2026-08-01"), isoToDay("2026-09-01")), "window: inclusive at the start");
+assert(!overlaps(task, isoToDay("2026-09-12"), isoToDay("2026-09-20")), "window: a task that ended before it is excluded");
+assert(!overlaps(task, isoToDay("2026-08-01"), isoToDay("2026-08-31")), "window: a task starting after it is excluded");
