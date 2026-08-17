@@ -44,6 +44,35 @@ export interface Workspace {
   pulseCount?: number;
 }
 
+/**
+ * An AI assistant connected over MCP (`MCP-Spec.md` §3). Lives under the user
+ * because it is theirs alone to see and revoke: `users/{uid}/connections/{id}`.
+ *
+ * **Server-owned except for deletion.** The MCP service writes `lastUsedAt` and
+ * the OAuth flow creates the record; the customer's only write is revoking,
+ * which is what `revokedAt` records. Rules enforce that split — a client that
+ * could edit `scope` could grant its own assistant write access.
+ */
+export interface McpConnection {
+  id: string;
+  /** Customer-supplied, shown in the connection list and in activity
+   * attribution once writes ship ("Ana's Claude (via MCP)", MC7). */
+  name: string;
+  /** What the AI client reported about itself, for the list. Untrusted. */
+  client?: string;
+  scope: McpScope;
+  createdAt: Timestamp;
+  /** Refreshed by the MCP service, so an unused connection is visibly prunable
+   * (MC12). Absent until first use. */
+  lastUsedAt?: Timestamp;
+  /** Set on revoke. Present ⇒ the connection is dead and cannot refresh. Kept
+   * rather than deleted so the customer can see it was revoked, not lost. */
+  revokedAt?: Timestamp | null;
+}
+
+/** v1 issues only `read` (MC5); `write` is Phase 2. */
+export type McpScope = "read" | "write";
+
 export type WorkspaceRole = "owner" | "member";
 
 export interface WorkspaceMember {

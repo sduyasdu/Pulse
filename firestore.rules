@@ -186,6 +186,28 @@ service cloud.firestore {
       match /myPulses/{pulseId} {
         allow read, write: if isSignedIn() && request.auth.uid == uid;
       }
+
+      // ---- MCP connections (MCP-Spec §3) ----
+      // An assistant the user has connected. Theirs to see and to revoke, and
+      // nobody else's to see at all.
+      //
+      // Revoking is the ONLY client write, and it may set nothing but
+      // `revokedAt`. A client that could edit `scope` could grant its own
+      // assistant write access; one that could edit `lastUsedAt` could make an
+      // active connection look idle. Both are server-owned, which is why this
+      // is a narrow update rather than `allow write`.
+      //
+      // No un-revoke: turning a connection back on is re-consenting, which
+      // means going through /oauth/authorize again. `revokedAt` therefore only
+      // ever goes from null to a number.
+      match /connections/{connectionId} {
+        allow read: if isSignedIn() && request.auth.uid == uid;
+        allow create, delete: if false;   // the OAuth flow creates; nothing deletes
+        allow update: if isSignedIn() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revokedAt'])
+          && resource.data.get('revokedAt', null) == null
+          && request.resource.data.revokedAt is number;
+      }
     }
 
     // ---- workspaces ----

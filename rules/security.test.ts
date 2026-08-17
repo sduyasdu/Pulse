@@ -1105,3 +1105,79 @@ describe("plan quotas — Pulse count (Plans-Spec §3.2/§5, PL5)", () => {
     );
   });
 });
+
+describe("MCP connections (MCP-Spec §3)", () => {
+  const CONN = "conn1";
+
+  async function seedConnection(over: Record<string, unknown> = {}) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "connections", CONN), {
+        id: CONN, name: "Ana's Claude", scope: "read", createdAt: Date.now(), revokedAt: null, ...over,
+      });
+    });
+  }
+
+  it("only the owner can see their connected assistants", async () => {
+    await seedConnection();
+    await assertSucceeds(getDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", CONN)));
+    await assertFails(getDoc(doc(dbAs("bob", "bob@example.com"), "users", "alice", "connections", CONN)));
+    await assertFails(getDoc(doc(dbAs(null), "users", "alice", "connections", CONN)));
+  });
+
+  it("the owner can revoke", async () => {
+    await seedConnection();
+    await assertSucceeds(
+      updateDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", CONN), { revokedAt: Date.now() }),
+    );
+  });
+
+  it("nobody else can revoke", async () => {
+    await seedConnection();
+    await assertFails(
+      updateDoc(doc(dbAs("bob", "bob@example.com"), "users", "alice", "connections", CONN), { revokedAt: Date.now() }),
+    );
+  });
+
+  // The whole reason revoking is a narrow update rather than `allow write`:
+  // these two fields decide what the assistant may do and whether it looks idle.
+  it("denies escalating scope, with or without a revoke riding along", async () => {
+    await seedConnection();
+    const alice = dbAs("alice", "alice@example.com");
+    await assertFails(updateDoc(doc(alice, "users", "alice", "connections", CONN), { scope: "write" }));
+    await assertFails(
+      updateDoc(doc(alice, "users", "alice", "connections", CONN), { revokedAt: Date.now(), scope: "write" }),
+    );
+  });
+
+  it("denies forging lastUsedAt", async () => {
+    await seedConnection();
+    await assertFails(
+      updateDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", CONN), { lastUsedAt: 0 }),
+    );
+  });
+
+  it("denies un-revoking — turning it back on means consenting again", async () => {
+    await seedConnection({ revokedAt: Date.now() });
+    await assertFails(
+      updateDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", CONN), { revokedAt: null }),
+    );
+  });
+
+  it("denies creating a connection from the client", async () => {
+    await assertFails(
+      setDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", "forged"), {
+        id: "forged", name: "mine", scope: "write", createdAt: Date.now(), revokedAt: null,
+      }),
+    );
+  });
+
+  it("keeps the OAuth server's own collections unreadable", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "mcpRefreshTokens", "hash1"), { uid: "alice", connectionId: CONN, scope: "read" });
+      await setDoc(doc(db, "mcpAuthCodes", "hash2"), { uid: "alice", connectionId: CONN, scope: "read" });
+    });
+    const alice = dbAs("alice", "alice@example.com");
+    await assertFails(getDoc(doc(alice, "mcpRefreshTokens", "hash1")));
+    await assertFails(getDoc(doc(alice, "mcpAuthCodes", "hash2")));
+  });
+});

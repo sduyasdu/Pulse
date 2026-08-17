@@ -36,3 +36,7 @@ export { onPulseCreateCount, onPulseDeleteCount } from "./counters";
 // the server-side half of the PL4 downgrade. The two callables mint hosted
 // Stripe URLs (Checkout / Customer Portal); payment details never touch the app.
 export { stripeWebhook, createCheckoutSession, createPortalSession, listPlans } from "./billing";
+
+// MCP — the OAuth half (MCP-Spec.md §2/§2.1, Phase 0). The MCP service itself
+// acts as the customer; the Admin SDK appears here only to mint their token.
+export { approveMcpConnection, mcpOauthToken } from "./mcp";
