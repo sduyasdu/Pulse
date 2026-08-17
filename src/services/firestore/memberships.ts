@@ -26,6 +26,23 @@ export async function syncMyMemberPhoto(pulseId: string, uid: string, photoURL: 
   await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { photoURL }).catch(() => {});
 }
 
+/** Repair a blank `email` on the caller's own membership doc.
+ *
+ * Pulses created before the fix wrote the owner's member doc with `email: ""`,
+ * which is invisible in the app — the owner knows who they are — but leaves the
+ * only readable record of who owns a Pulse empty for everyone else, including
+ * the MCP tools.
+ *
+ * Only an owner can do this: the update rule pins `email` on self-edits
+ * precisely so a member cannot rewrite the identity their access was granted
+ * against, and the owner branch is the exception. Best effort and idempotent —
+ * called on load, writes only when actually blank, so it converges and a denial
+ * costs nothing. */
+export async function backfillMyOwnerEmail(pulseId: string, uid: string, email: string | null): Promise<void> {
+  if (!email) return;
+  await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { email }).catch(() => {});
+}
+
 /** Owner-only (enforced by firestore.rules). Materializes the role's capability
  * bundle alongside the role (Permissions-Spec §4.1) so it's ready for rules
  * enforcement; the caps are inert until that phase lands. */

@@ -427,3 +427,52 @@ assistant relays.
     not orphaned.
     Version moved 0.2.0 → 0.3.0, which is what MC17 keys on: this is the first
     surface change to announce itself to already-connected clients.
+19. **MC19 — MC17 does not do what it claims; corrected here rather than
+    edited away.** MC17 (added 2026-08-17) says a stale client is told about a
+    tool-surface change on a tool call's response stream, making reconnects
+    unnecessary. The logs from the 0.2.0 → 0.3.0 change say otherwise: the
+    `announcing tool-list change` line never appeared once, and the customer
+    still had to reconnect. Two facts explain it, and both were assumptions
+    rather than observations when MC17 was written.
+    First, **this client re-runs `initialize` + `tools/list` at the start of every
+    session**, not only when the connector is added. Since `tools/list` is what
+    clears the staleness flag, the flag is always clean before any `tools/call`
+    can carry a notification. The mechanism can only fire if a deploy lands
+    mid-session — a narrow window, not the common case.
+    Second, **the tool list was never the thing blocking**: `tools listed,
+    tools: 9` was served to the pre-existing connection 55 seconds *before* the
+    reconnect. The new tools were available at the protocol level without one.
+    What required reconnecting is the client's own connector UI — its enabled-tool
+    list, cached above the protocol, where a server cannot reach.
+    Kept rather than removed: it is correct for a client that caches across
+    sessions, it costs one field on a document `authenticate` already reads, and
+    the version discipline it forces is what made this diagnosis possible at all.
+    **But it is not a reconnect-avoidance mechanism, and MC17 should not be cited
+    as one** — including for the Phase 2 write tools, which will need a reconnect
+    like everything else.
+20. **MC20 — Negotiate 2025-11-25, and assemble `serverInfo` per revision →
+    DECIDED (`functions/src/mcpServer.ts`).** Every real connection logged
+    `downgraded: true`, asking for `2025-11-25` and being answered `2025-06-18`;
+    a client may walk away from a version it did not ask for, and this one was
+    being downgraded on every handshake. `2025-11-25` is now the newest supported
+    revision. Because `icons` and `websiteUrl` are legitimate members of it,
+    identity is now built **against the negotiated version** — clients on
+    2025-11-25 receive them, older ones receive exactly what they received
+    before. That turns MC15's rule from a blanket prohibition into what it always
+    should have been: *send only what the revision you announced defines*, decided
+    per response rather than per server. The icon is therefore stated rather than
+    sniffed from `/favicon.ico`, without repeating the failure that statement
+    caused when it was sent under the wrong revision. Verified live on both paths
+    before shipping.
+21. **MC21 — An owner's membership doc stored `email: ""`.** `createPulse` and
+    `duplicatePulse` wrote the creator's member doc with a blank email, so
+    `search_resources` returned no address for a resource linked to the owner —
+    the one member whose identity is least likely to be recorded anywhere else.
+    Invisible in the app, because an owner already knows who they are. Fixed at
+    the source (both writers now take the creator's email) and repaired on load
+    for existing Pulses. The repair has to be done **by an owner**: the
+    `pulseMembers` update rule pins `email` on self-edits so a member cannot
+    rewrite the identity their access was granted against, and the owner branch
+    is the only exception — which happens to be exactly who is affected.
+    `search_resources` also now maps `""` to null, because an empty string
+    reaching an assistant reads as an address rather than as an absence.

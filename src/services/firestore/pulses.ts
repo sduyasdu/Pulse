@@ -28,7 +28,7 @@ import { fetchFeatures, newFeatureId, createFeature } from "./features";
  * doc (to check `createdBy`) can't see a same-batch, not-yet-committed
  * write, so batching this together gets denied outright.
  */
-export async function createPulse(uid: string, workspaceId: string, name: string): Promise<string> {
+export async function createPulse(uid: string, workspaceId: string, name: string, creatorEmail?: string | null): Promise<string> {
   const pulseRef = doc(collection(db, "pulses"));
   const pulse: Pulse = {
     id: pulseRef.id,
@@ -42,7 +42,12 @@ export async function createPulse(uid: string, workspaceId: string, name: string
   };
   await setDoc(pulseRef, pulse);
 
-  const member: PulseMember = { uid, email: "", role: "owner", joinedAt: Date.now() };
+  // The creator's real email, not "". A blank here is invisible in the app —
+  // the owner already knows who they are — but it is the only record of who
+  // owns the Pulse that other members and the MCP tools can read, and the
+  // pulseMembers update rule PINS email against self-edits, so a blank one can
+  // only ever be repaired by an owner (see backfillMyOwnerEmail).
+  const member: PulseMember = { uid, email: creatorEmail ?? "", role: "owner", joinedAt: Date.now() };
   await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), member);
 
   const indexEntry: MyPulseIndexEntry = {
@@ -67,7 +72,7 @@ export type DuplicateMode = "full" | "noResources" | "empty";
  *   - "empty": a blank Pulse (default config, nothing copied) — just the name.
  * Ids are freshly minted and remapped (epic ↔ task, resource ↔ assignment).
  */
-export async function duplicatePulse(uid: string, workspaceId: string, sourcePulseId: string, name: string, mode: DuplicateMode): Promise<string> {
+export async function duplicatePulse(uid: string, workspaceId: string, sourcePulseId: string, name: string, mode: DuplicateMode, creatorEmail?: string | null): Promise<string> {
   const source = mode === "empty" ? null : await getPulse(sourcePulseId);
   const now = Date.now();
   const pulseRef = doc(collection(db, "pulses"));
@@ -83,7 +88,7 @@ export async function duplicatePulse(uid: string, workspaceId: string, sourcePul
     ...(source?.statuses ? { statuses: source.statuses } : {}),
   };
   await setDoc(pulseRef, stripUndefined(pulse));
-  await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), { uid, email: "", role: "owner", joinedAt: now } satisfies PulseMember);
+  await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), { uid, email: creatorEmail ?? "", role: "owner", joinedAt: now } satisfies PulseMember);
   const indexEntry: MyPulseIndexEntry = { pulseId: pulseRef.id, name, workspaceId, role: "owner", joinedAt: now };
   await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
 

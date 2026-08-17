@@ -303,7 +303,7 @@ export function DashboardPage() {
             if (!workspaceId) {
               throw new Error(t("dashboard.workspaceNotReady"));
             }
-            const pulseId = await createPulse(firebaseUser.uid, workspaceId, name);
+            const pulseId = await createPulse(firebaseUser.uid, workspaceId, name, firebaseUser.email);
             setCreating(false);
             navigate(`/p/${pulseId}`);
           }}
@@ -340,7 +340,7 @@ export function DashboardPage() {
           onDuplicate={async (name: string, mode: DuplicateMode) => {
             const workspaceId = userDoc?.personalWorkspaceId;
             if (!workspaceId) throw new Error(t("dashboard.workspaceNotReady"));
-            const newId = await duplicatePulse(firebaseUser.uid, workspaceId, duplicatingPulse.pulseId, name, mode);
+            const newId = await duplicatePulse(firebaseUser.uid, workspaceId, duplicatingPulse.pulseId, name, mode, firebaseUser.email);
             setDuplicatingPulse(null);
             navigate(`/p/${newId}`);
           }}

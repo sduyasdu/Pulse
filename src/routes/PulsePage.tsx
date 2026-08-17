@@ -5,7 +5,7 @@ import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { useUndoStore } from "@/stores/undoStore";
 import { ensureMyPulseEntry, getPulse, removeMyPulseEntry, setPulseArchived, updateMyPulseArchivedAt } from "@/services/firestore/pulses";
 import { logDirectActivity } from "@/domain/activityRecorder";
-import { fetchMembership, syncMyMemberPhoto } from "@/services/firestore/memberships";
+import { backfillMyOwnerEmail, fetchMembership, syncMyMemberPhoto } from "@/services/firestore/memberships";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
@@ -41,6 +41,7 @@ export function PulsePage() {
   const navigate = useNavigate();
   const firebaseUser = useAuthStore((s) => s.firebaseUser);
   const myPhotoURL = useAuthStore((s) => s.userDoc?.photoURL ?? null);
+  const myEmail = useAuthStore((s) => s.firebaseUser?.email ?? null);
 
   const load = usePulseStore((s) => s.load);
   const pulse = usePulseStore((s) => s.pulse);
@@ -142,7 +143,11 @@ export function PulsePage() {
     if (!uid || !pulseId) return;
     const me = members.find((m) => m.uid === uid);
     if (me && (me.photoURL ?? null) !== myPhotoURL) void syncMyMemberPhoto(pulseId, uid, myPhotoURL);
-  }, [uid, pulseId, members, myPhotoURL]);
+    // Same shape, different field: Pulses created before the fix stored the
+    // owner's email as "". Only an owner may repair it (the rule pins email
+    // against self-edits), which is exactly who is affected.
+    if (me && me.role === "owner" && !me.email) void backfillMyOwnerEmail(pulseId, uid, myEmail);
+  }, [uid, pulseId, members, myPhotoURL, myEmail]);
 
   // Keyboard: ⌘/Ctrl+Z = undo, ⇧⌘/Ctrl+Z (or Ctrl+Y) = redo. Ignored while a
   // text field owns the caret, and only for editors.

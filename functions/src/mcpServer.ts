@@ -19,8 +19,13 @@ const FN = "MCP.server";
 /** Protocol versions we knowingly speak. We echo the client's if it is one of
  * these, because our surface (tools only) is identical across them; otherwise we
  * answer with our newest and let the client decide whether to continue. */
-export const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+export const SUPPORTED_PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
+
+/** The revision that added `icons` and `websiteUrl` to `Implementation`.
+ * Compared lexicographically, which is sound for these date-shaped ids and
+ * means a later revision inherits them rather than silently losing them. */
+const ICONS_FROM = "2025-11-25";
 
 /**
  * What we tell a client we are, in `initialize`.
@@ -29,20 +34,34 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  * does — a client that caches tools has nothing else to notice a change by, and
  * `0.1.0` never moving is part of why the six new tools stayed invisible.
  *
- * `title` is here because `Implementation` extends `BaseMetadata` as of
- * 2025-06-18, the revision we negotiate. `icons` and `websiteUrl` are NOT — they
- * belong to a later draft, and sending them broke connection setup outright: the
- * token exchange succeeded, three requests returned 2xx, the server logged
- * nothing, and the client refused the session anyway. Announcing 2025-06-18 and
- * then answering with a newer revision's members is our inconsistency, not the
- * client's bug.
+ * `title` has been safe since 2025-06-18, when `Implementation` gained
+ * `BaseMetadata`. `icons` and `websiteUrl` arrived later, and sending them under
+ * 2025-06-18 broke connection setup outright — the token exchange succeeded,
+ * three requests returned 2xx, the server logged nothing, and the client refused
+ * the session anyway.
  *
- * **Only send members that exist in the revision this response announces.** If
- * the negotiated version moves up, they can come back — see MC15 for why the
- * icon is worth stating rather than leaving to `/favicon.ico`, which is now a
- * correct fallback but was the fallback that produced the Yasdu mark.
+ * The rule that came out of that is **send only members the announced revision
+ * defines**, which is a per-response question rather than a per-server one. So
+ * identity is assembled against the version actually negotiated: clients on
+ * 2025-11-25 get the icons, older ones get exactly what they got before.
  */
 const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.3.0" };
+
+/** Stated rather than left to be sniffed from `/favicon.ico` — the fallback that
+ * produced the parent company's mark when that path was answering with SPA HTML.
+ * Absolute URLs, because the client has no base to resolve against. */
+const IDENTITY = {
+  websiteUrl: "https://pulse.yasdu.com",
+  icons: [
+    { src: "https://pulse.yasdu.com/brand/pulse-favicon-32.png", mimeType: "image/png", sizes: "32x32" },
+    { src: "https://pulse.yasdu.com/brand/pulse-apple-touch-180.png", mimeType: "image/png", sizes: "180x180" },
+    { src: "https://pulse.yasdu.com/brand/pulse-favicon-512.png", mimeType: "image/png", sizes: "512x512" },
+    { src: "https://pulse.yasdu.com/favicon.svg", mimeType: "image/svg+xml", sizes: "any" },
+  ],
+};
+
+const serverInfoFor = (protocolVersion: string) =>
+  protocolVersion >= ICONS_FROM ? { ...SERVER_INFO, ...IDENTITY } : SERVER_INFO;
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -597,7 +616,12 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
             // placeholder for one. Which it is changes what an assistant should
             // say about it, so state it rather than leaving it to be inferred
             // from a null.
-            linkedAccount: linked ? { email: linked.email ?? null, role: linked.role ?? null } : null,
+            // `|| null` rather than `?? null`: owner membership docs created
+            // before the fix carry `email: ""`, and an empty string reaching an
+            // assistant is worse than an absent one — it reads as an address.
+            linkedAccount: linked
+              ? { email: (linked.email as string) || null, role: linked.role ?? null }
+              : null,
             hourlyCostUsd: rate.has(String(r.id)) ? rate.get(String(r.id)) : null,
           };
         }),
@@ -797,7 +821,11 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
       // `listChanged` is declared only because we can now actually send it, on
       // the response stream of a tool call. Declaring a capability we could not
       // honour would promise a notification that never arrives.
-      res.json(rpcResult(id, { protocolVersion, capabilities: { tools: { listChanged: true } }, serverInfo: SERVER_INFO }));
+      res.json(rpcResult(id, {
+        protocolVersion,
+        capabilities: { tools: { listChanged: true } },
+        serverInfo: serverInfoFor(protocolVersion),
+      }));
       return;
     }
     if (isNotification) {
