@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { Spinner } from "@/components/shared/Spinner";
 import { useAuthStore } from "@/stores/authStore";
-import { subscribeMcpConnections, revokeMcpConnection } from "@/services/firestore/users";
+import { subscribeMcpConnections, revokeMcpConnection, deleteMcpConnection } from "@/services/firestore/users";
+import { copyText } from "@/domain/share";
 import { confirmAt } from "@/stores/confirmStore";
 import { useI18nStore } from "@/stores/i18nStore";
 import { useT } from "@/i18n";
@@ -17,8 +18,21 @@ import type { McpConnection } from "@/types";
  *
  * Revoked connections stay listed rather than disappearing: a customer who
  * revokes something wants to see that they did, and a row that vanishes reads
- * like data loss.
+ * like data loss. They can then be removed deliberately, which is a second act
+ * with its own confirm — see the rules for why deleting is never an off switch.
  */
+
+/**
+ * The address a customer pastes into their AI app.
+ *
+ * Hardcoded to the canonical host rather than built from `window.location.origin`,
+ * because the OAuth discovery documents name `https://pulse.yasdu.com` as the
+ * issuer. Handing someone a connector URL on a different origin than the issuer
+ * is the mixed-origin arrangement that already broke client registration once —
+ * and it would break it for the customer, in their app, where the error is
+ * unreadable. One origin, stated in one place.
+ */
+const MCP_URL = "https://pulse.yasdu.com/mcp";
 export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const lang = useI18nStore((s) => s.lang);
@@ -26,6 +40,7 @@ export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) 
   const [rows, setRows] = useState<McpConnection[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!uid) return;
@@ -51,11 +66,62 @@ export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) 
     }
   };
 
+  const remove = async (c: McpConnection, e: { clientX: number; clientY: number }) => {
+    if (!uid) return;
+    const ok = await confirmAt(e, {
+      message: t("mcp.removeConfirm", { name: c.name }),
+      // Says what it does NOT do, because the dangerous misreading is that this
+      // is the disconnect. It already is disconnected; this clears the record.
+      detail: t("mcp.removeDetail"),
+      confirmLabel: t("mcp.removeAction"),
+    });
+    if (!ok) return;
+    setBusy(c.id);
+    try {
+      await deleteMcpConnection(uid, c.id);
+    } catch {
+      setError(t("mcp.removeError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copyUrl = async () => {
+    setCopied(await copyText(MCP_URL));
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6" onClick={onClose}>
       <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-base font-semibold text-yasdu-fg">{t("account.connectedAssistants")}</h2>
         <p className="mt-1 text-xs" style={{ color: "#64748B" }}>{t("mcp.listIntro")}</p>
+
+        {/* The connector URL sits above the list because it is what someone
+            opening this dialog with nothing connected actually came for. */}
+        <div className="mt-4 rounded-xl border p-3" style={{ borderColor: "#E2DFD9", background: "#FBFAF7" }}>
+          <div className="mono text-[10px] uppercase tracking-wide" style={{ color: "#94A3B8" }}>
+            {t("mcp.connectUrlLabel")}
+          </div>
+          <div className="mt-1.5 flex items-center gap-2">
+            <code
+              className="mono min-w-0 flex-1 truncate rounded-lg border px-2.5 py-1.5 text-[11px]"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330" }}
+              title={MCP_URL}
+            >
+              {MCP_URL}
+            </code>
+            <button
+              onClick={() => void copyUrl()}
+              className="hoverable flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold"
+              style={{ borderColor: "#E2DFD9", color: copied ? "#0F7B6C" : "#334155" }}
+            >
+              <Icon name={copied ? "check" : "content_copy"} size={14} />
+              {copied ? t("mcp.copied") : t("mcp.copy")}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "#94A3B8" }}>{t("mcp.connectUrlHint")}</p>
+        </div>
 
         {error ? (
           // Distinct from "none connected" on purpose — see the note on
@@ -93,9 +159,23 @@ export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) 
                     </div>
                   </div>
                   {revoked ? (
-                    <span className="mono rounded px-2 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#94A3B8" }}>
-                      {t("mcp.revoked")}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="mono rounded px-2 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: "#EEF1F5", color: "#94A3B8" }}>
+                        {t("mcp.revoked")}
+                      </span>
+                      {/* Always visible rather than hover-revealed: a tablet has
+                          no hover, and a row action behind one is unreachable. */}
+                      <button
+                        onClick={(e) => void remove(c, e)}
+                        disabled={busy === c.id}
+                        title={t("mcp.removeAction")}
+                        aria-label={t("mcp.removeAction")}
+                        className="hoverable rounded-lg border p-1 disabled:opacity-50"
+                        style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}
+                      >
+                        <Icon name="delete" size={14} />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={(e) => void revoke(c, e)}

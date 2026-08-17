@@ -200,9 +200,18 @@ service cloud.firestore {
       // No un-revoke: turning a connection back on is re-consenting, which
       // means going through /oauth/authorize again. `revokedAt` therefore only
       // ever goes from null to a number.
+      // Deleting is tidying up, NOT an off switch, so it is allowed only once
+      // the connection is already revoked. Letting a live one be deleted would
+      // look like the same button: the record vanishes, `liveConnection()` finds
+      // nothing and refresh fails — so it half-works as a disconnect while the
+      // outstanding access token keeps reading for up to another hour, and the
+      // evidence that anything was ever connected is gone. Revoke then remove
+      // keeps the two acts separate and each one honest about what it did.
       match /connections/{connectionId} {
         allow read: if isSignedIn() && request.auth.uid == uid;
-        allow create, delete: if false;   // the OAuth flow creates; nothing deletes
+        allow create: if false;           // only the OAuth flow creates
+        allow delete: if isSignedIn() && request.auth.uid == uid
+          && resource.data.revokedAt is number;
         allow update: if isSignedIn() && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revokedAt'])
           && resource.data.get('revokedAt', null) == null

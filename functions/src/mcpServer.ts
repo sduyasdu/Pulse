@@ -576,10 +576,28 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
     if (method === "initialize") {
       const asked = (params.protocolVersion as string) ?? LATEST_PROTOCOL;
       const protocolVersion = SUPPORTED_PROTOCOLS.includes(asked) ? asked : LATEST_PROTOCOL;
+      const client = params.clientInfo as { name?: string; version?: string } | undefined;
+      // Who connected and on which revision. `downgraded` is the one worth
+      // seeing at a glance: it means we answered a version the client did not
+      // ask for, and a client is free to walk away from that.
+      log(FN, "initialize", {
+        client: client?.name ?? null,
+        clientVersion: client?.version ?? null,
+        asked,
+        answered: protocolVersion,
+        downgraded: asked !== protocolVersion,
+        serverVersion: SERVER_INFO.version,
+      });
       res.json(rpcResult(id, { protocolVersion, capabilities: { tools: {} }, serverInfo: SERVER_INFO }));
       return;
     }
     if (isNotification) {
+      // Log the method, because `notifications/initialized` is the only proof
+      // the client ACCEPTED our initialize result. When it validated our
+      // response and refused it, the server saw a clean exchange and three 2xx
+      // replies with nothing wrong — the absence of this line is what says the
+      // handshake died on our payload rather than on a request we mishandled.
+      log(FN, "notification", { method });
       res.status(202).send("");
       return;
     }
@@ -593,6 +611,9 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
     }
 
     if (method === "tools/list") {
+      // The count answers "did this client actually see the new tools?" without
+      // anyone having to reproduce it — the question that started this.
+      log(FN, "tools listed", { uid: caller.uid, connectionId: caller.connectionId, tools: TOOLS.length });
       res.json(rpcResult(id, { tools: TOOLS }));
       return;
     }
@@ -601,6 +622,7 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
       const name = params.name as string;
       const tool = TOOLS.find((t) => t.name === name);
       if (!tool) {
+        logError(FN, "unknown tool", new Error(String(name)), { uid: caller.uid, tool: String(name) });
         res.json(rpcError(id, METHOD_NOT_FOUND, `Unknown tool: ${name}`));
         return;
       }
@@ -614,6 +636,11 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
       return;
     }
 
+    // Not an error on our side — `resources/list` and `prompts/list` are
+    // routinely probed by clients we serve no resources or prompts to. Logged
+    // anyway: if a client needs something we don't implement, this line is the
+    // only place that ever says so.
+    log(FN, "unimplemented method", { uid: caller.uid, method });
     res.json(rpcError(id, METHOD_NOT_FOUND, `Unknown method: ${method}`));
   } catch (err) {
     logError(FN, "request failed", err, { method });

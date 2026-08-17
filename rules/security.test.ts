@@ -1163,6 +1163,24 @@ describe("MCP connections (MCP-Spec §3)", () => {
     );
   });
 
+  it("the owner can remove a connection they have already revoked", async () => {
+    await seedConnection({ revokedAt: Date.now() });
+    await assertSucceeds(deleteDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", CONN)));
+  });
+
+  // The allow side is not the interesting half here — this is. Deleting a live
+  // connection would read as a disconnect and only half be one.
+  it("denies removing a connection that is still live", async () => {
+    await seedConnection();
+    await assertFails(deleteDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", CONN)));
+  });
+
+  it("nobody else can remove a revoked connection", async () => {
+    await seedConnection({ revokedAt: Date.now() });
+    await assertFails(deleteDoc(doc(dbAs("bob", "bob@example.com"), "users", "alice", "connections", CONN)));
+    await assertFails(deleteDoc(doc(dbAs(null), "users", "alice", "connections", CONN)));
+  });
+
   it("denies creating a connection from the client", async () => {
     await assertFails(
       setDoc(doc(dbAs("alice", "alice@example.com"), "users", "alice", "connections", "forged"), {

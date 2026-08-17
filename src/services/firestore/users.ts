@@ -118,3 +118,13 @@ export function subscribeMcpConnections(
 export async function revokeMcpConnection(uid: string, connectionId: string): Promise<void> {
   await updateDoc(doc(db, "users", uid, "connections", connectionId), { revokedAt: Date.now() });
 }
+
+/** Clear a revoked connection off the list.
+ *
+ * Only ever called for a connection that is already revoked — the rules enforce
+ * that too, because deleting a live one would work as a partial disconnect and
+ * take the record of it away at the same time. This is tidying, not an off
+ * switch, and the UI only offers it once the off switch has been used. */
+export async function deleteMcpConnection(uid: string, connectionId: string): Promise<void> {
+  await deleteDoc(doc(db, "users", uid, "connections", connectionId));
+}
