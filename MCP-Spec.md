@@ -350,3 +350,22 @@ assistant relays.
     it shapes the token endpoint, and retrofitting it means changing a flow
     customers have already authorized. Bonus, not incidental: revocation bites at
     refresh, and scope becomes changeable without re-approval.
+15. **MC15 — `serverInfo` states our identity; it does not leave it to be
+    inferred → DECIDED (`functions/src/mcpServer.ts:25`).** `initialize` returns
+    `title`, `websiteUrl` and `icons` alongside `name`/`version`, and `version`
+    tracks the **tool surface** rather than the code — it is bumped when a tool
+    is added, removed or changes shape, and not otherwise. Both halves come from
+    the same incident: six new tools and a corrected favicon were live and
+    invisible, because a client caches the tool list and the icon from the
+    moment the connector is added, and nothing in our responses had changed to
+    invalidate either. *Rejected: relying on `/favicon.ico` alone* — it is a
+    fallback that already failed once (served as SPA HTML, so the client walked
+    up to the parent domain and showed Yasdu's mark), and a fallback that fails
+    silently is worth replacing with a statement. *Rejected: declaring
+    `capabilities.tools.listChanged`* — we are stateless HTTP with no open
+    channel to push `notifications/tools/list_changed` down, so advertising it
+    would promise a notification that never arrives. Note the honest limit: the
+    `icons` member is optional and newer than some clients, and neither field
+    invalidates a cache that has already been populated. **A tool-surface change
+    still requires the customer to reconnect the connector to see it** — say so
+    in release notes rather than assuming rollout is automatic.

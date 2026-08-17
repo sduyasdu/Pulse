@@ -22,7 +22,33 @@ const FN = "MCP.server";
 export const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
 
-const SERVER_INFO = { name: "pulse", version: "0.1.0" };
+/**
+ * What we tell a client we are, in `initialize`.
+ *
+ * `version` is bumped whenever the **tool surface** changes, not when the code
+ * does — a client that caches tools has nothing else to notice a change by, and
+ * `0.1.0` never moving is part of why the six new tools stayed invisible.
+ *
+ * `title`, `websiteUrl` and `icons` are additive: a client that predates them
+ * ignores unknown members, and one that reads them stops having to guess our
+ * identity from `/favicon.ico`. Guessing is what produced the Yasdu icon — the
+ * favicon was being served as SPA HTML, so the client walked up to the parent
+ * domain. That is fixed, but stating the icon outright is strictly better than
+ * relying on a fallback that failed once already. Absolute URLs, because the
+ * client resolving them has no base to resolve against.
+ */
+const SERVER_INFO = {
+  name: "pulse",
+  title: "Pulse",
+  version: "0.2.0",
+  websiteUrl: "https://pulse.yasdu.com",
+  icons: [
+    { src: "https://pulse.yasdu.com/brand/pulse-favicon-32.png", mimeType: "image/png", sizes: "32x32" },
+    { src: "https://pulse.yasdu.com/brand/pulse-apple-touch-180.png", mimeType: "image/png", sizes: "180x180" },
+    { src: "https://pulse.yasdu.com/brand/pulse-favicon-512.png", mimeType: "image/png", sizes: "512x512" },
+    { src: "https://pulse.yasdu.com/favicon.svg", mimeType: "image/svg+xml", sizes: "any" },
+  ],
+};
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
