@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useBackClose } from "@/hooks/useBackClose";
 import { Icon } from "@/components/shared/Icon";
 import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
@@ -63,6 +64,19 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
   const myFilter = myTasksOnly && myResourceIds.length > 0 ? myResourceIds : null;
 
   const selected = features.find((f) => f.id === selectedId) ?? null;
+
+  // Back closes whatever screen is on top, rather than leaving the Pulse. One
+  // guard for every overlay — see useBackClose for why per-overlay guards race
+  // when you open a task straight from the comments list. Order matches what is
+  // visually on top when two could be open at once.
+  const overlayOpen = selected !== null || showComments || showHelp || showInvite;
+  const closeTopOverlay = () => {
+    if (selected) setSelectedId(null);
+    else if (showComments) setShowComments(false);
+    else if (showHelp) setShowHelp(false);
+    else if (showInvite) setShowInvite(false);
+  };
+  useBackClose(overlayOpen, closeTopOverlay);
 
   const handleAdd = async () => {
     const id = await addFeature({ x: todayIndex(), y: 20 });
@@ -164,11 +178,10 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
       {/* Full-screen task editor */}
       {selected && (
         <div className="fixed inset-0 flex flex-col" style={{ background: "#FFFFFF", zIndex: 50 }}>
-          <header className="flex items-center gap-2 px-3 flex-shrink-0 border-b" style={{ height: 52, borderColor: "#E2DFD9", background: "#FFFFFF" }}>
-            <button onClick={() => setSelectedId(null)} className="flex items-center gap-1" style={{ color: "#123359", fontSize: 14, fontWeight: 600 }}>
-              <Icon name="chevron_left" size={22} /> {t("mobile.tasks")}
-            </button>
-          </header>
+          {/* Content first: the back bar sits at the BOTTOM on this screen, in
+              thumb reach and in the same place as the tab bar it replaces, so
+              leaving a task costs the same reach as switching tabs. The form
+              keeps its own sticky title, so nothing at the top is lost. */}
           <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             <DetailsTab
               feature={selected}
@@ -180,6 +193,16 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
               }}
             />
           </div>
+          <footer
+            className="flex items-center gap-2 px-3 flex-shrink-0 border-t"
+            // minHeight, not height: with border-box the safe-area padding would
+            // eat into a fixed 52 and squash the row on a gesture-bar device.
+            style={{ minHeight: 52, borderColor: "#E2DFD9", background: "#FFFFFF", paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
+            <button onClick={() => setSelectedId(null)} className="flex items-center gap-1" style={{ color: "#123359", fontSize: 14, fontWeight: 600 }}>
+              <Icon name="chevron_left" size={22} /> {t("mobile.tasks")}
+            </button>
+          </footer>
         </div>
       )}
 
