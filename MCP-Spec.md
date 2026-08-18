@@ -556,3 +556,41 @@ assistant relays.
     Kept from MC20: nothing. Kept from the episode: the logging, and the rule
     that a change to the handshake is a change to the front door — it earns a
     reconnect test of its own, not a ride along with a feature.
+26. **MC26 — `get_activity` was returning the newest of an arbitrary sample.**
+    `listAsUser` issued a plain REST list with no `orderBy`, so it returned
+    documents in **id** order — and activity ids are random auto-ids. Reading 200
+    and sorting them in memory therefore sampled 200 arbitrary entries and
+    presented the newest of *those* as the newest overall. On any Pulse with more
+    than 200 entries the answer was wrong, and wrong in the most plausible way
+    available: real entries, real timestamps, correct ordering, just not the
+    right ones. `search_comments` had the same shape. Both now order in the
+    query, and `get_activity` fetches `limit` documents instead of 200 — so the
+    fix is also four to six times cheaper. The app was always right here
+    (`subscribeActivity` uses `orderBy("at","desc")`); only the MCP copy was not.
+    *Generalises:* a bounded read whose ordering is applied after the bound is
+    not a smaller answer, it is a different one.
+27. **MC27 — Bounded scans say so (`coverage`).** Every tool that scans a
+    collection capped at `MAX_LIMIT` now returns a `coverage` note when the read
+    came back full. `truncated` already existed but answers a different question
+    — how many *matches* were displayed — and its presence made the silence about
+    source coverage look deliberate. Without this, "no blocked tasks in this
+    Pulse" and "no blocked tasks among the 200 I looked at" were the same
+    response. Pagination would be the complete fix; disclosure is the honest
+    minimum, and it ships now.
+28. **MC28 — `lastActivityAt` is derived, never maintained (`list_pulses`,
+    `includeActivity`).** Opt-in, one ordered single-document read per Pulse.
+    *Rejected: a `lastActivityAt` field on the Pulse document* — it was proposed
+    here as "cheapest" and it is not. It costs a write per activity event (every
+    task drag, edit, comment — hundreds a day on an active Pulse) against a read
+    per MCP call that asks (a handful a day), and Firestore writes cost roughly
+    3× reads. The stronger objection is contention, not price: Firestore sustains
+    about one write per second per document, so writing the Pulse doc on every
+    content change would serialise people who are not editing that document at
+    all. Debouncing narrows the cost gap but not the contention, and adds a
+    denormalized field that can drift. `joinedDate` is also returned and labelled
+    as such — it is when *you* joined, not when the Pulse was created, and the
+    index holds no other date.
+    The same reasoning drives the dashboard: `createdAt` **is** denormalized onto
+    the index entry, because it is immutable — written once, cannot drift, no
+    reconcile case — while `lastActivityAt` is fetched live per card, alongside a
+    summary that already loads every feature, epic and resource.

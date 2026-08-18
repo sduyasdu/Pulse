@@ -3,11 +3,16 @@ import type { Epic, Feature, Resource } from "@/types";
 import { fetchFeatures } from "@/services/firestore/features";
 import { fetchEpics } from "@/services/firestore/epics";
 import { fetchResources } from "@/services/firestore/resources";
+import { fetchLatestActivityAt } from "@/services/firestore/activity";
 
 export interface PulseSummary {
   epics: Epic[];
   features: Feature[];
   resources: Resource[];
+  /** Newest activity entry's timestamp, or null when nothing is recorded (or
+   * the log is not readable at this role). One extra document on a fetch that
+   * already pulls every feature, epic and resource. */
+  lastActivityAt: number | null;
 }
 
 /** One-shot fetch of a Pulse's epics/features/resources for the dashboard card
@@ -22,14 +27,15 @@ export function usePulseSummary(pulseId: string): PulseSummary | null {
     setSummary(null);
     void (async () => {
       try {
-        const [features, epics, resources] = await Promise.all([
+        const [features, epics, resources, lastActivityAt] = await Promise.all([
           fetchFeatures(pulseId),
           fetchEpics(pulseId),
           fetchResources(pulseId),
+          fetchLatestActivityAt(pulseId),
         ]);
-        if (!cancelled) setSummary({ features, epics, resources });
+        if (!cancelled) setSummary({ features, epics, resources, lastActivityAt });
       } catch {
-        if (!cancelled) setSummary({ features: [], epics: [], resources: [] });
+        if (!cancelled) setSummary({ features: [], epics: [], resources: [], lastActivityAt: null });
       }
     })();
     return () => {

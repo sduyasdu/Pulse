@@ -3,7 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import { PulseLockup } from "@/components/shared/Logo";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseHidden, updateMyPulseArchivedAt, setPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
+import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseHidden, updateMyPulseArchivedAt, updateMyPulseCreatedAt, setPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
 import { countPulseMembers, fetchMembership, leavePulse } from "@/services/firestore/memberships";
 import { confirmAt } from "@/stores/confirmStore";
 import { hiddenOf, type MyPulseIndexEntry } from "@/types";
@@ -90,6 +90,11 @@ export function DashboardPage() {
           }
           if (pulse && (pulse.archivedAt ?? null) !== (p.archivedAt ?? null)) {
             await updateMyPulseArchivedAt(firebaseUser.uid, p.pulseId, pulse.archivedAt ?? null);
+          }
+          // Immutable, so this is a one-time backfill per entry rather than a
+          // reconcile — free here, since the Pulse doc is already in hand.
+          if (pulse && pulse.createdAt && p.createdAt === undefined) {
+            await updateMyPulseCreatedAt(firebaseUser.uid, p.pulseId, pulse.createdAt);
           }
         } catch {
           // transient — skip; a later load retries

@@ -221,6 +221,8 @@ export const pt: Dict = {
   "card.delete": "Excluir…",
   "card.leavePulse": "Sair do Pulse",
   "card.archivedTag": "Arquivado",
+  "card.created": "Criado em {date}",
+  "card.lastActivity": "Última atividade {date}",
   "card.hiddenTag": "Oculto",
   "card.copySuffix": "(cópia)",
   "card.epicOne": "{n} epic",

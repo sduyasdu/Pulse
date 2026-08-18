@@ -3,6 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import { Link } from "react-router-dom";
 import { hiddenOf, type MyPulseIndexEntry } from "@/types";
 import { roleMeta } from "@/domain/permissions";
+import { useI18nStore } from "@/stores/i18nStore";
 import { useT, type TranslationKey } from "@/i18n";
 import { PulseThumbnail } from "./PulseThumbnail";
 import { usePulseSummary } from "./usePulseSummary";
@@ -31,6 +32,7 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
   const archived = (entry.archivedAt ?? null) !== null;
   const dimmed = hidden || archived;
   const [menuOpen, setMenuOpen] = useState(false);
+  const lang = useI18nStore((st) => st.lang);
   const summary = usePulseSummary(entry.pulseId);
   const subtaskCount = summary?.features.reduce((n, f) => n + (f.children?.length ?? 0), 0) ?? 0;
 
@@ -155,6 +157,19 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
             )}
           </div>
         )}
+        {/* Dates read as provenance, not as a statistic — so they sit under the
+            badges in plain small text rather than becoming two more chips.
+            "Created" is always known; "last activity" is only known once the
+            summary lands, and stays absent rather than showing a placeholder
+            that would later change into a real date. */}
+        {(entry.createdAt || summary?.lastActivityAt) && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px]" style={{ color: "#94A3B8" }}>
+            {entry.createdAt && <span>{t("card.created", { date: shortDate(entry.createdAt, lang) })}</span>}
+            {summary?.lastActivityAt && (
+              <span>{t("card.lastActivity", { date: shortDate(summary.lastActivityAt, lang) })}</span>
+            )}
+          </div>
+        )}
         {summary && (
           <div className="mt-2 flex flex-wrap items-center gap-1" style={{ paddingRight: 30 }}>
             <StatBadge n={summary.epics.length} text={countLabel(t, "card.epicOne", "card.epicOther", summary.epics.length)} bg="#EAF0FA" color="#1B3A63" />
@@ -190,4 +205,10 @@ function MenuItem({ label, icon, danger, onClick }: { label: string; icon: strin
       {label}
     </button>
   );
+}
+
+/** Locale-aware short date. The card has room for "17 Aug 2026", not for a
+ * relative string that has to be recomputed and re-translated as it ages. */
+function shortDate(ms: number, lang: string): string {
+  return new Date(ms).toLocaleDateString(lang, { year: "numeric", month: "short", day: "numeric" });
 }

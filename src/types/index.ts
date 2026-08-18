@@ -396,6 +396,11 @@ export interface MyPulseIndexEntry {
    * self-heal pass that reconciles the name (so it costs no extra read). Drives
    * the card's Archived chip ONLY — never a security boundary. */
   archivedAt?: Timestamp | null;
+  /** Denormalized copy of `Pulse.createdAt`. The ideal thing to denormalize:
+   * immutable, so unlike `name`/`archivedAt` it is written once and can never
+   * drift. Backfilled by the same self-heal pass, from a Pulse doc it already
+   * fetched. Absent on entries written before this field existed. */
+  createdAt?: Timestamp;
 }
 
 /** Per-user hidden state, tolerating the pre-split `archived` field for one

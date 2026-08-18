@@ -56,6 +56,7 @@ export async function createPulse(uid: string, workspaceId: string, name: string
     workspaceId,
     role: "owner",
     joinedAt: Date.now(),
+    createdAt: pulse.createdAt,
   };
   await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
 
@@ -89,7 +90,7 @@ export async function duplicatePulse(uid: string, workspaceId: string, sourcePul
   };
   await setDoc(pulseRef, stripUndefined(pulse));
   await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), { uid, email: creatorEmail ?? "", role: "owner", joinedAt: now } satisfies PulseMember);
-  const indexEntry: MyPulseIndexEntry = { pulseId: pulseRef.id, name, workspaceId, role: "owner", joinedAt: now };
+  const indexEntry: MyPulseIndexEntry = { pulseId: pulseRef.id, name, workspaceId, role: "owner", joinedAt: now, createdAt: now };
   await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
 
   if (mode === "empty") return pulseRef.id;
@@ -197,6 +198,13 @@ export async function setMyPulseHidden(uid: string, pulseId: string, hidden: boo
  * Pulse doc — a cache, never a security boundary (Hide-and-Archive-Spec §3). */
 export async function updateMyPulseArchivedAt(uid: string, pulseId: string, archivedAt: number | null): Promise<void> {
   await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { archivedAt }).catch(() => {});
+}
+
+/** Backfill the denormalized creation date on a user's own index entry. Written
+ * once and never again — `createdAt` cannot change, so there is no reconcile
+ * case and no risk of the copy going stale. */
+export async function updateMyPulseCreatedAt(uid: string, pulseId: string, createdAt: number): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { createdAt });
 }
 
 /** Owner-only, shared archive toggle (Hide-and-Archive-Spec §2.3). Freezes the

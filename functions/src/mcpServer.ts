@@ -45,7 +45,7 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  * refusal happens inside the client, after a response we consider successful.
  * The icon is served correctly at `/favicon.ico` and does not need this.
  */
-const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.4.0" };
+const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.5.0" };
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -143,9 +143,20 @@ async function getAsUser(caller: Caller, path: string): Promise<Record<string, u
 }
 
 /** List a collection as the customer. A rules denial surfaces as 403, which is
- * the correct answer and not an error to retry. */
-async function listAsUser(caller: Caller, path: string, pageSize: number): Promise<Record<string, unknown>[]> {
-  const res = await fetch(`${REST_ROOT}/${path}?pageSize=${pageSize}`, {
+ * the correct answer and not an error to retry.
+ *
+ * `orderBy` is not a convenience. Without it this returns documents in **id**
+ * order, and ids here are random — so "read 200 and sort them" samples an
+ * arbitrary 200 and then presents the newest of *those* as the newest overall.
+ * That is wrong in the most plausible-looking way possible, and it is also four
+ * to six times the reads. Pass e.g. `"at desc"` for anything time-ordered.
+ *
+ * Note the Firestore semantics that comes with it: ordering by a field EXCLUDES
+ * documents that lack it. Only used on fields every document in the collection
+ * carries. */
+async function listAsUser(caller: Caller, path: string, pageSize: number, orderBy?: string): Promise<Record<string, unknown>[]> {
+  const order = orderBy ? `&orderBy=${encodeURIComponent(orderBy)}` : "";
+  const res = await fetch(`${REST_ROOT}/${path}?pageSize=${pageSize}${order}`, {
     headers: { Authorization: `Bearer ${caller.idToken}` },
   });
   if (res.status === 403) return [];
@@ -308,6 +319,15 @@ async function loadLookups(caller: Caller, pulseId: string): Promise<Lookups> {
 // ---------------------------------------------------------------------------
 
 const MAX_LIMIT = 200;
+
+/** A collection read that came back exactly full may have had more behind it.
+ * Saying so is the difference between "this Pulse has no blocked tasks" and "I
+ * looked at 200 of them". Silence here reads as completeness — which is the one
+ * thing a bounded scan cannot promise. */
+const coverageNote = (rows: unknown[], what: string) =>
+  rows.length >= MAX_LIMIT
+    ? `Only the first ${MAX_LIMIT} ${what} in this Pulse were examined; it holds more, so this answer may be incomplete.`
+    : undefined;
 export const clampLimit = (raw: unknown, fallback: number) =>
   Math.min(MAX_LIMIT, Math.max(1, Number.isFinite(Number(raw)) ? Number(raw) : fallback));
 
@@ -322,6 +342,10 @@ export const TOOLS = [
       properties: {
         limit: { type: "number", description: `Max Pulses to return (default 50, max ${MAX_LIMIT}).` },
         includeHidden: { type: "boolean", description: "Include Pulses the user has hidden from their dashboard." },
+        includeActivity: {
+          type: "boolean",
+          description: "Add lastActivityAt to each Pulse — when anything last changed in it. Costs one extra read per Pulse, so ask for it when ranking by recency, not by default.",
+        },
       },
     },
   },
@@ -493,18 +517,45 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
   switch (name) {
     case "list_pulses": {
       const limit = clampLimit(args.limit, 50);
+      const withActivity = args.includeActivity === true;
       // The customer's own dashboard index — the same list their browser reads,
       // and the only listable view of "Pulses I can access" (see the note at the
       // top of firestore.rules on why this is an index rather than a query).
       const rows = await listAsUser(caller, `users/${caller.uid}/myPulses`, limit);
       const visible = args.includeHidden ? rows : rows.filter((r) => !r.hidden);
+
+      // One ordered single-document read per Pulse, and only when asked. NOT a
+      // `lastActivityAt` maintained on the Pulse document: that would cost a
+      // write on every task edit and make the Pulse doc a contention point for
+      // everyone working in it, to serve a field only this tool reads.
+      const lastActivity = new Map<string, string | null>();
+      if (withActivity) {
+        await Promise.all(
+          visible.map(async (r) => {
+            const id = String(r.pulseId ?? r.id);
+            const [newest] = await listAsUser(caller, `pulses/${id}/activity`, 1, "at desc");
+            lastActivity.set(id, newest?.at ? new Date(Number(newest.at)).toISOString() : null);
+          }),
+        );
+      }
+
       return {
-        pulses: visible.map((r) => ({
-          pulseId: r.pulseId ?? r.id,
-          name: r.name || "Untitled Pulse",
-          role: r.role,
-          archived: r.archivedAt != null,
-        })),
+        pulses: visible.map((r) => {
+          const id = String(r.pulseId ?? r.id);
+          return {
+            pulseId: id,
+            name: r.name || "Untitled Pulse",
+            role: r.role,
+            archived: r.archivedAt != null,
+            // When you joined, which is not when the Pulse was created — it is
+            // the only date this index actually holds, so it is labelled for
+            // what it is rather than passed off as an age.
+            joinedDate: r.joinedAt ? new Date(Number(r.joinedAt)).toISOString() : null,
+            // Null with includeActivity means genuinely no recorded activity,
+            // not "not looked up" — absent means not looked up.
+            lastActivityAt: withActivity ? (lastActivity.get(id) ?? null) : undefined,
+          };
+        }),
         count: visible.length,
       };
     }
@@ -519,6 +570,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         tasks: features.map((f) => shapeTask(f, look)),
         taskCount: features.length,
         truncated: features.length === limit ? `Only the first ${limit} tasks are shown.` : undefined,
+        coverage: coverageNote(features, "tasks"),
       };
     }
 
@@ -554,6 +606,9 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         }),
         matched: hits.length,
         truncated: hits.length > limit ? `${hits.length} matched; showing ${limit}.` : undefined,
+        // Distinct from `truncated`: that reports how many MATCHES were shown,
+        // this reports that the search never saw the whole Pulse.
+        coverage: coverageNote(features, "tasks"),
       };
     }
 
@@ -569,6 +624,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         window: { from: dayToISO(from), to: dayToISO(to) },
         tasks: inWindow.slice(0, limit).map((f) => shapeTask(f, look)),
         count: inWindow.length,
+        coverage: coverageNote(features, "tasks"),
       };
     }
 
@@ -601,6 +657,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
           .sort((a, b) => b.allocatedPercent - a.allocatedPercent)
           .map((p) => ({ ...p, overCapacity: p.allocatedPercent > p.capacityPercent })),
         note: "Allocation sums every task overlapping the window, so it shows simultaneous commitment rather than total effort.",
+        coverage: coverageNote(features, "tasks"),
       };
     }
 
@@ -637,6 +694,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         // An empty result is ambiguous, and the ambiguity matters: costs are
         // role-gated, so say so rather than letting it read as "nothing spent".
         note: costs.length === 0 ? "No costs returned. This may mean none are recorded, or that your role cannot see them." : undefined,
+        coverage: coverageNote(costs, "cost entries"),
       };
     }
 
@@ -692,6 +750,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         note: rates.length === 0
           ? "No hourly rates returned. This may mean none are set, or that your role cannot see them."
           : undefined,
+        coverage: coverageNote(resources, "resources"),
       };
     }
 
@@ -699,7 +758,9 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
       const limit = clampLimit(args.limit, 50);
       const look = await loadLookups(caller, pulseId);
       const [comments, features] = await Promise.all([
-        listAsUser(caller, `pulses/${pulseId}/comments`, MAX_LIMIT),
+        // Newest-first from the query, so filtering narrows the most recent
+        // comments rather than an arbitrary slice of the whole thread.
+        listAsUser(caller, `pulses/${pulseId}/comments`, MAX_LIMIT, "createdAt desc"),
         listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT),
       ]);
       const titles = new Map(features.map((f) => [String(f.id), String(f.title ?? "Untitled task")]));
@@ -729,7 +790,6 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
 
       return {
         comments: hits
-          .sort((a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0))
           .slice(0, limit)
           .map((c) => ({
             commentId: c.id,
@@ -746,15 +806,18 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
           })),
         matched: hits.length,
         truncated: hits.length > limit ? `${hits.length} matched; showing ${limit}.` : undefined,
+        // Ordered newest-first by the query, so this means "older comments than
+        // these were not searched" rather than "an arbitrary slice".
+        coverage: coverageNote(comments, "most recent comments"),
       };
     }
 
     case "get_activity": {
       const limit = clampLimit(args.limit, 30);
-      const rows = await listAsUser(caller, `pulses/${pulseId}/activity`, MAX_LIMIT);
-      const recent = rows
-        .sort((a, b) => Number(b.at ?? b.createdAt ?? 0) - Number(a.at ?? a.createdAt ?? 0))
-        .slice(0, limit);
+      // Ordered in the query, and only `limit` documents fetched. This used to
+      // read 200 unordered and sort them, which on a Pulse with more history
+      // than that returned the newest of an arbitrary sample.
+      const recent = await listAsUser(caller, `pulses/${pulseId}/activity`, limit, "at desc");
       return {
         entries: recent.map((e) => ({
           when: e.at ? new Date(Number(e.at)).toISOString() : null,

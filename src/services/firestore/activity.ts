@@ -1,4 +1,4 @@
-import { collection, doc, limit as qLimit, onSnapshot, orderBy, query, setDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, limit as qLimit, onSnapshot, orderBy, query, setDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ActivityEntry } from "@/types";
 import { stripUndefined } from "./patch";
@@ -11,6 +11,26 @@ import { stripUndefined } from "./patch";
 
 export function newActivityId(pulseId: string): string {
   return doc(collection(db, "pulses", pulseId, "activity")).id;
+}
+
+/** When anything last changed in a Pulse, or null if nothing ever has.
+ *
+ * One ordered document — deliberately not a `lastActivityAt` denormalized onto
+ * the Pulse doc, which would cost a write on every task edit and turn that
+ * document into a contention point for everyone working in the Pulse, to serve
+ * a field only the dashboard and the MCP read.
+ *
+ * Returns null on a read failure too: a My-Beat Viewer's unconstrained read of
+ * this collection is refused by the rules, and "unknown" is the honest answer
+ * there rather than an error the card cannot act on. */
+export async function fetchLatestActivityAt(pulseId: string): Promise<number | null> {
+  try {
+    const snap = await getDocs(query(collection(db, "pulses", pulseId, "activity"), orderBy("at", "desc"), qLimit(1)));
+    const at = snap.docs[0]?.data()?.at;
+    return typeof at === "number" ? at : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Append one entry. Create-only: never updated or deleted (rules enforce it).

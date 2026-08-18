@@ -221,6 +221,8 @@ export const de: Dict = {
   "card.delete": "Löschen…",
   "card.leavePulse": "Pulse verlassen",
   "card.archivedTag": "Archiviert",
+  "card.created": "Erstellt am {date}",
+  "card.lastActivity": "Letzte Aktivität {date}",
   "card.hiddenTag": "Ausgeblendet",
   "card.copySuffix": "(Kopie)",
   "card.epicOne": "{n} Epic",

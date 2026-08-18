@@ -227,6 +227,8 @@ export const en = {
   "card.delete": "Delete…",
   "card.leavePulse": "Leave Pulse",
   "card.archivedTag": "Archived",
+  "card.created": "Created {date}",
+  "card.lastActivity": "Last activity {date}",
   "card.hiddenTag": "Hidden",
   "card.copySuffix": "(copy)",
   "card.epicOne": "{n} epic",
