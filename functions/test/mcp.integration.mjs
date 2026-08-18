@@ -77,7 +77,7 @@ assert((await liveConnection(db, UID, "alive")).scope === "read", "revocation: s
 // claim to speak.
 // ---------------------------------------------------------------------------
 
-const { decode, decodeFields, clampLimit, SUPPORTED_PROTOCOLS, TOOLS } = await import("../lib/mcpServer.js");
+const { decode, decodeFields, clampLimit, SUPPORTED_PROTOCOLS, TOOLS, stripHtml, subtaskTitleMatches } = await import("../lib/mcpServer.js");
 
 // Firestore REST type tags. Getting integerValue wrong is the sharp one: it
 // arrives as a STRING, so a missed Number() turns 3 into "3" and every
@@ -180,6 +180,18 @@ assert(!overlaps(task, isoToDay("2026-08-01"), isoToDay("2026-08-31")), "window:
   await mk("t_due", "ws_due", [], [["ws_due", { tier: "pro", status: "past_due" }]]);
   assert((await bestTierFor(db, "t_due")) === "pro", "tier: past_due still holds its tier");
 }
+
+// Subtask shaping. Notes are rich text, and markup reaching an assistant is
+// noise it will try to interpret.
+assert(stripHtml("<p>Ship the <b>API</b></p>") === "Ship the API", "subtasks: tags are stripped");
+assert(stripHtml("a<br>b") === "a b", "subtasks: a line break becomes a space, not a join");
+assert(stripHtml("R&amp;D &lt;spec&gt;") === "R&D <spec>", "subtasks: entities decode to characters");
+assert(stripHtml(undefined) === "" && stripHtml(null) === "", "subtasks: absent notes are empty, not 'undefined'");
+
+const withKids = { children: [{ title: "Diseño de API" }, { title: "Tests" }] };
+assert(subtaskTitleMatches(withKids, "diseno"), "subtasks: search folds accents in subtask titles too");
+assert(!subtaskTitleMatches(withKids, "deploy"), "subtasks: a non-match is a non-match");
+assert(!subtaskTitleMatches({}, "x"), "subtasks: a task with no children never matches");
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
 process.exit(failed ? 1 : 0);

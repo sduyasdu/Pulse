@@ -177,7 +177,7 @@ Pulse v1 is resources plus read-shaped tools.
 | --- | --- | --- |
 | `list_pulses` | tool | the customer's Pulses: id, name, role, archived |
 | `get_pulse` | tool | one Pulse: epics, tasks, resources, statuses |
-| `search_tasks` | tool | tasks matching text/status/epic/assignee, across one Pulse |
+| `search_tasks` | tool | tasks matching text/status/epic/assignee, **with their subtasks in full** |
 | `get_schedule` | tool | tasks in a date window with dates, effort and assignees |
 | `get_people_load` | tool | per-person allocation over a window, against capacity |
 | `get_costs` | tool | cost summary by model / person / task — **admins only**, mirroring `viewPeopleCost` |
@@ -507,3 +507,25 @@ assistant relays.
     nothing was hiding behind it — this time. Worth generalising: a suite that
     reports success is not evidence it ran, and `&&`-chained scripts make an
     early exit look like a pass.
+24. **MC24 — Subtasks are returned by `search_tasks` only, and text search
+    reaches their titles (v0.4.0).** Subtasks live as an embedded `children[]`
+    array on the task document, so returning them costs no extra read. They are
+    nonetheless **opt-in per tool**: `get_pulse` and `get_schedule` return up to
+    100 tasks each, and folding every subtask into those multiplies the payload
+    for a caller who asked about the schedule. `search_tasks` is where someone
+    has already narrowed to the task they mean.
+    Every task-shaped result now carries `subtaskSummary` (`total`, `done`) even
+    where the detail is omitted, so a tool that leaves subtasks out never implies
+    a task has none. `done` counts the status **id**, not the label, because
+    labels are customisable per Pulse and would not compare across them.
+    Text search matches a subtask title as well as the task's own — the thing
+    someone remembers is often the checklist line — and each hit carries
+    `matchedIn: "title" | "subtask"` so a result whose title looks unrelated is
+    explained rather than surprising. Notes are stored as rich text and are
+    stripped to plain text before crossing the boundary; markup reaching an
+    assistant is noise it will try to interpret. A subtask's three dates are
+    already plain `YYYY-MM-DD` strings, unlike the parent's day offsets, so they
+    pass straight through; `createdDate` is null on subtasks written before that
+    field existed rather than being inferred from another date. `overdue` is
+    computed here rather than left as arithmetic over three nullable dates, which
+    is the calculation most likely to be got subtly wrong.

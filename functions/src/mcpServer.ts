@@ -45,7 +45,7 @@ const ICONS_FROM = "2025-11-25";
  * identity is assembled against the version actually negotiated: clients on
  * 2025-11-25 get the icons, older ones get exactly what they got before.
  */
-const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.3.0" };
+const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.4.0" };
 
 /** Stated rather than left to be sniffed from `/favicon.ico` — the fallback that
  * produced the parent company's mark when that path was answering with SPA HTML.
@@ -206,14 +206,66 @@ interface Lookups {
   statuses: Map<string, string>;
 }
 
+/** Subtask notes are rich text (HTML), because the editor writes HTML. An
+ * assistant reading `<p>` and `<br>` is reading markup, not content — so tags
+ * come out and the entities the editor emits are decoded back to characters. */
+export function stripHtml(html: unknown): string {
+  if (typeof html !== "string" || !html) return "";
+  return html
+    .replace(/<(br|\/p|\/div|\/li)\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+/** One subtask. Its three dates are stored as plain `YYYY-MM-DD` strings, NOT as
+ * the day offsets the parent task uses — so they pass straight through, and the
+ * only conversion needed is the one that isn't done here.
+ *
+ * `createdAt` is absent on subtasks written before the field existed, so it is
+ * null rather than guessed. Reporting a creation date that is really "the first
+ * date we happened to have" would be worse than reporting none. */
+function shapeSubtask(st: Record<string, unknown>, look: Lookups) {
+  const planned = typeof st.plannedAt === "string" ? st.plannedAt : null;
+  const finished = typeof st.finishedAt === "string" ? st.finishedAt : null;
+  const statusId = String(st.status ?? "");
+  const resourceIds = Array.isArray(st.resources) ? (st.resources as string[]) : [];
+  const notes = stripHtml(st.notes);
+  return {
+    title: st.title || "Untitled subtask",
+    status: look.statuses.get(statusId) ?? statusId,
+    assignees: resourceIds.map((id) => look.resources.get(id)?.name ?? id),
+    createdDate: typeof st.createdAt === "string" ? st.createdAt : null,
+    plannedDate: planned,
+    finishedDate: finished,
+    // Stated rather than left to be worked out from three nullable dates, which
+    // is the arithmetic an assistant is most likely to get subtly wrong.
+    overdue: !!planned && !finished && planned < todayISO(),
+    notes: notes || undefined,
+  };
+}
+
 /** One task, in the vocabulary the customer uses: real dates, names instead of
- * ids, and the allocation percentages that drive everything else. */
-function shapeTask(f: Record<string, unknown>, look: Lookups) {
+ * ids, and the allocation percentages that drive everything else.
+ *
+ * `withSubtasks` is opt-in per tool rather than always on: `get_pulse` and
+ * `get_schedule` return up to 100 tasks each, and folding every subtask into
+ * those would multiply the payload for callers that asked about the schedule. */
+function shapeTask(f: Record<string, unknown>, look: Lookups, withSubtasks = false) {
   const x = Number(f.x ?? 0);
   const duration = Number(f.duration ?? 1);
   const resourceIds = Array.isArray(f.resources) ? (f.resources as string[]) : [];
   const alloc = (f.alloc ?? {}) as Record<string, number>;
   const statusId = String(f.status ?? "");
+  const children = Array.isArray(f.children) ? (f.children as Record<string, unknown>[]) : [];
   return {
     taskId: f.id,
     title: f.title || "Untitled task",
@@ -234,6 +286,13 @@ function shapeTask(f: Record<string, unknown>, look: Lookups) {
     plan: f.plannedX != null
       ? { startDate: dayToISO(Number(f.plannedX)), startDeltaDays: x - Number(f.plannedX) }
       : null,
+    // Always present, so a tool that omits the detail never implies a task has
+    // no subtasks. `done` counts the status id, not its label, because labels
+    // are customisable per Pulse and would not compare.
+    subtaskSummary: children.length
+      ? { total: children.length, done: children.filter((c) => String(c.status ?? "") === "done").length }
+      : null,
+    subtasks: withSubtasks && children.length ? children.map((c) => shapeSubtask(c, look)) : undefined,
   };
 }
 
@@ -299,8 +358,10 @@ export const TOOLS = [
   {
     name: "search_tasks",
     description:
-      "Find tasks in a Pulse by text, status, epic or assignee. Text matches the title, " +
-      "case- and accent-insensitively. Combine filters to narrow.",
+      "Find tasks in a Pulse by text, status, epic or assignee, and get their subtasks in full — " +
+      "each subtask's status, assignees, created/planned/finished dates, whether it is overdue, " +
+      "and its notes. Text matches a task title OR a subtask title, case- and accent-insensitively; " +
+      "`matchedIn` says which. Combine filters to narrow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -431,6 +492,12 @@ function windowOf(args: Record<string, unknown>) {
 
 /** Does a task overlap the window at all? Inclusive at both ends — a task
  * finishing on the first day of the window is still in it. */
+/** Does any subtask title match? Folded the same way as everything else, so
+ * "analisis" finds "Análisis". */
+export const subtaskTitleMatches = (f: Record<string, unknown>, folded: string) =>
+  Array.isArray(f.children) &&
+  (f.children as Record<string, unknown>[]).some((c) => fold(c.title).includes(folded));
+
 export const overlaps = (f: Record<string, unknown>, from: number, to: number) => {
   const x = Number(f.x ?? 0);
   return x <= to && x + Number(f.duration ?? 1) >= from;
@@ -482,7 +549,11 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
 
       const hits = features.filter((f) => {
         const shaped = shapeTask(f, look);
-        if (q && !fold(shaped.title).includes(q)) return false;
+        // Text matches a subtask title as well as the task's own, because the
+        // thing someone remembers is often the checklist line rather than the
+        // task it hangs off. `matchedIn` below says which it was, so a result
+        // whose title looks unrelated is explained rather than surprising.
+        if (q && !fold(shaped.title).includes(q) && !subtaskTitleMatches(f, q)) return false;
         // Matches either the id or the label, because an assistant may have
         // seen either — "blocked" and "Blocked" both work.
         if (wantStatus && !fold(shaped.status).includes(wantStatus) && !fold(f.status).includes(wantStatus)) return false;
@@ -491,7 +562,12 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         return true;
       });
       return {
-        tasks: hits.slice(0, limit).map((f) => shapeTask(f, look)),
+        tasks: hits.slice(0, limit).map((f) => {
+          const shaped = shapeTask(f, look, true);
+          return q
+            ? { ...shaped, matchedIn: fold(shaped.title).includes(q) ? "title" : "subtask" }
+            : shaped;
+        }),
         matched: hits.length,
         truncated: hits.length > limit ? `${hits.length} matched; showing ${limit}.` : undefined,
       };
