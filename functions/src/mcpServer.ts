@@ -19,13 +19,8 @@ const FN = "MCP.server";
 /** Protocol versions we knowingly speak. We echo the client's if it is one of
  * these, because our surface (tools only) is identical across them; otherwise we
  * answer with our newest and let the client decide whether to continue. */
-export const SUPPORTED_PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+export const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
-
-/** The revision that added `icons` and `websiteUrl` to `Implementation`.
- * Compared lexicographically, which is sound for these date-shaped ids and
- * means a later revision inherits them rather than silently losing them. */
-const ICONS_FROM = "2025-11-25";
 
 /**
  * What we tell a client we are, in `initialize`.
@@ -34,34 +29,23 @@ const ICONS_FROM = "2025-11-25";
  * does — a client that caches tools has nothing else to notice a change by, and
  * `0.1.0` never moving is part of why the six new tools stayed invisible.
  *
- * `title` has been safe since 2025-06-18, when `Implementation` gained
- * `BaseMetadata`. `icons` and `websiteUrl` arrived later, and sending them under
- * 2025-06-18 broke connection setup outright — the token exchange succeeded,
- * three requests returned 2xx, the server logged nothing, and the client refused
- * the session anyway.
+ * `name`, `title` and `version`. Nothing else — and that is a scar, not
+ * minimalism.
  *
- * The rule that came out of that is **send only members the announced revision
- * defines**, which is a per-response question rather than a per-server one. So
- * identity is assembled against the version actually negotiated: clients on
- * 2025-11-25 get the icons, older ones get exactly what they got before.
+ * `icons`/`websiteUrl` have now broken connection setup TWICE: once sent under
+ * 2025-06-18 (a revision that does not define them), and once sent legitimately
+ * under a negotiated 2025-11-25. Both times the failure was silent from here —
+ * OAuth completed, `initialize` returned 200, nothing logged — and visible only
+ * as the client never sending `notifications/initialized` and never listing
+ * tools. The second attempt also meant answering 2025-11-25 at all, so the two
+ * variables were never separated.
+ *
+ * **Do not re-add either without a way to test the handshake that does not
+ * involve a customer reconnecting.** A `curl` probe cannot detect this: the
+ * refusal happens inside the client, after a response we consider successful.
+ * The icon is served correctly at `/favicon.ico` and does not need this.
  */
 const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.4.0" };
-
-/** Stated rather than left to be sniffed from `/favicon.ico` — the fallback that
- * produced the parent company's mark when that path was answering with SPA HTML.
- * Absolute URLs, because the client has no base to resolve against. */
-const IDENTITY = {
-  websiteUrl: "https://pulse.yasdu.com",
-  icons: [
-    { src: "https://pulse.yasdu.com/brand/pulse-favicon-32.png", mimeType: "image/png", sizes: "32x32" },
-    { src: "https://pulse.yasdu.com/brand/pulse-apple-touch-180.png", mimeType: "image/png", sizes: "180x180" },
-    { src: "https://pulse.yasdu.com/brand/pulse-favicon-512.png", mimeType: "image/png", sizes: "512x512" },
-    { src: "https://pulse.yasdu.com/favicon.svg", mimeType: "image/svg+xml", sizes: "any" },
-  ],
-};
-
-const serverInfoFor = (protocolVersion: string) =>
-  protocolVersion >= ICONS_FROM ? { ...SERVER_INFO, ...IDENTITY } : SERVER_INFO;
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -897,11 +881,7 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
       // `listChanged` is declared only because we can now actually send it, on
       // the response stream of a tool call. Declaring a capability we could not
       // honour would promise a notification that never arrives.
-      res.json(rpcResult(id, {
-        protocolVersion,
-        capabilities: { tools: { listChanged: true } },
-        serverInfo: serverInfoFor(protocolVersion),
-      }));
+      res.json(rpcResult(id, { protocolVersion, capabilities: { tools: { listChanged: true } }, serverInfo: SERVER_INFO }));
       return;
     }
     if (isNotification) {

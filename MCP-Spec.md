@@ -529,3 +529,30 @@ assistant relays.
     field existed rather than being inferred from another date. `overdue` is
     computed here rather than left as arithmetic over three nullable dates, which
     is the calculation most likely to be got subtly wrong.
+25. **MC25 — MC20 is reverted. `serverInfo` carries `name`, `title`, `version`
+    and nothing else, and the MCP does not negotiate 2025-11-25.** MC20 added
+    both together: the newer revision (to stop downgrading every client) and
+    `icons`/`websiteUrl` (legitimate members of it). Reconnecting then failed
+    with the same customer-facing error as MC15 — *"Your account was authorized,
+    but Pulse returned an error when connecting."*
+    The logs separate cause from noise cleanly, which is the one good outcome
+    here. OAuth completed (`connection approved, tier: pro`; `code exchanged`),
+    `initialize` returned 200 — and **every** `initialize` answering 2025-11-25
+    is followed by no `notifications/initialized` and no `tools/list`, while
+    every one answering 2025-06-18 is followed by both. The client accepted the
+    old result and refused the new one. That is precisely the diagnostic MC17's
+    logging was added for, and it is the only reason this took minutes.
+    **This is the second outage caused by `icons`, and the two attempts never
+    separated their variables** — the first sent it under a revision that does
+    not define it, the second changed the negotiated revision at the same time.
+    So the honest state is: we do not know whether 2025-11-25 alone is safe, we
+    know the pair is not, and the product had a working connector before either
+    change and does again now.
+    **Neither may be re-attempted without a way to test the handshake that does
+    not cost a customer a broken reconnect.** A `curl` probe cannot detect this:
+    the refusal happens inside the client, after a response the server considers
+    successful. Until such a harness exists, the icon is served at
+    `/favicon.ico` (correct, verified by decoding the bytes) and that is enough.
+    Kept from MC20: nothing. Kept from the episode: the logging, and the rule
+    that a change to the handshake is a change to the front door — it earns a
+    reconnect test of its own, not a ride along with a feature.
