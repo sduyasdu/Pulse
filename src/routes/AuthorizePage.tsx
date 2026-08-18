@@ -30,6 +30,10 @@ export function AuthorizePage() {
   const codeChallenge = params.get("code_challenge") ?? "";
   const challengeMethod = params.get("code_challenge_method") ?? "";
   const clientName = params.get("client_name") ?? params.get("client_id") ?? "";
+  // Forwarded so the server can hold this client to the redirect URIs it
+  // registered (MCP-Publishing-Spec MP3). Untrusted, like everything here — it
+  // only ever narrows what is allowed, never widens it.
+  const clientId = params.get("client_id") ?? "";
 
   const [name, setName] = useState(clientName ? clientName.slice(0, 60) : "");
   const [busy, setBusy] = useState(false);
@@ -44,7 +48,7 @@ export function AuthorizePage() {
     setError(null);
     try {
       const call = httpsCallable<
-        { redirectUri: string; codeChallenge: string; name: string; client: string; scope: string },
+        { redirectUri: string; codeChallenge: string; name: string; client: string; clientId: string; scope: string },
         { code: string }
       >(functions, "approveMcpConnection");
       const { data } = await call({
@@ -52,6 +56,7 @@ export function AuthorizePage() {
         codeChallenge,
         name: name.trim() || t("mcp.defaultName"),
         client: clientName,
+        clientId,
         scope: "read",
       });
       // Hand the code back to the client. `assign`, not `replace`: the customer

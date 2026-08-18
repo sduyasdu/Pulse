@@ -9,7 +9,7 @@
 // issue — which is the part that must not be wrong.
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { bestTierFor, isAllowedRedirect, liveConnection, sha256, sha256b64url } from "../lib/mcp.js";
+import { bestTierFor, isAllowedRedirect, liveConnection, registeredRedirectUris, sha256, sha256b64url } from "../lib/mcp.js";
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-pulse-rules-test" });
 const db = getFirestore();
@@ -192,6 +192,53 @@ const withKids = { children: [{ title: "Diseño de API" }, { title: "Tests" }] }
 assert(subtaskTitleMatches(withKids, "diseno"), "subtasks: search folds accents in subtask titles too");
 assert(!subtaskTitleMatches(withKids, "deploy"), "subtasks: a non-match is a non-match");
 assert(!subtaskTitleMatches({}, "x"), "subtasks: a task with no children never matches");
+
+// ---------------------------------------------------------------------------
+// MP2/MP3 — redirect validation. The one place a mistake hands a live
+// authorization code to somebody else, so the near-misses matter more than the
+// happy path.
+// ---------------------------------------------------------------------------
+assert(isAllowedRedirect("https://claude.ai/api/mcp/auth_callback"), "redirect: Claude's callback");
+assert(isAllowedRedirect("https://claude.com/api/mcp/auth_callback"), "redirect: claude.com");
+assert(isAllowedRedirect("https://chatgpt.com/connector_platform_oauth_redirect"), "redirect: ChatGPT's callback");
+// ChatGPT mints a distinct path per connector, which is why MP2 pins the host.
+assert(isAllowedRedirect("https://chatgpt.com/connector_platform_oauth_redirect/abc123"), "redirect: any path on a known host");
+
+// The exact reason prefix matching was replaced. Every one of these passes a
+// naive startsWith against the old constants.
+assert(!isAllowedRedirect("https://claude.ai.evil.test/api/mcp/auth_callback"), "redirect: a suffixed lookalike host is refused");
+assert(!isAllowedRedirect("https://evil.test/?x=https://claude.ai/api/mcp/auth_callback"), "redirect: the target in a query string is refused");
+assert(!isAllowedRedirect("https://notchatgpt.com/x"), "redirect: an unrelated host is refused");
+assert(!isAllowedRedirect("https://sub.chatgpt.com/x"), "redirect: subdomains are not implied");
+assert(!isAllowedRedirect("http://claude.ai/api/mcp/auth_callback"), "redirect: plain http on a public host is refused");
+assert(!isAllowedRedirect("javascript:alert(1)"), "redirect: a non-http scheme is refused");
+assert(!isAllowedRedirect("not a url"), "redirect: unparseable is refused");
+assert(!isAllowedRedirect(""), "redirect: empty is refused");
+assert(!isAllowedRedirect(null) && !isAllowedRedirect(undefined), "redirect: absent is refused");
+
+// Loopback stays usable for desktop and CLI clients, http included.
+assert(isAllowedRedirect("http://localhost:8976/callback"), "redirect: loopback on localhost");
+assert(isAllowedRedirect("http://127.0.0.1:51000/cb"), "redirect: loopback on 127.0.0.1");
+assert(isAllowedRedirect("http://[::1]:8080/cb"), "redirect: loopback on IPv6");
+// http, not https — RFC 8252 §7.3, and pinned above too. Asserted from both
+// directions so a future rewrite cannot quietly widen it.
+assert(!isAllowedRedirect("https://127.0.0.1:8080/cb"), "redirect: https loopback stays refused");
+
+// MP3 — a registered client is held to what it declared.
+{
+  await db.doc("mcpClients/c_known").set({
+    clientId: "c_known",
+    redirectUris: ["https://chatgpt.com/connector_platform_oauth_redirect/one"],
+  });
+  const uris = await registeredRedirectUris(db, "c_known");
+  assert(uris?.length === 1, "registration: declared URIs are read back");
+  assert(uris.includes("https://chatgpt.com/connector_platform_oauth_redirect/one"), "registration: exact URI preserved");
+  // Null means "never registered", which falls back to host policy — NOT a
+  // failure, or clients with a fixed client_id could never connect.
+  assert((await registeredRedirectUris(db, "c_unknown")) === null, "registration: an unknown client is null, not empty");
+  assert((await registeredRedirectUris(db, "")) === null, "registration: a missing client_id is null");
+  assert((await registeredRedirectUris(db, undefined)) === null, "registration: an absent client_id is null");
+}
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
 process.exit(failed ? 1 : 0);

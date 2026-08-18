@@ -25,6 +25,11 @@
         "function": { "functionId": "mcpMetadata", "region": "us-central1" }
       },
       {
+        "comment": "ChatGPT directory domain-ownership proof (MCP-Publishing-Spec MP4). Here for the same reason as the two documents above, not as a preference: public/.well-known/ is dropped by the ignore rule, so the file would exist in the repo and never ship.",
+        "source": "/.well-known/openai-apps",
+        "function": { "functionId": "mcpMetadata", "region": "us-central1" }
+      },
+      {
         "comment": "The rest of the OAuth surface, same-origin. An authorization server whose issuer is pulse.yasdu.com but whose token and registration endpoints live on cloudfunctions.net is a cross-origin arrangement some clients refuse outright — and it would show customers a URL that is not the product. NOTE /oauth/authorize is deliberately absent: it is an SPA route and must keep falling through to the catch-all below.",
         "source": "/oauth/register",
         "function": { "functionId": "mcpMetadata", "region": "us-central1" }

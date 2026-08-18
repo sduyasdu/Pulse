@@ -40,17 +40,70 @@ const ACCESS_TOKEN_TTL_S = 3600;
 /** Where a consenting browser is allowed to send the customer afterwards.
  * Same reasoning as billing's return-URL allowlist: an unvalidated redirect
  * hands an attacker a way to bounce a customer — with a live authorization code
- * — to somewhere they don't control. */
-const ALLOWED_REDIRECT_PREFIXES = [
-  "https://claude.ai/api/mcp/auth_callback",
-  "https://claude.com/api/mcp/auth_callback",
-  // Desktop and CLI clients complete the loop on a loopback port they own.
-  "http://localhost:",
-  "http://127.0.0.1:",
-];
+ * — to somewhere they don't control.
+ *
+ * Hosts we will hand a live authorization code to (MCP-Publishing-Spec MP6).
+ *
+ * **Copied from each vendor, never guessed.** A wrong origin in a security
+ * control is worse than a missing one: it looks handled. Google's is absent
+ * because it is not published — take it from the submission portal when there
+ * is one, and add it here.
+ *
+ * Exact hostnames, so `claude.ai.evil.test` is not a match. */
+const ALLOWED_REDIRECT_HOSTS = new Set([
+  "claude.ai",
+  "claude.com",
+  "chatgpt.com", // e.g. /connector_platform_oauth_redirect — path varies per connector
+]);
 
+/** Desktop and CLI clients complete the loop on a port they own. */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+/**
+ * Is this somewhere we will send the customer, carrying a code?
+ *
+ * **Parsed, not prefix-matched.** The old form was `uri.startsWith(...)`, which
+ * is the standard way to end up accepting `https://claude.ai.evil.test/...`;
+ * comparing a parsed `hostname` removes the class rather than the instance.
+ *
+ * It pins the host and no longer the path, because ChatGPT mints a distinct
+ * callback path per connector and a path-pinned list cannot express that. The
+ * exact-match against registered redirect URIs (MP3, in approveMcpConnection) is
+ * what compensates.
+ */
 export function isAllowedRedirect(uri: unknown): boolean {
-  return typeof uri === "string" && ALLOWED_REDIRECT_PREFIXES.some((p) => uri.startsWith(p));
+  if (typeof uri !== "string" || !uri) return false;
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    return false;
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, ""); // URL keeps IPv6 brackets
+  // Loopback is http, per RFC 8252 §7.3 for native apps — and an existing test
+  // pins it. The parsed rewrite briefly allowed https here too; nothing asked
+  // for it, and widening a redirect rule for no caller is how one drifts open.
+  if (LOOPBACK_HOSTS.has(host)) return url.protocol === "http:";
+  if (url.protocol !== "https:") return false;
+  return ALLOWED_REDIRECT_HOSTS.has(url.hostname);
+}
+
+/**
+ * The redirect URIs a client declared when it registered (RFC 7591), or null if
+ * it never registered.
+ *
+ * Null is NOT a failure: clients using a fixed `client_id` never call the
+ * registration endpoint, and requiring it would be a flag day for them. So this
+ * strengthens the clients that do register — which is all three vendor
+ * directories — without breaking the ones that don't. Consent and PKCE remain
+ * the boundary; this is depth behind them.
+ */
+export async function registeredRedirectUris(db: Db, clientId: unknown): Promise<string[] | null> {
+  if (typeof clientId !== "string" || !clientId) return null;
+  const snap = await db.doc(`mcpClients/${encodeURIComponent(clientId)}`).get();
+  if (!snap.exists) return null;
+  const uris = snap.data()?.redirectUris;
+  return Array.isArray(uris) && uris.length ? (uris as string[]) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +230,15 @@ export const approveMcpConnection = onCall(async (request) => {
   }
 
   const db = getFirestore();
+
+  // MP3: if this client registered, the redirect must be one it declared. An
+  // exact string match — OAuth redirect comparison is character-for-character,
+  // and "close enough" is how a code reaches somewhere it should not.
+  const declared = await registeredRedirectUris(db, request.data?.clientId);
+  if (declared && !declared.includes(redirectUri)) {
+    log(FN, "connection refused — unregistered redirect", { uid, clientId: request.data?.clientId });
+    throw new HttpsError("invalid-argument", "That redirect target is not registered for this client.");
+  }
 
   // MC10. Passes for everyone today; the point is that the code path, the log
   // line and the error shape all exist before they are ever needed.

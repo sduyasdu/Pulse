@@ -1193,9 +1193,17 @@ describe("MCP connections (MCP-Spec §3)", () => {
     await seed(async (db) => {
       await setDoc(doc(db, "mcpRefreshTokens", "hash1"), { uid: "alice", connectionId: CONN, scope: "read" });
       await setDoc(doc(db, "mcpAuthCodes", "hash2"), { uid: "alice", connectionId: CONN, scope: "read" });
+      // Registered OAuth clients (MCP-Publishing-Spec MP3). No user data in it,
+      // but it decides where an authorization code may be sent — so a client
+      // that could add its own redirect URI could redirect a code to itself.
+      await setDoc(doc(db, "mcpClients", "c1"), { clientId: "c1", redirectUris: ["https://claude.ai/x"] });
     });
     const alice = dbAs("alice", "alice@example.com");
     await assertFails(getDoc(doc(alice, "mcpRefreshTokens", "hash1")));
     await assertFails(getDoc(doc(alice, "mcpAuthCodes", "hash2")));
+    await assertFails(getDoc(doc(alice, "mcpClients", "c1")));
+    await assertFails(
+      setDoc(doc(alice, "mcpClients", "mine"), { clientId: "mine", redirectUris: ["https://evil.test/cb"] }),
+    );
   });
 });

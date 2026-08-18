@@ -1,7 +1,8 @@
 import { onRequest } from "firebase-functions/v2/https";
+import { randomBytes } from "node:crypto";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { liveConnection, touchConnection } from "./mcp";
+import { isAllowedRedirect, liveConnection, touchConnection } from "./mcp";
 import { log, logError } from "./lib/conventions";
 
 // MCP — the service (MCP-Spec.md §1, §3, §5). Phase 0, read-only.
@@ -15,6 +16,16 @@ import { log, logError } from "./lib/conventions";
 // the mitigation is testing against a real client early rather than at the end.
 
 const FN = "MCP.server";
+
+/** Domain-verification token for the ChatGPT directory (MP4). Configuration, not
+ * code, so rotating it is an .env change rather than a source change.
+ *
+ * Read from `process.env`, NOT via `defineString`. A declared param with an
+ * empty-string default still **prompts interactively** for a value — which hangs
+ * `emulators:exec` and `firebase deploy --only functions` on a tty that will
+ * never answer. Costly to discover and invisible until something blocks. An
+ * optional value with a sane absent-case does not need the params machinery. */
+const openAiAppsToken = () => process.env.OPENAI_APPS_TOKEN ?? "";
 
 /** Protocol versions we knowingly speak. We echo the client's if it is one of
  * these, because our surface (tools only) is identical across them; otherwise we
@@ -331,9 +342,25 @@ const coverageNote = (rows: unknown[], what: string) =>
 export const clampLimit = (raw: unknown, fallback: number) =>
   Math.min(MAX_LIMIT, Math.max(1, Number.isFinite(Number(raw)) ? Number(raw) : fallback));
 
+// Every tool is annotated (MCP-Publishing-Spec MP1). `title` is what a directory
+// listing and a permission prompt show a human; the three hints are what both
+// Anthropic's and OpenAI's reviews check, and getting them wrong is the leading
+// stated cause of rejection.
+//
+//   readOnlyHint:    true  — nothing here writes, and each is safe to retry.
+//   destructiveHint: false — follows from the above.
+//   openWorldHint:   false — these reach Pulse's own store and nothing else. It
+//                            is NOT about whether the server is on the internet;
+//                            it is about whether the tool's effects escape into
+//                            an open-ended world.
+//
+// Phase 2's writes flip these per tool, and that is a submission-affecting
+// change to re-declare, not an implementation detail.
 export const TOOLS = [
   {
     name: "list_pulses",
+    title: "List Pulses",
+    annotations: { title: "List Pulses", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "List the Pulses (project roadmaps) this user can access, with their role in each. " +
       "Use this first to find a pulseId for the other tools.",
@@ -351,6 +378,8 @@ export const TOOLS = [
   },
   {
     name: "get_pulse",
+    title: "Get a Pulse",
+    annotations: { title: "Get a Pulse", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "One Pulse in full: its epics, its tasks with real dates and assignees, and its people. " +
       "Dates are ISO; a task's length is given in both calendar and working days.",
@@ -365,6 +394,8 @@ export const TOOLS = [
   },
   {
     name: "search_tasks",
+    title: "Search tasks",
+    annotations: { title: "Search tasks", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "Find tasks in a Pulse by text, status, epic or assignee, and get their subtasks in full — " +
       "each subtask's status, assignees, created/planned/finished dates, whether it is overdue, " +
@@ -385,6 +416,8 @@ export const TOOLS = [
   },
   {
     name: "get_schedule",
+    title: "Get schedule",
+    annotations: { title: "Get schedule", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "Tasks active in a date window, earliest first — what is running now, what lands this month, " +
       "what is late. A task counts if any part of it falls inside the window.",
@@ -401,6 +434,8 @@ export const TOOLS = [
   },
   {
     name: "get_people_load",
+    title: "Get people load",
+    annotations: { title: "Get people load", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "Per-person allocation across a date window, against their capacity. Use it to find who is " +
       "over-committed. Allocation is summed across every task overlapping the window.",
@@ -416,6 +451,8 @@ export const TOOLS = [
   },
   {
     name: "get_costs",
+    title: "Get costs",
+    annotations: { title: "Get costs", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "Recorded costs for a Pulse, grouped by model, by person or by task. Only visible to users " +
       "whose role permits it — an empty result may mean no access rather than no costs.",
@@ -431,6 +468,8 @@ export const TOOLS = [
   },
   {
     name: "search_resources",
+    title: "Search resources",
+    annotations: { title: "Search resources", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "The people and resources defined in a Pulse, in detail: type, capacity, the Pulse account each " +
       "one is linked to (if any), and hourly rate where the user's role permits seeing it. " +
@@ -452,6 +491,8 @@ export const TOOLS = [
   },
   {
     name: "search_comments",
+    title: "Search comments",
+    annotations: { title: "Search comments", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
       "Comments in a Pulse — the discussion, newest first. Each one says what it is attached to " +
       "(a task, a resource, or the Pulse itself) and whether it is a reply. Filter by text, author, " +
@@ -471,6 +512,8 @@ export const TOOLS = [
   },
   {
     name: "get_activity",
+    title: "Get recent activity",
+    annotations: { title: "Get recent activity", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description: "Recent changes in a Pulse — who changed what, and when. Newest first.",
     inputSchema: {
       type: "object",
@@ -1045,7 +1088,7 @@ const MCP_URL = `${ISSUER}/mcp`;
 const TOKEN_URL = `${ISSUER}/oauth/token`;
 const REGISTER_URL = `${ISSUER}/oauth/register`;
 
-export const mcpMetadata = onRequest({ invoker: "public", cors: true }, (req, res) => {
+export const mcpMetadata = onRequest({ invoker: "public", cors: true }, async (req, res) => {
   res.set("Cache-Control", "public, max-age=3600");
 
   if (req.path.endsWith("/oauth-protected-resource")) {
@@ -1071,22 +1114,60 @@ export const mcpMetadata = onRequest({ invoker: "public", cors: true }, (req, re
     return;
   }
 
-  // Dynamic client registration (RFC 7591). Stubbed on purpose: client identity
-  // is not a boundary here — consent, PKCE and the redirect allowlist are — and
-  // we already accept any client_id. Issuing one without storing it is therefore
-  // honest rather than lax, and it is what lets clients that require DCR
-  // complete discovery at all.
+  // Dynamic client registration (RFC 7591). This USED to be a stub that issued a
+  // client_id and stored nothing, on the reasoning that client identity is not a
+  // boundary — consent and PKCE are. That reasoning still holds, but it left the
+  // redirect allowlist carrying redirect security alone, and MP2 had to loosen
+  // that from a pinned path to a pinned host so ChatGPT's per-connector callback
+  // could work. So the registration is now real: what a client declares here is
+  // what `approveMcpConnection` will hold it to (MP3).
   if (req.path.endsWith("/register")) {
     const body = (req.body ?? {}) as { redirect_uris?: unknown; client_name?: unknown };
+    // Only URIs we would actually redirect to are worth storing — registering a
+    // target we would refuse later just moves the rejection somewhere less
+    // legible for whoever is integrating.
+    const redirectUris = (Array.isArray(body.redirect_uris) ? body.redirect_uris : []).filter(isAllowedRedirect);
+    if (!redirectUris.length) {
+      res.status(400).json({
+        error: "invalid_redirect_uri",
+        error_description: "No usable redirect_uris. Pulse accepts HTTPS callbacks on known assistant hosts, or loopback.",
+      });
+      return;
+    }
+    const clientId = `pulse-mcp-${randomBytes(16).toString("base64url")}`;
+    const clientName = typeof body.client_name === "string" ? body.client_name.slice(0, 120) : null;
+    await getFirestore().doc(`mcpClients/${clientId}`).set({
+      clientId,
+      redirectUris,
+      clientName,
+      createdAt: Date.now(),
+    });
+    log(FN, "client registered", { clientId, clientName, redirects: redirectUris.length });
     res.status(201).json({
-      client_id: `pulse-mcp-${Date.now().toString(36)}`,
+      client_id: clientId,
       client_id_issued_at: Math.floor(Date.now() / 1000),
       token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
-      redirect_uris: Array.isArray(body.redirect_uris) ? body.redirect_uris : [],
-      client_name: typeof body.client_name === "string" ? body.client_name : undefined,
+      redirect_uris: redirectUris,
+      client_name: clientName ?? undefined,
     });
+    return;
+  }
+
+  // Domain-ownership proof for the ChatGPT directory (MP4). Served from here
+  // rather than `public/.well-known/`, for the reason in §8: Hosting's
+  // `ignore: ["**/.*"]` drops dot-directories, so the file would exist in the
+  // repo, pass review, and never ship. An unset token 404s rather than serving
+  // an empty body, which would read as a failed verification instead of an
+  // unconfigured one.
+  if (req.path.endsWith("/openai-apps")) {
+    const token = openAiAppsToken();
+    if (!token) {
+      res.status(404).json({ error: "not_configured" });
+      return;
+    }
+    res.set("Content-Type", "text/plain; charset=utf-8").status(200).send(token);
     return;
   }
 
