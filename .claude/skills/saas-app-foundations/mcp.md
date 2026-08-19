@@ -133,31 +133,61 @@ The same rule covers transport. Answer with an event stream only if the client's
 This generalises past MCP: **an integration can fail entirely on a response you
 consider successful.** Which is why §7.9 exists.
 
+**And it will happen twice if you let it.** The same field broke connection setup
+a second time after being sent *legitimately*, under a newer revision the client
+itself had asked for — because that change also moved the negotiated revision, and
+the two variables were never separated. Both times the server saw a clean OAuth
+exchange, 200s, and no errors.
+
+Two rules come out of that, and they are worth more than the specific field:
+
+- **Change one thing about the handshake at a time.** Adding a member and moving
+  the revision in one deploy leaves you unable to say which broke it.
+- **A `curl` probe cannot test this.** The refusal happens inside the client,
+  after a response you consider successful. If you cannot exercise the handshake
+  end to end without a customer reconnecting, you have no way to verify a change
+  to it — so treat the handshake as the front door: it earns its own test, rather
+  than riding along with a feature.
+
 ## 7.8 Clients cache the tool list
 
 Adding a tool does not reach connected clients. They cached the list when they
 connected, so a new tool is invisible until they reconnect — and the customer
 experiences that as your feature not working.
 
-Two ways out, in order of preference:
+**Plan for the reconnect. Do not plan to avoid it.**
 
-- **Announce the change on a response you are already sending.** Streamable HTTP
-  lets a POST be answered with an SSE stream carrying notifications ahead of the
-  result, so `notifications/tools/list_changed` can ride back on an ordinary tool
-  call. No standing connection, no held-open compute. Store on each connection
-  which server version it last listed at; notify while it differs, clear it when
-  the client re-lists. It converges by itself.
-- **Tell people to reconnect**, in release notes, if you don't build the above.
+The protocol's escape hatch is `notifications/tools/list_changed`, and there is a
+clever way to send it without a standing connection: Streamable HTTP lets a POST
+be answered with an SSE stream carrying notifications ahead of the result, so the
+notification rides back on an ordinary tool call.
 
-Either way, **version your server by the tool surface, not by the code** — bump
-it when a tool is added, removed, or changes shape, and not otherwise. That
-version is the staleness signal; a version that never moves gives a client
-nothing to notice.
+**This was built, and it never fired once.** Measured against a real client, two
+things made it moot:
 
-Two limits worth stating in your own docs: this only helps clients that
-connected *after* you built it, so the change that introduces the mechanism
-still needs a reconnect. And only the declared surface is cached — changing what
-a tool *returns* needs nothing, so most iteration is free.
+- The client **re-runs `initialize` + `tools/list` at the start of every
+  session**, not only when the connector is added. So `tools/list` always
+  precedes any `tools/call`, the staleness flag is cleared before a tool call
+  could carry the notification, and the mechanism only has a window if a deploy
+  lands mid-session.
+- **The protocol layer was never what blocked.** The logs showed the full new
+  tool list served to the *existing* connection a minute before the customer
+  reconnected. What actually needed the reconnect was the client's own connector
+  UI — its enabled-tool list, cached above the protocol, where a server cannot
+  reach.
+
+So: build it if you like — it is correct for a client that caches across
+sessions and it costs one field on a document you already read — but **do not
+tell anyone it removes the reconnect.** Put the reconnect in your release notes.
+
+**Version your server by the tool surface, not by the code** — bump when a tool
+is added, removed, or changes shape, and not otherwise. Worth doing regardless of
+the above: it is the only staleness signal that exists, and it is what makes a
+log line say which surface a client is actually holding.
+
+The genuinely useful half: **only the declared surface is cached.** Changing what
+a tool *returns* needs nothing, so most iteration is free — it is specifically
+the shape of the menu that is sticky.
 
 ## 7.9 Log the handshake, or you will debug blind
 
@@ -180,18 +210,114 @@ reference ID that means nothing to you. Log, at minimum:
 - **Resolve identifiers to names.** An assistant handed `ownerId: "u_8fa2"` will
   either say that out loud or guess.
 - **Clamp every limit** server-side, and return a count alongside results.
+- **Order in the query, not after the bound.** "Read 200 and sort them" is not a
+  smaller answer than "the newest 30" — it is a *different* one. If ids are
+  random, an unordered page is an arbitrary sample, so the newest of it is not
+  the newest of anything. This shipped, looked entirely plausible (real rows,
+  real timestamps, correct ordering) and was wrong on every collection larger
+  than the page. Ordering in the query also costs less: fetch `limit` rows, not
+  200.
+- **Say when a scan was bounded.** If a read came back exactly full, there was
+  probably more behind it — and silence reads as completeness. "No blocked tasks
+  in this Pulse" and "no blocked tasks among the 200 I looked at" must not be the
+  same response. Pagination is the complete fix; a `coverage` note is the honest
+  minimum and ships in an hour.
 - **Fewer, task-shaped tools beat one per table.** "What is this person's load
   next month" is a tool; four joins the assistant has to compose is not.
 - **Mirror your existing field-level permissions.** If some roles can't see
   costs in the UI, they can't see costs here — via the same rules (§7.2), not a
   second check that will drift.
 
-## 7.11 Cost and abuse
+## 7.11 Rate limiting, and unauthenticated writes
 
-An assistant in a loop is the plausible failure, and it spends your compute and
-the customer's quota at once. Rate-limit per connection, cap result sizes, and
-decide early whether AI access is plan-gated — the gate is easy to add and
-awkward to add *retroactively* once customers rely on it.
+An assistant in a loop is the plausible failure: it spends your compute and the
+customer's read quota at machine speed, and nothing else in this design stops it.
+
+**Put the counters where you already read and write.** If every authenticated
+request already fetches a connection record, and marking it used already writes
+one, a limiter on that record costs **no extra read and no extra write** — the
+increment folds into the write that was happening anyway. Look for that document
+before reaching for a separate store or a Redis.
+
+Five details that decide whether it works:
+
+- **Atomic increment, not read-modify-write.** A server-side `increment` cannot
+  lose a concurrent update, and it avoids the round trip a transaction adds to
+  every call.
+- **Two windows, not one.** A per-minute cap alone lets a caller sit just under
+  it forever; an hourly cap alone lets a loop burn the allowance in seconds.
+- **A refused call still counts.** Otherwise a caller in a loop resets its own
+  budget by hitting the limit.
+- **Refuse as an error *result*, not a protocol error.** A protocol error
+  surfaces to the customer as "the connector is broken". A result the model can
+  read lets the assistant say what is true and when to retry.
+- **Check your store's update semantics.** Nested-vs-dotted field paths, merge
+  behaviour, whether a partial write drops sibling fields — get one wrong and you
+  ship a limiter that looks implemented and enforces nothing. Assert the shape of
+  the update itself in a test, not just the decision.
+
+Accept that a burst can overshoot slightly: the count is read at request start
+and written without waiting. That is right for abuse prevention — **do not
+describe it as a quota**, and pick the numbers from your own logs rather than
+from a blog post.
+
+**Weight by what a call actually costs**, eventually. Tools are not comparable:
+one that joins two collections can read ten times what a list does, so a flat
+per-call cap spans an order of magnitude in real cost. Ship flat, weight later.
+
+**A per-connection limit does not bound a user**, who can connect several
+assistants. The cap that does is a limit on *connected assistants*, which is also
+usually a better fit for a quantity-based pricing model than gating the feature
+outright (`billing.md`).
+
+**Finally: any unauthenticated endpoint that writes a document is a storage
+leak.** Dynamic client registration is the one that catches people — it is public
+by protocol, and a random id per request lets anyone grow the collection without
+limit. The fix is not a rate limit, it is **idempotence**: derive the id from a
+hash of the registration's own content, so a repeat returns the same record and
+writes nothing. The collection is then bounded by distinct clients rather than by
+request count.
+
+## 7.12 Publishing to the assistant directories
+
+Listing is a review queue with concrete, checkable requirements. Two are named by
+the vendors themselves as leading causes of rejection, and both are cheap:
+
+1. **Annotate every tool** — a human-readable `title`, plus behaviour hints
+   (`readOnlyHint`, `destructiveHint`, and `openWorldHint` where the vendor wants
+   it). Declare all of them even if one vendor only checks two: two annotation
+   sets kept in step is a second thing to get wrong. Note that `openWorldHint` is
+   about whether the tool's *effects escape into an open-ended world*, not about
+   whether your server is on the internet.
+2. **A published privacy policy.** Missing or incomplete is an immediate
+   rejection, not a review note.
+
+Then the ones that take real time:
+
+- **Domain ownership proof** — usually a token at a well-known path. Watch the
+  §7.4 trap: if your host drops dot-directories, serve it from code.
+- **A demo account with realistic data.** The most underestimated item — a
+  reviewer must be able to use the product end to end, and an empty account fails.
+- **Docs, example prompts, an icon, a support contact**, and for some vendors
+  test cases and a video.
+
+Three things worth knowing before you plan around it:
+
+- **Vendors differ more than the shared protocol suggests.** One may need you to
+  be on a paid organisation plan to reach the submission portal at all; another
+  requires explicit domain verification; a third may have **no self-serve
+  directory** and only a per-customer enterprise route, which is documentation
+  work rather than a submission.
+- **A callback allowlist scales badly.** Hardcoding one vendor's redirect origin
+  blocks every other. Validate by parsing the URI and comparing the host — never
+  `startsWith`, which accepts `yourvendor.com.attacker.test` — and bind the
+  redirect to what the client declared at registration.
+- **Copy each vendor's origins from their docs; never guess one.** A wrong origin
+  in a security control is worse than a missing one, because it looks handled.
+
+Write it down. Directory programmes change faster than any note about them, so
+record what you verified **and when**, with the source, and re-read the vendor
+docs before submitting rather than trusting your own summary.
 
 ## Checklist
 
@@ -213,4 +339,12 @@ awkward to add *retroactively* once customers rely on it.
 10. Handshake logging in place — including the `initialized` notification.
 11. Revocation list in the UI, with a **read error state distinct from empty**.
 12. Rate limits and result caps decided, and plan-gating decided even if not
-    enforced yet.
+    enforced yet — counters on a record you already read, refused calls counted,
+    and the update's shape asserted in a test.
+13. Every unauthenticated write path idempotent, so it is bounded by distinct
+    callers rather than by request count.
+14. Bounded scans disclose that they were bounded, and time-ordered reads order
+    in the query rather than after the page.
+15. If you intend to publish: every tool annotated with a title and hints, a
+    published privacy policy, domain verification served from code, and a demo
+    account with real data.

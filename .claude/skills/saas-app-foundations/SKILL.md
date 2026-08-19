@@ -1,6 +1,6 @@
 ---
 name: saas-app-foundations
-description: Use when starting a new multi-tenant SaaS web app, or when adding one of its seven foundations to an existing one — architecture/stack choice, internationalization, billing with plan limits, multi-user collaboration (roles, sharing, presence), the mobile version, in-app help and empty states, or exposing the product to AI assistants over MCP. Front-loads the decisions that are cheap on day one and expensive to retrofit, and carries the failure modes that pass every green check and still ship broken. Written from building Pulse (React + Firebase + Stripe, six languages, three tiers, mobile-first views, a customer-facing MCP server).
+description: Use when starting a new multi-tenant SaaS web app, or when adding one of its seven foundations to an existing one — architecture/stack choice, internationalization, billing with plan limits, multi-user collaboration (roles, sharing, presence), the mobile version, in-app help and empty states, or exposing the product to AI assistants over MCP (including rate limiting and publishing to the Claude/ChatGPT/Gemini directories). Front-loads the decisions that are cheap on day one and expensive to retrofit, and carries the failure modes that pass every green check and still ship broken. Written from building Pulse (React + Firebase + Stripe, six languages, three tiers, mobile-first views, a customer-facing MCP server).
 ---
 
 # Foundations of a multi-tenant SaaS app
@@ -26,7 +26,7 @@ are about to work on before you start.** If you are touching two, read two.
 | Collaboration | `collaboration.md` | roles, sharing, invites, presence, anything a second user can see |
 | Mobile | `mobile.md` | phone/tablet layout, touch, hover, viewport |
 | Help & empty states | `help.md` | help content, empty states, disabled controls, error copy |
-| AI access (MCP) | `mcp.md` | exposing the product to AI assistants — OAuth, consent, tools, revocation |
+| AI access (MCP) | `mcp.md` | exposing the product to AI assistants — OAuth, consent, tools, revocation, rate limits, publishing to the directories |
 
 ## The bias underneath all six
 
@@ -86,6 +86,7 @@ whether it affected them.
    empty states that distinguish "nothing yet" from "nothing matches".
 7. **AI access** — the service reads as the customer through the existing rules,
    the access token works from a bare `curl`, discovery and endpoints share one
-   origin, revocation is enforced at refresh, and the handshake is logged.
+   origin, revocation is enforced at refresh, the handshake is logged, tool calls
+   are rate-limited, and every unauthenticated write path is idempotent.
 8. **Verified against the live system**, not just the source — and the check that
    validates the thing you changed was actually the one you ran.
