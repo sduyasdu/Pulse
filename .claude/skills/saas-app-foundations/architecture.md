@@ -82,6 +82,33 @@ Set → redeploy immediately → verify the new version is bound.
 And note what this does to rollback: if the old version was destroyed, rolling
 back means re-obtaining the old value from the provider, not reverting a pointer.
 
+### Optional config must not go through a mechanism that can prompt
+
+Platforms offer a *declared parameter* for configuration — a value the toolchain
+resolves at deploy. When it cannot find one, it does the friendly thing and
+**asks on the terminal**. That is fine at a keyboard and catastrophic everywhere
+else: CI, a scripted deploy, an emulator started by a test runner. The process
+does not fail, it **waits**.
+
+That failure mode is the reason this is worth its own note. Nothing errors,
+nothing logs, no timeout fires. A test run looks slow. A deploy looks stuck. The
+prompt is sitting in output you are probably piping through something that
+buffers, so you cannot even see it — `| tail` shows nothing until the process
+exits, and the process is never going to exit.
+
+Do not assume a default suppresses it. An **empty-string default may still
+prompt**, which is exactly the case an optional value hits.
+
+So: if the value is optional and has a sane absent-case, skip the machinery and
+read the environment directly (`process.env.X ?? ""`), with the absent case doing
+something honest — return 404, disable the feature — rather than serving an empty
+value that reads as a broken one. Keep declared parameters and secret bindings
+for values the service genuinely cannot start without.
+
+**When something hangs rather than fails, look at raw unbuffered output first.**
+Redirect to a file and read it. Half an hour of "why is the emulator slow" is one
+line of prompt you could not see.
+
 ## 1.5 Know which check validates which thing
 
 Write the matrix down. In Pulse:

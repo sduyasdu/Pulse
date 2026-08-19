@@ -90,6 +90,32 @@ npx firebase functions:secrets:get STRIPE_SECRET_KEY --project pulse-b9d96
 Rollback is not reverting a pointer: the old value is gone from Secret Manager,
 so it means fetching it from Stripe again and setting a new version.
 
+## A declared param with no value **prompts**, and hangs the run
+
+`defineString("OPENAI_APPS_TOKEN", { default: "" })` looks like optional config.
+It is not: Firebase resolves declared params when functions load, and with no
+value it asks on the terminal —
+
+```
+? Enter a string value for OPENAI_APPS_TOKEN:
+```
+
+**An empty-string default does not suppress it.** `emulators:exec` started both
+emulators, printed `Serving at port 8333`, and then waited forever for input.
+Nothing failed, nothing logged, no timeout — the test run just looked slow, and
+`firebase deploy --only functions` would have done the same in CI.
+
+It cost three restarts to find, because the prompt was in output being piped
+through `tail`, which buffers until the process exits — and it never exits. **When
+something hangs rather than fails, redirect raw output to a file and read it**
+before assuming the machine is slow.
+
+Optional config with a sane absent-case reads the environment instead
+(`process.env.X ?? ""`, `functions/.env`), and the absent case does something
+honest — `/.well-known/openai-apps` 404s rather than serving an empty body that
+would read as a failed verification. Keep `defineString`/secrets for values the
+service cannot start without.
+
 ## `npm run test:functions` tests the **compiled** output
 
 The suites in `functions/test/*.mjs` import `functions/lib/*.js`, not `src/`. Run
