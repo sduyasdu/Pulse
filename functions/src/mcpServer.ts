@@ -1,8 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { randomBytes } from "node:crypto";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { isAllowedRedirect, liveConnection, touchConnection } from "./mcp";
+import { isAllowedRedirect, liveConnection, rateDecision, recordCall, sha256, RATE_PER_MINUTE, RATE_PER_HOUR, type RateState } from "./mcp";
 import { log, logError } from "./lib/conventions";
 
 // MCP — the service (MCP-Spec.md §1, §3, §5). Phase 0, read-only.
@@ -74,6 +73,9 @@ interface Caller {
    * Null until it has ever listed. Read off the connection doc `authenticate`
    * already fetches, so knowing whether a client is stale costs nothing. */
   toolsVersion: string | null;
+  /** Rate-limit windows, off the same connection document. Read here so the
+   * limiter costs no request of its own (MC29). */
+  rate: RateState | undefined;
 }
 
 /**
@@ -105,6 +107,7 @@ async function authenticate(authorization: string | undefined): Promise<Caller |
     scope: typeof decoded.scope === "string" ? decoded.scope : "read",
     idToken,
     toolsVersion: typeof connection.toolsVersion === "string" ? connection.toolsVersion : null,
+    rate: (connection.rate ?? undefined) as RateState | undefined,
   };
 }
 
@@ -1027,9 +1030,38 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
         res.json(rpcError(id, METHOD_NOT_FOUND, `Unknown tool: ${name}`));
         return;
       }
+      // MC29 — checked BEFORE the tool runs, since the point is to not spend the
+      // reads. The refused call still counts (see rateDecision), or a caller in
+      // a loop would keep resetting its own budget by hitting the limit.
+      const limit = rateDecision(caller.rate, Date.now());
+      if (!limit.allowed) {
+        void recordCall(getFirestore(), caller.uid, caller.connectionId, limit.patch);
+        log(FN, "rate limited", {
+          uid: caller.uid,
+          connectionId: caller.connectionId,
+          tool: name,
+          window: limit.window,
+        });
+        // An error RESULT, not a JSON-RPC error. A protocol error surfaces to the
+        // customer as "the connector is broken"; a result the model can read
+        // lets the assistant say what is actually true and what to do about it.
+        res.json(rpcResult(id, {
+          isError: true,
+          content: [{
+            type: "text",
+            text:
+              `Rate limit reached for this connection (${limit.window === "minute" ? `${RATE_PER_MINUTE} calls per minute` : `${RATE_PER_HOUR} calls per hour`}). ` +
+              `Try again in about ${limit.retryAfterSeconds} seconds. This limit is per connected assistant, not per user.`,
+          }],
+        }));
+        return;
+      }
+
       // Phase 2: writes gate on caller.scope here as well as in rules.
       const out = await callTool(caller, name, (params.arguments as Record<string, unknown>) ?? {});
-      void touchConnection(getFirestore(), caller.uid, caller.connectionId);
+      // Folds the counter increment into the write `touchConnection` was already
+      // making, so the limiter adds no read and no write of its own.
+      void recordCall(getFirestore(), caller.uid, caller.connectionId, limit.patch);
       log(FN, "tool called", { uid: caller.uid, connectionId: caller.connectionId, tool: name });
       // Tool results are content blocks, not raw JSON — text is what every
       // client renders, and the assistant reads JSON in it perfectly well.
@@ -1134,15 +1166,29 @@ export const mcpMetadata = onRequest({ invoker: "public", cors: true }, async (r
       });
       return;
     }
-    const clientId = `pulse-mcp-${randomBytes(16).toString("base64url")}`;
     const clientName = typeof body.client_name === "string" ? body.client_name.slice(0, 120) : null;
-    await getFirestore().doc(`mcpClients/${clientId}`).set({
-      clientId,
-      redirectUris,
-      clientName,
-      createdAt: Date.now(),
-    });
-    log(FN, "client registered", { clientId, clientName, redirects: redirectUris.length });
+
+    // **Idempotent**, and that is a control rather than a nicety: this endpoint
+    // is unauthenticated and writes a document, so a random id per request would
+    // let anyone grow this collection without limit. Deriving the id from the
+    // registration's own content means a repeat returns the same client instead
+    // of creating another, and the collection is bounded by distinct clients
+    // rather than by request count. Sorted first, so URI order cannot mint a
+    // second identity for the same client.
+    const fingerprint = sha256(JSON.stringify({ r: [...redirectUris].sort(), n: clientName }));
+    const clientId = `pulse-mcp-${fingerprint.slice(0, 32)}`;
+
+    // Because the id IS the content, a repeat registration is byte-identical to
+    // what is already stored — so it needs no write at all. One read on a rare
+    // endpoint, and a caller that POSTs a thousand times leaves one document and
+    // one write behind. `createdAt` therefore keeps meaning "first seen", which
+    // a blind re-write would have destroyed.
+    const ref = getFirestore().doc(`mcpClients/${clientId}`);
+    const existing = await ref.get();
+    if (!existing.exists) {
+      await ref.set({ clientId, redirectUris, clientName, createdAt: Date.now() });
+    }
+    log(FN, "client registered", { clientId, clientName, redirects: redirectUris.length, repeat: existing.exists });
     res.status(201).json({
       client_id: clientId,
       client_id_issued_at: Math.floor(Date.now() / 1000),

@@ -431,18 +431,112 @@ export const mcpOauthToken = onRequest({ invoker: "public", cors: true }, async 
   }
 });
 
-/**
- * Marks a connection used, so `lastUsedAt` means something in the customer's
- * list (MC12). Called by the MCP service, not the client.
+// ---------------------------------------------------------------------------
+// Rate limiting (MC29)
+//
+// An assistant in a loop is the plausible abuse case: it spends Pulse's compute
+// and the customer's Firestore reads at machine speed, and nothing else here
+// stops it.
+//
+// The counters live on the **connection document**, which is the cheap place:
+// `authenticate()` already reads it on every request, and marking the
+// connection used already writes it, so a limiter costs no extra read and no
+// extra write — the increment folds into the write that was happening anyway.
+// `recordCall` below replaced the old `touchConnection`: one writer for this
+// document, so the timestamp and the counters cannot drift apart.
+//
+// `FieldValue.increment` is doing real work — it is an atomic server-side
+// operation, so two concurrent calls cannot both read 5 and both write 6. A
+// transaction would be correct too and would cost a round trip on every call.
+//
+// **Known and accepted:** the count is read at the start of a request and
+// written without waiting, so a genuine burst can overshoot the cap before it
+// bites. That is the right trade for abuse prevention — this bounds runaway
+// usage, it is not a billing quota and must not be described as one.
+// ---------------------------------------------------------------------------
+
+/** Two windows, because one is always the wrong one. A per-minute cap alone
+ * lets a caller sit just under it forever; an hourly cap alone lets a loop burn
+ * the whole allowance in seconds.
  *
- * Separate from the token endpoint because refreshing is not using — a client
- * that renews hourly while nobody asks it anything should still look idle.
+ * These numbers are a starting point, not a measurement. An assistant answering
+ * one question makes roughly 5–20 tool calls, so a minute's worth permits a fast
+ * human asking repeatedly and stops a loop within a second or two. Revisit them
+ * against the `tool called` log lines before treating them as tuned. */
+export const RATE_PER_MINUTE = 60;
+export const RATE_PER_HOUR = 1000;
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+
+export interface RateState {
+  minuteKey?: number;
+  minuteCount?: number;
+  hourKey?: number;
+  hourCount?: number;
+}
+
+export interface RateDecision {
+  allowed: boolean;
+  /** Which window refused, for the message and the log. */
+  window?: "minute" | "hour";
+  /** Seconds until the refusing window rolls over. */
+  retryAfterSeconds?: number;
+  /** The merge payload to fold into the next write. Present even when refused —
+   * a refused call still counts, or a caller in a loop would reset its own
+   * budget by hammering the limit. */
+  patch: Record<string, unknown>;
+}
+
+/**
+ * Decide, and produce the counter update, from state already in hand.
+ *
+ * Pure and separately exported so the arithmetic — the part with the off-by-one
+ * and the window-rollover bugs in it — is testable without an emulator, a clock
+ * or a connection.
  */
-export async function touchConnection(db: Db, uid: string, connectionId: string): Promise<void> {
+export function rateDecision(state: RateState | undefined, nowMs: number): RateDecision {
+  const minuteKey = Math.floor(nowMs / MINUTE_MS);
+  const hourKey = Math.floor(nowMs / HOUR_MS);
+  const s = state ?? {};
+
+  // A stale key means the window rolled over: the old count is not "0 so far",
+  // it is a different window entirely, so it is replaced rather than added to.
+  const minuteCount = s.minuteKey === minuteKey ? (s.minuteCount ?? 0) : 0;
+  const hourCount = s.hourKey === hourKey ? (s.hourCount ?? 0) : 0;
+
+  // A NESTED map, not dotted keys. `rate.minuteCount` is only a field path in
+  // `update()`; in a `set(..., {merge:true})` it creates a literal field whose
+  // name contains a dot, and the counter silently never increments. Nested maps
+  // deep-merge under `merge: true`, so writing only the minute fields leaves the
+  // hour fields alone.
+  const bump = (key: number, count: number, field: "minute" | "hour") =>
+    count === 0
+      ? { [`${field}Key`]: key, [`${field}Count`]: 1 }
+      : { [`${field}Count`]: FieldValue.increment(1) };
+
+  const patch = { rate: { ...bump(minuteKey, minuteCount, "minute"), ...bump(hourKey, hourCount, "hour") } };
+
+  if (minuteCount >= RATE_PER_MINUTE) {
+    return { allowed: false, window: "minute", retryAfterSeconds: Math.ceil(((minuteKey + 1) * MINUTE_MS - nowMs) / 1000), patch };
+  }
+  if (hourCount >= RATE_PER_HOUR) {
+    return { allowed: false, window: "hour", retryAfterSeconds: Math.ceil(((hourKey + 1) * HOUR_MS - nowMs) / 1000), patch };
+  }
+  return { allowed: true, patch };
+}
+
+/** Record a call against the connection's windows. Merged with `lastUsedAt` so
+ * this is one write, not two.
+ *
+ * Also what keeps `lastUsedAt` meaningful in the customer's connection list
+ * (MC12): called on use, and deliberately NOT on refresh — a client that renews
+ * hourly while nobody asks it anything should still look idle. */
+export async function recordCall(db: Db, uid: string, connectionId: string, patch: Record<string, unknown>): Promise<void> {
   await db
     .doc(`users/${uid}/connections/${connectionId}`)
-    .set({ lastUsedAt: FieldValue.serverTimestamp() }, { merge: true })
+    .set({ lastUsedAt: FieldValue.serverTimestamp(), ...patch }, { merge: true })
     .catch(() => {
-      /* best effort — a missed timestamp must never fail a customer's request */
+      /* best effort, as above — losing a tick must not fail a customer request */
     });
 }

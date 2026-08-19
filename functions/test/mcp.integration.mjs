@@ -9,7 +9,7 @@
 // issue — which is the part that must not be wrong.
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { bestTierFor, isAllowedRedirect, liveConnection, registeredRedirectUris, sha256, sha256b64url } from "../lib/mcp.js";
+import { bestTierFor, isAllowedRedirect, liveConnection, rateDecision, registeredRedirectUris, RATE_PER_MINUTE, RATE_PER_HOUR, sha256, sha256b64url } from "../lib/mcp.js";
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-pulse-rules-test" });
 const db = getFirestore();
@@ -238,6 +238,54 @@ assert(!isAllowedRedirect("https://127.0.0.1:8080/cb"), "redirect: https loopbac
   assert((await registeredRedirectUris(db, "c_unknown")) === null, "registration: an unknown client is null, not empty");
   assert((await registeredRedirectUris(db, "")) === null, "registration: a missing client_id is null");
   assert((await registeredRedirectUris(db, undefined)) === null, "registration: an absent client_id is null");
+}
+
+// ---------------------------------------------------------------------------
+// MC29 — the rate limiter's arithmetic. Pure, so it is tested against a fixed
+// clock rather than by waiting a minute.
+// ---------------------------------------------------------------------------
+{
+  const T = 1_800_000_000_000; // fixed "now"
+  const minuteKey = Math.floor(T / 60_000);
+  const hourKey = Math.floor(T / 3_600_000);
+
+  assert(rateDecision(undefined, T).allowed, "rate: a connection that has never called is allowed");
+  assert(rateDecision({}, T).allowed, "rate: empty state is allowed");
+
+  // Counting starts at 1 for a fresh window, not 0 — an off-by-one here gives
+  // away a free call every minute.
+  const fresh = rateDecision(undefined, T);
+  assert(fresh.patch.rate.minuteCount === 1 && fresh.patch.rate.minuteKey === minuteKey, "rate: a fresh window is seeded at 1");
+
+  const under = { minuteKey, minuteCount: RATE_PER_MINUTE - 1, hourKey, hourCount: 5 };
+  assert(rateDecision(under, T).allowed, "rate: one below the cap is allowed");
+
+  const at = { minuteKey, minuteCount: RATE_PER_MINUTE, hourKey, hourCount: 5 };
+  const refused = rateDecision(at, T);
+  assert(!refused.allowed && refused.window === "minute", "rate: at the cap is refused");
+  assert(refused.retryAfterSeconds > 0 && refused.retryAfterSeconds <= 60, "rate: retry-after is inside the window");
+  // A refused call still counts, or a caller in a loop resets its own budget.
+  assert(refused.patch.rate.minuteCount !== undefined, "rate: a refused call is still counted");
+
+  // A stale key is a DIFFERENT window, so the old count is replaced, not added
+  // to. Getting this wrong locks a connection out permanently.
+  const stale = { minuteKey: minuteKey - 5, minuteCount: 9999, hourKey, hourCount: 1 };
+  const rolled = rateDecision(stale, T);
+  assert(rolled.allowed, "rate: a stale minute window does not carry its count forward");
+  assert(rolled.patch.rate.minuteCount === 1 && rolled.patch.rate.minuteKey === minuteKey, "rate: the rolled window reseeds at 1");
+
+  // The hourly window catches a caller who stays just under the per-minute cap.
+  const hourly = { minuteKey, minuteCount: 0, hourKey, hourCount: RATE_PER_HOUR };
+  const hourRefused = rateDecision(hourly, T);
+  assert(!hourRefused.allowed && hourRefused.window === "hour", "rate: the hourly cap refuses independently");
+  assert(hourRefused.retryAfterSeconds > 60, "rate: the hourly retry-after reflects the longer window");
+
+  const staleHour = { minuteKey, minuteCount: 0, hourKey: hourKey - 1, hourCount: RATE_PER_HOUR };
+  assert(rateDecision(staleHour, T).allowed, "rate: a stale hour window does not carry forward either");
+
+  // Nested map, not dotted keys — dotted keys in a set() create a literal field
+  // with a dot in its name and the counter silently never moves.
+  assert(typeof fresh.patch.rate === "object" && !("rate.minuteCount" in fresh.patch), "rate: the patch is a nested map");
 }
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");

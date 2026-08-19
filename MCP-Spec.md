@@ -594,3 +594,48 @@ assistant relays.
     the index entry, because it is immutable — written once, cannot drift, no
     reconcile case — while `lastActivityAt` is fetched live per card, alongside a
     summary that already loads every feature, epic and resource.
+29. **MC29 — Rate limiting lives on the connection document → DECIDED
+    (`functions/src/mcp.ts`).** Two fixed windows, 60 calls/minute and 1,000/hour,
+    counted per connection. The placement is the decision: `authenticate()`
+    already reads that document on every request and marking the connection used
+    already writes it, so the limiter costs **no extra read and no extra write**
+    — the increment folds into the write that was happening anyway.
+    `FieldValue.increment` rather than a transaction: it is atomic server-side,
+    so two concurrent calls cannot both read 5 and both write 6, and a
+    transaction would add a round trip to every call. The counters are a **nested
+    map**, not dotted keys — `rate.minuteCount` is a field path only in
+    `update()`; in a `set(…, {merge:true})` it creates a literal field with a dot
+    in its name and the counter silently never moves.
+    Two windows because one is always wrong: a per-minute cap alone lets a caller
+    sit just under it indefinitely, an hourly cap alone lets a loop burn the
+    allowance in seconds. **A refused call still counts**, or a caller in a loop
+    resets its own budget by hitting the limit.
+    Refusal is an **error result** (`isError: true`), not a JSON-RPC error: a
+    protocol error surfaces to the customer as "the connector is broken", while a
+    result the model can read lets the assistant say what is true and when to
+    retry.
+    *Accepted:* the count is read at request start and written without waiting,
+    so a burst can overshoot slightly. Correct for abuse prevention; **this must
+    not be described as a quota.** The numbers are a starting point, not a
+    measurement — the `tool called` log lines carry the real distribution.
+    *Deferred:* per-tool weighting. `search_comments` reads up to 400 documents
+    and `list_pulses` up to 50, so a flat cap is 3,000–24,000 reads a minute
+    depending on which tool. Worth adding once there is usage to weight against.
+    *Not covered by this, and stated so it is not assumed:* a user can multiply
+    their budget by connecting several assistants. The fix is a **per-tier cap on
+    connected assistants**, which is also the quantity-shaped gate that fits
+    Plans-Spec §3 rather than breaking it with a feature gate (cf. MC10, MC22).
+    `bestTierFor()` already supplies the tier.
+    Supersedes `touchConnection`, now removed: one writer for this document, so
+    `lastUsedAt` and the counters cannot drift apart.
+30. **MC30 — `/oauth/register` is idempotent, and that is a control.** The
+    endpoint is unauthenticated and writes a document, so the random id per
+    request introduced with MP3 let anyone grow `mcpClients` without limit —
+    unbounded storage from anonymous callers. The `client_id` is now derived from
+    a hash of the registration's own content (redirect URIs, sorted, plus client
+    name), so a repeat returns the **same** client and writes nothing at all: one
+    read on a rare endpoint, and a thousand POSTs leave one document behind. The
+    collection is bounded by distinct clients rather than by request count, and
+    `createdAt` keeps meaning "first seen", which a blind re-write would have
+    destroyed. Verified live: two identical registrations return one id, a
+    different client name returns another.
