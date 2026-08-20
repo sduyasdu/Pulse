@@ -435,7 +435,7 @@ export const it: Dict = {
   "details.assignFirst": "assegna prima qualcuno",
   "details.subtasks": "SOTTOATTIVITÀ",
   "details.noSubtasks": "Ancora nessuna sottoattività — suddividi questa attività in passi.",
-  "details.addSubtask": "+ aggiungi sottoattività",
+  "details.addSubtask": "Aggiungi sottoattività",
   "details.deleteSubtask": "Elimina sottoattività",
   "details.deleteSubtaskMsg": "Eliminare la sottoattività «{title}»?",
   "details.collapse": "Comprimi",

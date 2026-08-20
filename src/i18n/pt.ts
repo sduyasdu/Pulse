@@ -435,7 +435,7 @@ export const pt: Dict = {
   "details.assignFirst": "atribua alguém primeiro",
   "details.subtasks": "SUBTAREFAS",
   "details.noSubtasks": "Ainda não há subtarefas — divida esta tarefa em etapas.",
-  "details.addSubtask": "+ adicionar subtarefa",
+  "details.addSubtask": "Adicionar subtarefa",
   "details.deleteSubtask": "Excluir subtarefa",
   "details.deleteSubtaskMsg": "Excluir a subtarefa “{title}”?",
   "details.collapse": "Recolher",

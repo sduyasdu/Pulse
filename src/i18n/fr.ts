@@ -435,7 +435,7 @@ export const fr: Dict = {
   "details.assignFirst": "affectez d'abord quelqu'un",
   "details.subtasks": "SOUS-TÂCHES",
   "details.noSubtasks": "Aucune sous-tâche pour l'instant — découpez cette tâche en étapes.",
-  "details.addSubtask": "+ ajouter une sous-tâche",
+  "details.addSubtask": "Ajouter une sous-tâche",
   "details.deleteSubtask": "Supprimer la sous-tâche",
   "details.deleteSubtaskMsg": "Supprimer la sous-tâche « {title} » ?",
   "details.collapse": "Réduire",

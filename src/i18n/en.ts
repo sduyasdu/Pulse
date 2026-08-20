@@ -441,7 +441,7 @@ export const en = {
   "details.assignFirst": "assign someone first",
   "details.subtasks": "SUBTASKS",
   "details.noSubtasks": "No subtasks yet — break this feature into steps.",
-  "details.addSubtask": "+ add subtask",
+  "details.addSubtask": "Add subtask",
   "details.deleteSubtask": "Delete subtask",
   "details.deleteSubtaskMsg": "Delete subtask \"{title}\"?",
   "details.collapse": "Collapse",

@@ -435,7 +435,7 @@ export const de: Dict = {
   "details.assignFirst": "weise zuerst jemanden zu",
   "details.subtasks": "TEILAUFGABEN",
   "details.noSubtasks": "Noch keine Teilaufgaben — gliedere diese Aufgabe in Schritte.",
-  "details.addSubtask": "+ Teilaufgabe hinzufügen",
+  "details.addSubtask": "Teilaufgabe hinzufügen",
   "details.deleteSubtask": "Teilaufgabe löschen",
   "details.deleteSubtaskMsg": "Teilaufgabe „{title}“ löschen?",
   "details.collapse": "Einklappen",
