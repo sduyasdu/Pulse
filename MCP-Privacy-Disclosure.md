@@ -44,8 +44,8 @@ and favourable:
 | Where | Fields | Lifetime |
 | --- | --- | --- |
 | `users/{uid}/connections/{id}` | connection name (customer-chosen), client name as reported by the AI client, scope, created, last used, revoked, tool-list version | Until the user deletes it; a revoked connection is kept so the user can see it was revoked |
-| `mcpAuthCodes/{sha256(code)}` | uid, connectionId, scope, PKCE challenge, redirect URI, expiry | Deleted on use; **5-minute expiry — see §5** |
-| `mcpRefreshTokens/{sha256(token)}` | uid, connectionId, scope, created | Deleted on use (rotated) and on revoke; **see §5** |
+| `mcpAuthCodes/{sha256(code)}` | uid, connectionId, scope, PKCE challenge, redirect URI, expiry | Deleted on use; 5-minute expiry, swept daily (§5) |
+| `mcpRefreshTokens/{sha256(token)}` | uid, connectionId, scope, created | Deleted on use (rotated), on revoke, and swept once the connection ends (§5) |
 | `mcpClients/{client_id}` | client id, declared redirect URIs, client name | Indefinite. **Contains no user data** — it describes an AI product, not a person |
 
 **Tokens are stored only as SHA-256 hashes.** Neither the access token nor the
@@ -84,14 +84,14 @@ Found while writing this. Both are now swept daily by `mcpCleanup`
 (`functions/src/mcpCleanup.ts`, MC31), so the retention periods below are
 statements a policy can make:
 
-1. **Expired authorization codes are never deleted.** `mcpAuthCodes` documents
-   are removed when exchanged, and carry a 5-minute `expiresAt` that is *checked*
-   but not swept. A code that is issued and never used leaves a row holding a
-   uid indefinitely. It is unusable — expiry is enforced on read — but "we keep
-   it for 5 minutes" would not be a true statement today.
-2. **Abandoned refresh tokens are never deleted.** Rotation deletes the presented
-   token and revocation deletes the one it finds, but a client that simply stops
-   calling leaves its row forever.
+1. **Expired authorization codes were never deleted.** `mcpAuthCodes` documents
+   are removed when exchanged, and carry a 5-minute `expiresAt` that was
+   *checked* but not swept, so a code issued and never used left a row holding a
+   uid indefinitely. Unusable — expiry is enforced on read — but "we keep it for
+   five minutes" was not a true statement.
+2. **Abandoned refresh tokens were never deleted.** Rotation deletes the
+   presented token and revocation deletes the one it finds, but a client that
+   simply stopped calling left its row forever.
 
 Neither was a security hole (both are hashes, both are checked against a live
 connection before use). Both were retention claims a policy would otherwise have
