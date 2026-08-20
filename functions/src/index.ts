@@ -44,3 +44,8 @@ export { approveMcpConnection, mcpOauthToken } from "./mcp";
 // The MCP service itself (MCP-Spec §1/§5). JSON-RPC over HTTP, reading Firestore
 // as the customer through the REST API so security rules still apply.
 export { mcp, mcpMetadata } from "./mcpServer";
+
+// MCP retention sweep (MCP-Privacy-Disclosure §5). The project's first scheduled
+// function — deploying it needs the Cloud Scheduler API enabled. Exists to make
+// a retention claim in the privacy policy true, not to close an exploit.
+export { mcpCleanup } from "./mcpCleanup";

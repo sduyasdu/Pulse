@@ -288,5 +288,45 @@ assert(!isAllowedRedirect("https://127.0.0.1:8080/cb"), "redirect: https loopbac
   assert(typeof fresh.patch.rate === "object" && !("rate.minuteCount" in fresh.patch), "rate: the patch is a nested map");
 }
 
+// ---------------------------------------------------------------------------
+// Retention sweep (MCP-Privacy-Disclosure §5). The deny side is the dangerous
+// half here: deleting a token whose connection is LIVE silently breaks a working
+// connection, and the only cure is the customer reconnecting.
+// ---------------------------------------------------------------------------
+{
+  const { sweepAuthCodes, sweepRefreshTokens } = await import("../lib/mcpCleanup.js");
+  const NOW = 2_000_000_000_000;
+  const U = "u_sweep";
+
+  await db.doc(`users/${U}/connections/live`).set({ id: "live", scope: "read", revokedAt: null });
+  await db.doc(`users/${U}/connections/revoked`).set({ id: "revoked", scope: "read", revokedAt: NOW - 1000 });
+
+  await db.doc("mcpAuthCodes/expired").set({ uid: U, connectionId: "live", expiresAt: NOW - 1 });
+  await db.doc("mcpAuthCodes/fresh").set({ uid: U, connectionId: "live", expiresAt: NOW + 300_000 });
+
+  const removedCodes = await sweepAuthCodes(db, NOW);
+  assert(removedCodes === 1, "sweep: exactly the expired code is removed");
+  assert(!(await db.doc("mcpAuthCodes/expired").get()).exists, "sweep: the expired code is gone");
+  // The one that matters — a code issued seconds ago is mid-flow.
+  assert((await db.doc("mcpAuthCodes/fresh").get()).exists, "sweep: an unexpired code is left alone");
+
+  await db.doc("mcpRefreshTokens/t_live").set({ uid: U, connectionId: "live", createdAt: 1 });
+  await db.doc("mcpRefreshTokens/t_revoked").set({ uid: U, connectionId: "revoked", createdAt: 1 });
+  await db.doc("mcpRefreshTokens/t_missing").set({ uid: U, connectionId: "no_such_connection", createdAt: 1 });
+  await db.doc("mcpRefreshTokens/t_malformed").set({ createdAt: 1 });
+
+  const removedTokens = await sweepRefreshTokens(db);
+  assert(removedTokens === 3, "sweep: revoked, missing and malformed tokens are removed");
+  assert((await db.doc("mcpRefreshTokens/t_live").get()).exists, "sweep: a token on a LIVE connection survives");
+  assert(!(await db.doc("mcpRefreshTokens/t_revoked").get()).exists, "sweep: a revoked connection's token is removed");
+  assert(!(await db.doc("mcpRefreshTokens/t_missing").get()).exists, "sweep: a token whose connection is gone is removed");
+  assert(!(await db.doc("mcpRefreshTokens/t_malformed").get()).exists, "sweep: a token with no connection reference is removed");
+
+  // Idempotent: a second run finds nothing and deletes nothing, so a retry or an
+  // overlapping schedule cannot do damage.
+  assert((await sweepAuthCodes(db, NOW)) === 0 && (await sweepRefreshTokens(db)) === 0, "sweep: running twice is a no-op");
+  assert((await db.doc("mcpRefreshTokens/t_live").get()).exists, "sweep: the live token still survives a second pass");
+}
+
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
 process.exit(failed ? 1 : 0);

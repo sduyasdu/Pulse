@@ -639,3 +639,28 @@ assistant relays.
     `createdAt` keeps meaning "first seen", which a blind re-write would have
     destroyed. Verified live: two identical registrations return one id, a
     different client name returns another.
+31. **MC31 — A daily sweep deletes expired authorization codes and dead refresh
+    tokens (`functions/src/mcpCleanup.ts`).** Neither collection had ever been
+    cleaned: codes were deleted on exchange but never on expiry, and refresh
+    tokens on rotation and revocation but never when a client simply stopped
+    calling. **Not a security fix** — both hold only hashes and both are
+    re-validated against a live connection before anything is issued — but a
+    retention claim the privacy policy could not honestly make
+    (`MCP-Privacy-Disclosure.md` §5). Scheduled rather than triggered because the
+    condition is the passage of time: nothing *happens* when a code expires, which
+    is precisely why they accumulated. The project's first scheduled function, so
+    deploying it enabled Cloud Scheduler.
+    *Rejected: deleting old refresh tokens whose connection is still live.* Age
+    looks like a good abandonment signal, since rotation replaces a working
+    client's token roughly hourly — but it cannot separate "abandoned" from
+    "connected and idle", and the failure is silent and one-directional: a
+    dormant connection the customer still wants stops working, with a reconnect
+    as the only cure. The retention argument does not carry it either — while the
+    connection is live it is listed in the customer's own UI and already holds
+    their uid, so the token row discloses nothing further. The rule is therefore
+    "the connection is revoked or gone", which is exactly the condition under
+    which the token endpoint would refuse it anyway. Consequence to state in the
+    policy: *deleted when the connection ends*, not *deleted after N days*.
+    Malformed rows (no connection reference) are swept too — unvalidatable and
+    unusable. Bounded per run and idempotent, so a retry or an overlapping
+    schedule cannot do damage.

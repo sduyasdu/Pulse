@@ -78,9 +78,11 @@ actual setting before stating a number in the policy.
   connecting.
 - **Stripe** — billing, unrelated to the MCP but part of the same policy.
 
-## 5. Two retention gaps to fix or disclose
+## 5. Two retention gaps — CLOSED 2026-08-20
 
-Found while writing this, and both are small:
+Found while writing this. Both are now swept daily by `mcpCleanup`
+(`functions/src/mcpCleanup.ts`, MC31), so the retention periods below are
+statements a policy can make:
 
 1. **Expired authorization codes are never deleted.** `mcpAuthCodes` documents
    are removed when exchanged, and carry a 5-minute `expiresAt` that is *checked*
@@ -91,11 +93,24 @@ Found while writing this, and both are small:
    token and revocation deletes the one it finds, but a client that simply stops
    calling leaves its row forever.
 
-Neither is a security hole (both are hashes, both are checked against a live
-connection before use). Both are retention claims a policy would otherwise make
-falsely. **Recommend a scheduled cleanup before submission** — a daily function
-deleting `mcpAuthCodes` past expiry and `mcpRefreshTokens` whose connection is
-gone or revoked — so the policy can state a retention period that is true.
+Neither was a security hole (both are hashes, both are checked against a live
+connection before use). Both were retention claims a policy would otherwise have
+made falsely.
+
+**What the sweep now guarantees, and what it deliberately does not:**
+
+- An **authorization code** is deleted on use, and otherwise within a day of its
+  five-minute expiry. A policy may say codes are short-lived.
+- A **refresh token** is deleted on rotation, on revocation, and otherwise within
+  a day of its connection being revoked or deleted.
+- A refresh token whose connection is **still live** is kept, however old. Age
+  cannot distinguish "abandoned" from "connected but idle", and deleting the
+  wrong one silently breaks a connection the customer still wants. It also
+  discloses nothing extra: while the connection is live it is listed in the
+  customer's own UI and already holds their uid.
+
+So the honest phrasing for a policy is *"deleted when the connection ends"*, not
+*"deleted after N days"*.
 
 ## 6. User controls to describe
 
