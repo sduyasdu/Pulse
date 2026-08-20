@@ -450,6 +450,8 @@ export const es: Dict = {
   "details.teamLeaderLegend": "= líder de equipo",
   "details.noneAssigned": "Nadie asignado todavía — asigná a alguien abajo, o arrastralo desde la pestaña Equipo a esta caja.",
   "details.assignResource": "Asignar recurso",
+  "details.adjustLength": "Ajustar duración a los recursos",
+  "details.adjustLengthTitle": "Ajusta el largo de la caja para que los recursos asignados cubran el esfuerzo estimado",
   "details.unassign": "Quitar",
   "details.allAssigned": "Ya está todo el mundo asignado",
   "details.status": "ESTADO",

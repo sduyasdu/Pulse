@@ -450,6 +450,8 @@ export const fr: Dict = {
   "details.teamLeaderLegend": "= chef d'équipe",
   "details.noneAssigned": "Personne d'affecté pour l'instant — affectez quelqu'un ci-dessous, ou faites-le glisser depuis l'onglet Équipe sur cette boîte.",
   "details.assignResource": "Affecter une ressource",
+  "details.adjustLength": "Ajuster la durée aux ressources",
+  "details.adjustLengthTitle": "Ajuste la longueur du bloc pour que les ressources affectées couvrent l'effort estimé",
   "details.unassign": "Retirer",
   "details.allAssigned": "Tout le monde est déjà affecté",
   "details.status": "STATUT",

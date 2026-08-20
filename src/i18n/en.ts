@@ -456,6 +456,8 @@ export const en = {
   "details.teamLeaderLegend": "= team leader",
   "details.noneAssigned": "No one assigned yet — assign someone below, or drag them from the Team tab onto this box.",
   "details.assignResource": "Assign resource",
+  "details.adjustLength": "Adjust length to resources",
+  "details.adjustLengthTitle": "Set the box length so the assigned resources deliver the estimated effort",
   "details.unassign": "Unassign",
   "details.allAssigned": "Everyone's already assigned",
   "details.status": "STATUS",

@@ -450,6 +450,8 @@ export const de: Dict = {
   "details.teamLeaderLegend": "= Teamleiter",
   "details.noneAssigned": "Noch niemand zugewiesen — weise unten jemanden zu, oder ziehe ihn aus dem Tab Team auf diese Box.",
   "details.assignResource": "Ressource zuweisen",
+  "details.adjustLength": "Dauer an Ressourcen anpassen",
+  "details.adjustLengthTitle": "Setzt die Länge des Blocks so, dass die zugewiesenen Ressourcen den geschätzten Aufwand leisten",
   "details.unassign": "Entfernen",
   "details.allAssigned": "Alle sind bereits zugewiesen",
   "details.status": "STATUS",

@@ -41,6 +41,26 @@ const round1 = (v: number) => Math.round(v * 10) / 10;
  * toolbar's active-button palette (`Toolbar.tsx` — `#EE7240` / `#0A1428`);
  * `#0A1428` rather than white because small text on this orange needs the
  * contrast. Grey matches the neighbouring duplicate button. */
+/** The shared look for the panel's three full-width orange actions — Assign
+ * resource, add subtask, adjust length. Defined once because they had drifted
+ * into three different oranges (#D85A28/#C2410C on #F7E8DA/#FFF1E9 with a solid,
+ * dashed and third border), and a shared constant is the only thing that keeps
+ * them together the next time one is edited.
+ *
+ * Design tokens, not hex: `yasdu-primary`, `yasdu-accent` and
+ * `yasdu-orange-soft` already existed in index.css and are what "the Yasdu
+ * orange" means. The one-off values these replace appeared 1–5 times in the
+ * whole codebase, against 47 for the token. */
+const PANEL_ACTION =
+  "hoverable mono flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-sm " +
+  "border-yasdu-orange-soft bg-yasdu-accent text-yasdu-primary";
+
+/** Same shape, no colour — for the disabled case, which must not read as
+ * actionable. */
+const PANEL_ACTION_OFF =
+  "mono flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-sm " +
+  "border-yasdu-border bg-yasdu-secondary";
+
 const PLAN_ON = { background: "#EE7240", color: "#0A1428" } as const;
 const PLAN_OFF = { background: "#F1F5F9", color: "#64748B" } as const;
 
@@ -341,8 +361,9 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           })}
         </div>
         {canEdit && (
-          <button onClick={() => void addSubtask(feature.id)} className="mono text-xs flex items-center justify-center gap-1 w-full mt-2 py-1.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28", border: "1px dashed #F0A875" }}>
-            {t("details.addSubtask")}
+          <button onClick={() => void addSubtask(feature.id)} className={`${PANEL_ACTION} mt-2`}>
+            <Icon name="add" size={17} />
+            <span className="font-semibold">{t("details.addSubtask")}</span>
           </button>
         )}
       </div>
@@ -518,11 +539,15 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
           <button
             onClick={adjustLengthToResources}
             disabled={!hasRes}
-            title="Set the box length so the assigned resources deliver the Estimate Effort"
-            className="mono text-xs w-full mt-2 py-1.5 rounded flex items-center justify-center gap-1"
-            style={{ background: hasRes ? "#F7E8DA" : "#F1F5F9", color: hasRes ? "#D85A28" : "#B4BECC", border: "1px solid " + (hasRes ? "#F0A875" : "#E2DFD9") }}
+            // Was a hardcoded English label AND a hardcoded English tooltip, in a
+            // six-language product — invisible because the panel around it was
+            // translated.
+            title={t("details.adjustLengthTitle")}
+            className={`${hasRes ? PANEL_ACTION : PANEL_ACTION_OFF} mt-2`}
+            style={hasRes ? undefined : { color: "#B4BECC" }}
           >
-            ⇥ adjust length to resources
+            <Icon name="swap_horiz" size={17} />
+            <span className="font-semibold">{t("details.adjustLength")}</span>
           </button>
         )}
         <div className="mono mt-2" style={{ fontSize: 9, color: "#94A3B8" }}>
@@ -861,8 +886,7 @@ function AssignResourcePicker({ resources, assignedIds, onAssign }: { resources:
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 w-full rounded-lg px-3 py-2.5 text-sm"
-        style={{ background: "#FFF1E9", color: "#C2410C", border: "1px solid #FBD3BE" }}
+        className={PANEL_ACTION}
       >
         <Icon name="person_add" size={17} />
         <span className="font-semibold">{t("details.assignResource")}</span>
