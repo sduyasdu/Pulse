@@ -28,9 +28,22 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   const patchResource = usePulseStore((s) => s.patchResource);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
+  // Controlled, so the confirm button can read the value and be disabled while
+  // it is empty. The field used to be uncontrolled and read `e.target.value`,
+  // which only a keystroke could reach.
+  const [draft, setDraft] = useState("");
   // Pending link that would attach an account already linked to other
   // resource(s) — resolved by the Cancel / Keep both / Replace dialog.
   const [linkConflict, setLinkConflict] = useState<{ resourceId: string; uid: string; conflicts: { id: string; label: string }[] } | null>(null);
+
+  /** One path for both Enter and the check button, so they cannot diverge. */
+  const commitResource = () => {
+    const name = draft.trim();
+    if (!name) return;
+    void addResource(name, null);
+    setDraft("");
+    setAdding(false);
+  };
 
   const accountLabel = (uid: string) => (uid === myUid ? `${t("team.yourAccount")}${myEmail ? ` (${myEmail})` : ""}` : members.find((m) => m.uid === uid)?.email ?? t("team.thatAccount"));
 
@@ -86,22 +99,36 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
         )}
       </div>
       {adding && (
-        <input
-          autoFocus
-          placeholder={t("team.addPlaceholder")}
-          className="w-full text-xs rounded px-2 py-1.5"
-          style={{ border: "1px solid #E2DFD9" }}
-          onKeyDown={(e) => {
-            const target = e.target as HTMLInputElement;
-            if (e.key === "Enter" && target.value.trim()) {
-              void addResource(target.value, null);
-              target.value = "";
-              setAdding(false);
-            }
-            if (e.key === "Escape") setAdding(false);
-          }}
-          onBlur={() => setAdding(false)}
-        />
+        // Input and confirm button share one bordered box so they read as a
+        // single field rather than a field with a stray button beside it.
+        <div className="flex w-full items-center rounded" style={{ border: "1px solid #E2DFD9", background: "#FFFFFF" }}>
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={t("team.addPlaceholder")}
+            className="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-xs outline-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitResource();
+              if (e.key === "Escape") { setDraft(""); setAdding(false); }
+            }}
+            onBlur={() => { setDraft(""); setAdding(false); }}
+          />
+          <button
+            // Without this the button never fires: clicking it blurs the input,
+            // onBlur tears the whole row down, and the click lands on nothing.
+            // preventDefault on mousedown stops the blur from happening at all.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={commitResource}
+            disabled={draft.trim() === ""}
+            title={t("team.addConfirm")}
+            aria-label={t("team.addConfirm")}
+            className="hoverable flex shrink-0 items-center justify-center px-2 py-1.5 disabled:opacity-35"
+            style={{ color: "#D85A28" }}
+          >
+            <Icon name="check" size={14} />
+          </button>
+        </div>
       )}
       {filterResource && (
         <button onClick={() => setFilterResource(null)} className="w-full flex items-center justify-between px-2 py-1.5 rounded" style={{ background: "#F7E8DA", border: "1px solid #F0A875" }}>
