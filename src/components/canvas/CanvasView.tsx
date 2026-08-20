@@ -53,6 +53,13 @@ export interface CanvasViewHandle {
   addEpicAtCenter: () => Promise<string>;
 }
 
+/** Does this box, or any of its subtasks, carry the filtered resource? */
+function matchesResourceFilter(box: { resources?: string[]; children?: { resources?: string[] }[] }, filterResource: string | null): boolean {
+  if (!filterResource) return true;
+  return (box.resources || []).includes(filterResource)
+    || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
+}
+
 interface CanvasViewProps {
   graph: GraphConfig;
   density: Density;
@@ -197,7 +204,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     const handle = setTimeout(() => {
       const { startDay: sd, endDay: ed, dayWidth: dw, viewZoom: vz, features: fs, filterResource: fr } = latestViewRef.current;
       const matching = fs.filter((box) => {
-        const matchesRes = !fr || (box.resources || []).includes(fr) || (box.children || []).some((c) => (c.resources || []).includes(fr));
+        const matchesRes = matchesResourceFilter(box, fr);
         const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
         const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
         const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
@@ -223,6 +230,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
   // Does a task match the active filters? (Same rule the render uses to dim.)
   const qLower = featureQuery.trim().toLowerCase();
+  /** A box matches if it, or any of its subtasks, is assigned the resource.
+   * Extracted because this predicate now decides visibility in three places —
+   * the boxes, their plan ghosts, and the autoscroll bounds — and three copies
+   * of it is how they end up disagreeing. */
   const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || !!filterResource || !!myResourceIds;
   const matchOf = useCallback(
     (box: Feature) => {
@@ -841,6 +852,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                 what used to make ownership ambiguous and overlap neighbours. */}
             {showDelays &&
               displayFeatures
+                // Same resource filter as the boxes below. A ghost outlives its
+                // box otherwise: the task vanishes and its dashed baseline stays
+                // behind, belonging to nothing on screen.
+                .filter((b) => matchesResourceFilter(b, filterResource))
                 .filter((b) => b.plannedX != null && b.plannedDuration != null)
                 .map((b) => {
                   const pStart = b.plannedX as number;
@@ -875,12 +890,24 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const unassigned = !box.resources || box.resources.length === 0;
               const selected = selectedId === box.id;
               const dragOver = dragOverBoxId === box.id;
-              const matchesRes = !filterResource || (box.resources || []).includes(filterResource) || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
+              const matchesRes = matchesResourceFilter(box, filterResource);
               const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
               const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
               const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
               const matchesMine = !myResourceIds || (box.resources || []).some((r) => myResourceIds.includes(r)) || (box.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
               const matches = matchesRes && matchesQuery && matchesStatus && matchesEpic && matchesMine;
+              // Selecting a resource HIDES the rest rather than fading them.
+              // The canvas dimmed to 0.22 while the Kanban filtered the same
+              // predicate out of its array — so the identical click narrowed one
+              // view and merely greyed the other, which reads as the filter not
+              // working. Kanban's own comment claimed the two agreed; they never
+              // did. Picking a person is a "show me their work" request, and a
+              // ghost of everyone else's answers a different question.
+              //
+              // Only the resource filter hides. Query/status/epic still dim,
+              // because those narrow *within* what you are looking at, where
+              // seeing the surrounding shape is the point.
+              if (!matchesRes) return null;
               const est = estimateEffort(box, graph);
               const assigned = assignedEffort(box);
               const coverage = Math.round((assigned / Math.max(0.1, est)) * 100);

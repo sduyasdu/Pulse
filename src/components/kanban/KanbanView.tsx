@@ -64,7 +64,10 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
-  // columns (D7). Matching mirrors the canvas so the two views agree.
+  // columns (D7). The matching PREDICATE mirrors the canvas; the treatment does
+  // not, and did not for a long time — the canvas dims a non-match while this
+  // removes it. They now agree for the resource filter (the canvas returns null
+  // for a non-match); query/status/epic still dim there.
   const q = featureQuery.trim().toLowerCase();
   const visibleFeatures = useMemo(
     () =>
