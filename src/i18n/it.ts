@@ -250,6 +250,8 @@ export const it: Dict = {
   "dialog.copyFullDetail": "Epic, attività e sottoattività, più il team e le sue assegnazioni.",
   "dialog.copyNoResources": "Copia le attività, senza risorse",
   "dialog.copyNoResourcesDetail": "Epic, attività e sottoattività, ma senza team — le attività restano non assegnate.",
+  "dialog.copyResourcesOnly": "Copia solo le risorse",
+  "dialog.copyResourcesOnlyDetail": "Il team e le impostazioni, ma senza epic né attività — un piano nuovo con le stesse persone.",
   "dialog.copyEmpty": "Pulse vuoto",
   "dialog.copyEmptyDetail": "Un Pulse vuoto — non viene copiato nulla, solo il nome.",
 

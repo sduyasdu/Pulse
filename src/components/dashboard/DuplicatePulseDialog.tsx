@@ -13,6 +13,10 @@ export function DuplicatePulseDialog({ pulseName, onClose, onDuplicate }: Duplic
   const MODES: { id: DuplicateMode; label: string; detail: string }[] = [
     { id: "full", label: t("dialog.copyFull"), detail: t("dialog.copyFullDetail") },
     { id: "noResources", label: t("dialog.copyNoResources"), detail: t("dialog.copyNoResourcesDetail") },
+    // Ordered most-copied to least: everything, the work without the people,
+    // the people without the work, nothing. `resourcesOnly` sits next to its
+    // complement so the pair reads as a choice rather than two unrelated modes.
+    { id: "resourcesOnly", label: t("dialog.copyResourcesOnly"), detail: t("dialog.copyResourcesOnlyDetail") },
     { id: "empty", label: t("dialog.copyEmpty"), detail: t("dialog.copyEmptyDetail") },
   ];
   const [name, setName] = useState(`${pulseName || t("common.untitledPulse")} ${t("card.copySuffix")}`);

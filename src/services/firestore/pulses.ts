@@ -63,13 +63,16 @@ export async function createPulse(uid: string, workspaceId: string, name: string
   return pulseRef.id;
 }
 
-export type DuplicateMode = "full" | "noResources" | "empty";
+export type DuplicateMode = "full" | "noResources" | "resourcesOnly" | "empty";
 
 /**
  * Creates a new Pulse owned by `uid` from an existing one. `mode`:
  *   - "full": copy config, resources, epics and tasks (with assignments);
  *   - "noResources": copy config, epics and tasks but drop every resource
  *     reference (tasks left unassigned);
+ *   - "resourcesOnly": copy config and the team, and nothing else — the
+ *     complement of "noResources", for starting a new plan with the same
+ *     people rather than the same work;
  *   - "empty": a blank Pulse (default config, nothing copied) — just the name.
  * Ids are freshly minted and remapped (epic ↔ task, resource ↔ assignment).
  */
@@ -94,7 +97,7 @@ export async function duplicatePulse(uid: string, workspaceId: string, sourcePul
   await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
 
   if (mode === "empty") return pulseRef.id;
-  const copyResources = mode === "full";
+  const copyResources = mode === "full" || mode === "resourcesOnly";
 
   // Resources first, so tasks can point at the new ids.
   const resMap = new Map<string, string>();
@@ -108,6 +111,11 @@ export async function duplicatePulse(uid: string, workspaceId: string, sourcePul
       }),
     );
   }
+
+  // Everything below copies work. `resourcesOnly` wants none of it, and
+  // returning here rather than guarding each step means no epic/feature read is
+  // issued at all — the copy is as cheap as the mode implies.
+  if (mode === "resourcesOnly") return pulseRef.id;
 
   const [epics, features] = await Promise.all([fetchEpics(sourcePulseId), fetchFeatures(sourcePulseId)]);
   const epicMap = new Map<string, string>();

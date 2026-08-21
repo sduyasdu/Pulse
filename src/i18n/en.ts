@@ -256,6 +256,8 @@ export const en = {
   "dialog.copyFullDetail": "Epics, tasks and subtasks, plus the team and their assignments.",
   "dialog.copyNoResources": "Copy tasks, no resources",
   "dialog.copyNoResourcesDetail": "Epics, tasks and subtasks, but no team — tasks are left unassigned.",
+  "dialog.copyResourcesOnly": "Copy resources only",
+  "dialog.copyResourcesOnlyDetail": "The team and settings, but no epics or tasks — a fresh plan with the same people.",
   "dialog.copyEmpty": "Empty Pulse",
   "dialog.copyEmptyDetail": "A blank Pulse — nothing is copied, just the name.",
 
