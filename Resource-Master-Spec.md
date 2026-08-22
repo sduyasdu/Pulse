@@ -1,6 +1,6 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM13 decided; RM12 and RM14 open (master quota
+Status: **Design agreed — RM1–RM13 and RM15 decided; RM12 and RM14 open (master quota
 shape, request-access). Nothing built.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
@@ -207,18 +207,93 @@ Keeping master rates in a **separate collection** from the master resource
 mirrors Costs-Spec §8.3's reason: the resource document must stay
 workspace-member-readable, and Firestore security is per document.
 
-## 8. Quotas — and a gap this will expose (RM10)
+## 8. Enforcing `maxResourcesPerPulse` on the server (RM10, RM15)
 
 `maxResourcesPerPulse` is 20 / 40 / unlimited by tier
 (`src/domain/entitlements.ts:16`). **It is enforced only in the client. There is
-no rule.** Nothing in `firestore.rules` counts resources in a Pulse.
+no rule** — nothing in `firestore.rules` counts resources in a Pulse, so today
+the cap is a suggestion that any direct write ignores.
 
-That is survivable while resources are typed in one at a time. A "copy this team
-into my Pulse" button makes exceeding it a single click, which turns a soft
-client gate into an obvious hole. Fixing it needs a server-owned counter, the SF11
-`pulseCount` pattern applied to `pulses/{id}.resourceCount` — and per this
-project's own deploy note, **the counter must ship before the rule that reads
-it**, or the gate is inert.
+That was survivable while resources were typed in one at a time. "Copy this team
+into my Pulse" makes exceeding it a single click, so this has to be closed before
+phase 1 ships, not after.
+
+Note it is already reachable without masters: `duplicatePulse` in *full* mode
+(`src/services/firestore/pulses.ts`) copies every resource from the source, so
+duplicating a 40-resource Pulse into a Starter workspace already creates 40.
+Closing this fixes that too.
+
+### 8.1 The counter
+
+Follow SF11 exactly (`functions/src/counters.ts`) rather than inventing a second
+pattern:
+
+- **`pulses/{pulseId}.resourceCount`**, written by a new trigger pair on
+  `pulses/{pulseId}/resources/{rid}` create and delete.
+- **Recount with `count()`, never `FieldValue.increment`.** Firestore delivers
+  triggers at-least-once, so an incremented counter drifts upward on redelivery
+  and never repairs itself. A recount is idempotent and self-healing: whatever
+  the stored number was, the next create or delete corrects it.
+- **Server-owned.** `firestore.rules:40` lists `SERVER_COUNTERS()` for the
+  workspace document; the Pulse update rule needs the same treatment for
+  `resourceCount`. A client that can set its own counter can set it to zero, and
+  the gate becomes decoration.
+
+### 8.2 The rule
+
+Mirror `maxPulsesFor` / `withinPulseQuota` (`firestore.rules:60`, `:73`), with
+`-1` for unlimited as those already do:
+
+```
+function maxResourcesFor(orgId) {
+  let tier = planTierOf(orgId);
+  return tier == 'business' ? -1 : (tier == 'pro' ? 40 : 20);
+}
+```
+
+Two things to watch, both cheap to check and expensive to discover late:
+
+- **The `get()` budget.** The resource-create rule already calls
+  `canWriteContent(pulseId)`, which reads documents. Adding a quota check means
+  reading the Pulse doc for its `workspaceId` and then `planTierOf(orgId)`, which
+  itself does an `exists()` plus up to two `get()`s on `billing/{orgId}`. Rules
+  cap document accesses per request. **Measure it in
+  `rules/security.test.ts` before assuming it fits.** If it does not, the fallback
+  is to denormalize the *limit* (`pulses/{id}.maxResources`) alongside the count,
+  reducing the rule to one read — at the cost of refreshing it whenever the plan
+  changes.
+- **Absent means zero**, exactly as `pulseCount` does (`firestore.rules:67`). A
+  Pulse that predates the counter reads as 0 and gets a free pass until its first
+  create or delete triggers a recount. **Backfill it.** SF11's own `pulseCount`
+  backfill was specified and never run; repeating that here means every existing
+  Pulse silently carries no cap until someone touches it.
+
+### 8.3 The rule alone cannot stop the burst
+
+This is the part that matters, and it is why the counter is necessary but not
+sufficient.
+
+The counter is written **asynchronously by a trigger**. SF11 accepts the
+consequence explicitly — "a rapid burst of creates can transiently allow one past
+the cap before the counter catches up" — because for Pulse creation a burst is an
+edge case.
+
+For "copy this team in", **the burst is the normal path.** A parallel write of
+twenty resources has every one of them evaluated against the same stale count, so
+every one passes. The rule would stop the *twenty-first* copy operation and none
+of the twenty writes inside it.
+
+So bulk copy cannot be a client loop under a rule. It has to be a **callable**
+that reads the current count, checks the tier and writes with the Admin SDK — the
+one place where the check and the writes are ordered. Ad-hoc single adds stay
+client-side under the rule, where a burst is genuinely an edge case and eventual
+convergence is the right trade.
+
+### 8.4 Deploy order
+
+The counter ships **before** the rule that reads it. A gate reading a field
+nothing writes yet is inert, and looks deployed (`CLAUDE.md`, "the order follows
+the data dependency"). Concretely: trigger → backfill → rule → the copy UI.
 
 Whether the *master* roster has its own cap is open (RM12).
 
@@ -235,15 +310,20 @@ A new dashboard section is not just a route:
 
 Each phase is shippable and leaves the product coherent.
 
-1. **Masters + copy into a Pulse.** `masterId` and the `inherited` marker written
-   from the very first copy, even though nothing propagates yet — retrofitting
-   provenance onto existing copies means guessing.
+0. **The resource counter, backfill and rule** (§8, RM10). Not a phase of its own
+   so much as a precondition: phase 1 introduces the button that makes the
+   unenforced cap reachable in one click, so this lands first or phase 1 ships a
+   hole. Trigger → backfill → rule, in that order.
+1. **Masters + copy into a Pulse**, the bulk path as a callable (RM15).
+   `masterId` and the `inherited` marker written from the very first copy, even
+   though nothing propagates yet — retrofitting provenance onto existing copies
+   means guessing.
 2. **Usage index + "where used"**, with the RM7 disclosure implemented as decided.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
 5. **Propagation** switched on, per RM2's classes.
-6. **Master rates** — last, because it is the one that touches money, and because
-   `resourceCount` (RM10) should exist before bulk copying does.
+6. **Master rates** — last, because it is the one that touches money and the one
+   whose propagation can be wrong in currency (§7).
 
 ---
 
@@ -324,12 +404,24 @@ Each phase is shippable and leaves the product coherent.
    unconditionally* — it silently reverses a deliberate commercial decision (a
    discount, a frozen quote) with nothing on screen to explain why the number
    moved.
-10. **RM10 — Bulk copy requires a server-side resource counter first → DECIDED.**
-    `maxResourcesPerPulse` (`src/domain/entitlements.ts:16`) is enforced **only in
-    the client**; no rule counts resources. One-at-a-time entry made that
-    survivable, a "copy this team in" button does not. Needs `pulses/{id}.resourceCount`
-    on the SF11 `pulseCount` pattern — and the counter must ship **before** the
-    rule that reads it, or the gate is inert (`CLAUDE.md`, deploy order).
+10. **RM10 — `maxResourcesPerPulse` gets a server-owned counter and a rule →
+    DECIDED (§8).** It is enforced **only in the client** today
+    (`src/domain/entitlements.ts:16`); no rule counts resources in a Pulse, so any
+    direct write ignores it. Already reachable without masters — `duplicatePulse`
+    in full mode copies every resource from the source — and a "copy this team in"
+    button makes it a single click. `pulses/{id}.resourceCount` on the SF11
+    pattern (`functions/src/counters.ts`): **recount with `count()`, never
+    `increment`**, because triggers are at-least-once and an incremented counter
+    drifts upward forever. Server-owned, added to `SERVER_COUNTERS()`
+    (`firestore.rules:40`) so a client cannot zero its own gate.
+    *Rejected: relying on the client gate* — it is the thing that is already
+    failing. *Rejected: `increment`* — see above; the recount is idempotent and
+    self-healing.
+    Two traps recorded so they are not rediscovered: the rule must fit inside the
+    per-request document-access budget (measure it, or denormalize the limit onto
+    the Pulse instead), and an absent counter reads as **zero**, so every existing
+    Pulse is uncapped until backfilled — SF11's own backfill was specified and
+    never run. Deploy order is counter → backfill → rule → UI.
 11. **RM11 — Phase in the order of §10 → DECIDED.** Provenance fields
     (`masterId`, `inherited`) are written from the first copy even though nothing
     propagates until phase 5, because retrofitting provenance onto copies that
@@ -351,6 +443,18 @@ Each phase is shippable and leaves the product coherent.
     person deleting the master may not even be able to open. *Rejected: refusing
     to delete a master that is in use* — it makes the roster un-tidyable, and RM7's
     usage index already tells you where it is used if you want to look first.
+
+14. **RM15 — Bulk copy is a server callable, not a client loop → DECIDED (§8.3).**
+    The counter is written asynchronously, so a parallel write of twenty resources
+    has all twenty evaluated against the same stale count and all twenty pass. The
+    rule would stop the twenty-*first* copy operation and none of the writes inside
+    it. SF11 accepts that convergence gap for Pulse creation because a burst is an
+    edge case there; for "copy this team in" **the burst is the normal path**, so
+    the same trade does not carry over. A callable reading the count, checking the
+    tier and writing with the Admin SDK is the only place the check and the writes
+    are ordered. *Rejected: a client-side batch under the rule* — it is precisely
+    the case the rule cannot see. Single ad-hoc adds stay client-side, where
+    eventual convergence is the right trade.
 
 ## Open
 
