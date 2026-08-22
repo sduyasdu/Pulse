@@ -1,7 +1,7 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM11 decided; RM12–RM14 open (quota shape, the
-server-side resource gate, request-access). Nothing built.** ·
+Status: **Design agreed — RM1–RM13 decided; RM12 and RM14 open (master quota
+shape, request-access). Nothing built.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
 `Costs-Spec.md` §8.3 (rates, the one genuinely sensitive collection),
@@ -171,10 +171,37 @@ Pulse today and must continue to. Master rates live at
 (`WorkspaceRole` is `owner | member`, `src/types/index.ts:76`).
 
 So the rate is copied down like everything else, into the existing per-Pulse
-rates collection, marked `inherited`. Master changes refresh only the copies
-still marked inherited; the moment someone sets a rate in a Pulse, that Pulse
-stops tracking. Cost reporting keeps working unchanged for everyone who can do it
-today, including non-workspace members.
+rates collection, under the rule that already exists. Cost reporting keeps
+working unchanged for everyone who can do it today, including non-workspace
+members.
+
+**Why the copy needs a marker.** A stale rate is not cosmetic like a stale name —
+it produces wrong money, in cost reports and budgets, so propagation matters more
+here than for identity. But a per-Pulse rate is legitimate and common: this
+client is billed differently, this engagement was quoted at last year's rate and
+must stay frozen, this project carries a negotiated discount. Which leaves two
+states that are **identical in the data**:
+
+```
+{ hourlyCost: 100 }   ← copied from a master that says 100
+{ hourlyCost: 100 }   ← someone typed 100 here on purpose
+```
+
+Overwrite both and you silently undo a commercial decision; overwrite neither and
+the master is decorative. So:
+
+- **on copy** → the Pulse rate is written `inherited: true`
+- **master rate changes** → the fan-out touches only docs still marked inherited
+- **someone edits the rate in the Pulse** → `inherited` goes false, permanently
+- **"reset to master rate"** → sets it back to true, for the customer who changed
+  their mind
+
+This is why rate is a *third* propagation class (§3) rather than being forced
+into one of the other two. Name is always-propagate — nobody has a different name
+per project. Capacity is never-propagate — a different value per Pulse is the
+normal case. Rate is genuinely in between: usually the same everywhere, so
+propagation is valuable; sometimes deliberately different, so overwriting is
+destructive.
 
 Keeping master rates in a **separate collection** from the master resource
 mirrors Costs-Spec §8.3's reason: the resource document must stay
@@ -288,8 +315,15 @@ Each phase is shippable and leaves the product coherent.
    (`workspaces/{wsId}/resourceRates/{rid}`, workspace owners only), separate from
    the master resource for exactly Costs-Spec §8.3's reason: the resource document
    must stay workspace-member-readable and Firestore security is per document.
+   The copy carries `inherited` because "equals the master because it was copied"
+   and "typed here on purpose" are the same bytes, and a stale rate is wrong
+   money rather than a wrong label. Master changes refresh only inherited copies;
+   editing a Pulse's rate ends its tracking permanently.
    *Rejected: resolving the rate server-side per request* — heavier, and it makes
-   every cost view depend on a function being up.
+   every cost view depend on a function being up. *Rejected: propagating rates
+   unconditionally* — it silently reverses a deliberate commercial decision (a
+   discount, a frozen quote) with nothing on screen to explain why the number
+   moved.
 10. **RM10 — Bulk copy requires a server-side resource counter first → DECIDED.**
     `maxResourcesPerPulse` (`src/domain/entitlements.ts:16`) is enforced **only in
     the client**; no rule counts resources. One-at-a-time entry made that
@@ -301,19 +335,31 @@ Each phase is shippable and leaves the product coherent.
     propagates until phase 5, because retrofitting provenance onto copies that
     already exist means guessing which of them came from where.
 
+12. **RM13 — Deleting a master DETACHES its copies; it never deletes them →
+    DECIDED (product).** A Pulse's plan must not lose its people because someone
+    tidied the roster, and a deleted person's past work still has to cost and
+    report correctly. So `masterId` is cleared on every copy and each Pulse is
+    left intact and self-sufficient. Consequence: **`masterId` never dangles**, so
+    no reader has to handle a pointer to a missing master.
+    **The detach is two documents, not one.** Clearing `masterId` on the resource
+    stops identity propagation, but the rate lives in a *different* collection
+    (§7) — and a rate doc still marked `inherited: true` with no master to inherit
+    from is a dangling reference in the one place where a mistake is denominated
+    in currency. So detaching must also clear `inherited` on
+    `pulses/{id}/rates/{resourceId}`. The same applies to a manual detach.
+    *Rejected: cascade-deleting the copies* — it destroys plan data in Pulses the
+    person deleting the master may not even be able to open. *Rejected: refusing
+    to delete a master that is in use* — it makes the roster un-tidyable, and RM7's
+    usage index already tells you where it is used if you want to look first.
+
 ## Open
 
-12. **RM12 — Does the master roster have its own quota?** Per-Pulse caps still
+- **RM12 — Does the master roster have its own quota?** Per-Pulse caps still
     apply on copy, so the exposure is storage rather than entitlement.
     *Recommend: no master cap initially*, and revisit if a workspace ever holds an
     unreasonable roster. Tiers differ only by quantity (`Plans-Spec.md` §3), so if
     a cap is added it must be a quantity, not a feature gate.
-13. **RM13 — Does deleting a master delete the copies?** Almost certainly not —
-    a Pulse's plan should not lose its people because someone tidied the roster.
-    *Recommend: deleting a master detaches every copy* (clears `masterId`), leaving
-    each Pulse intact and self-sufficient. Needs deciding before phase 1, because
-    it determines whether `masterId` can ever dangle.
-14. **RM14 — Request access.** A linked user who can see they are staffed on a
+- **RM14 — Request access.** A linked user who can see they are staffed on a
     Pulse they cannot open should be able to ask. Out of scope for phase 1;
     listed because RM7's disclosure was accepted partly on the strength of it, and
     a decision that leans on a future feature should say so.
