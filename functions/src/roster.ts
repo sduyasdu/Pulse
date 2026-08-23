@@ -1,5 +1,5 @@
 import { onDocumentWritten, onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { log, logError } from "./lib/conventions";
 
 // Resource master — resolving a linked email to a uid (Resource-Master-Spec §5,
@@ -236,6 +236,54 @@ export const onPulseMemberJoinResolve = onDocumentCreated(
       if (resolved) log(FN, "resolved pulse links on join", { pulseId, memberUid, resolved });
     } catch (err) {
       logError(FN, "pulse resolution on join failed", err, { pulseId, memberUid });
+      throw err;
+    }
+  },
+);
+
+/**
+ * A roster entry was deleted — DETACH its copies, never delete them (RM13).
+ *
+ * A Pulse's plan must not lose its people because someone tidied the roster, and
+ * a departed person's past work still has to cost and report correctly. Clearing
+ * `masterId` leaves each copy intact and self-sufficient, and buys a real
+ * simplification: **`masterId` can never dangle**, so no reader anywhere has to
+ * handle a pointer to a missing master.
+ *
+ * This has to be a server trigger. The workspace owner doing the deleting is
+ * routinely not a member of the Pulses holding copies, so the rules would refuse
+ * them the write — and widening that rule to allow it would be far worse than the
+ * problem.
+ *
+ * `collectionGroup("resources")` also spans `workspaces/*​/resources`, i.e. the
+ * masters themselves; harmless, because a master carries no `masterId` and so
+ * never matches. Single-field collection-group queries are served by Firestore's
+ * automatic index (same as SF6's `myPulses` sweep).
+ *
+ * **Phase 6 will add a second half.** RM13 requires the detach to clear
+ * `inherited` on `pulses/{id}/rates/{resourceId}` too — a rate still marked as
+ * tracking a master that no longer exists is a dangling reference in the one
+ * place a mistake is denominated in currency. That collection does not carry the
+ * flag yet (master rates are phase 6), so there is nothing to clear today; when
+ * it does, it belongs here.
+ */
+export const onMasterResourceDeletedDetach = onDocumentDeleted(
+  "workspaces/{workspaceId}/resources/{resourceId}",
+  async (event) => {
+    const { workspaceId, resourceId } = event.params;
+    try {
+      const db = getFirestore();
+      const copies = await db.collectionGroup("resources").where("masterId", "==", resourceId).get();
+      if (copies.empty) return;
+      const writer = db.bulkWriter();
+      // FieldValue.delete() rather than null: a null masterId would still read as
+      // "has a provenance field", and `masterId` present is what RM2 treats as
+      // "identity tracks the master".
+      for (const d of copies.docs) writer.update(d.ref, { masterId: FieldValue.delete() });
+      await writer.close();
+      log(FN, "detached copies of a deleted master", { workspaceId, resourceId, detached: copies.size });
+    } catch (err) {
+      logError(FN, "detach after master delete failed", err, { workspaceId, resourceId });
       throw err;
     }
   },

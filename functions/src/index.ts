@@ -65,6 +65,11 @@ export { onMasterResourceWriteResolve, onWorkspaceMemberJoinResolve, onWorkspace
 // master's uid means "in the workspace" and says nothing about THIS Pulse.
 export { onPulseResourceWriteResolve, onPulseMemberJoinResolve } from "./roster";
 
+// RM13 — deleting a roster entry detaches its copies rather than deleting them.
+// Server-side because the workspace owner doing the deleting is routinely not a
+// member of the Pulses holding those copies.
+export { onMasterResourceDeletedDetach } from "./roster";
+
 // RM15 — bulk copy from the roster into a Pulse. A callable rather than a client
 // loop because the resource counter is async: parallel creates all see the same
 // stale count, so the rule would stop the next OPERATION and none of the writes
