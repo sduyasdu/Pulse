@@ -1,6 +1,6 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM11, RM13, RM15–RM19 decided; RM12 and RM14 open,
+Status: **Design agreed — RM1–RM11, RM13, RM15–RM20 decided; RM12 and RM14 open,
 neither blocking. Nothing built.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
@@ -205,6 +205,45 @@ Unchanged and load-bearing: **being linked grants nothing.** Access is
 `pulseMembers`, full stop. A resource linked to someone who is not a member is
 inert — they do not see the Pulse, and SF1's `assignedUids` will carry a uid that
 matches no reader, which is harmless and correct.
+
+### 5.6 Showing which links are live, and which are waiting (RM20)
+
+Inside a Pulse it must be visible **at a glance** which linked people are actually
+collaborators here and which are not — otherwise a roster copied from a master
+looks like a fully staffed team when half of it cannot see the Pulse.
+
+**No new field is needed, and none should be added.** The distinction is exactly
+the two fields already in §5:
+
+| State | Data | Means |
+| --- | --- | --- |
+| **Not linked** | no `linkedEmail` | a placeholder — a role, a contractor, a name with no account behind it |
+| **Linked, live** | `linkedEmail` + `linkedUid` | a current collaborator on this Pulse |
+| **Linked, waiting** | `linkedEmail`, no `linkedUid` | rostered, but **not a collaborator here** — they cannot see this Pulse |
+
+That mapping is exact rather than approximate, and it stays exact on its own:
+RM16 sets `linkedUid` when someone joins, RM17 clears it when they are removed.
+A stored `isCollaborator` flag would say the same thing while being able to drift
+from it, which is the only way this can go wrong.
+
+**Say what is true, not what is guessed.** "Linked, waiting" has two causes that
+the Pulse genuinely cannot tell apart: the person has an account but was never
+invited here (or was removed), or they have no account at all. Distinguishing
+them would mean reading a user document that a Pulse member has no right to read.
+So the label is about *this Pulse* — "not a collaborator on this Pulse", true in
+both cases and the only part that affects what they can see.
+
+The visible consequence to surface alongside it: a waiting link means **no
+My-Beat visibility** and no notifications for that person here, because SF1's
+`assignedUids` has no uid to carry.
+
+The natural affordance is to offer the invite from that row — the flow already
+exists, the email is already in hand, and the admin looking at the row is usually
+the person who can fix it. That is the mirror of RM14, which is the *linked
+person* asking to be let in.
+
+The same three states exist at master level against **workspace** membership, and
+should read the same way there.
 
 ## 6. "Where is this person?" (RM6, RM7)
 
@@ -586,6 +625,22 @@ Each phase is shippable and leaves the product coherent.
     for, which turns an unresolved link into an unexplained blank. *Rejected:
     storing the email only once it resolves* — it breaks precisely the case RM16
     exists to serve, a master copied in ahead of its person.
+19. **RM20 — A Pulse distinguishes live links from waiting ones, derived rather
+    than stored → DECIDED (§5.6).** Three states, read straight off the two fields
+    of §5: no `linkedEmail` is a placeholder; `linkedEmail` + `linkedUid` is a
+    current collaborator; `linkedEmail` without a uid is rostered but **not a
+    collaborator on this Pulse**. Without the distinction a roster copied from a
+    master looks like a fully staffed team when half of it cannot open the Pulse.
+    *Rejected: an `isCollaborator` flag* — it would say the same thing while being
+    able to drift from it, and the derivation is already exact and self-maintaining
+    (RM16 sets the uid on join, RM17 clears it on removal).
+    The label states what is true of *this Pulse*, not what it guesses about the
+    person: "not a collaborator here" covers both "has an account but was never
+    invited" and "has no account yet", which a Pulse cannot tell apart without
+    reading a user document it has no right to read. Surface the consequence too —
+    a waiting link means no My-Beat visibility and no notifications, because SF1's
+    `assignedUids` has no uid to carry. Offering the invite from that row is the
+    natural affordance, and the mirror of RM14.
 
 ## Open
 
