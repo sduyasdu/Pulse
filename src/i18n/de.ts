@@ -488,7 +488,6 @@ export const de: Dict = {
   "capacity.noMatch": "Keine Person passt zu „{query}“.",
   "capacity.idle": "frei",
   "capacity.clickToRename": "Zum Umbenennen klicken",
-  "capacity.peakLine": "Spitze {peak}% · Limit {limit}% · {used}% genutzt",
   "capacity.type": "TYP",
   "capacity.role": "Rolle",
   "capacity.roleFromRoster": "Rolle aus der Personenliste deiner Organisation — wird dort verwaltet, nicht hier.",

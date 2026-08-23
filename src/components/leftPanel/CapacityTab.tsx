@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { usePulseStore } from "@/stores/pulseStore";
-import { allocInRange, resourcePeakPct, utilizationPct } from "@/domain/assignments";
+import { allocInRange, utilizationPct } from "@/domain/assignments";
 import { todayIndex } from "@/domain/dateUtils";
 import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
@@ -219,8 +219,6 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
       )}
 
       {filtered.map((r) => {
-        const pct = utilizationPct(features, r);
-        const peak = resourcePeakPct(features, r.id);
         const loadPct = (lo: number, hi: number) => clamp(Math.round((allocInRange(features, r.id, lo, hi) / (r.capacity || 100)) * 100), 0, 999);
         const rows = features.filter((f) => (f.resources || []).includes(r.id) || (f.children || []).some((c) => (c.resources || []).includes(r.id)));
         return (
@@ -234,20 +232,22 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
                 <div className="flex items-center gap-1">
                   <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} renameTitle={t("capacity.clickToRename")} />
                   <ResourceOriginBadge masterId={r.masterId} />
-                  {/* The ORG role, inherited and read-only (RM24). Shown beside
-                      the name because it is who this person is, not how this
-                      Pulse files them — that is `type`, below. */}
-                  {r.role && (
-                    <span
-                      className="mono shrink-0 rounded px-1.5 py-0.5 text-[9px]"
-                      title={t("capacity.roleFromRoster")}
-                      style={{ background: "#F4F5F7", color: "#64748B" }}
-                    >
-                      {r.role}
-                    </span>
-                  )}
                 </div>
-                <div className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.peakLine", { peak, limit: r.capacity, used: pct })}</div>
+                {/* The ORG role, inherited and read-only (RM24), on its own line
+                    under the name — it is who this person is, not how this Pulse
+                    files them (that is `type`, below).
+                    It replaces the peak/limit/used line, which restated in words
+                    what the three load bars and the capacity slider already show
+                    in place. */}
+                {r.role && (
+                  <span
+                    className="mono inline-block rounded px-1.5 py-0.5 text-[9px]"
+                    title={t("capacity.roleFromRoster")}
+                    style={{ background: "#F4F5F7", color: "#64748B" }}
+                  >
+                    {r.role}
+                  </span>
+                )}
               </div>
               {rows.length === 0 && <span className="mono text-xs px-1.5 py-0.5 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>{t("capacity.idle")}</span>}
             </div>

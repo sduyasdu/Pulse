@@ -494,7 +494,6 @@ export const en = {
   "capacity.noMatch": "No people match “{query}”.",
   "capacity.idle": "idle",
   "capacity.clickToRename": "Click to rename",
-  "capacity.peakLine": "peak {peak}% · limit {limit}% · {used}% used",
   "capacity.type": "TYPE",
   "capacity.role": "Role",
   "capacity.roleFromRoster": "Role from your organisation's People list — managed there, not here.",
