@@ -269,7 +269,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       id,
       title: "New task",
       duration: 8,
-      work: 2,
+      // One unit of work per day — a new task starts as light as the graph can
+      // draw it, so its height is something the planner sets rather than
+      // something they have to undo.
+      work: 1,
       status: "planned",
       resources: [],
       ai: false,

@@ -12,6 +12,7 @@ import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
 import { recordSingle, patchOp } from "@/stores/undoStore";
 import { confirmAt } from "@/stores/confirmStore";
+import { useI18nStore } from "@/stores/i18nStore";
 
 function EpicNameInput({ name, color, disabled, onCommit }: { name: string; color: string; disabled: boolean; onCommit: (name: string) => void }) {
   const [local, onChange] = useDebouncedText(name, onCommit);
@@ -424,9 +425,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const dragRef = useRef<{ kind: DragKind; id: string; startX: number; startY: number; orig: Feature; dayWidth: number; viewZoom: number; lastWrite: number; xOnly?: boolean } | null>(null);
   const latestPatchRef = useRef<Partial<Feature> | null>(null);
 
+  // The reader's language, not en-US. This was hardcoded while it only fed a
+  // plan-ghost tooltip; the hover card now shows a task's dates prominently, and
+  // an English date in a Spanish product is the kind of thing nobody reports and
+  // everybody notices.
+  const lang = useI18nStore((st) => st.lang);
   const fmtDate = useCallback(
-    (day: number) => dateForDay(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
-    [],
+    (day: number) => dateForDay(day).toLocaleDateString(lang, { month: "short", day: "numeric", timeZone: "UTC" }),
+    [lang],
   );
 
   const handleDragMove = useCallback(
@@ -722,7 +728,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const y = Math.max(10, Math.round((scrollTop + visH / 2) / viewZoom) - 40);
       // New tasks always start at today's date, regardless of where the
       // canvas is currently scrolled horizontally.
-      return addFeature({ x: todayIndex(), y, duration: 8, work: 2, status: "planned", resources: [] });
+      return addFeature({ x: todayIndex(), y, duration: 8, work: 1, status: "planned", resources: [] });
     },
     addEpicAtCenter: async () => {
       const cont = containerRef.current;
@@ -1076,6 +1082,12 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
           <div className="fixed pointer-events-none rounded-lg" style={{ left: hoverCard.x + 14, top: hoverCard.y + 14, maxWidth: 260, background: "#123359", border: "1px solid #EE7240", padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 100 }}>
             <div className="text-xs font-semibold" style={{ color: "#F7F6F2", marginBottom: 3 }}>{hb.title}</div>
             <div className="mono" style={{ fontSize: 9, color: hm.border, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>{hm.label}</div>
+            {/* End is the LAST day of the task, not the day after it: `x + duration`
+                is the exclusive bound, and showing it would read as a task
+                running a day longer than the box drawn on screen. */}
+            <div className="mono" style={{ fontSize: 10, color: "#E2E8F0", marginBottom: 5 }}>
+              {fmtDate(hb.x)} → {fmtDate(hb.x + Math.max(1, hb.duration) - 1)}
+            </div>
             <div className="mono" style={{ fontSize: 10, color: "#F0A875", marginBottom: hRes.length ? 6 : 0 }}>{hEst}md est · {hAssigned}md assigned · {hCov}%</div>
             {hRes.length === 0 ? (
               <div className="mono" style={{ fontSize: 10, color: "#9FB3C8" }}>No one assigned</div>
