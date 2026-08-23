@@ -205,9 +205,14 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                     className="flex shrink-0 items-center justify-center rounded"
                     title={r.masterId ? t("team.fromRoster") : t("team.localOnly")}
                     aria-label={r.masterId ? t("team.fromRoster") : t("team.localOnly")}
-                    style={{ width: 14, height: 14, background: r.masterId ? "#EAF0FA" : "#F4F5F7" }}
+                    // Roster-linked wears the same orange as the two add
+                    // buttons, and literally the same constant — "from the
+                    // organisation" should look like the button that brings
+                    // people from it. Local stays neutral grey, so the coloured
+                    // one is the one that carries meaning.
+                    style={{ width: 14, height: 14, background: r.masterId ? ADD_BTN_STYLE.background : "#F4F5F7" }}
                   >
-                    <Icon name={r.masterId ? "group" : "person"} size={10} style={{ color: r.masterId ? "#1B3A63" : "#94A3B8" }} />
+                    <Icon name={r.masterId ? "group" : "person"} size={10} style={{ color: r.masterId ? ADD_BTN_STYLE.color : "#94A3B8" }} />
                   </span>
                   <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
                 </div>
