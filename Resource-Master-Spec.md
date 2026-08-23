@@ -1,8 +1,7 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM11, RM13, RM15–RM18 decided. RM12 and RM14 open.
-RM19 open and BLOCKING PHASE 1: whether a Pulse resource may carry the email of
-someone who is not a collaborator. Nothing built.** ·
+Status: **Design agreed — RM1–RM11, RM13, RM15–RM19 decided; RM12 and RM14 open,
+neither blocking. Nothing built.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
 `Costs-Spec.md` §8.3 (rates, the one genuinely sensitive collection),
@@ -154,7 +153,8 @@ deliberate (RM18):
 
 - **Copied from a master.** Brings the master's `linkedEmail`, which may name
   someone who is not a collaborator on this Pulse. `linkedUid` is left unresolved
-  until they are.
+  until they are. **That address is visible to every member of this Pulse**,
+  including external collaborators — a deliberate disclosure, decided in RM19.
 - **Linked by hand in the Team tab.** Unchanged from today: the dropdown offers
   **only current collaborators** (`TeamTab.tsx:215`), so a hand-made link always
   resolves at once.
@@ -395,8 +395,7 @@ Each phase is shippable and leaves the product coherent.
    linking by email and the two resolution triggers (RM16). `masterId`,
    `inherited` and `linkedEmail` written from the very first copy, even though
    nothing propagates yet — retrofitting provenance onto copies that already
-   exist means guessing. **RM19 must be answered before this starts**: it decides
-   whether the Pulse copy stores the address or only a hash of it.
+   exist means guessing. The email is stored in the clear (RM19).
 2. **Usage index + "where used"**, with the RM7 disclosure implemented as decided.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
@@ -574,21 +573,22 @@ Each phase is shippable and leaves the product coherent.
     typos and phantom links that never resolve, whereas a master-derived one has a
     curated roster behind it and a resolution path (RM16) that will complete on
     its own.
+18. **RM19 — A Pulse resource stores the linked email in the clear, including for
+    someone who is not a collaborator → DECIDED (product).** Required for RM16:
+    the address is what resolution matches on when that person later joins.
+    **The disclosure is deliberate and stated so nobody discovers it as a
+    surprise:** resource documents are readable by every Pulse member, so copying
+    a master into a Pulse shows staff email addresses to any collaborator on that
+    Pulse — including an external one invited to that project alone. Accepted
+    because a person on a Pulse's roster is part of that project's team, and
+    appearing as such is what the field is for. *Rejected: storing only a hash* —
+    it still resolves, but the UI can then never say who a resource is waiting
+    for, which turns an unresolved link into an unexplained blank. *Rejected:
+    storing the email only once it resolves* — it breaks precisely the case RM16
+    exists to serve, a master copied in ahead of its person.
 
 ## Open
 
-- **RM19 — Does a Pulse resource carry the email of someone who is not a
-  collaborator? BLOCKS PHASE 1.** It has to, for RM16's resolution to work — but
-  resource documents are readable by every Pulse member, so copying a master into
-  a Pulse would expose staff email addresses to an external collaborator invited
-  to that one project. Same shape as the roster-exposure argument that decided
-  RM1, and it changes the data model either way, so it cannot be deferred past
-  phase 1. *Recommend: accept it* — the person is rostered onto that project, so
-  appearing as part of its team is defensible, and the alternative (store the
-  email only once it resolves) breaks the very case RM16 exists for. If it is not
-  acceptable, the fallback is storing a hash of the email for matching and never
-  the address itself, which costs the UI any ability to show who a resource is
-  waiting for.
 - **RM12 — Does the master roster have its own quota?** Per-Pulse caps still
     apply on copy, so the exposure is storage rather than entitlement.
     *Recommend: no master cap initially*, and revisit if a workspace ever holds an
