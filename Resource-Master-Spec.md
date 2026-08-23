@@ -1,7 +1,8 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM13 and RM15 decided; RM12 and RM14 open (master quota
-shape, request-access). Nothing built.** ·
+Status: **Design agreed — RM1–RM11, RM13, RM15–RM18 decided. RM12 and RM14 open.
+RM19 open and BLOCKING PHASE 1: whether a Pulse resource may carry the email of
+someone who is not a collaborator. Nothing built.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
 `Costs-Spec.md` §8.3 (rates, the one genuinely sensitive collection),
@@ -63,12 +64,14 @@ enables §6 and §3 — never indirection at read time.
 
 ```
 pulses/{pulseId}/resources/{rid}
-  … existing fields (name, initials, type, capacity, linkedUid) …
+  … existing fields (name, initials, type, capacity) …
   masterId?: string      // the workspace resource this was copied from
   inherited?: string[]   // fields still tracking the master (see §3)
+  linkedEmail?: string   // WHO this is meant to be — durable         (see §5)
+  linkedUid?: string     // who it resolved to, if they have an account
 ```
 
-## 3. Propagation has three classes, not two (RM2)
+## 3. Every field belongs to exactly one propagation class (RM2)
 
 Rename a person at master level and twelve Pulses hold a stale name. But blindly
 syncing everything destroys deliberate local edits, and the user cannot tell why
@@ -76,13 +79,18 @@ their number keeps reverting. So each field belongs to exactly one class:
 
 | Class | Fields | Behaviour |
 | --- | --- | --- |
-| **Always** | name, initials, type, avatar, `linkedUid` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
+| **Always** | name, initials, type, avatar, `linkedEmail` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
+| **Derived, never propagated** | `linkedUid` | Resolved locally from `linkedEmail` against *this* Pulse's membership (§5). Copying a master's uid down would assert a Pulse membership that may not exist. |
 | **Never** | capacity, allocations | Per-Pulse *by nature* — someone is 100% here and 30% there. The master's value is a default used at copy time only. |
 | **Unless overridden** | hourly rate | Tracks the master until someone sets it in this Pulse, then never again. See §7. |
 
-The third class needs the `inherited` marker on the copy. Without it there is no
-way to distinguish "this equals the master because it was copied" from "someone
-typed this exact value here on purpose".
+**Unless-overridden** needs the `inherited` marker on the copy. Without it there
+is no way to distinguish "this equals the master because it was copied" from
+"someone typed this exact value here on purpose".
+
+**Derived** is not a weaker form of propagation — it is the absence of it.
+`linkedUid` is computed locally against *this* Pulse's membership, and pushing a
+master's uid down would assert a Pulse membership that may not exist (§5).
 
 **Detach** is the escape hatch: clearing `masterId` makes a copy purely local and
 stops all propagation, permanently.
@@ -115,19 +123,88 @@ crosses a billing boundary and immediately raises "whose seat does this consume"
 which has no cheap answer. It also bounds §6's disclosure neatly: a usage index
 can only ever name Pulses inside the org that already owns the roster.
 
-## 5. Linking is identity; membership is access (RM5)
+## 5. Linking: email is the intent, uid is the resolution (RM5, RM16–RM18)
 
-A master resource may carry `linkedUid`. Copying it down to the Pulse copy is
-correct and changes nothing about access: **being linked to a resource on a Pulse
-grants no access to that Pulse.** Access is `pulseMembers`, full stop.
+**A resource is linked to an *email*.** The uid is not the link — it is what the
+email resolved to once that person turned out to have an account with access.
+Two fields, and keeping them separate is what makes the rest of this section
+short.
 
-This is already true by construction today — `linkedUid` is a field, not a grant
-— and it stays true. If the linked person is not a member, they simply do not see
-the Pulse.
+This mirrors how the product already identifies people who have not arrived yet:
+invites are keyed by email (`pulses/{id}/invites/{emailKey}`), and `emailKey()`
+— trim and lowercase — is already the canonical form compared against
+`request.auth.token.email.lower()` in the rules. **Reuse it.** `Ana@x.com` and
+`ana@x.com` are one person or the whole model leaks duplicates.
 
-One wrinkle to know before someone "fixes" it: SF1 maintains `assignedUids` on
-features for My-Beat read scoping. A resource linked to a non-member contributes
-a uid there that never matches any reader. Harmless, and correct.
+### 5.1 At master level
+
+A master resource carries `linkedEmail`. If that email already belongs to a
+workspace member, `linkedUid` resolves immediately; otherwise it stays empty and
+the roster entry is still perfectly usable — which is the point, because a
+roster exists before its people have logged in.
+
+### 5.2 At Pulse level
+
+A Pulse resource carries both fields too, **stored, not read from the master** —
+`RM1` requires the copy to be self-sufficient because a non-workspace member
+cannot read master documents.
+
+Two ways one gets there, with different constraints, and the difference is
+deliberate (RM18):
+
+- **Copied from a master.** Brings the master's `linkedEmail`, which may name
+  someone who is not a collaborator on this Pulse. `linkedUid` is left unresolved
+  until they are.
+- **Linked by hand in the Team tab.** Unchanged from today: the dropdown offers
+  **only current collaborators** (`TeamTab.tsx:215`), so a hand-made link always
+  resolves at once.
+
+While `masterId` is set, `linkedEmail` is **locked locally** — the master owns
+who this is. A Pulse that genuinely needs to disagree detaches (`RM13`), which is
+the escape hatch that already exists.
+
+### 5.3 Resolution happens on arrival, in two places (RM16)
+
+Nothing polls. Two triggers, each a bounded query on an email that just became
+usable:
+
+| Event | Effect |
+| --- | --- |
+| Someone joins the **workspace** | Resolve `linkedUid` on master resources whose `linkedEmail` matches |
+| Someone joins a **Pulse** | Resolve `linkedUid` on that Pulse's resources whose `linkedEmail` matches |
+
+The second is what closes the loop for a master copied in ahead of its person:
+the resource sits with an email and no uid until they accept the invitation, and
+then it simply works — nobody has to remember to go back and link it.
+
+**`WorkspaceMember` has no email field today** (`{uid, role, joinedAt}`), unlike
+`PulseMember`. Give it one, denormalised on join, so the first trigger is a
+single query rather than a member-doc read followed by a `users/{uid}` lookup.
+
+### 5.4 Removal clears the resolution, not the intent (RM17)
+
+Today SF7 (`functions/src/cascade.ts:65`) sets `linkedUid: null` when a member is
+removed from a Pulse. That stays — but it now clears **only the uid**. The email
+survives, so if that person is invited back, §5.3 re-resolves them and the link
+returns.
+
+That makes "unlink" two distinct operations, and they must not be confused:
+
+- **Removed from the Pulse** → clear `linkedUid`, keep `linkedEmail`. A
+  membership change is not a statement about who this resource *is*.
+- **The user unlinks deliberately** → clear both. That is a statement.
+
+This is also what dissolves a conflict the earlier draft of this spec had: with a
+single `linkedUid`, SF7's clear and master propagation fought each other and a
+link would resurrect after being cleared. Splitting intent from resolution makes
+the same behaviour correct instead of a bug.
+
+### 5.5 Access is still not implied (RM6)
+
+Unchanged and load-bearing: **being linked grants nothing.** Access is
+`pulseMembers`, full stop. A resource linked to someone who is not a member is
+inert — they do not see the Pulse, and SF1's `assignedUids` will carry a uid that
+matches no reader, which is harmless and correct.
 
 ## 6. "Where is this person?" (RM6, RM7)
 
@@ -314,10 +391,12 @@ Each phase is shippable and leaves the product coherent.
    so much as a precondition: phase 1 introduces the button that makes the
    unenforced cap reachable in one click, so this lands first or phase 1 ships a
    hole. Trigger → backfill → rule, in that order.
-1. **Masters + copy into a Pulse**, the bulk path as a callable (RM15).
-   `masterId` and the `inherited` marker written from the very first copy, even
-   though nothing propagates yet — retrofitting provenance onto existing copies
-   means guessing.
+1. **Masters + copy into a Pulse**, the bulk path as a callable (RM15), with
+   linking by email and the two resolution triggers (RM16). `masterId`,
+   `inherited` and `linkedEmail` written from the very first copy, even though
+   nothing propagates yet — retrofitting provenance onto copies that already
+   exist means guessing. **RM19 must be answered before this starts**: it decides
+   whether the Pulse copy stores the address or only a hash of it.
 2. **Usage index + "where used"**, with the RM7 disclosure implemented as decided.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
@@ -341,9 +420,11 @@ Each phase is shippable and leaves the product coherent.
    the master a clipboard: RM6 becomes impossible and names drift permanently.
    The copy is what the Pulse renders from; the pointer is provenance only, never
    dereferenced at read time.
-2. **RM2 — Propagation is per-field, in three classes → DECIDED.** *Always*
-   (identity: name, initials, type, avatar, `linkedUid`); *never* (capacity and
-   allocations, which are per-Pulse by nature); *unless overridden* (rate, §7).
+2. **RM2 — Propagation is per-field, in four classes → DECIDED.** *Always*
+   (identity: name, initials, type, avatar, **`linkedEmail`**); *never* (capacity
+   and allocations, which are per-Pulse by nature); *unless overridden* (rate,
+   §7); *derived* (**`linkedUid`**, computed locally per §5 and never pushed down
+   — a master's uid would assert a Pulse membership that may not exist).
    *Rejected: propagate everything* — it stomps deliberate local edits with no
    way for the user to see why a value reverted. *Rejected: propagate nothing* —
    then a rename never reaches the Pulses, which is most of the point. The
@@ -365,10 +446,19 @@ Each phase is shippable and leaves the product coherent.
    sharing the product's **third** authorization system after workspace seats and
    Pulse roles, and every later feature would have to ask which one governs it.
    The actual requirement is narrow: let someone build Pulses using my team.
-6. **RM6 — Linking is identity; it grants no Pulse access → DECIDED (product).**
-   `linkedUid` copied from master changes nothing about visibility; access remains
-   `pulseMembers`. Already true by construction. Note for future readers: SF1's
-   `assignedUids` will contain uids of non-members, which is harmless and correct.
+6. **RM6 — A link is to an EMAIL; the uid is resolved state → DECIDED (§5).**
+   `linkedEmail` is what someone meant; `linkedUid` is what it resolved to once
+   that person had an account with access. Normalised with the existing
+   `emailKey()` (trim + lowercase), the same canonical form invites already use
+   and that the rules compare against `request.auth.token.email.lower()`.
+   **Linking still grants no access** — that remains `pulseMembers`, and a link to
+   a non-member is inert.
+   *Rejected: `linkedUid` as the link* (this spec's first draft) — it cannot name
+   someone who has not joined yet, which is the normal case for a roster, and it
+   put SF7's clear-on-removal in direct conflict with master propagation, so a
+   link would resurrect after being cleared. Splitting intent from resolution
+   makes that same behaviour correct rather than a bug, and the conflict
+   disappears rather than being worked around.
 7. **RM7 — "Where used" shows the Pulse title and a count even for Pulses the
    viewer cannot open → DECIDED (product).** Served from a server-maintained
    `usage/{pulseId}` index rather than a collection-group query, which is hard to
@@ -455,9 +545,50 @@ Each phase is shippable and leaves the product coherent.
     are ordered. *Rejected: a client-side batch under the rule* — it is precisely
     the case the rule cannot see. Single ad-hoc adds stay client-side, where
     eventual convergence is the right trade.
+15. **RM16 — Resolution happens on arrival, via two triggers → DECIDED (§5.3).**
+    Someone joining the **workspace** resolves `linkedUid` on master resources
+    matching their email; someone joining a **Pulse** resolves it on that Pulse's
+    resources. Both are bounded queries on an email that has just become usable.
+    This is what closes the loop for a master copied into a Pulse ahead of its
+    person: the resource waits with an email and no uid, and works the moment they
+    accept. *Rejected: resolving lazily on read* — every reader would need write
+    permission to persist the result, and `assignedUids` (SF1) is derived from the
+    stored uid, so a lazily-resolved link would never reach the rules that use it.
+    Requires **`WorkspaceMember` to gain a denormalised `email`** — it has none
+    today (`{uid, role, joinedAt}`), unlike `PulseMember` — so the first trigger is
+    one query rather than a member read plus a `users/{uid}` lookup.
+16. **RM17 — Removal clears the resolution; only a deliberate unlink clears the
+    intent → DECIDED (§5.4).** SF7 (`functions/src/cascade.ts:65`) keeps clearing
+    `linkedUid` when a member is removed, but stops there: `linkedEmail` survives,
+    so re-inviting that person re-resolves the link. A membership change is not a
+    statement about who a resource *is*. An explicit unlink clears both, because
+    that is such a statement. *Rejected: SF7 clearing both* — it silently discards
+    roster intent on a temporary access change, and on a master-linked resource
+    the next propagation would restore the email anyway, so the clear would not
+    even hold.
+17. **RM18 — Hand-made links stay collaborator-only; master-derived links may name
+    a non-collaborator → DECIDED (§5.2).** The Team tab dropdown keeps offering
+    only current collaborators (`TeamTab.tsx:215`), while a copy from a master
+    brings whatever email the roster holds. The asymmetry is deliberate and worth
+    stating before someone reports it as a bug: a hand-typed address invites
+    typos and phantom links that never resolve, whereas a master-derived one has a
+    curated roster behind it and a resolution path (RM16) that will complete on
+    its own.
 
 ## Open
 
+- **RM19 — Does a Pulse resource carry the email of someone who is not a
+  collaborator? BLOCKS PHASE 1.** It has to, for RM16's resolution to work — but
+  resource documents are readable by every Pulse member, so copying a master into
+  a Pulse would expose staff email addresses to an external collaborator invited
+  to that one project. Same shape as the roster-exposure argument that decided
+  RM1, and it changes the data model either way, so it cannot be deferred past
+  phase 1. *Recommend: accept it* — the person is rostered onto that project, so
+  appearing as part of its team is defensible, and the alternative (store the
+  email only once it resolves) breaks the very case RM16 exists for. If it is not
+  acceptable, the fallback is storing a hash of the email for matching and never
+  the address itself, which costs the UI any ability to show who a resource is
+  waiting for.
 - **RM12 — Does the master roster have its own quota?** Per-Pulse caps still
     apply on copy, so the exposure is storage rather than entitlement.
     *Recommend: no master cap initially*, and revisit if a workspace ever holds an
