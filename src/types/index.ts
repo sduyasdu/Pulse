@@ -120,7 +120,14 @@ export interface MasterResource {
   id: string;
   name: string;
   initials: string;
-  type: string | null;
+  /** The org role, chosen from `Workspace.resourceRoles` (RM22). This is the
+   * roster's ONLY category — a Pulse's `type` is a separate, local thing
+   * (RM24). */
+  role?: string | null;
+  /** @deprecated Where the role lived before RM24 split the two concepts. Read
+   * as a fallback so entries written before the split keep their role; never
+   * written. */
+  type?: string | null;
   /** The default a copy starts from. Never propagates after that — capacity is
    * per-Pulse by nature (RM2). */
   capacity: number;
@@ -666,7 +673,14 @@ export interface Resource {
   initials: string;
   name: string;
   capacity: number; // occupation limit %, default 100
+  /** The Pulse's OWN category, chosen from `Pulse.resourceTypes`. Always local,
+   * always editable, never inherited — a Pulse groups people its own way
+   * (RM24). */
   type: string | null;
+  /** The organisation's role, propagated from the roster and read-only here
+   * (RM24). Absent on a resource added straight into this Pulse, which has no
+   * organisation-level identity to inherit. */
+  role?: string | null;
   /** The workspace roster entry this was copied from (RM1). Provenance only —
    * never dereferenced when reading a Pulse, because a Pulse must stay readable
    * by collaborators who are not workspace members. Absent on a resource typed

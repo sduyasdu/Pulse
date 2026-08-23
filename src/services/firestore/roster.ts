@@ -47,7 +47,7 @@ export function subscribeRoster(
 
 export async function createMasterResource(
   workspaceId: string,
-  input: { name: string; initials?: string; type?: string | null; capacity?: number; linkedEmail?: string | null },
+  input: { name: string; initials?: string; role?: string | null; capacity?: number; linkedEmail?: string | null },
 ): Promise<string> {
   const id = newMasterResourceId(workspaceId);
   const name = input.name.trim();
@@ -55,7 +55,7 @@ export async function createMasterResource(
     id,
     name,
     initials: (input.initials?.trim() || initialsOf(name)).slice(0, 3).toUpperCase(),
-    type: input.type ?? null,
+    role: input.role ?? null,
     capacity: input.capacity ?? 100,
     linkedEmail: input.linkedEmail ? emailKey(input.linkedEmail) : null,
     createdAt: Date.now(),
@@ -70,7 +70,7 @@ export async function createMasterResource(
 export async function patchMasterResource(
   workspaceId: string,
   id: string,
-  patch: Partial<Pick<MasterResource, "name" | "initials" | "type" | "capacity" | "linkedEmail" | "teamIds">>,
+  patch: Partial<Pick<MasterResource, "name" | "initials" | "role" | "capacity" | "linkedEmail" | "teamIds">>,
 ): Promise<void> {
   const clean = { ...patch };
   if (patch.linkedEmail !== undefined) clean.linkedEmail = patch.linkedEmail ? emailKey(patch.linkedEmail) : null;
@@ -122,4 +122,24 @@ export async function copyRosterToPulse(pulseId: string, masterIds: string[]): P
   const call = httpsCallable<{ pulseId: string; masterIds: string[] }, CopyRosterResult>(functions, "copyRosterToPulse");
   const { data } = await call({ pulseId, masterIds });
   return data;
+}
+
+/** The org role of a roster entry.
+ *
+ * Reads `type` as a fallback: before RM24 split role from type, the role lived
+ * in `type`. Entries written then keep working, and `roleSelfHeal` moves them
+ * across the first time the People screen sees them. */
+export const roleOf = (r: MasterResource): string | null => r.role ?? r.type ?? null;
+
+/** Move a pre-RM24 entry's role out of `type` into `role`.
+ *
+ * A self-heal rather than a migration script, for the reason recorded about
+ * SF11's backfill: a script somebody has to remember to run is a script that
+ * does not get run. Idempotent, and silent on failure — a non-owner simply
+ * cannot, and the fallback read keeps their view correct anyway. */
+export async function roleSelfHeal(workspaceId: string, rows: MasterResource[]): Promise<void> {
+  for (const r of rows) {
+    if (r.role != null || r.type == null) continue;
+    await patchMasterResource(workspaceId, r.id, { role: r.type }).catch(() => {});
+  }
 }

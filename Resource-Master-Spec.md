@@ -79,7 +79,8 @@ their number keeps reverting. So each field belongs to exactly one class:
 
 | Class | Fields | Behaviour |
 | --- | --- | --- |
-| **Always** | name, initials, type (the org role, RM22), avatar, `linkedEmail` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
+| **Always** | name, initials, `role` (the org role, RM22/RM24), avatar, `linkedEmail` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
+| **Never** | `type` — the Pulse's OWN category (RM24) | Different question from `role`: who they are vs how this Pulse files them. |
 | **Derived, never propagated** | `linkedUid` | Resolved locally from `linkedEmail` against *this* Pulse's membership (§5). Copying a master's uid down would assert a Pulse membership that may not exist. |
 | **Never** | capacity, allocations | Per-Pulse *by nature* — someone is 100% here and 30% there. The master's value is a default used at copy time only. |
 | **Unless overridden** | hourly rate | Tracks the master until someone sets it in this Pulse, then never again. See §7. |
@@ -771,3 +772,29 @@ Each phase is shippable and leaves the product coherent.
     typed straight into a Pulse — so someone copied from the roster looks the same
     in the roster and in every Pulse holding them. Cosmetic, but it is the cheapest
     signal that two rows are the same person.
+24. **RM24 — `role` and `type` are two fields with two owners → DECIDED.**
+    RM22 propagated the org role into the Pulse's `type`, which meant one field
+    answered two questions: *who is this person* and *how does this Pulse file
+    them*. That forced a read-only `type` in the Pulse, a rename cascade that had
+    to skip roster-linked resources, and a Capacity tab that relabelled the same
+    control depending on where someone came from — three workarounds for one
+    conflation.
+    Split: **`role` is inherited, always, and read-only in a Pulse. `type` is
+    local, always, and always editable.** Propagation writes `role` and never
+    touches `type`; a copy arrives with the org's role and a blank type for
+    whoever is planning to set. Nothing a Pulse owns can be undone by
+    propagation, so the rename cascade covers every resource again and the
+    exceptions disappear.
+    In the UI the two sit where they belong: `role` beside the name, because it is
+    who the person is; `type` in the field list, because it is how this Pulse
+    groups them. Both are searchable in both tabs, along with name and email.
+    *Rejected: keeping one field* — it is what RM22 tried, and every consequence
+    was a special case. *Rejected: renaming the roster's field in place* — entries
+    written before the split keep their role in `type`, so `roleOf()` reads
+    `role ?? type` and a self-heal moves it across the first time the People
+    screen loads. No migration script, for the reason recorded about SF11's
+    backfill: one that has to be remembered does not get run.
+    **Known residue:** Pulse copies made before this split carry the org role in
+    their local `type`. It is harmless — it reads as a local type someone chose —
+    and the next master edit propagates the role into its proper field. Clear it
+    by hand if it bothers you; there is too little of it to justify a migration.

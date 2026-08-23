@@ -261,15 +261,14 @@ export const onPulseMemberJoinResolve = onDocumentCreated(
 /**
  * A roster entry changed — push its IDENTITY down to every copy (RM2, RM22).
  *
- * Only the always-propagate class: name, initials, type (the org role) and
- * `linkedEmail`. Never `capacity`, which is per-Pulse by nature, and never
- * `linkedUid`, which means "collaborator on THIS Pulse" and is resolved locally —
- * pushing the master's would assert a membership that may not exist.
+ * Only the always-propagate class: name, initials, `role` and `linkedEmail`.
+ * Never `capacity`, which is per-Pulse by nature; never `linkedUid`, which means
+ * "collaborator on THIS Pulse" and is resolved locally; and never `type`, which
+ * since RM24 is the Pulse's OWN category and has nothing to do with the roster.
  *
- * `type` is here because RM22 made the org role a managed vocabulary owned at
- * workspace level, and the Pulse copy is read-only for it. Before that it was a
- * per-Pulse value with a rename cascade of its own, and propagating it would
- * have silently undone that rename.
+ * Role and type being one field was the whole problem: the Capacity tab renames
+ * a type across a Pulse, and propagation would silently undo that rename. Two
+ * fields, two owners, no conflict.
  *
  * Writes only the fields that actually differ, so a capacity edit on the master
  * does not touch a single copy, and a no-op write does not fan out at all.
@@ -287,10 +286,17 @@ export const onMasterResourceWritePropagate = onDocumentWritten(
     // Typed as string|null rather than unknown: every propagated field is one,
     // and `unknown` is not assignable to Firestore's UpdateData.
     const patch: Record<string, string | null> = {};
-    for (const field of ["name", "initials", "type", "linkedEmail"] as const) {
+    for (const field of ["name", "initials", "linkedEmail"] as const) {
       const next = a[field];
       if (next !== b[field]) patch[field] = typeof next === "string" ? next : null;
     }
+    // The org role lands on the copy's `role`, NOT its `type` (RM24). A Pulse's
+    // `type` is its own category and must never be written from here — writing
+    // it was what made the Capacity tab's rename cascade unsafe.
+    // `?? type` reads a roster entry written before the split.
+    const roleAfter = (a.role ?? a.type ?? null) as string | null;
+    const roleBefore = (b.role ?? b.type ?? null) as string | null;
+    if (roleAfter !== roleBefore) patch.role = roleAfter;
     if (Object.keys(patch).length === 0) return;
 
     try {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "@/i18n";
-import { initialsOf } from "@/services/firestore/roster";
+import { initialsOf, roleOf } from "@/services/firestore/roster";
 import type { MasterResource } from "@/types";
 
 /**
@@ -16,14 +16,14 @@ export function MasterResourceDialog({ resource, roles, onClose, onSave }: {
    * how "Backend" and "backend" became two roles. */
   roles: string[];
   onClose: () => void;
-  onSave: (values: { name: string; initials: string; type: string | null; capacity: number; linkedEmail: string | null }) => Promise<void>;
+  onSave: (values: { name: string; initials: string; role: string | null; capacity: number; linkedEmail: string | null }) => Promise<void>;
 }) {
   const t = useT();
   const [name, setName] = useState(resource?.name ?? "");
   // Empty means "derive from the name" — kept as a placeholder rather than
   // prefilled, so typing a name updates it instead of fighting a stale value.
   const [initials, setInitials] = useState(resource?.initials ?? "");
-  const [type, setType] = useState(resource?.type ?? "");
+  const [role, setRole] = useState(resource ? roleOf(resource) ?? "" : "");
   const [capacity, setCapacity] = useState(String(resource?.capacity ?? 100));
   const [email, setEmail] = useState(resource?.linkedEmail ?? "");
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ export function MasterResourceDialog({ resource, roles, onClose, onSave }: {
       await onSave({
         name: name.trim(),
         initials: (initials.trim() || initialsOf(name)).slice(0, 3).toUpperCase(),
-        type: type.trim() || null,
+        role: role.trim() || null,
         // Clamped rather than validated: a capacity of 0 or 10000 is a typo, and
         // refusing the whole form over it is worse than fixing it.
         capacity: Math.max(1, Math.min(1000, Number(capacity) || 100)),
@@ -77,13 +77,13 @@ export function MasterResourceDialog({ resource, roles, onClose, onSave }: {
             </label>
             <label className="flex flex-1 flex-col gap-1">
               <span className={label} style={{ color: "#94A3B8" }}>{t("roster.typeLabel")}</span>
-              <select value={type} onChange={(e) => setType(e.target.value)} className={field} style={{ borderColor: "#E2DFD9" }}>
+              <select value={role} onChange={(e) => setRole(e.target.value)} className={field} style={{ borderColor: "#E2DFD9" }}>
                 <option value="">{t("common.none")}</option>
                 {roles.map((r) => <option key={r} value={r}>{r}</option>)}
                 {/* A role removed from the list after this person was given it.
                     Keeping it selectable means editing their name does not
                     silently blank their role. */}
-                {type && !roles.includes(type) && <option value={type}>{type}</option>}
+                {role && !roles.includes(role) && <option value={role}>{role}</option>}
               </select>
             </label>
             <label className="flex w-24 flex-col gap-1">

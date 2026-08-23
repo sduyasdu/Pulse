@@ -114,7 +114,11 @@ export const copyRosterToPulse = onCall(async (request) => {
         id: ref.id,
         name: data.name ?? "Unnamed",
         initials: data.initials ?? "",
-        type: data.type ?? null,
+        // The org role rides across; the Pulse's own `type` starts empty and is
+        // set here, locally, by whoever is planning (RM24). `?? type` reads a
+        // roster entry written before role and type were split.
+        role: data.role ?? data.type ?? null,
+        type: null,
         // The master's capacity is a DEFAULT, used here and never again (RM2).
         capacity: typeof data.capacity === "number" ? data.capacity : 100,
         masterId: m.id,

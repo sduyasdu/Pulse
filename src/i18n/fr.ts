@@ -489,6 +489,7 @@ export const fr: Dict = {
   "capacity.peakLine": "pic {peak}% · limite {limit}% · {used}% utilisé",
   "capacity.type": "TYPE",
   "capacity.role": "Rôle",
+  "capacity.roleFromRoster": "Rôle issu de la liste Personnes de votre organisation — géré là-bas, pas ici.",
   "capacity.typeFromRoster": "Ce rôle provient de la liste Personnes de votre organisation et se gère là-bas.",
   "capacity.limitPct": "LIMITE %",
   "capacity.limitNote": "La limite est le % maximal qu'une personne peut se voir affecter. Les barres montrent la charge de son jour le plus chargé par rapport à cette limite ; le rouge indique une surcharge.",

@@ -78,12 +78,13 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   };
 
   const q = query.trim().toLowerCase();
-  // `type` holds the org ROLE on a roster-linked person (RM22) and the Pulse's
-  // own type on a local one, so one field covers both. Email is searched too —
-  // it is often the only thing someone remembers about a colleague.
+  // Four axes, because they answer different questions: the name, the Pulse's
+  // own `type`, the inherited org `role` (RM24), and the email — often the only
+  // thing someone remembers about a colleague.
   const filtered = resources.filter((r) => !q
     || r.name.toLowerCase().includes(q)
     || (r.type || "").toLowerCase().includes(q)
+    || (r.role || "").toLowerCase().includes(q)
     || (r.linkedEmail || "").toLowerCase().includes(q));
 
   // Three forward 4-week windows from today, for the per-resource load

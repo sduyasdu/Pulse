@@ -495,6 +495,7 @@ export const en = {
   "capacity.peakLine": "peak {peak}% · limit {limit}% · {used}% used",
   "capacity.type": "TYPE",
   "capacity.role": "Role",
+  "capacity.roleFromRoster": "Role from your organisation's People list — managed there, not here.",
   "capacity.typeFromRoster": "This role comes from your organisation's People list and is managed there.",
   "capacity.limitPct": "LIMIT %",
   "capacity.limitNote": "Limit is the max % a person may be assigned. Bars show their busiest-day load against that limit; red means over-allocated.",

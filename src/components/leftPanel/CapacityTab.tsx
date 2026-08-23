@@ -117,6 +117,7 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
   const filtered = resources.filter((r) => !q
     || r.name.toLowerCase().includes(q)
     || (r.type || "").toLowerCase().includes(q)
+    || (r.role || "").toLowerCase().includes(q)
     || (r.linkedEmail || "").toLowerCase().includes(q));
 
   // Three forward 4-week windows from today for the per-resource load
@@ -136,10 +137,9 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
     const nn = window.prompt(t("capacity.renameTypePrompt"), type);
     if (!nn || !nn.trim() || nn.trim() === type) return;
     void setResourceTypes(resourceTypes.map((x) => (x === type ? nn.trim() : x)));
-    // Roster-linked resources are skipped: their role belongs to the workspace,
-    // and rewriting it here would be reverted by the next propagation — a rename
-    // that silently half-applies is worse than one that visibly does not.
-    resources.filter((r) => r.type === type && !r.masterId).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
+    // Every resource, roster-linked or not: `type` is local to this Pulse now
+    // (RM24), so nothing here can be undone by propagation.
+    resources.filter((r) => r.type === type).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
   };
   const deleteType = async (type: string, e: { clientX: number; clientY: number }) => {
     if (await confirmAt(e, { message: t("capacity.deleteTypeMsg", { type }), detail: t("capacity.deleteTypeDetail") })) {
@@ -231,6 +231,18 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
                 <div className="flex items-center gap-1">
                   <ResourceOriginBadge masterId={r.masterId} />
                   <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} renameTitle={t("capacity.clickToRename")} />
+                  {/* The ORG role, inherited and read-only (RM24). Shown beside
+                      the name because it is who this person is, not how this
+                      Pulse files them — that is `type`, below. */}
+                  {r.role && (
+                    <span
+                      className="mono shrink-0 rounded px-1.5 py-0.5 text-[9px]"
+                      title={t("capacity.roleFromRoster")}
+                      style={{ background: "#F4F5F7", color: "#64748B" }}
+                    >
+                      {r.role}
+                    </span>
+                  )}
                 </div>
                 <div className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.peakLine", { peak, limit: r.capacity, used: pct })}</div>
               </div>
@@ -255,37 +267,22 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
             </div>
             <div className="flex items-center gap-2 mt-2">
               <div className="flex-1">
-                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>
-                  {r.masterId ? t("capacity.role") : t("capacity.type")}
-                </span>
-                {r.masterId ? (
-                  // Stated, not offered. A disabled <select> reads as a control
-                  // that is broken or that you lack permission for; this is
-                  // neither — the org owns this value and propagates it (RM22),
-                  // so it is shown as the fact it is, with a title saying where
-                  // to change it.
-                  <div
-                    className="mono text-xs rounded px-1 py-0.5 w-full truncate"
-                    title={t("capacity.typeFromRoster")}
-                    style={{ background: "#F8FAFC", border: "1px solid #EEF1F4", color: "#475569" }}
-                  >
-                    {r.type || t("common.none")}
-                  </div>
-                ) : (
-                  <select
-                    value={r.type || ""}
-                    disabled={!canEdit}
-                    onChange={(e) => void patchResource(r.id, { type: e.target.value || null })}
-                    className="mono text-xs border rounded px-1 py-0.5 w-full"
-                    style={{ borderColor: "#E2DFD9" }}
-                  >
-                    <option value="">{t("common.none")}</option>
-                    {resourceTypes.map((rt) => (
-                      <option key={rt} value={rt}>{rt}</option>
-                    ))}
-                    {r.type && !resourceTypes.includes(r.type) && <option value={r.type}>{r.type}</option>}
-                  </select>
-                )}
+                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.type")}</span>
+                {/* Always local, always editable — a Pulse groups people its own
+                    way, whether or not they came from the roster (RM24). */}
+                <select
+                  value={r.type || ""}
+                  disabled={!canEdit}
+                  onChange={(e) => void patchResource(r.id, { type: e.target.value || null })}
+                  className="mono text-xs border rounded px-1 py-0.5 w-full"
+                  style={{ borderColor: "#E2DFD9" }}
+                >
+                  <option value="">{t("common.none")}</option>
+                  {resourceTypes.map((rt) => (
+                    <option key={rt} value={rt}>{rt}</option>
+                  ))}
+                  {r.type && !resourceTypes.includes(r.type) && <option value={r.type}>{r.type}</option>}
+                </select>
               </div>
               <div style={{ width: 112 }}>
                 <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.limitPct")}</span>

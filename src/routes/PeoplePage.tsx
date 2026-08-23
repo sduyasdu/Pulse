@@ -6,7 +6,7 @@ import { PulseLockup } from "@/components/shared/Logo";
 import { confirmAt } from "@/stores/confirmStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
-import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf } from "@/services/firestore/roster";
+import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf, roleOf, roleSelfHeal } from "@/services/firestore/roster";
 import { subscribeTeams, createTeam, renameTeam, deleteTeam, setTeamMembership } from "@/services/firestore/teams";
 import { subscribeWorkspaceMembers, subscribeWorkspace, updateResourceRoles } from "@/services/firestore/workspaces";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
@@ -46,8 +46,13 @@ export function PeoplePage() {
 
   useEffect(() => {
     if (!workspaceId) return;
-    return subscribeRoster(workspaceId, (r) => { setRows(r); setError(null); }, setError);
-  }, [workspaceId]);
+    return subscribeRoster(workspaceId, (r) => {
+      setRows(r);
+      setError(null);
+      // Pre-RM24 entries kept their role in `type`; move it across once.
+      if (canManage) void roleSelfHeal(workspaceId, r);
+    }, setError);
+  }, [workspaceId, canManage]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -76,7 +81,7 @@ export function PeoplePage() {
     const next = window.prompt(t("people.renameRolePrompt"), role)?.trim();
     if (!next || next === role || roles.includes(next)) return;
     run(updateResourceRoles(workspaceId, roles.map((x) => (x === role ? next : x))), "rename role");
-    for (const r of rows ?? []) if (r.type === role) run(patchMasterResource(workspaceId, r.id, { type: next }), "rename role");
+    for (const r of rows ?? []) if (roleOf(r) === role) run(patchMasterResource(workspaceId, r.id, { role: next }), "rename role");
   };
 
   const addRole = () => {
@@ -107,7 +112,7 @@ export function PeoplePage() {
     () => (rows ?? []).filter((r) =>
       !q
       || (r.name ?? "").toLowerCase().includes(q)
-      || (r.type ?? "").toLowerCase().includes(q)
+      || (roleOf(r) ?? "").toLowerCase().includes(q)
       || (r.linkedEmail ?? "").toLowerCase().includes(q)),
     [rows, q],
   );
@@ -420,7 +425,7 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold" style={{ color: "#1F2330" }}>{r.name}</div>
           <div className="mono truncate text-[10px]" style={{ color: "#94A3B8" }}>
-            {[r.type, `${r.capacity ?? 100}%`].filter(Boolean).join(" · ")}
+            {[roleOf(r), `${r.capacity ?? 100}%`].filter(Boolean).join(" · ")}
           </div>
         </div>
         <span
