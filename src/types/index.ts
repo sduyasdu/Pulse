@@ -662,6 +662,11 @@ export interface Resource {
   name: string;
   capacity: number; // occupation limit %, default 100
   type: string | null;
+  /** The workspace roster entry this was copied from (RM1). Provenance only —
+   * never dereferenced when reading a Pulse, because a Pulse must stay readable
+   * by collaborators who are not workspace members. Absent on a resource typed
+   * in here, and cleared if its master is deleted (RM13), so it never dangles. */
+  masterId?: string;
   /** WHO this resource is, durably (Resource-Master-Spec RM6). Stored in
    * `emailKey()` form. May name someone who is not a collaborator on this
    * Pulse — the normal case for a resource copied from the workspace roster. */

@@ -1,5 +1,6 @@
 import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "@/lib/firebase";
 import { emailKey } from "./emailKey";
 import type { MasterResource } from "@/types";
 
@@ -90,4 +91,35 @@ export function initialsOf(name: string): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// ---------------------------------------------------------------------------
+// Copying roster people into a Pulse (RM15)
+// ---------------------------------------------------------------------------
+
+export interface CopyRosterResult {
+  copied: number;
+  skippedAlreadyPresent: number;
+  skippedMissing: number;
+  skippedOverQuota: number;
+  limit: number;
+  used: number;
+}
+
+/**
+ * Copy roster entries into a Pulse.
+ *
+ * A **callable**, not a client loop, and the reason is not convenience:
+ * `resourceCount` is written asynchronously, so N parallel creates would all be
+ * evaluated against the same stale count and all N would pass the quota rule.
+ * The server checks once and writes once, which is the only ordering that
+ * bounds a burst (Resource-Master-Spec §8.3).
+ *
+ * Returns what it actually did, split by reason — copied, already present, over
+ * quota — because "some of them" needs to say which ones and why.
+ */
+export async function copyRosterToPulse(pulseId: string, masterIds: string[]): Promise<CopyRosterResult> {
+  const call = httpsCallable<{ pulseId: string; masterIds: string[] }, CopyRosterResult>(functions, "copyRosterToPulse");
+  const { data } = await call({ pulseId, masterIds });
+  return data;
 }

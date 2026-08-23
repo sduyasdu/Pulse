@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { emailKey } from "@/services/firestore/emailKey";
+import { AddFromRosterDialog } from "./AddFromRosterDialog";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useAuthStore } from "@/stores/authStore";
 import { allocInRange } from "@/domain/assignments";
@@ -28,7 +29,9 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   const duplicateResource = usePulseStore((s) => s.duplicateResource);
   const patchResource = usePulseStore((s) => s.patchResource);
   const [query, setQuery] = useState("");
+  const pulse = usePulseStore((s) => s.pulse);
   const [adding, setAdding] = useState(false);
+  const [picking, setPicking] = useState(false);
   // Controlled, so the confirm button can read the value and be disabled while
   // it is empty. The field used to be uncontrolled and read `e.target.value`,
   // which only a keystroke could reach.
@@ -81,6 +84,13 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
     { label: "9–12w", lo: today + 56, hi: today + 84 },
   ];
 
+  // `masterId` is present only on resources copied from the roster, so this is
+  // exactly the set the picker should show as already added.
+  const linkedMasterIds = useMemo(
+    () => new Set(resources.map((r) => r.masterId).filter((x): x is string => !!x)),
+    [resources],
+  );
+
   return (
     <div className="p-3 flex flex-col gap-2">
       <div className="flex items-center gap-1.5 rounded px-2 py-1.5" style={{ border: "1px solid #E2DFD9", background: "#FDFCF8" }}>
@@ -103,6 +113,18 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
         {canEdit && (
           <button onClick={() => setAdding(true)} className="mono text-xs flex items-center gap-1 px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>
             {t("team.add")}
+          </button>
+        )}
+        {/* Only offered when this Pulse belongs to a workspace — the roster is a
+            property of the org, and there is nothing to pull from without one. */}
+        {canEdit && pulse?.workspaceId && (
+          <button
+            onClick={() => setPicking(true)}
+            title={t("team.addFromRoster")}
+            className="mono text-xs flex items-center gap-1 px-2 py-0.5 rounded"
+            style={{ background: "#F7E8DA", color: "#D85A28" }}
+          >
+            <Icon name="group" size={12} />
           </button>
         )}
       </div>
@@ -250,6 +272,15 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
           </div>
         );
       })}
+
+      {picking && pulse?.workspaceId && (
+        <AddFromRosterDialog
+          pulseId={pulse.id}
+          workspaceId={pulse.workspaceId}
+          alreadyLinked={linkedMasterIds}
+          onClose={() => setPicking(false)}
+        />
+      )}
 
       {linkConflict && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/30 px-4" style={{ zIndex: 300 }} onClick={() => setLinkConflict(null)}>
