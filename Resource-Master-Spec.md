@@ -79,7 +79,7 @@ their number keeps reverting. So each field belongs to exactly one class:
 
 | Class | Fields | Behaviour |
 | --- | --- | --- |
-| **Always** | name, initials, type, avatar, `linkedEmail` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
+| **Always** | name, initials, type (the org role, RM22), avatar, `linkedEmail` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
 | **Derived, never propagated** | `linkedUid` | Resolved locally from `linkedEmail` against *this* Pulse's membership (§5). Copying a master's uid down would assert a Pulse membership that may not exist. |
 | **Never** | capacity, allocations | Per-Pulse *by nature* — someone is 100% here and 30% there. The master's value is a default used at copy time only. |
 | **Unless overridden** | hourly rate | Tracks the master until someone sets it in this Pulse, then never again. See §7. |
@@ -738,3 +738,36 @@ Each phase is shippable and leaves the product coherent.
     Pulse they cannot open should be able to ask. Out of scope for phase 1;
     listed because RM7's disclosure was accepted partly on the strength of it, and
     a decision that leans on a future feature should say so.
+22. **RM22 — The org role is a managed vocabulary, owned at workspace level and
+    read-only inside a Pulse → DECIDED.** `type` was free text on the roster and a
+    per-Pulse managed list (`Pulse.resourceTypes`) inside a Pulse, and RM2 put it
+    in the always-propagate class. Those three facts could not all hold: the
+    Capacity tab's `renameType` **rewrites `type` on every resource in the Pulse**,
+    so the next propagation would silently undo a rename the customer had just
+    made — exactly the "stomps a deliberate local edit with nothing on screen to
+    explain it" failure RM2 exists to prevent.
+    Resolved by moving ownership up rather than dropping propagation:
+    `Workspace.resourceRoles` is a managed list with the same shape as a Pulse's
+    `resourceTypes`, a roster entry picks its role from it, and the Pulse copy
+    shows the role **disabled**, with a title saying where it is managed. The
+    rename cascade skips roster-linked resources, because a rename that
+    half-applies is worse than one that visibly does not.
+    *Rejected: making `type` a copy-time default like capacity* — simpler, and it
+    was the recommendation until the vocabulary question surfaced. A role is not
+    per-Pulse the way capacity is: someone is 30% on one project and 100% on
+    another, but they are a Designer everywhere. Copy-time-only would also have
+    left the roster with no vocabulary at all, where "Backend" and "backend" are
+    two roles with nothing to reconcile them.
+    *Rejected: seeding the Pulse's `resourceTypes` from the master on copy* —
+    it mixes two vocabularies into one list, so deleting an org role from a Pulse
+    would look possible and mean nothing.
+    Removing a role from the list leaves it on the people who already have it, as
+    the Pulse's own type list already does: the label stops being offered, and
+    nobody's record is rewritten behind their back.
+23. **RM23 — A person is one colour everywhere.** The roster badge was grey while
+    Pulse badges were coloured by resource id, so the same human was a different
+    colour in each Pulse and grey on the People screen. Both now key on
+    `masterId` when there is one, falling back to the local id for a resource
+    typed straight into a Pulse — so someone copied from the roster looks the same
+    in the roster and in every Pulse holding them. Cosmetic, but it is the cheapest
+    signal that two rows are the same person.

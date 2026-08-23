@@ -8,9 +8,10 @@ import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
 import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf } from "@/services/firestore/roster";
 import { subscribeTeams, createTeam, renameTeam, deleteTeam, setTeamMembership } from "@/services/firestore/teams";
-import { subscribeWorkspaceMembers } from "@/services/firestore/workspaces";
+import { subscribeWorkspaceMembers, subscribeWorkspace, updateResourceRoles } from "@/services/firestore/workspaces";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
-import type { MasterResource, Team, WorkspaceMember } from "@/types";
+import type { MasterResource, Team, WorkspaceMember, Workspace } from "@/types";
+import { colorForName } from "@/domain/constants";
 
 /**
  * People — the workspace roster and its teams (Resource-Master-Spec §1, RM4).
@@ -33,6 +34,7 @@ export function PeoplePage() {
   const [rows, setRows] = useState<MasterResource[] | null>(null);
   const [teams, setTeams] = useState<Team[] | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [teamQuery, setTeamQuery] = useState("");
@@ -59,6 +61,34 @@ export function PeoplePage() {
     if (!workspaceId) return;
     return subscribeWorkspaceMembers(workspaceId, setMembers);
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    return subscribeWorkspace(workspaceId, setWorkspace);
+  }, [workspaceId]);
+
+  const roles = useMemo(() => workspace?.resourceRoles ?? [], [workspace]);
+
+  // Renaming a role rewrites it on everyone who had it. A rename that leaves the
+  // old string behind is a fork, not a rename — the same cascade a Pulse already
+  // does for its own types.
+  const renameRole = (role: string) => {
+    const next = window.prompt(t("people.renameRolePrompt"), role)?.trim();
+    if (!next || next === role || roles.includes(next)) return;
+    run(updateResourceRoles(workspaceId, roles.map((x) => (x === role ? next : x))), "rename role");
+    for (const r of rows ?? []) if (r.type === role) run(patchMasterResource(workspaceId, r.id, { type: next }), "rename role");
+  };
+
+  const addRole = () => {
+    const name = window.prompt(t("people.addRolePrompt"))?.trim();
+    if (!name || roles.includes(name)) return;
+    run(updateResourceRoles(workspaceId, [...roles, name]), "add role");
+  };
+
+  // Removing a role leaves it on the people who have it, exactly as the Pulse's
+  // type list does: the label stops being offered, and nobody's record is
+  // rewritten behind their back.
+  const removeRole = (role: string) => run(updateResourceRoles(workspaceId, roles.filter((x) => x !== role)), "remove role");
 
   const photoByUid = useMemo(() => {
     const m = new Map<string, string>();
@@ -284,6 +314,24 @@ export function PeoplePage() {
             the layout rather than by reading the headings. */}
         <div className="mb-8 border-t" style={{ borderColor: "#E2DFD9" }} />
 
+        {canManage && (
+          <div className="mb-4 flex flex-wrap items-center gap-1.5">
+            <span className="mono text-[10px] uppercase tracking-wide" style={{ color: "#94A3B8" }}>{t("people.roles")}</span>
+            {roles.map((role) => (
+              <span key={role} className="mono flex items-center gap-1 rounded px-2 py-0.5 text-[10px]" style={{ background: "#F4F5F7", color: "#475569" }}>
+                <button onClick={() => renameRole(role)} title={t("people.renameRole")}>{role}</button>
+                <button onClick={() => removeRole(role)} aria-label={t("people.removeRole", { role })} title={t("people.removeRole", { role })} style={{ color: "#94A3B8" }}>
+                  <Icon name="close" size={10} />
+                </button>
+              </span>
+            ))}
+            <button onClick={addRole} className="hoverable mono rounded border px-2 py-0.5 text-[10px] font-semibold border-yasdu-orange-soft bg-yasdu-accent text-yasdu-primary">
+              + {t("people.addRole")}
+            </button>
+            {roles.length === 0 && <span className="text-[10px]" style={{ color: "#CBD5E1" }}>{t("people.noRoles")}</span>}
+          </div>
+        )}
+
         <SectionHead
           title={t("roster.title")}
           count={rows?.length}
@@ -326,6 +374,7 @@ export function PeoplePage() {
 
       {editing && (
         <MasterResourceDialog
+          roles={roles}
           resource={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
           onSave={async (values) => {
@@ -494,7 +543,7 @@ function PersonAvatar({ r, photo, size }: { r: MasterResource; photo?: string; s
     <span
       className="mono flex items-center justify-center font-bold"
       title={label}
-      style={{ ...base, background: "#F1F5F9", color: "#475569", fontSize: Math.max(8, Math.round(size * 0.38)) }}
+      style={{ ...base, background: colorForName(r.id), color: "#fff", fontSize: Math.max(8, Math.round(size * 0.38)) }}
     >
       {r.initials || initialsOf(r.name)}
     </span>

@@ -259,6 +259,56 @@ export const onPulseMemberJoinResolve = onDocumentCreated(
 );
 
 /**
+ * A roster entry changed — push its IDENTITY down to every copy (RM2, RM22).
+ *
+ * Only the always-propagate class: name, initials, type (the org role) and
+ * `linkedEmail`. Never `capacity`, which is per-Pulse by nature, and never
+ * `linkedUid`, which means "collaborator on THIS Pulse" and is resolved locally —
+ * pushing the master's would assert a membership that may not exist.
+ *
+ * `type` is here because RM22 made the org role a managed vocabulary owned at
+ * workspace level, and the Pulse copy is read-only for it. Before that it was a
+ * per-Pulse value with a rename cascade of its own, and propagating it would
+ * have silently undone that rename.
+ *
+ * Writes only the fields that actually differ, so a capacity edit on the master
+ * does not touch a single copy, and a no-op write does not fan out at all.
+ */
+export const onMasterResourceWritePropagate = onDocumentWritten(
+  "workspaces/{workspaceId}/resources/{resourceId}",
+  async (event) => {
+    const { workspaceId, resourceId } = event.params;
+    const after = event.data?.after;
+    const before = event.data?.before;
+    if (!after?.exists || !before?.exists) return; // create/delete are not propagation
+
+    const a = after.data() ?? {};
+    const b = before.data() ?? {};
+    // Typed as string|null rather than unknown: every propagated field is one,
+    // and `unknown` is not assignable to Firestore's UpdateData.
+    const patch: Record<string, string | null> = {};
+    for (const field of ["name", "initials", "type", "linkedEmail"] as const) {
+      const next = a[field];
+      if (next !== b[field]) patch[field] = typeof next === "string" ? next : null;
+    }
+    if (Object.keys(patch).length === 0) return;
+
+    try {
+      const db = getFirestore();
+      const copies = await db.collectionGroup("resources").where("masterId", "==", resourceId).get();
+      if (copies.empty) return;
+      const writer = db.bulkWriter();
+      for (const d of copies.docs) writer.update(d.ref, patch);
+      await writer.close();
+      log(FN, "propagated identity to copies", { workspaceId, resourceId, fields: Object.keys(patch), copies: copies.size });
+    } catch (err) {
+      logError(FN, "identity propagation failed", err, { workspaceId, resourceId });
+      throw err;
+    }
+  },
+);
+
+/**
  * A roster entry was deleted — DETACH its copies, never delete them (RM13).
  *
  * A Pulse's plan must not lose its people because someone tidied the roster, and

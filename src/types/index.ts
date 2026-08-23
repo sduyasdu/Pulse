@@ -27,6 +27,11 @@ export interface Workspace {
   isPersonal: boolean;
   ownerId: string;
   createdAt: Timestamp;
+  /** The org's managed list of roles (Resource-Master-Spec RM22). The same shape
+   * as a Pulse's `resourceTypes`, one level up: free text on the roster meant
+   * "Backend" and "backend" were two roles with nothing to reconcile them.
+   * A roster entry's `type` is chosen from here. */
+  resourceRoles?: string[];
   /** Org/legal identity for billing (Plans-Spec §1.1/§7). A Workspace *is* the
    * billing Organization (PL6), so these live here. Set when the org subscribes;
    * absent = never subscribed (Free). `country` is ISO 3166-1 alpha-2. */

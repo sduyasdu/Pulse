@@ -10,8 +10,11 @@ import type { MasterResource } from "@/types";
  * be created and then immediately edited. A roster entry is a small record and
  * there is no reason to split it across two steps.
  */
-export function MasterResourceDialog({ resource, onClose, onSave }: {
+export function MasterResourceDialog({ resource, roles, onClose, onSave }: {
   resource: MasterResource | null;
+  /** The org's managed role list (RM22). Chosen from, not typed — free text is
+   * how "Backend" and "backend" became two roles. */
+  roles: string[];
   onClose: () => void;
   onSave: (values: { name: string; initials: string; type: string | null; capacity: number; linkedEmail: string | null }) => Promise<void>;
 }) {
@@ -74,7 +77,14 @@ export function MasterResourceDialog({ resource, onClose, onSave }: {
             </label>
             <label className="flex flex-1 flex-col gap-1">
               <span className={label} style={{ color: "#94A3B8" }}>{t("roster.typeLabel")}</span>
-              <input value={type} onChange={(e) => setType(e.target.value)} placeholder={t("roster.typePlaceholder")} className={field} style={{ borderColor: "#E2DFD9" }} />
+              <select value={type} onChange={(e) => setType(e.target.value)} className={field} style={{ borderColor: "#E2DFD9" }}>
+                <option value="">{t("common.none")}</option>
+                {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                {/* A role removed from the list after this person was given it.
+                    Keeping it selectable means editing their name does not
+                    silently blank their role. */}
+                {type && !roles.includes(type) && <option value={type}>{type}</option>}
+              </select>
             </label>
             <label className="flex w-24 flex-col gap-1">
               <span className={label} style={{ color: "#94A3B8" }}>{t("roster.capacityLabel")}</span>

@@ -129,7 +129,10 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
     const nn = window.prompt(t("capacity.renameTypePrompt"), type);
     if (!nn || !nn.trim() || nn.trim() === type) return;
     void setResourceTypes(resourceTypes.map((x) => (x === type ? nn.trim() : x)));
-    resources.filter((r) => r.type === type).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
+    // Roster-linked resources are skipped: their role belongs to the workspace,
+    // and rewriting it here would be reverted by the next propagation — a rename
+    // that silently half-applies is worse than one that visibly does not.
+    resources.filter((r) => r.type === type && !r.masterId).forEach((r) => void patchResource(r.id, { type: nn.trim() }));
   };
   const deleteType = async (type: string, e: { clientX: number; clientY: number }) => {
     if (await confirmAt(e, { message: t("capacity.deleteTypeMsg", { type }), detail: t("capacity.deleteTypeDetail") })) {
@@ -245,10 +248,15 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
                 <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.type")}</span>
                 <select
                   value={r.type || ""}
-                  disabled={!canEdit}
+                  // A resource copied from the roster wears the ORG's role, which
+                  // is managed at workspace level and propagated down (RM22).
+                  // Editing it here would be undone by the next propagation, so
+                  // it is read-only rather than a trap.
+                  disabled={!canEdit || !!r.masterId}
+                  title={r.masterId ? t("capacity.typeFromRoster") : undefined}
                   onChange={(e) => void patchResource(r.id, { type: e.target.value || null })}
                   className="mono text-xs border rounded px-1 py-0.5 w-full"
-                  style={{ borderColor: "#E2DFD9" }}
+                  style={{ borderColor: "#E2DFD9", ...(r.masterId ? { background: "#F8FAFC", color: "#64748B" } : {}) }}
                 >
                   <option value="">{t("common.none")}</option>
                   {resourceTypes.map((rt) => (

@@ -4,7 +4,12 @@ import { colorForName } from "@/domain/constants";
 /** Circular resource avatar. For a resource linked to a real account whose
  * owner has set an avatar, it shows that user's picture; otherwise the
  * initials on the resource's colour. Looks the resource + linked member up by
- * id from the store. */
+ * id from the store.
+ *
+ * Keyed on `masterId` when there is one, so somebody copied from the workspace
+ * roster is the same colour in every Pulse that holds them — and the same colour
+ * as their entry on the People screen. Falls back to the local id for a resource
+ * typed straight into a Pulse. */
 export function ResourceBadge({ resourceId, size = 16, title, ring, style }: { resourceId: string; size?: number; title?: string; ring?: string; style?: React.CSSProperties }) {
   const resource = usePulseStore((s) => s.resources.find((r) => r.id === resourceId));
   const members = usePulseStore((s) => s.members);
@@ -25,7 +30,7 @@ export function ResourceBadge({ resourceId, size = 16, title, ring, style }: { r
     return <img src={linkedPhoto} alt={tip} title={tip} className="hoverable--enlarge" style={{ ...base, objectFit: "cover", display: "block" }} />;
   }
   return (
-    <span className="hoverable--enlarge mono flex items-center justify-center" title={tip} style={{ ...base, background: colorForName(resourceId), color: "#fff", fontWeight: 700, fontSize: Math.max(7, Math.round(size * 0.44)) }}>
+    <span className="hoverable--enlarge mono flex items-center justify-center" title={tip} style={{ ...base, background: colorForName(resource?.masterId ?? resourceId), color: "#fff", fontWeight: 700, fontSize: Math.max(7, Math.round(size * 0.44)) }}>
       {initials}
     </span>
   );

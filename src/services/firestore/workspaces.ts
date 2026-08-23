@@ -109,3 +109,13 @@ export async function syncMyWorkspacePhoto(workspaceId: string, uid: string, pho
     /* not permitted, or offline — the roster falls back to initials */
   }
 }
+
+/** Replace the org's managed role list (RM22). Owner-only by the rules.
+ *
+ * Renaming a role rewrites it on every roster entry that used it — the same
+ * cascade a Pulse already does for its `resourceTypes`, and for the same reason:
+ * a rename that leaves the old string behind on the people who had it is not a
+ * rename, it is a fork. */
+export async function updateResourceRoles(workspaceId: string, resourceRoles: string[]): Promise<void> {
+  await updateDoc(doc(db, "workspaces", workspaceId), { resourceRoles });
+}

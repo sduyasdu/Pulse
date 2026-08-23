@@ -70,6 +70,11 @@ export { onPulseResourceWriteResolve, onPulseMemberJoinResolve } from "./roster"
 // member of the Pulses holding those copies.
 export { onMasterResourceDeletedDetach } from "./roster";
 
+// RM2/RM22 — identity changes on a roster entry reach its copies. Name,
+// initials, org role and linked email only; capacity is per-Pulse and linkedUid
+// is resolved locally.
+export { onMasterResourceWritePropagate } from "./roster";
+
 // RM15 — bulk copy from the roster into a Pulse. A callable rather than a client
 // loop because the resource counter is async: parallel creates all see the same
 // stale count, so the rule would stop the next OPERATION and none of the writes
