@@ -382,6 +382,8 @@ export const de: Dict = {
   "team.clear": "löschen",
   "team.dragToAssign": "Auf eine Box ziehen, um zuzuweisen · klicken, um die Canvas zu filtern",
   "team.linkedAccount": "Mit einem echten Konto verknüpft",
+  "team.linkedWaiting": "Im Team-Pool, aber noch kein Mitarbeiter in diesem Pulse — kein Zugriff, keine Benachrichtigungen",
+  "team.notCollaborator": "hier kein Mitarbeiter",
   "team.freeform": "Freier Platzhalter — nicht mit einem Konto verknüpft",
   "team.duplicateResource": "Diese Ressource duplizieren",
   "team.removeResource": "Diese Ressource entfernen",

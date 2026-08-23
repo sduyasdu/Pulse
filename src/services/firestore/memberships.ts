@@ -2,6 +2,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, updateDoc } fr
 import { db } from "@/lib/firebase";
 import type { PulseMember, PulseRole } from "@/types";
 import { capsForRole } from "@/domain/permissions";
+import { emailKey } from "./emailKey";
 
 export function subscribePulseMembers(pulseId: string, cb: (members: PulseMember[]) => void): () => void {
   return onSnapshot(collection(db, "pulses", pulseId, "pulseMembers"), (snap) =>
@@ -40,7 +41,7 @@ export async function syncMyMemberPhoto(pulseId: string, uid: string, photoURL: 
  * costs nothing. */
 export async function backfillMyOwnerEmail(pulseId: string, uid: string, email: string | null): Promise<void> {
   if (!email) return;
-  await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { email }).catch(() => {});
+  await updateDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), { email: emailKey(email) }).catch(() => {});
 }
 
 /** Owner-only (enforced by firestore.rules). Materializes the role's capability

@@ -23,20 +23,38 @@ type Db = FirebaseFirestore.Firestore;
 
 const FN = "RM16.roster";
 
-/** The uid of the workspace member with this email, or null.
+/** Canonical email form. Mirrors `emailKey()` in
+ * `src/services/firestore/emailKey.ts` — functions cannot import from the app,
+ * so the two must be kept in step. */
+export const emailKey = (email: string) => email.trim().toLowerCase();
+
+/**
+ * The uid of the member of `collectionPath` whose email is `email`, or null.
  *
- * Matches on the denormalized `WorkspaceMember.email` (RM16) rather than reading
- * each member's user document — one query instead of N lookups. Both sides are
- * stored in `emailKey()` form (trimmed, lowercased), so this is a plain equality
- * and `Ana@x.com` and `ana@x.com` are the same person. */
-async function uidForEmail(db: Db, workspaceId: string, email: string): Promise<string | null> {
-  const snap = await db
-    .collection(`workspaces/${workspaceId}/workspaceMembers`)
-    .where("email", "==", email)
-    .limit(1)
-    .get();
-  return snap.empty ? null : snap.docs[0].id;
+ * **Compares in code rather than with a `where()` query, deliberately.** Member
+ * emails are NOT reliably normalised in existing data: invite acceptance writes
+ * them through `emailKey()`, while the copy-link join, Pulse creation and the
+ * owner-email backfill all wrote the raw address. An equality query would
+ * therefore miss anyone with a capital letter in their address — silently, in
+ * the mechanism that decides whether someone shows as linked. Both writers are
+ * fixed going forward, but the data already out there is mixed, and a scan is
+ * immune to that.
+ *
+ * Affordable because membership is small and capped by plan
+ * (`maxCollaborators` is 10 / 20 / unlimited).
+ */
+async function uidForEmailIn(db: Db, collectionPath: string, email: string): Promise<string | null> {
+  const want = emailKey(email);
+  const snap = await db.collection(collectionPath).get();
+  for (const d of snap.docs) {
+    const stored = d.data()?.email;
+    if (typeof stored === "string" && emailKey(stored) === want) return d.id;
+  }
+  return null;
 }
+
+const uidForEmail = (db: Db, workspaceId: string, email: string) =>
+  uidForEmailIn(db, `workspaces/${workspaceId}/workspaceMembers`, email);
 
 /** Write a resolution only when it actually changes.
  *
@@ -154,7 +172,77 @@ export const onWorkspaceMemberLeaveUnresolve = onDocumentDeleted(
   },
 );
 
+// ---------------------------------------------------------------------------
+// The same mechanism, one level down: a Pulse's own resources (RM16, second
+// trigger).
+//
+// A Pulse resource copied from a master arrives with an email and no uid,
+// because the master's uid means "member of the workspace" and says nothing
+// about THIS Pulse. It resolves here, against this Pulse's own membership — and
+// stays unresolved, correctly, for someone who is not a collaborator (RM20's
+// "waiting" state).
+//
+// Removal is already handled: SF7 (`cascade.ts`) clears `linkedUid` when a
+// member is removed and leaves `linkedEmail` alone, which is exactly RM17.
+// ---------------------------------------------------------------------------
+
+export const onPulseResourceWriteResolve = onDocumentWritten(
+  "pulses/{pulseId}/resources/{resourceId}",
+  async (event) => {
+    const { pulseId, resourceId } = event.params;
+    const after = event.data?.after;
+    if (!after?.exists) return;
+
+    const before = event.data?.before;
+    const emailBefore = (before?.exists ? before.data()?.linkedEmail : null) ?? null;
+    const emailAfter = (after.data()?.linkedEmail as string | null) ?? null;
+    const uidNow = (after.data()?.linkedUid as string | null) ?? null;
+    if (emailAfter === emailBefore && !(emailAfter !== null && uidNow === null)) return;
+
+    try {
+      const desired = emailAfter
+        ? await uidForEmailIn(getFirestore(), `pulses/${pulseId}/pulseMembers`, emailAfter)
+        : null;
+      if (await applyResolution(after.ref, uidNow, desired)) {
+        log(FN, "resolved pulse link", { pulseId, resourceId, email: emailAfter, uid: desired });
+      }
+    } catch (err) {
+      logError(FN, "pulse link resolution failed", err, { pulseId, resourceId });
+      throw err;
+    }
+  },
+);
+
+export const onPulseMemberJoinResolve = onDocumentCreated(
+  "pulses/{pulseId}/pulseMembers/{memberUid}",
+  async (event) => {
+    const { pulseId, memberUid } = event.params;
+    const stored = event.data?.data()?.email;
+    if (typeof stored !== "string" || !stored) return;
+    const email = emailKey(stored);
+
+    try {
+      const db = getFirestore();
+      // Scanned rather than queried, for the same normalisation reason as
+      // `uidForEmailIn`: resources copied from a roster carry a normalised
+      // email, but nothing guarantees what a hand-made link stored.
+      const resources = await db.collection(`pulses/${pulseId}/resources`).get();
+      let resolved = 0;
+      for (const d of resources.docs) {
+        const want = d.data()?.linkedEmail;
+        if (typeof want !== "string" || emailKey(want) !== email) continue;
+        if (await applyResolution(d.ref, (d.data()?.linkedUid as string | null) ?? null, memberUid)) resolved += 1;
+      }
+      if (resolved) log(FN, "resolved pulse links on join", { pulseId, memberUid, resolved });
+    } catch (err) {
+      logError(FN, "pulse resolution on join failed", err, { pulseId, memberUid });
+      throw err;
+    }
+  },
+);
+
 // Exported for the integration tests: the two pieces where being wrong is
 // silent — the email match, and the comparison that terminates the trigger.
 export const uidForEmailForTest = uidForEmail;
+export const uidForEmailInForTest = uidForEmailIn;
 export const applyResolutionForTest = applyResolution;

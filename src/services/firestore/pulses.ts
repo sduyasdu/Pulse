@@ -13,6 +13,7 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
+import { emailKey } from "./emailKey";
 import { db } from "@/lib/firebase";
 import type { Feature, MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
@@ -47,7 +48,7 @@ export async function createPulse(uid: string, workspaceId: string, name: string
   // owns the Pulse that other members and the MCP tools can read, and the
   // pulseMembers update rule PINS email against self-edits, so a blank one can
   // only ever be repaired by an owner (see backfillMyOwnerEmail).
-  const member: PulseMember = { uid, email: creatorEmail ?? "", role: "owner", joinedAt: Date.now() };
+  const member: PulseMember = { uid, email: creatorEmail ? emailKey(creatorEmail) : "", role: "owner", joinedAt: Date.now() };
   await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), member);
 
   const indexEntry: MyPulseIndexEntry = {
@@ -92,7 +93,7 @@ export async function duplicatePulse(uid: string, workspaceId: string, sourcePul
     ...(source?.statuses ? { statuses: source.statuses } : {}),
   };
   await setDoc(pulseRef, stripUndefined(pulse));
-  await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), { uid, email: creatorEmail ?? "", role: "owner", joinedAt: now } satisfies PulseMember);
+  await setDoc(doc(db, "pulses", pulseRef.id, "pulseMembers", uid), { uid, email: creatorEmail ? emailKey(creatorEmail) : "", role: "owner", joinedAt: now } satisfies PulseMember);
   const indexEntry: MyPulseIndexEntry = { pulseId: pulseRef.id, name, workspaceId, role: "owner", joinedAt: now, createdAt: now };
   await setDoc(doc(db, "users", uid, "myPulses", pulseRef.id), indexEntry);
 

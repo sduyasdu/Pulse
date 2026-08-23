@@ -388,6 +388,8 @@ export const en = {
   "team.clear": "clear",
   "team.dragToAssign": "Drag onto a box to assign · click to filter the canvas",
   "team.linkedAccount": "Linked to a real account",
+  "team.linkedWaiting": "Rostered, but not a collaborator on this Pulse yet — no access, no notifications",
+  "team.notCollaborator": "not a collaborator here",
   "team.freeform": "Freeform placeholder — not linked to an account",
   "team.duplicateResource": "Duplicate this resource",
   "team.removeResource": "Remove this resource",

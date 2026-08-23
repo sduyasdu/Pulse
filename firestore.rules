@@ -520,13 +520,25 @@ service cloud.firestore {
           || (isSignedIn() && resource.data.authorUid == request.auth.uid && isPulseActive(pulseId));
       }
 
+      // `linkedUid` is SERVER-OWNED here exactly as it is on the roster
+      // (Resource-Master-Spec RM6/RM16): the client writes `linkedEmail`, and a
+      // trigger resolves the uid against THIS Pulse's membership. A client that
+      // could write the uid could show someone as a live collaborator who was
+      // never invited — forging the distinction RM20 renders.
+      //
+      // Clearing it IS allowed, so an explicit unlink can drop both fields in
+      // one write (RM17); the trigger will not put it back, because the email is
+      // gone too.
       match /resources/{resourceId} {
         allow read: if isPulseMember(pulseId);
         // Create is split from update for the quota (RM10): a Pulse sitting at
         // its cap must still be able to rename or reassign the resources it
         // already has.
-        allow create: if canWriteContent(pulseId) && withinResourceQuota(pulseId);
-        allow update: if canWriteContent(pulseId);
+        allow create: if canWriteContent(pulseId) && withinResourceQuota(pulseId)
+          && request.resource.data.get('linkedUid', null) == null;
+        allow update: if canWriteContent(pulseId)
+          && (request.resource.data.get('linkedUid', null) == resource.data.get('linkedUid', null)
+              || request.resource.data.get('linkedUid', null) == null);
         allow delete: if canDeleteContent(pulseId);
       }
 

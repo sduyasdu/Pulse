@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { InviteLink, MyPulseIndexEntry, Pulse, PulseMember, PulseRole } from "@/types";
+import { emailKey } from "./emailKey";
 
 function newToken(): string {
   // Unguessable capability. randomUUID is 122 bits of entropy — plenty for a
@@ -36,7 +37,7 @@ export async function getPulseInviteLink(pulseId: string): Promise<InviteLink | 
 export async function joinPulseViaLink(pulseId: string, token: string, role: PulseRole, uid: string, email: string): Promise<void> {
   const existing = await getDoc(doc(db, "pulses", pulseId, "pulseMembers", uid));
   if (!existing.exists()) {
-    const member: PulseMember = { uid, email, role, joinedAt: Date.now(), joinToken: token };
+    const member: PulseMember = { uid, email: emailKey(email), role, joinedAt: Date.now(), joinToken: token };
     await setDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), member);
   }
   const snap = await getDoc(doc(db, "pulses", pulseId));

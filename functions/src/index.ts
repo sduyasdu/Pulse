@@ -59,3 +59,8 @@ export { mcpCleanup } from "./mcpCleanup";
 // writer of `MasterResource.linkedUid`: the email is the durable intent a client
 // sets, the uid is derived from real membership.
 export { onMasterResourceWriteResolve, onWorkspaceMemberJoinResolve, onWorkspaceMemberLeaveUnresolve } from "./roster";
+
+// The same resolution one level down, against a Pulse's own membership. A
+// resource copied from the roster arrives with an email and no uid — the
+// master's uid means "in the workspace" and says nothing about THIS Pulse.
+export { onPulseResourceWriteResolve, onPulseMemberJoinResolve } from "./roster";

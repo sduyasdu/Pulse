@@ -382,6 +382,8 @@ export const fr: Dict = {
   "team.clear": "effacer",
   "team.dragToAssign": "Faites glisser sur une boîte pour affecter · cliquez pour filtrer le canevas",
   "team.linkedAccount": "Lié à un vrai compte",
+  "team.linkedWaiting": "Dans l'effectif, mais pas encore collaborateur sur ce Pulse — ni accès ni notifications",
+  "team.notCollaborator": "pas collaborateur ici",
   "team.freeform": "Marqueur libre — non lié à un compte",
   "team.duplicateResource": "Dupliquer cette ressource",
   "team.removeResource": "Retirer cette ressource",

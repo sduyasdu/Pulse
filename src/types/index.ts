@@ -644,7 +644,13 @@ export interface Resource {
   name: string;
   capacity: number; // occupation limit %, default 100
   type: string | null;
-  /** Linked to a real Pulse member's uid, if this Resource maps 1:1 to an
-   * invited account (spec §8 — "allow both", visually distinguish). */
+  /** WHO this resource is, durably (Resource-Master-Spec RM6). Stored in
+   * `emailKey()` form. May name someone who is not a collaborator on this
+   * Pulse — the normal case for a resource copied from the workspace roster. */
+  linkedEmail?: string | null;
+  /** What `linkedEmail` resolved to against THIS Pulse's membership. Present
+   * ⇒ that person is a current collaborator here; absent with an email set ⇒
+   * rostered but waiting (RM20). Server-owned — resolved by trigger, cleared by
+   * SF7 on removal. */
   linkedUid?: string | null;
 }

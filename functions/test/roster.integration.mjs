@@ -15,7 +15,7 @@ const assert = (cond, msg) => (cond ? console.log("  ✓", msg) : (failed++, con
 
 // The triggers themselves need a deployed function runtime; what is exercised
 // here is the logic they are built from, against real Firestore semantics.
-const { uidForEmailForTest, applyResolutionForTest } = await import("../lib/roster.js");
+const { uidForEmailForTest, uidForEmailInForTest, applyResolutionForTest } = await import("../lib/roster.js");
 
 const WS = "ws_roster";
 await db.doc(`workspaces/${WS}`).set({ id: WS, name: "Acme" });
@@ -27,11 +27,23 @@ await db.doc(`workspaces/${WS}/workspaceMembers/bob`).set({ uid: "bob", role: "m
 assert((await uidForEmailForTest(db, WS, "bob@example.com")) === "bob", "resolve: a member's email finds their uid");
 assert((await uidForEmailForTest(db, WS, "nobody@example.com")) === null, "resolve: a stranger resolves to null, not undefined");
 
-// Both sides are stored lowercased, so this is a plain equality — the test
-// exists to pin that the STORAGE is normalised, since the query cannot fold case.
+// Member emails are NOT reliably normalised in existing data — invite
+// acceptance wrote them through emailKey() while the copy-link join, Pulse
+// creation and the owner backfill wrote the raw address. A `where()` equality
+// would silently miss anyone with a capital letter, in the mechanism that
+// decides whether someone shows as linked. So the match folds case on READ.
 await db.doc(`workspaces/${WS}/workspaceMembers/cara`).set({ uid: "cara", role: "member", joinedAt: 1, email: "Cara@Example.com" });
-assert((await uidForEmailForTest(db, WS, "cara@example.com")) === null,
-  "resolve: an unnormalised stored email does NOT match — emailKey() must be applied on write");
+assert((await uidForEmailForTest(db, WS, "cara@example.com")) === "cara",
+  "resolve: a legacy mixed-case stored email still matches");
+assert((await uidForEmailForTest(db, WS, "  CARA@example.com  ")) === "cara",
+  "resolve: the looked-up address is folded too, not just the stored one");
+
+// The Pulse side uses the same helper against pulseMembers.
+await db.doc("pulses/p_roster/pulseMembers/dan").set({ uid: "dan", role: "editor", joinedAt: 1, email: "Dan@Example.com" });
+assert((await uidForEmailInForTest(db, "pulses/p_roster/pulseMembers", "dan@example.com")) === "dan",
+  "resolve: the same fold applies to Pulse membership");
+assert((await uidForEmailInForTest(db, "pulses/p_roster/pulseMembers", "ana@example.com")) === null,
+  "resolve: a non-collaborator stays unresolved — the 'waiting' state (RM20)");
 
 // ---------------------------------------------------------------------------
 // Termination. applyResolution is what stops the write-triggers-itself loop.

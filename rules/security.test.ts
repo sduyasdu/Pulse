@@ -1366,3 +1366,51 @@ describe("resource master — the workspace roster (Resource-Master-Spec §1, RM
     await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", RID), { name: "Bob B" }));
   });
 });
+
+describe("pulse resource links — email is the intent, uid is resolved (RM6/RM16/RM20)", () => {
+  const P = "p_link";
+
+  async function seedLinkable(over: Record<string, unknown> = {}) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", P), {
+        id: P, workspaceId: "ws_link", name: "Linking", createdBy: "alice",
+        createdAt: Date.now(), updatedAt: Date.now(), graphConfig: { stepPx: 16, workPerStep: 1 },
+      });
+      await setDoc(doc(db, "pulses", P, "pulseMembers", "alice"), { uid: "alice", email: "alice@example.com", role: "owner", joinedAt: Date.now() });
+      await setDoc(doc(db, "pulses", P, "resources", "r1"), { id: "r1", name: "Ana", capacity: 100, linkedEmail: null, linkedUid: null, ...over });
+    });
+  }
+
+  const alice = () => dbAs("alice", "alice@example.com");
+
+  it("lets an editor set the linked EMAIL", async () => {
+    await seedLinkable();
+    await assertSucceeds(updateDoc(doc(alice(), "pulses", P, "resources", "r1"), { linkedEmail: "ana@example.com" }));
+  });
+
+  // The forgery this prevents: showing someone as a live collaborator who was
+  // never invited to the Pulse.
+  it("denies writing the resolved linkedUid", async () => {
+    await seedLinkable();
+    await assertFails(updateDoc(doc(alice(), "pulses", P, "resources", "r1"), { linkedUid: "alice" }));
+  });
+
+  it("denies creating a resource that arrives pre-resolved", async () => {
+    await seedLinkable();
+    await assertFails(
+      setDoc(doc(alice(), "pulses", P, "resources", "r_forged"), { id: "r_forged", name: "Forged", capacity: 100, linkedUid: "alice" }),
+    );
+  });
+
+  // An explicit unlink must be able to drop both in one write (RM17), or the
+  // email would survive and the trigger would re-resolve what the user cleared.
+  it("allows an explicit unlink to clear both fields at once", async () => {
+    await seedLinkable({ linkedEmail: "alice@example.com", linkedUid: "alice" });
+    await assertSucceeds(updateDoc(doc(alice(), "pulses", P, "resources", "r1"), { linkedEmail: null, linkedUid: null }));
+  });
+
+  it("allows unrelated edits to an already-resolved resource", async () => {
+    await seedLinkable({ linkedEmail: "alice@example.com", linkedUid: "alice" });
+    await assertSucceeds(updateDoc(doc(alice(), "pulses", P, "resources", "r1"), { name: "Ana T" }));
+  });
+});

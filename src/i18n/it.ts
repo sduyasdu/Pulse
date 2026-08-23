@@ -382,6 +382,8 @@ export const it: Dict = {
   "team.clear": "cancella",
   "team.dragToAssign": "Trascina su una casella per assegnare · clicca per filtrare il canvas",
   "team.linkedAccount": "Collegato a un account reale",
+  "team.linkedWaiting": "Nell'organico, ma non ancora collaboratore in questo Pulse — nessun accesso né notifiche",
+  "team.notCollaborator": "non collabora qui",
   "team.freeform": "Segnaposto libero — non collegato a un account",
   "team.duplicateResource": "Duplica questa risorsa",
   "team.removeResource": "Rimuovi questa risorsa",

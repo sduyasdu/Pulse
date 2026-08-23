@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
+import { emailKey } from "@/services/firestore/emailKey";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useAuthStore } from "@/stores/authStore";
 import { allocInRange } from "@/domain/assignments";
@@ -34,7 +35,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   const [draft, setDraft] = useState("");
   // Pending link that would attach an account already linked to other
   // resource(s) — resolved by the Cancel / Keep both / Replace dialog.
-  const [linkConflict, setLinkConflict] = useState<{ resourceId: string; uid: string; conflicts: { id: string; label: string }[] } | null>(null);
+  const [linkConflict, setLinkConflict] = useState<{ resourceId: string; email: string; conflicts: { id: string; label: string }[] } | null>(null);
 
   /** One path for both Enter and the check button, so they cannot diverge. */
   const commitResource = () => {
@@ -45,20 +46,27 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
     setAdding(false);
   };
 
-  const accountLabel = (uid: string) => (uid === myUid ? `${t("team.yourAccount")}${myEmail ? ` (${myEmail})` : ""}` : members.find((m) => m.uid === uid)?.email ?? t("team.thatAccount"));
-
+  // The client writes the EMAIL; a trigger resolves the uid against this Pulse's
+  // membership (Resource-Master-Spec RM6/RM16). Writing the uid here would be
+  // refused by the rules, and would also be a lie waiting to happen — the uid
+  // means "collaborator on this Pulse", which is a fact about membership, not
+  // about what someone picked in a dropdown.
+  //
+  // Unlinking clears BOTH: an explicit unlink is a statement about who this
+  // resource is, unlike a membership change, which clears only the resolution
+  // (RM17, SF7).
   const onLinkChange = (resourceId: string, value: string) => {
-    const uid = value || null;
-    if (!uid) {
-      void patchResource(resourceId, { linkedUid: null });
+    const email = value ? emailKey(value) : null;
+    if (!email) {
+      void patchResource(resourceId, { linkedEmail: null, linkedUid: null });
       return;
     }
-    const conflicts = resources.filter((x) => x.id !== resourceId && x.linkedUid === uid);
+    const conflicts = resources.filter((x) => x.id !== resourceId && x.linkedEmail && emailKey(x.linkedEmail) === email);
     if (conflicts.length === 0) {
-      void patchResource(resourceId, { linkedUid: uid });
+      void patchResource(resourceId, { linkedEmail: email });
       return;
     }
-    setLinkConflict({ resourceId, uid, conflicts: conflicts.map((c) => ({ id: c.id, label: c.name?.trim() || c.initials })) });
+    setLinkConflict({ resourceId, email, conflicts: conflicts.map((c) => ({ id: c.id, label: c.name?.trim() || c.initials })) });
   };
 
   const q = query.trim().toLowerCase();
@@ -155,8 +163,11 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               <ResourceBadge
                 resourceId={r.id}
                 size={22}
-                ring={r.linkedUid ? "#12A594" : undefined}
-                title={r.linkedUid ? t("team.linkedAccount") : t("team.freeform")}
+                // RM20's three states, read straight off the two fields: no
+                // email is a placeholder, email+uid is a live collaborator,
+                // email alone is rostered but waiting for access here.
+                ring={r.linkedUid ? "#12A594" : r.linkedEmail ? "#EAB308" : undefined}
+                title={r.linkedUid ? t("team.linkedAccount") : r.linkedEmail ? t("team.linkedWaiting") : t("team.freeform")}
               />
               <div className="overflow-hidden flex-1">
                 <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
@@ -213,7 +224,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               <div className="relative mt-1.5">
                 <Icon name="link" size={12} style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
                 <select
-                  value={r.linkedUid || ""}
+                  value={r.linkedEmail || ""}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onLinkChange(r.id, e.target.value)}
@@ -222,10 +233,17 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                   title={t("team.linkTitle")}
                 >
                   <option value="">{t("team.notLinked")}</option>
-                  {myUid && <option value={myUid}>{t("team.myAccount")}{myEmail ? ` (${myEmail})` : ""}</option>}
-                  {members.filter((m) => m.uid !== myUid).map((m) => (
-                    <option key={m.uid} value={m.uid}>{m.email}</option>
+                  {myEmail && <option value={emailKey(myEmail)}>{t("team.myAccount")} ({myEmail})</option>}
+                  {members.filter((m) => m.uid !== myUid && m.email).map((m) => (
+                    <option key={m.uid} value={emailKey(m.email)}>{m.email}</option>
                   ))}
+                  {/* A link copied from the roster can name someone who is not a
+                      collaborator here (RM18). The dropdown only OFFERS
+                      collaborators, so without this the select would silently
+                      show blank and the next change would wipe the link. */}
+                  {r.linkedEmail && !members.some((m) => m.email && emailKey(m.email) === emailKey(r.linkedEmail!)) && (
+                    <option value={emailKey(r.linkedEmail)}>{r.linkedEmail} — {t("team.notCollaborator")}</option>
+                  )}
                 </select>
               </div>
             )}
@@ -238,20 +256,20 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
           <div className="w-full max-w-sm rounded-2xl bg-yasdu-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-display mb-2 text-base font-semibold text-yasdu-fg">{t("team.accountLinked")}</h2>
             <p className="text-xs leading-relaxed" style={{ color: "#64748B" }}>
-              {t("team.linkConflictBody", { account: accountLabel(linkConflict.uid), resources: linkConflict.conflicts.map((c) => `“${c.label}”`).join(", ") })}
+              {t("team.linkConflictBody", { account: linkConflict.email, resources: linkConflict.conflicts.map((c) => `“${c.label}”`).join(", ") })}
               {" "}{linkConflict.conflicts.length === 1 ? t("team.linkConflictOne") : t("team.linkConflictMany")}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setLinkConflict(null)} className="rounded-lg px-3 py-2 text-sm" style={{ color: "#64748B" }}>{t("common.cancel")}</button>
               <button
-                onClick={() => { void patchResource(linkConflict.resourceId, { linkedUid: linkConflict.uid }); setLinkConflict(null); }}
+                onClick={() => { void patchResource(linkConflict.resourceId, { linkedEmail: linkConflict.email }); setLinkConflict(null); }}
                 className="rounded-lg px-3 py-2 text-sm font-semibold"
                 style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}
               >
                 {t("team.keepBoth")}
               </button>
               <button
-                onClick={() => { linkConflict.conflicts.forEach((c) => void patchResource(c.id, { linkedUid: null })); void patchResource(linkConflict.resourceId, { linkedUid: linkConflict.uid }); setLinkConflict(null); }}
+                onClick={() => { linkConflict.conflicts.forEach((c) => void patchResource(c.id, { linkedEmail: null, linkedUid: null })); void patchResource(linkConflict.resourceId, { linkedEmail: linkConflict.email }); setLinkConflict(null); }}
                 className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg"
                 style={{ background: "#D85A28" }}
               >
