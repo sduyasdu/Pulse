@@ -452,7 +452,11 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
       draggable={canManage}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="rounded-xl border p-3"
+      // h-full + flex column so the menu row can be pushed to the bottom. Grid
+      // items already stretch to equal height; without this the CONTENT does not,
+      // so the menu sat wherever the card happened to end — higher on someone
+      // with no email, lower on someone with one.
+      className="flex h-full flex-col rounded-xl border p-3"
       style={{ borderColor: "#E2DFD9", background: "#FFFFFF", opacity: dragging ? 0.45 : 1, cursor: canManage ? "grab" : "default" }}
     >
       <div className="flex items-center gap-2">
@@ -495,7 +499,9 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-end">
+      {/* mt-auto: pinned to the bottom of the card rather than trailing the
+          content, so a row of cards has one menu line instead of a ragged one. */}
+      <div className="mt-auto flex items-center justify-end pt-2">
         {/* Where-they're-used is offered to every workspace member, not only an
             owner: seeing where someone is staffed is a reading question, not a
             curation one. So a non-owner gets a one-item menu, and an owner three. */}
