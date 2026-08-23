@@ -294,8 +294,17 @@ export const onMasterResourceWritePropagate = onDocumentWritten(
     // `type` is its own category and must never be written from here — writing
     // it was what made the Capacity tab's rename cascade unsafe.
     // `?? type` reads a roster entry written before the split.
+    // `before` reads ONLY `role`, while `after` falls back to the pre-split
+    // `type`. Deliberately asymmetric: the self-heal that moves a roster entry's
+    // role out of `type` into `role` would otherwise look like no change at all
+    // (both sides resolving to the same string through the fallback), and the
+    // copies would never receive a `role` — which is exactly how existing
+    // linked resources ended up showing no role at all.
+    //
+    // It also means the first edit of ANY kind to a pre-split entry backfills
+    // its copies, which is the cheapest migration available: none.
     const roleAfter = (a.role ?? a.type ?? null) as string | null;
-    const roleBefore = (b.role ?? b.type ?? null) as string | null;
+    const roleBefore = (b.role ?? null) as string | null;
     if (roleAfter !== roleBefore) patch.role = roleAfter;
     if (Object.keys(patch).length === 0) return;
 

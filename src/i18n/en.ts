@@ -445,6 +445,8 @@ export const en = {
   "addRoster.noAccess": "You can add people to this Pulse, but you can't browse the organisation's list — that needs access to the workspace it belongs to.",
   "addRoster.emptyRoster": "No people in your organisation yet. Add them from the dashboard first.",
   "addRoster.wholeTeam": "Select a whole team",
+  "addRoster.selectTeam": "Select everyone in {team}",
+  "addRoster.clearTeam": "Clear everyone in {team}",
   "addRoster.searchPlaceholder": "Search by name or role",
   "addRoster.noMatch": "No one matches that search.",
   "addRoster.alreadyHere": "already here",

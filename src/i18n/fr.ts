@@ -439,6 +439,8 @@ export const fr: Dict = {
   "addRoster.noAccess": "Vous pouvez ajouter des personnes à ce Pulse, mais pas parcourir la liste de l'organisation — cela demande l'accès à l'espace de travail auquel il appartient.",
   "addRoster.emptyRoster": "Aucune personne dans votre organisation pour l'instant. Ajoutez-en depuis le tableau de bord.",
   "addRoster.wholeTeam": "Sélectionner une équipe entière",
+  "addRoster.selectTeam": "Sélectionner toute l'équipe {team}",
+  "addRoster.clearTeam": "Désélectionner toute l'équipe {team}",
   "addRoster.searchPlaceholder": "Rechercher par nom ou rôle",
   "addRoster.noMatch": "Personne ne correspond à cette recherche.",
   "addRoster.alreadyHere": "déjà présent",

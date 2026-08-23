@@ -204,8 +204,8 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               />
               <div className="overflow-hidden flex-1">
                 <div className="flex items-center gap-1">
-                  <ResourceOriginBadge masterId={r.masterId} />
                   <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                  <ResourceOriginBadge masterId={r.masterId} />
                 </div>
                 <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · {t("team.limit", { n: r.capacity })}</div>
               </div>

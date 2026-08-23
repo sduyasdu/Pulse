@@ -58,15 +58,34 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
     return next;
   });
 
-  /** Add every member of a team that is not already here. Selecting rather than
-   * copying immediately, so the whole thing is still one reviewable action. */
-  const pickTeam = (teamId: string) => setPicked((cur) => {
-    const next = new Set(cur);
-    for (const r of rows ?? []) {
-      if ((r.teamIds ?? []).includes(teamId) && !alreadyLinked.has(r.id)) next.add(r.id);
-    }
-    return next;
-  });
+  /** Members of this team that could still be added. */
+  const selectableIn = (teamId: string) =>
+    (rows ?? []).filter((r) => (r.teamIds ?? []).includes(teamId) && !alreadyLinked.has(r.id)).map((r) => r.id);
+
+  /** Whether clicking the team again would clear it — i.e. everyone it can
+   * contribute is already picked. Drives the pressed look, so the button says
+   * what a second click will do. */
+  const teamFullySelected = (teamId: string) => {
+    const ids = selectableIn(teamId);
+    return ids.length > 0 && ids.every((id) => picked.has(id));
+  };
+
+  /**
+   * Toggle a whole team.
+   *
+   * Selecting rather than copying immediately, so a twenty-person team is still
+   * one reviewable action — and clicking again clears it, because a control that
+   * only adds leaves no way back except unpicking twenty people by hand.
+   */
+  const pickTeam = (teamId: string) => {
+    const ids = selectableIn(teamId);
+    const clearing = teamFullySelected(teamId);
+    setPicked((cur) => {
+      const next = new Set(cur);
+      for (const id of ids) if (clearing) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const submit = async () => {
     if (picked.size === 0 || busy) return;
@@ -102,16 +121,26 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
               <div className="mt-3">
                 <div className="mono text-[10px] uppercase tracking-wide" style={{ color: "#94A3B8" }}>{t("addRoster.wholeTeam")}</div>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {teams.map((tm) => (
-                    <button
-                      key={tm.id}
-                      onClick={() => pickTeam(tm.id)}
-                      className="hoverable mono rounded px-2 py-1 text-[10px] font-semibold"
-                      style={{ background: tm.color, color: "#FFFFFF" }}
-                    >
-                      {tm.name}
-                    </button>
-                  ))}
+                  {teams.map((tm) => {
+                    const on = teamFullySelected(tm.id);
+                    return (
+                      <button
+                        key={tm.id}
+                        onClick={() => pickTeam(tm.id)}
+                        aria-pressed={on}
+                        title={on ? t("addRoster.clearTeam", { team: tm.name }) : t("addRoster.selectTeam", { team: tm.name })}
+                        className="hoverable no-press mono rounded px-2 py-1 text-[10px] font-semibold"
+                        // Selected reads as filled; unselected as an outline of
+                        // the same colour, so the pair is one control in two
+                        // states rather than two different buttons.
+                        style={on
+                          ? { background: tm.color, color: "#FFFFFF", border: `1px solid ${tm.color}` }
+                          : { background: "#FFFFFF", color: tm.color, border: `1px solid ${tm.color}` }}
+                      >
+                        {tm.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -140,7 +169,9 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
                       key={r.id}
                       disabled={here}
                       onClick={() => toggle(r.id)}
-                      className="flex w-full items-center gap-2 border-b px-2.5 py-2 text-left last:border-b-0 disabled:opacity-45"
+                      // no-press: the ungated global button scale (index.css) would
+                      // grow a full-width row past the list that clips it.
+                      className="no-press hoverable flex w-full items-center gap-2 border-b px-2.5 py-2 text-left last:border-b-0 disabled:opacity-45"
                       style={{ borderColor: "#F5F3EF", background: on ? "#FFF7F1" : undefined }}
                     >
                       <span

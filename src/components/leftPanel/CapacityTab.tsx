@@ -225,12 +225,15 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
         const rows = features.filter((f) => (f.resources || []).includes(r.id) || (f.children || []).some((c) => (c.resources || []).includes(r.id)));
         return (
           <div key={r.id} className="rounded px-3 py-3" style={{ border: "1px solid #E2DFD9" }}>
-            <div className="flex items-center gap-2">
+            {/* items-start, not items-center: the right-hand block is two lines
+                (name, then the peak figure), so centring floated the avatar
+                between them instead of against the name it belongs to. */}
+            <div className="flex items-start gap-2">
               <ResourceBadge resourceId={r.id} size={24} />
               <div className="flex-1 overflow-hidden">
                 <div className="flex items-center gap-1">
-                  <ResourceOriginBadge masterId={r.masterId} />
                   <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} renameTitle={t("capacity.clickToRename")} />
+                  <ResourceOriginBadge masterId={r.masterId} />
                   {/* The ORG role, inherited and read-only (RM24). Shown beside
                       the name because it is who this person is, not how this
                       Pulse files them — that is `type`, below. */}
