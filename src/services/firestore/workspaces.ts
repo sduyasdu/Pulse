@@ -1,4 +1,4 @@
-import { doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Workspace, WorkspaceMember } from "@/types";
 import { emailKey } from "./emailKey";
@@ -77,5 +77,35 @@ export async function backfillMyWorkspaceEmail(workspaceId: string, uid: string,
     await updateDoc(ref, { email: key });
   } catch {
     /* not the owner, or offline — the roster simply keeps showing "waiting" */
+  }
+}
+
+/** Live workspace membership — the roster reads it to put a real face on a
+ * linked person, and to know who a linked email resolved to. */
+export function subscribeWorkspaceMembers(
+  workspaceId: string,
+  cb: (rows: WorkspaceMember[]) => void,
+): () => void {
+  return onSnapshot(
+    collection(db, "workspaces", workspaceId, "workspaceMembers"),
+    (snap) => cb(snap.docs.map((d) => ({ uid: d.id, ...d.data() }) as WorkspaceMember)),
+    () => cb([]),
+  );
+}
+
+/** Self-sync the caller's avatar onto their own workspace membership, so other
+ * members can render it. Exactly what `syncMyMemberPhoto` does for a Pulse, and
+ * allowed by the same shape of rule: a member may write their own doc as long as
+ * identity and access fields are unchanged.
+ *
+ * Writes only on a real difference, so it converges rather than looping. */
+export async function syncMyWorkspacePhoto(workspaceId: string, uid: string, photoURL: string | null): Promise<void> {
+  const ref = doc(db, "workspaces", workspaceId, "workspaceMembers", uid);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists() || (snap.data()?.photoURL ?? null) === photoURL) return;
+    await updateDoc(ref, { photoURL });
+  } catch {
+    /* not permitted, or offline — the roster falls back to initials */
   }
 }

@@ -8,8 +8,9 @@ import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
 import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf } from "@/services/firestore/roster";
 import { subscribeTeams, createTeam, renameTeam, deleteTeam, setTeamMembership } from "@/services/firestore/teams";
+import { subscribeWorkspaceMembers } from "@/services/firestore/workspaces";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
-import type { MasterResource, Team } from "@/types";
+import type { MasterResource, Team, WorkspaceMember } from "@/types";
 
 /**
  * People — the workspace roster and its teams (Resource-Master-Spec §1, RM4).
@@ -31,6 +32,7 @@ export function PeoplePage() {
 
   const [rows, setRows] = useState<MasterResource[] | null>(null);
   const [teams, setTeams] = useState<Team[] | null>(null);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<MasterResource | "new" | null>(null);
@@ -48,6 +50,20 @@ export function PeoplePage() {
     if (!workspaceId) return;
     return subscribeTeams(workspaceId, setTeams);
   }, [workspaceId]);
+
+  // Members carry the denormalized avatar, because nobody can read anyone else's
+  // user document. A linked person therefore shows a real face rather than
+  // initials — which is also the clearest signal that the link resolved.
+  useEffect(() => {
+    if (!workspaceId) return;
+    return subscribeWorkspaceMembers(workspaceId, setMembers);
+  }, [workspaceId]);
+
+  const photoByUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of members) if (w.uid && w.photoURL) m.set(w.uid, w.photoURL);
+    return m;
+  }, [members]);
 
   const q = query.trim().toLowerCase();
   const matches = useMemo(
@@ -217,6 +233,7 @@ export function PeoplePage() {
                     ) : (
                       members.map((m) => (
                         <span key={m.id} className="mono flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]" style={{ background: "#F4F5F7", color: "#475569" }}>
+                          <PersonAvatar r={m} photo={m.linkedUid ? photoByUid.get(m.linkedUid) : undefined} size={14} />
                           {m.initials || initialsOf(m.name)}
                           {canManage && (
                             // The keyboard/touch path for unassigning. Dragging
@@ -259,6 +276,7 @@ export function PeoplePage() {
                 r={r}
                 teams={teams ?? []}
                 canManage={canManage}
+                photo={r.linkedUid ? photoByUid.get(r.linkedUid) : undefined}
                 dragging={dragId === r.id}
                 onDragStart={(e) => { e.dataTransfer.setData("text/plain", r.id); setDragId(r.id); }}
                 onDragEnd={() => { setDragId(null); setDropTeam(null); }}
@@ -288,10 +306,11 @@ export function PeoplePage() {
 
 /** One person. Draggable onto a team card, and equipped with a menu that does
  * the same thing without a mouse. */
-function PersonCard({ r, teams, canManage, dragging, onDragStart, onDragEnd, onEdit, onRemove, onToggleTeam }: {
+function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragEnd, onEdit, onRemove, onToggleTeam }: {
   r: MasterResource;
   teams: Team[];
   canManage: boolean;
+  photo?: string;
   dragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
@@ -313,9 +332,7 @@ function PersonCard({ r, teams, canManage, dragging, onDragStart, onDragEnd, onE
       style={{ borderColor: "#E2DFD9", background: "#FFFFFF", opacity: dragging ? 0.45 : 1, cursor: canManage ? "grab" : "default" }}
     >
       <div className="flex items-center gap-2">
-        <span className="mono flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ width: 28, height: 28, background: "#F1F5F9", color: "#475569" }}>
-          {r.initials || initialsOf(r.name)}
-        </span>
+        <PersonAvatar r={r} photo={photo} size={28} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold" style={{ color: "#1F2330" }}>{r.name}</div>
           <div className="mono truncate text-[10px]" style={{ color: "#94A3B8" }}>
@@ -365,5 +382,31 @@ function PersonCard({ r, teams, canManage, dragging, onDragStart, onDragEnd, onE
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A person's avatar: their account picture when the link has resolved and they
+ * have one, otherwise initials.
+ *
+ * The photo is the clearest possible signal that a link is live — a real face
+ * says "this is a person with an account here" more immediately than a chip
+ * does. It falls back rather than requiring one, because plenty of accounts have
+ * no picture and a linked person with no photo is still linked.
+ */
+function PersonAvatar({ r, photo, size }: { r: MasterResource; photo?: string; size: number }) {
+  const label = r.name || r.initials || "?";
+  const base: React.CSSProperties = { width: size, height: size, borderRadius: "50%", flexShrink: 0 };
+  if (photo) {
+    return <img src={photo} alt={label} title={label} style={{ ...base, objectFit: "cover", display: "block" }} />;
+  }
+  return (
+    <span
+      className="mono flex items-center justify-center font-bold"
+      title={label}
+      style={{ ...base, background: "#F1F5F9", color: "#475569", fontSize: Math.max(8, Math.round(size * 0.38)) }}
+    >
+      {r.initials || initialsOf(r.name)}
+    </span>
   );
 }

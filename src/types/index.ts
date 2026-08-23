@@ -79,6 +79,11 @@ export interface WorkspaceMember {
   uid: string;
   role: WorkspaceRole;
   joinedAt: Timestamp;
+  /** The member's avatar, self-synced from their user doc so the roster can show
+   * a real face on a linked person — the same denormalization `PulseMember`
+   * already carries, and for the same reason: members cannot read each other's
+   * user documents. */
+  photoURL?: string | null;
   /** Denormalized on join, in `emailKey()` form (Resource-Master-Spec RM16).
    * Lets the roster resolve `MasterResource.linkedEmail` to a uid with one
    * query instead of a member read followed by a `users/{uid}` lookup. Absent

@@ -21,7 +21,7 @@ import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
-import { backfillMyWorkspaceEmail } from "@/services/firestore/workspaces";
+import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto } from "@/services/firestore/workspaces";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 
 export function DashboardPage() {
@@ -71,7 +71,12 @@ export function DashboardPage() {
     const ws = userDoc?.personalWorkspaceId;
     if (!firebaseUser || !ws) return;
     void backfillMyWorkspaceEmail(ws, firebaseUser.uid, firebaseUser.email);
-  }, [firebaseUser, userDoc?.personalWorkspaceId]);
+    // Same shape for the avatar, so a linked person shows a face on the People
+    // screen. Converges: it writes only on a real difference.
+    // From the user doc, not the auth profile: the app's own avatar is what the
+    // rest of the product renders, and it is what a user can actually change.
+    void syncMyWorkspacePhoto(ws, firebaseUser.uid, userDoc?.photoURL ?? null);
+  }, [firebaseUser, userDoc?.personalWorkspaceId, userDoc?.photoURL]);
 
   useEffect(() => {
     if (!firebaseUser || !pulses || pulses.length === 0) return;

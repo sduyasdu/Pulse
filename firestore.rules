@@ -300,7 +300,23 @@ service cloud.firestore {
         allow create: if isSignedIn() && memberUid == request.auth.uid
           && request.resource.data.role == 'owner'
           && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
-        allow update, delete: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
+        // The owner may change anything; a member may update their OWN doc but
+        // only fields that don't affect identity or access. Mirrors the
+        // pulseMembers rule exactly: uid/role/joinedAt/email are pinned, which
+        // leaves the denormalized photoURL as the only thing a member can
+        // self-sync.
+        //
+        // `email` is pinned for a reason worth stating: the roster resolves a
+        // linked email to a uid (RM16), so a member who could rewrite their own
+        // email could make someone else's roster entry resolve to them.
+        allow update: if isWorkspaceMember(workspaceId) && (
+          workspaceRole(workspaceId) == 'owner'
+          || (memberUid == request.auth.uid
+              && request.resource.data.uid == resource.data.uid
+              && request.resource.data.role == resource.data.role
+              && request.resource.data.joinedAt == resource.data.joinedAt
+              && request.resource.data.get('email', null) == resource.data.get('email', null)));
+        allow delete: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
       }
     }
 

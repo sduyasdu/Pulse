@@ -1452,3 +1452,45 @@ describe("teams (Resource-Master-Spec RM4)", () => {
     await assertFails(deleteDoc(doc(bob, "workspaces", WS, "teams", "t1")));
   });
 });
+
+describe("workspace member self-update (avatar only)", () => {
+  const WS = "wsu";
+
+  async function seedMembers() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: 1, email: "alice@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "bob"), { uid: "bob", role: "member", joinedAt: 1, email: "bob@example.com" });
+    });
+  }
+
+  const bob = () => dbAs("bob", "bob@example.com");
+
+  it("lets a member self-sync their avatar", async () => {
+    await seedMembers();
+    await assertSucceeds(updateDoc(doc(bob(), "workspaces", WS, "workspaceMembers", "bob"), { photoURL: "data:image/png;base64,xx" }));
+  });
+
+  it("denies self-promotion", async () => {
+    await seedMembers();
+    await assertFails(updateDoc(doc(bob(), "workspaces", WS, "workspaceMembers", "bob"), { role: "owner" }));
+  });
+
+  // The forgery this closes: the roster resolves a linked EMAIL to a uid (RM16),
+  // so a member who could rewrite their own email could make someone else's
+  // roster entry resolve to them.
+  it("denies rewriting your own email", async () => {
+    await seedMembers();
+    await assertFails(updateDoc(doc(bob(), "workspaces", WS, "workspaceMembers", "bob"), { email: "alice@example.com" }));
+  });
+
+  it("denies touching someone else's membership", async () => {
+    await seedMembers();
+    await assertFails(updateDoc(doc(bob(), "workspaces", WS, "workspaceMembers", "alice"), { photoURL: "x" }));
+  });
+
+  it("still lets the owner change a member's role", async () => {
+    await seedMembers();
+    await assertSucceeds(updateDoc(doc(dbAs("alice", "alice@example.com"), "workspaces", WS, "workspaceMembers", "bob"), { role: "owner" }));
+  });
+});
