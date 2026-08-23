@@ -25,9 +25,13 @@ export function ResourceOriginBadge({ masterId, size = 14 }: { masterId?: string
       className="flex shrink-0 items-center justify-center rounded"
       title={label}
       aria-label={label}
-      style={{ width: size, height: size, background: fromRoster ? ORIGIN_ORANGE.background : "#F4F5F7" }}
+      // The INVERSE of the add button, from the same constant: the button is
+      // orange-on-tint, the badge is white-on-orange. One hue, two weights — the
+      // badge reads as a mark rather than a second button, and the orange still
+      // moves in one place if it ever changes.
+      style={{ width: size, height: size, background: fromRoster ? ORIGIN_ORANGE.color : "#F4F5F7" }}
     >
-      <Icon name={fromRoster ? "group" : "person"} size={Math.round(size * 0.72)} style={{ color: fromRoster ? ORIGIN_ORANGE.color : "#94A3B8" }} />
+      <Icon name={fromRoster ? "group" : "person"} size={Math.round(size * 0.72)} style={{ color: fromRoster ? "#FFFFFF" : "#94A3B8" }} />
     </span>
   );
 }
