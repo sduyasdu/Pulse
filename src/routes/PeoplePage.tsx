@@ -195,7 +195,7 @@ export function PeoplePage() {
             {t("people.noTeamMatch", { query: teamQuery.trim() })}
           </p>
         ) : visibleTeams.length > 0 ? (
-          <div className="mb-10 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+          <div className="mb-10 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
             {visibleTeams.map((team) => {
               const members = (rows ?? []).filter((r) => (r.teamIds ?? []).includes(team.id));
               const over = dropTeam === team.id;
@@ -234,20 +234,35 @@ export function PeoplePage() {
                     )}
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <div className="mt-2 flex flex-col items-start gap-1">
                     {members.length === 0 ? (
                       <span className="text-[11px]" style={{ color: "#CBD5E1" }}>{t("people.dropHere")}</span>
                     ) : (
                       members.map((m) => (
-                        <span key={m.id} className="mono flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]" style={{ background: "#F4F5F7", color: "#475569" }}>
-                          <PersonAvatar r={m} photo={m.linkedUid ? photoByUid.get(m.linkedUid) : undefined} size={14} />
-                          {m.initials || initialsOf(m.name)}
+                        // Avatar + NAME. The avatar already falls back to
+                        // initials when there is no photo, so pairing it with an
+                        // initials label printed the same two letters twice and
+                        // told you nothing about who the person is.
+                        <span
+                          key={m.id}
+                          className="flex max-w-full items-center gap-1.5 rounded px-1.5 py-1 text-[11px]"
+                          style={{ background: "#F4F5F7", color: "#334155" }}
+                          title={m.name}
+                        >
+                          <PersonAvatar r={m} photo={m.linkedUid ? photoByUid.get(m.linkedUid) : undefined} size={16} />
+                          <span className="min-w-0 truncate">{m.name}</span>
                           {canManage && (
                             // The keyboard/touch path for unassigning. Dragging
                             // a chip out would be the only way otherwise, and
                             // drag has neither.
-                            <button onClick={() => assign(m.id, team.id, false)} aria-label={t("people.unassign", { name: m.name, team: team.name })} title={t("people.unassign", { name: m.name, team: team.name })} style={{ color: "#94A3B8" }}>
-                              <Icon name="close" size={10} />
+                            <button
+                              onClick={() => assign(m.id, team.id, false)}
+                              aria-label={t("people.unassign", { name: m.name, team: team.name })}
+                              title={t("people.unassign", { name: m.name, team: team.name })}
+                              className="shrink-0"
+                              style={{ color: "#94A3B8" }}
+                            >
+                              <Icon name="close" size={11} />
                             </button>
                           )}
                         </span>
