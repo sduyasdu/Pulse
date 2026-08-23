@@ -1207,3 +1207,86 @@ describe("MCP connections (MCP-Spec §3)", () => {
     );
   });
 });
+
+describe("plan quotas — resources per Pulse (Resource-Master-Spec §8, RM10)", () => {
+  const WS = "wrq";
+  const P = "prq";
+
+  /** A Pulse whose `resourceCount` is already materialized, in an org on a given
+   * plan. The counter is seeded directly because only the server may write it. */
+  async function seedPulseWithCount(resourceCount: number | undefined, billing?: { tier: string; status: string }) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: Date.now() });
+      if (billing) await setDoc(doc(db, "billing", WS), { ...billing, source: "stripe", updatedAt: Date.now() });
+      await setDoc(doc(db, "pulses", P), {
+        id: P, workspaceId: WS, name: "Quota", createdBy: "alice", createdAt: Date.now(), updatedAt: Date.now(),
+        graphConfig: { stepPx: 16, workPerStep: 1 },
+        ...(resourceCount === undefined ? {} : { resourceCount }),
+      });
+      await setDoc(doc(db, "pulses", P, "pulseMembers", "alice"), { uid: "alice", email: "alice@example.com", role: "owner", joinedAt: Date.now() });
+      await setDoc(doc(db, "pulses", P, "resources", "existing"), { id: "existing", name: "Ana", capacity: 100 });
+    });
+  }
+
+  const newResource = (db: Firestore, id: string) =>
+    setDoc(doc(db, "pulses", P, "resources", id), { id, name: "New", capacity: 100 });
+
+  const alice = () => dbAs("alice", "alice@example.com");
+
+  // ── the allow side, which is where a quota gate breaks things ──────────────
+  it("allows creating under the Starter cap", async () => {
+    await seedPulseWithCount(19); // 19 of 20
+    await assertSucceeds(newResource(alice(), "r_new"));
+  });
+
+  it("blocks the create that would exceed the Starter cap", async () => {
+    await seedPulseWithCount(20);
+    await assertFails(newResource(alice(), "r_new"));
+  });
+
+  it("uses the paid cap on Pro", async () => {
+    await seedPulseWithCount(20, { tier: "pro", status: "active" });
+    await assertSucceeds(newResource(alice(), "r_new"));
+  });
+
+  it("never caps Business", async () => {
+    await seedPulseWithCount(9999, { tier: "business", status: "active" });
+    await assertSucceeds(newResource(alice(), "r_new"));
+  });
+
+  // At the cap you must still be able to fix what you have, and to get back
+  // under it. Gating either is how a Pulse becomes unusable rather than capped.
+  it("still allows EDITING a resource while at the cap", async () => {
+    await seedPulseWithCount(20);
+    await assertSucceeds(updateDoc(doc(alice(), "pulses", P, "resources", "existing"), { name: "Ana Renamed" }));
+  });
+
+  it("still allows DELETING a resource while at the cap", async () => {
+    await seedPulseWithCount(20);
+    await assertSucceeds(deleteDoc(doc(alice(), "pulses", P, "resources", "existing")));
+  });
+
+  // An absent counter reads as 0 — the documented backfill window. Asserted so
+  // the behaviour is a decision on the record rather than a surprise.
+  it("treats an absent counter as 0, leaving a pre-counter Pulse uncapped", async () => {
+    await seedPulseWithCount(undefined);
+    await assertSucceeds(newResource(alice(), "r_new"));
+  });
+
+  // ── the counter itself is server-owned ────────────────────────────────────
+  it("denies a Pulse owner writing resourceCount", async () => {
+    await seedPulseWithCount(20);
+    await assertFails(updateDoc(doc(alice(), "pulses", P), { resourceCount: 0 }));
+  });
+
+  it("denies creating a Pulse that exempts itself with a negative count", async () => {
+    await seedPulseWithCount(0);
+    await assertFails(
+      setDoc(doc(alice(), "pulses", "p_cheat"), {
+        workspaceId: WS, name: "Cheat", createdBy: "alice", createdAt: Date.now(), updatedAt: Date.now(),
+        graphConfig: { stepPx: 16, workPerStep: 1 }, resourceCount: -999,
+      }),
+    );
+  });
+});

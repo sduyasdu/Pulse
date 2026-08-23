@@ -32,6 +32,11 @@ export { onPulseDelete, onMemberRemoved, onResourceDelete, onEpicDelete } from "
 // which the Pulse-create rule gates on.
 export { onPulseCreateCount, onPulseDeleteCount } from "./counters";
 
+// RM10 — per-Pulse resource counter (Resource-Master-Spec §8). The writer for
+// the rule that gates `maxResourcesPerPulse`, and it ships BEFORE that rule:
+// a gate reading a field nothing writes yet is inert and looks deployed.
+export { onResourceCreateCount, onResourceDeleteCount, reconcileResourceCounts } from "./counters";
+
 // SF3 — billing / plan sync (Phase 3). The only writer of `billing/{orgId}`, and
 // the server-side half of the PL4 downgrade. The two callables mint hosted
 // Stripe URLs (Checkout / Customer Portal); payment details never touch the app.

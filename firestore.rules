@@ -77,6 +77,30 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workspaces/$(orgId)).data.get('pulseCount', 0) < limit;
     }
 
+    // Mirrors TIER_ENTITLEMENTS.maxResourcesPerPulse in src/domain/entitlements.ts
+    // — keep the two in step. -1 is "unlimited", as maxPulsesFor uses.
+    function maxResourcesFor(orgId) {
+      let tier = planTierOf(orgId);
+      return tier == 'business' ? -1 : (tier == 'pro' ? 40 : 20);
+    }
+
+    // Room for one more resource in this Pulse? (Resource-Master-Spec §8, RM10.)
+    //
+    // `resourceCount` is server-owned (counters.ts) and absent until the counter
+    // first writes it, so it defaults to 0 — meaning a Pulse that predates the
+    // counter is uncapped until the daily reconcile backfills it. That is why
+    // the reconcile exists and why it runs on a schedule rather than as a script
+    // somebody has to remember.
+    //
+    // Only CREATE is gated. Updating a resource at the cap must still work, and
+    // deleting must stay ungated — gating deletes is how an over-quota Pulse
+    // becomes unable to get back under its cap (CLAUDE.md).
+    function withinResourceQuota(pulseId) {
+      let pulse = get(/databases/$(database)/documents/pulses/$(pulseId)).data;
+      let limit = maxResourcesFor(pulse.workspaceId);
+      return limit < 0 || pulse.get('resourceCount', 0) < limit;
+    }
+
     // ---- workspaces ----
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() &&
@@ -284,7 +308,12 @@ service cloud.firestore {
         // trivially dodged by pointing workspaceId at a made-up id (no doc, no
         // counter, no limit) or at someone else's org (spending their quota).
         && isWorkspaceMember(request.resource.data.workspaceId)
-        && withinPulseQuota(request.resource.data.workspaceId);
+        && withinPulseQuota(request.resource.data.workspaceId)
+        // Server-owned (RM10). A Pulse born with a negative or inflated
+        // `resourceCount` would exempt itself from its own resource cap
+        // permanently — `get('resourceCount', 0) < limit` is trivially true at
+        // -999. Absent or zero only; the counter writes the real value.
+        && request.resource.data.get('resourceCount', 0) == 0;
       allow update: if
         // (a) The archive / unarchive write itself — owner-only, and the ONLY
         // write permitted to cross the freeze. hasOnly() stops a rename or a
@@ -307,6 +336,9 @@ service cloud.firestore {
           && resource.data.get('archivedAt', null) == null
           && request.resource.data.get('archivedAt', null) == resource.data.get('archivedAt', null)
           && request.resource.data.get('archivedBy', null) == resource.data.get('archivedBy', null)
+          // Pinned like the archive fields: a client that can set its own
+          // counter can set it to 0 and the resource cap becomes decoration.
+          && request.resource.data.get('resourceCount', 0) == resource.data.get('resourceCount', 0)
           && (request.resource.data.get('invite', null) == null
               || request.resource.data.invite.role in ['viewer', 'editor', 'taskLead', 'myBeatViewer']));
       // Unchanged: archive is not a delete guard (Hide-and-Archive-Spec §2.4).
@@ -466,7 +498,11 @@ service cloud.firestore {
 
       match /resources/{resourceId} {
         allow read: if isPulseMember(pulseId);
-        allow create, update: if canWriteContent(pulseId);
+        // Create is split from update for the quota (RM10): a Pulse sitting at
+        // its cap must still be able to rename or reassign the resources it
+        // already has.
+        allow create: if canWriteContent(pulseId) && withinResourceQuota(pulseId);
+        allow update: if canWriteContent(pulseId);
         allow delete: if canDeleteContent(pulseId);
       }
 

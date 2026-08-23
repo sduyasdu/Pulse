@@ -1,4 +1,5 @@
 import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore } from "firebase-admin/firestore";
 import { log, logError } from "./lib/conventions";
 
@@ -86,6 +87,107 @@ export const onPulseDeleteCount = onDocumentDeleted("pulses/{pulseId}", async (e
     log(FN, "recounted pulses after delete", { pulseId, workspaceId, pulseCount });
   } catch (err) {
     logError(FN, "recount after delete failed", err, { pulseId, workspaceId });
+    throw err;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// RM10 — per-Pulse resource counter (Resource-Master-Spec §8)
+//
+// `maxResourcesPerPulse` (20 / 40 / unlimited) has only ever been enforced in
+// the client (`src/domain/entitlements.ts`), so any direct write ignored it. It
+// was survivable while people were typed in one at a time; the resource master's
+// "copy this team in" makes exceeding it one click, and `duplicatePulse` in full
+// mode already copies every resource from its source.
+//
+// Same shape as `pulseCount` above, for the same reasons — recount rather than
+// increment, server-owned so a client cannot zero its own gate. Two differences
+// worth knowing, both learned from the collections this sits next to:
+//
+//   * It **must not resurrect a deleted Pulse.** `deletePulse` is a client-side
+//     cascade that removes subcollection docs first, so these triggers routinely
+//     fire during a teardown. `set(..., {merge:true})` on a deleted document
+//     CREATES it, which would leave a ghost Pulse holding nothing but a count —
+//     and SF6 has already run, so nothing would ever clean it up.
+//   * It writes **only when the number changed**, so a burst of deletes during a
+//     teardown converges to one write instead of N.
+// ---------------------------------------------------------------------------
+
+/**
+ * Recount one Pulse's resources onto `pulses/{pulseId}.resourceCount`.
+ *
+ * Returns null when the Pulse is gone — the caller should treat that as "nothing
+ * to do", never as zero.
+ */
+export async function recountResources(db: Db, pulseId: string): Promise<number | null> {
+  const ref = db.doc(`pulses/${pulseId}`);
+  const snap = await ref.get();
+  if (!snap.exists) return null; // teardown in progress — see the note above
+
+  const agg = await db.collection(`pulses/${pulseId}/resources`).count().get();
+  const resourceCount = agg.data().count;
+  if (snap.data()?.resourceCount === resourceCount) return resourceCount; // no-op write avoided
+  await ref.set({ resourceCount }, { merge: true });
+  return resourceCount;
+}
+
+export const onResourceCreateCount = onDocumentCreated("pulses/{pulseId}/resources/{resourceId}", async (event) => {
+  const { pulseId } = event.params;
+  try {
+    const resourceCount = await recountResources(getFirestore(), pulseId);
+    log(FN, "recounted resources after create", { pulseId, resourceCount });
+  } catch (err) {
+    logError(FN, "resource recount after create failed", err, { pulseId });
+    throw err; // retry — a stale-LOW counter is a hole, a stale-high one is a lockout
+  }
+});
+
+export const onResourceDeleteCount = onDocumentDeleted("pulses/{pulseId}/resources/{resourceId}", async (event) => {
+  const { pulseId } = event.params;
+  try {
+    const resourceCount = await recountResources(getFirestore(), pulseId);
+    log(FN, "recounted resources after delete", { pulseId, resourceCount });
+  } catch (err) {
+    logError(FN, "resource recount after delete failed", err, { pulseId });
+    throw err;
+  }
+});
+
+/**
+ * Daily reconcile — the backfill, and the safety net.
+ *
+ * Every Pulse that predates this counter has no `resourceCount`, and the rule
+ * reads an absent counter as **0**, so those Pulses are uncapped until something
+ * happens to touch them. SF11's own `pulseCount` backfill was specified and
+ * never run; making it a scheduled reconcile rather than a one-off script is how
+ * this one cannot be forgotten — it needs no credentials, no operator, and no
+ * remembering.
+ *
+ * It doubles as repair for a missed trigger, which is worth more than the
+ * backfill: Firestore delivers at-least-once, not exactly-once, and a dropped
+ * delivery would otherwise leave a wrong number until the next write.
+ *
+ * Bounded per run and it converges to zero *writes* (never zero reads — one
+ * `count()` per Pulse, billed at one read per 1000 documents). Revisit the
+ * whole-collection scan if Pulse ever holds tens of thousands.
+ */
+const RECONCILE_LIMIT = 500;
+
+export const reconcileResourceCounts = onSchedule("every day 04:11", async () => {
+  const db = getFirestore();
+  try {
+    const pulses = await db.collection("pulses").select("resourceCount").limit(RECONCILE_LIMIT).get();
+    let corrected = 0;
+    for (const d of pulses.docs) {
+      const before = d.data()?.resourceCount;
+      const after = await recountResources(db, d.id);
+      if (after !== null && after !== before) corrected += 1;
+    }
+    // Logged even at zero: "ran and found nothing" and "did not run" are the two
+    // states worth telling apart, and only one of them is fine.
+    log(FN, "reconciled resource counts", { scanned: pulses.size, corrected });
+  } catch (err) {
+    logError(FN, "resource reconcile failed", err);
     throw err;
   }
 });

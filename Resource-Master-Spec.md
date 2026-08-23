@@ -1,7 +1,8 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM11, RM13, RM15–RM21 decided; RM12 and RM14 open,
-neither blocking. Nothing built.** ·
+Status: **Phase 0 BUILT and live (2026-08-22) — the resource counter, its daily
+reconcile, and the `maxResourcesPerPulse` rule. Phases 1–6 not started.
+RM1–RM11, RM13, RM15–RM21 decided; RM12 and RM14 open, neither blocking.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
 `Costs-Spec.md` §8.3 (rates, the one genuinely sensitive collection),
@@ -478,10 +479,17 @@ expect every connected customer to reconnect before they appear (`MC15`, `MC19`)
 
 Each phase is shippable and leaves the product coherent.
 
-0. **The resource counter, backfill and rule** (§8, RM10). Not a phase of its own
-   so much as a precondition: phase 1 introduces the button that makes the
-   unenforced cap reachable in one click, so this lands first or phase 1 ships a
-   hole. Trigger → backfill → rule, in that order.
+0. **The resource counter, backfill and rule** (§8, RM10) — **DONE 2026-08-22.**
+   Shipped in dependency order: the triggers and the daily reconcile first, then
+   the rule, because a gate reading a field nothing writes yet is inert and looks
+   deployed. The backfill is the reconcile rather than a script — SF11's
+   `backfill-pulse-counts.mjs` exists and was never run, and a scheduled job needs
+   no operator and no credentials. **Until its first run, Pulses that predate the
+   counter read as 0 and stay uncapped** (asserted in `rules/security.test.ts`, so
+   it is a decision on the record rather than a surprise), and any Pulse already
+   over its tier cap will begin refusing new resources once the true count lands.
+   The `get()` budget §8.2 warned about was measured, not assumed: 103 rules tests
+   pass with the quota check in place.
 1. **Masters + copy into a Pulse**, the bulk path as a callable (RM15), with
    linking by email and the two resolution triggers (RM16). `masterId`,
    `inherited` and `linkedEmail` written from the very first copy, even though
