@@ -1,4 +1,4 @@
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Workspace, WorkspaceMember } from "@/types";
 import { emailKey } from "./emailKey";
@@ -45,4 +45,37 @@ export function subscribeWorkspace(workspaceId: string, cb: (ws: Workspace | nul
     (snap) => cb(snap.exists() ? ({ id: snap.id, ...snap.data() } as Workspace) : null),
     () => cb(null),
   );
+}
+
+/**
+ * Backfill `email` onto the caller's own workspace membership.
+ *
+ * `WorkspaceMember.email` arrived with the roster (RM16), and a personal
+ * workspace's member document is written **once**, at first sign-in — so every
+ * account that existed before it has no email, and the roster resolver has
+ * nothing to match on. Every roster entry would sit at "Waiting" forever, which
+ * is exactly how this was found.
+ *
+ * Self-heal rather than a migration script, for the reason recorded in
+ * `Resource-Master-Spec` §8.1 about SF11's backfill: a script somebody has to
+ * remember to run is a script that does not get run.
+ *
+ * Owner-only by the rules, which today covers everyone — a personal workspace is
+ * owned by its user. A shared workspace's non-owner members will need this done
+ * server-side; there are none yet.
+ *
+ * Idempotent and silent on failure: it writes only when the value is missing or
+ * stale, and a denial here must never break the dashboard.
+ */
+export async function backfillMyWorkspaceEmail(workspaceId: string, uid: string, email: string | null): Promise<void> {
+  if (!email) return;
+  const key = emailKey(email);
+  const ref = doc(db, "workspaces", workspaceId, "workspaceMembers", uid);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists() || snap.data()?.email === key) return;
+    await updateDoc(ref, { email: key });
+  } catch {
+    /* not the owner, or offline — the roster simply keeps showing "waiting" */
+  }
 }

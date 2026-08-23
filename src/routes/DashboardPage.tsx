@@ -22,6 +22,7 @@ import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialo
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
 import { RosterSection } from "@/components/dashboard/RosterSection";
+import { backfillMyWorkspaceEmail } from "@/services/firestore/workspaces";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 
 export function DashboardPage() {
@@ -64,6 +65,15 @@ export function DashboardPage() {
   // Only acts on a definitive read (getDoc succeeded); a transient/network
   // error leaves the entry for the next load to retry. Updates only when a
   // value actually changed, so it converges (no write/re-run loop).
+  // The roster resolver matches on the denormalized member email (RM16), which
+  // only exists on workspaces created after it shipped. Without this, every
+  // roster entry on an older account sits at "Waiting" forever.
+  useEffect(() => {
+    const ws = userDoc?.personalWorkspaceId;
+    if (!firebaseUser || !ws) return;
+    void backfillMyWorkspaceEmail(ws, firebaseUser.uid, firebaseUser.email);
+  }, [firebaseUser, userDoc?.personalWorkspaceId]);
+
   useEffect(() => {
     if (!firebaseUser || !pulses || pulses.length === 0) return;
     let cancelled = false;

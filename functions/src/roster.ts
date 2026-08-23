@@ -109,19 +109,36 @@ export const onMasterResourceWriteResolve = onDocumentWritten(
 );
 
 /**
- * Someone joined the workspace — resolve every roster entry that was waiting for
- * them.
+ * A workspace member's email became known — resolve every roster entry waiting
+ * for it.
  *
  * This is the half that makes rostering-before-joining work: an entry sits with
  * an email and no uid until the person accepts, and then simply becomes live.
  * Nobody has to remember to go back and link it.
+ *
+ * **`onDocumentWritten`, not `onDocumentCreated`, and that is a fix rather than
+ * a preference.** `WorkspaceMember.email` was added with RM16, so every member
+ * document written before it carries none — which is all of them, since a
+ * personal workspace's member doc is written once at first sign-in and never
+ * again. Those emails arrive by backfill, i.e. as an UPDATE. Listening only for
+ * creates meant the backfill landed and nothing re-resolved, so every roster
+ * entry stayed "Waiting" forever with no way out.
  */
-export const onWorkspaceMemberJoinResolve = onDocumentCreated(
+export const onWorkspaceMemberJoinResolve = onDocumentWritten(
   "workspaces/{workspaceId}/workspaceMembers/{memberUid}",
   async (event) => {
     const { workspaceId, memberUid } = event.params;
-    const email = (event.data?.data()?.email as string | null) ?? null;
-    if (!email) return; // member docs written before RM16 carry no email
+    const after = event.data?.after;
+    if (!after?.exists) return; // removal is handled by the unresolve trigger
+
+    const email = (after.data()?.email as string | null) ?? null;
+    if (!email) return; // still no email — nothing to match on
+
+    // Only when the email actually arrived or changed. A role edit must not
+    // re-scan the roster, and our own writes are to a different collection so
+    // they cannot re-enter here.
+    const emailBefore = (event.data?.before?.exists ? event.data.before.data()?.email : null) ?? null;
+    if (emailBefore === email) return;
 
     try {
       const db = getFirestore();
