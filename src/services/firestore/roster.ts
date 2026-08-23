@@ -1,8 +1,8 @@
-import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/lib/firebase";
 import { emailKey } from "./emailKey";
-import type { MasterResource } from "@/types";
+import type { MasterResource, RosterUsage } from "@/types";
 
 /**
  * The workspace roster (Resource-Master-Spec §1) — one list of people, which
@@ -142,4 +142,15 @@ export async function roleSelfHeal(workspaceId: string, rows: MasterResource[]):
     if (r.role != null || r.type == null) continue;
     await patchMasterResource(workspaceId, r.id, { role: r.type }).catch(() => {});
   }
+}
+
+/** Which Pulses hold a copy of this person (RM7).
+ *
+ * A one-shot read, not a subscription: it is opened from a dialog, and the
+ * answer does not change while someone is looking at it. */
+export async function fetchRosterUsage(workspaceId: string, masterId: string): Promise<RosterUsage[]> {
+  const snap = await getDocs(collection(db, "workspaces", workspaceId, "resources", masterId, "usage"));
+  const rows = snap.docs.map((d) => d.data() as RosterUsage);
+  rows.sort((a, b) => (a.pulseName ?? "").localeCompare(b.pulseName ?? ""));
+  return rows;
 }

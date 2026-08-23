@@ -10,6 +10,8 @@ import { subscribeRoster, createMasterResource, patchMasterResource, deleteMaste
 import { subscribeTeams, createTeam, renameTeam, deleteTeam, setTeamMembership } from "@/services/firestore/teams";
 import { subscribeWorkspaceMembers, subscribeWorkspace, updateResourceRoles } from "@/services/firestore/workspaces";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
+import { UsageDialog } from "@/components/people/UsageDialog";
+import { subscribeMyPulses } from "@/services/firestore/pulses";
 import type { MasterResource, Team, WorkspaceMember, Workspace } from "@/types";
 import { colorForName } from "@/domain/constants";
 
@@ -39,6 +41,11 @@ export function PeoplePage() {
   const [query, setQuery] = useState("");
   const [teamQuery, setTeamQuery] = useState("");
   const [editing, setEditing] = useState<MasterResource | "new" | null>(null);
+  const [showingUsage, setShowingUsage] = useState<MasterResource | null>(null);
+  // The viewer's own Pulses. The usage index names Pulses they may not be able
+  // to open (RM7), and this is the cheapest way to tell which — one index they
+  // already have, rather than a read attempt per Pulse.
+  const [myPulseIds, setMyPulseIds] = useState<Set<string>>(new Set());
   const [addingTeam, setAddingTeam] = useState(false);
   const [teamDraft, setTeamDraft] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
@@ -73,6 +80,11 @@ export function PeoplePage() {
   }, [workspaceId]);
 
   const roles = useMemo(() => workspace?.resourceRoles ?? [], [workspace]);
+
+  useEffect(() => {
+    if (!uid) return;
+    return subscribeMyPulses(uid, (rows) => setMyPulseIds(new Set(rows.map((r) => r.pulseId))));
+  }, [uid]);
 
   // Renaming a role rewrites it on everyone who had it. A rename that leaves the
   // old string behind is a fork, not a rename — the same cascade a Pulse already
@@ -365,6 +377,7 @@ export function PeoplePage() {
                 teams={teams ?? []}
                 canManage={canManage}
                 photo={r.linkedUid ? photoByUid.get(r.linkedUid) : undefined}
+                onShowUsage={() => setShowingUsage(r)}
                 dragging={dragId === r.id}
                 onDragStart={(e) => { e.dataTransfer.setData("text/plain", r.id); setDragId(r.id); }}
                 onDragEnd={() => { setDragId(null); setDropTeam(null); }}
@@ -376,6 +389,15 @@ export function PeoplePage() {
           </div>
         )}
       </main>
+
+      {showingUsage && (
+        <UsageDialog
+          resource={showingUsage}
+          workspaceId={workspaceId}
+          accessiblePulseIds={myPulseIds}
+          onClose={() => setShowingUsage(null)}
+        />
+      )}
 
       {editing && (
         <MasterResourceDialog
@@ -395,7 +417,7 @@ export function PeoplePage() {
 
 /** One person. Draggable onto a team card, and equipped with a menu that does
  * the same thing without a mouse. */
-function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragEnd, onEdit, onRemove, onToggleTeam }: {
+function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragEnd, onEdit, onShowUsage, onRemove, onToggleTeam }: {
   r: MasterResource;
   teams: Team[];
   canManage: boolean;
@@ -404,6 +426,7 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onEdit: () => void;
+  onShowUsage: () => void;
   onRemove: (r: MasterResource, e: { clientX: number; clientY: number }) => void;
   onToggleTeam: (teamId: string, member: boolean) => void;
 }) {
@@ -460,16 +483,28 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
         </div>
       )}
 
-      {canManage && (
-        <div className="mt-2 flex justify-end gap-1">
+      <div className="mt-2 flex items-center justify-end gap-1">
+        {/* Available to every workspace member, not only an owner: seeing where
+            someone is staffed is a reading question, not a curation one. */}
+        <button
+          onClick={onShowUsage}
+          className="hoverable mono mr-auto flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]"
+          style={{ borderColor: "#E2DFD9", color: "#64748B" }}
+        >
+          <Icon name="timeline" size={11} />
+          {t("usage.button")}
+        </button>
+        {canManage && (
           <button onClick={onEdit} title={t("common.edit")} aria-label={t("common.edit")} className="hoverable rounded border p-1" style={{ borderColor: "#E2DFD9", color: "#64748B" }}>
             <Icon name="edit" size={13} />
           </button>
+        )}
+        {canManage && (
           <button onClick={(e) => void onRemove(r, e)} title={t("roster.deleteAction")} aria-label={t("roster.deleteAction")} className="hoverable rounded border p-1" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
             <Icon name="delete" size={13} />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

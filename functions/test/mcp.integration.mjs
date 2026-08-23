@@ -332,7 +332,8 @@ assert(!isAllowedRedirect("https://127.0.0.1:8080/cb"), "redirect: https loopbac
 // UI. A tool that is still advertised while the app hides the data is not
 // hidden; it is hidden from everyone except the assistant.
 assert(!TOOLS.some((t) => t.name === "get_costs"), "parked: get_costs is not advertised while costing is hidden");
-assert(TOOLS.length === 8, "parked: the other eight tools are untouched");
+assert(TOOLS.length === 9, "parked: get_costs out, get_resource_usage in — nine advertised");
+assert(TOOLS.some((t) => t.name === "get_resource_usage"), "usage: the where-is-this-person tool is advertised");
 assert(TOOLS.every((t) => t.annotations?.readOnlyHint === true), "parked: every advertised tool is still annotated (MP1)");
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");

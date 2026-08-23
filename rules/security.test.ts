@@ -1530,3 +1530,42 @@ describe("team membership writes (RM4) — arrayUnion/arrayRemove on a roster en
     await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", "m1"), { teamIds: arrayRemove("t1") }));
   });
 });
+
+describe("roster usage index (RM7)", () => {
+  const WS = "wu";
+
+  async function seedUsage() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: 1, email: "alice@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "bob"), { uid: "bob", role: "member", joinedAt: 1, email: "bob@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "resources", "m1"), { id: "m1", name: "Ana", capacity: 100, createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "resources", "m1", "usage", "p_secret"), {
+        pulseId: "p_secret", pulseName: "Project Falcon", workspaceId: WS, updatedAt: Date.now(),
+      });
+    });
+  }
+
+  // The accepted disclosure, asserted so it is a decision on the record rather
+  // than a behaviour someone later "fixes" without knowing it was chosen.
+  it("lets any workspace member read usage, including Pulses they cannot open", async () => {
+    await seedUsage();
+    const bob = dbAs("bob", "bob@example.com");
+    await assertFails(getDoc(doc(bob, "pulses", "p_secret")));
+    await assertSucceeds(getDoc(doc(bob, "workspaces", WS, "resources", "m1", "usage", "p_secret")));
+  });
+
+  it("keeps it inside the workspace", async () => {
+    await seedUsage();
+    await assertFails(getDoc(doc(dbAs("carol", "carol@example.com"), "workspaces", WS, "resources", "m1", "usage", "p_secret")));
+  });
+
+  // Server-owned: a client that could write this could invent a Pulse or hide one.
+  it("denies every client write, owner included", async () => {
+    await seedUsage();
+    const alice = dbAs("alice", "alice@example.com");
+    await assertFails(setDoc(doc(alice, "workspaces", WS, "resources", "m1", "usage", "p_forged"), { pulseId: "p_forged", pulseName: "Invented" }));
+    await assertFails(updateDoc(doc(alice, "workspaces", WS, "resources", "m1", "usage", "p_secret"), { pulseName: "Renamed" }));
+    await assertFails(deleteDoc(doc(alice, "workspaces", WS, "resources", "m1", "usage", "p_secret")));
+  });
+});

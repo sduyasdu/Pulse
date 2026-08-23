@@ -1,7 +1,8 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Phase 6 (master rates) PARKED — see Costs-Spec §21.
-Phase 0 BUILT and live (2026-08-22) — the resource counter, its daily
+Status: **Phases 0–2 BUILT and live. Phase 6 (master rates) PARKED — see
+Costs-Spec §21.
+Phase 0 built (2026-08-22) — the resource counter, its daily
 reconcile, and the `maxResourcesPerPulse` rule. Phases 1–6 not started.
 RM1–RM11, RM13, RM15–RM21 decided; RM12 and RM14 open, neither blocking.** ·
 Owner: product + eng ·
@@ -504,7 +505,12 @@ Each phase is shippable and leaves the product coherent.
    `linkedEmail` written from the very first copy, even though nothing propagates
    yet — retrofitting provenance onto copies that already exist means guessing.
    The email is stored in the clear (RM19).
-2. **Usage index + "where used"**, with the RM7 disclosure implemented as decided.
+2. **Usage index + "where used"** — **DONE 2026-08-23.** Server-maintained at
+   `workspaces/{ws}/resources/{rid}/usage/{pulseId}`, read-only to clients, with
+   a button on each person card and the `get_resource_usage` MCP tool. RM7's
+   disclosure is implemented as decided and stated in both surfaces: inaccessible
+   Pulses are named, marked, and explained rather than hidden or shown as broken
+   links.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
 5. **Propagation** switched on, per RM2's classes.

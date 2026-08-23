@@ -68,7 +68,7 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  */
 const COSTS_ENABLED = false;
 
-const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.6.0" };
+const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.7.0" };
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -527,6 +527,22 @@ const ALL_TOOLS = [
     },
   },
   {
+    name: "get_resource_usage",
+    title: "Where a person is used",
+    annotations: { title: "Where a person is used", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    description:
+      "Which Pulses one person from the organisation's roster is on. Takes a resourceId from search_roster, " +
+      "or a name to look up. Some results may be Pulses the user has no access to — those are marked, and the " +
+      "user cannot open them without being invited.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        resourceId: { type: "string", description: "From search_roster." },
+        name: { type: "string", description: "Instead of resourceId: match a roster person by name." },
+      },
+    },
+  },
+  {
     name: "get_activity",
     title: "Get recent activity",
     annotations: { title: "Get recent activity", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -875,6 +891,48 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         // Ordered newest-first by the query, so this means "older comments than
         // these were not searched" rather than "an arbitrary slice".
         coverage: coverageNote(comments, "most recent comments"),
+      };
+    }
+
+    case "get_resource_usage": {
+      // The roster lives on the workspace, and there is exactly one per user
+      // today. Read as the customer, so a non-member gets [] and no roster
+      // leaks — the same property every other tool relies on (§1).
+      const user = await getAsUser(caller, `users/${caller.uid}`);
+      const workspaceId = typeof user?.personalWorkspaceId === "string" ? user.personalWorkspaceId : "";
+      if (!workspaceId) return { pulses: [], count: 0, note: "No organisation roster is available for this account." };
+
+      const roster = await listAsUser(caller, `workspaces/${workspaceId}/resources`, MAX_LIMIT);
+      const wantName = fold(args.name);
+      const target = typeof args.resourceId === "string" && args.resourceId
+        ? roster.find((r) => String(r.id) === args.resourceId)
+        : roster.find((r) => fold(r.name).includes(wantName));
+      if (!target) {
+        return { pulses: [], count: 0, note: "No such person on the roster. Use search_roster to find one." };
+      }
+
+      const usage = await listAsUser(caller, `workspaces/${workspaceId}/resources/${target.id}/usage`, MAX_LIMIT);
+      // Which of them the caller can actually open. Their own dashboard index is
+      // the cheapest answer, and the only one that does not need a read attempt
+      // per Pulse.
+      const mine = new Set(
+        (await listAsUser(caller, `users/${caller.uid}/myPulses`, MAX_LIMIT)).map((r) => String(r.pulseId ?? r.id)),
+      );
+
+      return {
+        person: { resourceId: target.id, name: target.name, role: target.role ?? target.type ?? null },
+        pulses: usage.map((u) => ({
+          pulseId: u.pulseId,
+          name: u.pulseName || "Untitled Pulse",
+          // Stated per row rather than left to be inferred from a missing id.
+          // RM7 accepted naming Pulses the caller cannot open; the assistant
+          // should explain that boundary, not imply the user can go and look.
+          hasAccess: mine.has(String(u.pulseId)),
+        })),
+        count: usage.length,
+        note: usage.some((u) => !mine.has(String(u.pulseId)))
+          ? "Some of these are Pulses this user is not a member of. They are listed because they belong to the same organisation, but the user cannot open them without being invited."
+          : undefined,
       };
     }
 

@@ -80,3 +80,8 @@ export { onMasterResourceWritePropagate } from "./roster";
 // stale count, so the rule would stop the next OPERATION and none of the writes
 // inside this one.
 export { copyRosterToPulse } from "./rosterCopy";
+
+// RM7 — the "where is this person" index. Server-owned, so the rule that guards
+// it is "workspace members read" rather than a collection-group query nobody can
+// scope safely.
+export { onPulseResourceUsage, onPulseRenameSyncUsage } from "./roster";

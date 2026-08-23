@@ -370,6 +370,11 @@ export const onMasterResourceDeletedDetach = onDocumentDeleted(
       // "has a provenance field", and `masterId` present is what RM2 treats as
       // "identity tracks the master".
       for (const d of copies.docs) writer.update(d.ref, { masterId: FieldValue.delete() });
+      // Firestore does not delete subcollections with their parent, so the usage
+      // index (§6) would outlive the master and stay readable by path. Nothing
+      // points at it any more, which is exactly why nothing would ever clean it.
+      const usage = await db.collection(`workspaces/${workspaceId}/resources/${resourceId}/usage`).get();
+      for (const d of usage.docs) writer.delete(d.ref);
       await writer.close();
       log(FN, "detached copies of a deleted master", { workspaceId, resourceId, detached: copies.size });
     } catch (err) {
@@ -384,3 +389,108 @@ export const onMasterResourceDeletedDetach = onDocumentDeleted(
 export const uidForEmailForTest = uidForEmail;
 export const uidForEmailInForTest = uidForEmailIn;
 export const applyResolutionForTest = applyResolution;
+
+// ---------------------------------------------------------------------------
+// Where is this person? (Resource-Master-Spec §6, RM7)
+//
+// `workspaces/{wsId}/resources/{rid}/usage/{pulseId}` — one document per Pulse
+// holding a copy, maintained by the server.
+//
+// A collection-group query over `pulses/*​/resources` would answer the same
+// question without an index to maintain, and is the wrong tool: scoping one
+// safely in rules is hard to get right and easy to get subtly wrong. An index
+// the server owns is readable by "workspace members" and nothing else.
+//
+// The document id IS the pulse id, so the index is naturally idempotent — a
+// duplicated trigger delivery writes the same document twice.
+// ---------------------------------------------------------------------------
+
+/** Does any resource in this Pulse still point at this master? Decides whether a
+ * delete removes the usage entry, since a Pulse can hold more than one copy of
+ * the same person (nothing forbids it, and the picker only guards its own
+ * path). */
+async function stillUsed(db: Db, pulseId: string, masterId: string): Promise<boolean> {
+  const snap = await db.collection(`pulses/${pulseId}/resources`).where("masterId", "==", masterId).limit(1).get();
+  return !snap.empty;
+}
+
+async function writeUsage(db: Db, pulseId: string, masterId: string): Promise<void> {
+  const pulse = await db.doc(`pulses/${pulseId}`).get();
+  if (!pulse.exists) return; // teardown — SF6 owns it
+  const workspaceId = pulse.data()?.workspaceId;
+  if (typeof workspaceId !== "string" || !workspaceId) return;
+  await db.doc(`workspaces/${workspaceId}/resources/${masterId}/usage/${pulseId}`).set({
+    pulseId,
+    // Denormalized so the People screen can name a Pulse the viewer cannot open
+    // (RM7's accepted disclosure). Kept in step by onPulseRenameSyncUsage below;
+    // without that the view goes quietly stale, which is worse than absent.
+    pulseName: pulse.data()?.name ?? "",
+    workspaceId,
+    updatedAt: Date.now(),
+  });
+}
+
+async function clearUsage(db: Db, pulseId: string, masterId: string, workspaceId?: string): Promise<void> {
+  const ws = workspaceId ?? (await db.doc(`pulses/${pulseId}`).get()).data()?.workspaceId;
+  if (typeof ws !== "string" || !ws) return;
+  await db.doc(`workspaces/${ws}/resources/${masterId}/usage/${pulseId}`).delete().catch(() => {});
+}
+
+/**
+ * A Pulse resource was created, deleted, or had its `masterId` change — keep the
+ * usage index in step.
+ *
+ * One `onDocumentWritten` rather than a create and a delete pair, because detach
+ * (RM13) changes `masterId` on an existing document and that is neither.
+ */
+export const onPulseResourceUsage = onDocumentWritten(
+  "pulses/{pulseId}/resources/{resourceId}",
+  async (event) => {
+    const { pulseId } = event.params;
+    const before = (event.data?.before?.exists ? event.data.before.data()?.masterId : null) ?? null;
+    const after = (event.data?.after?.exists ? event.data.after.data()?.masterId : null) ?? null;
+    if (before === after) return; // a rename or a capacity edit is not our business
+
+    try {
+      const db = getFirestore();
+      if (typeof after === "string" && after) await writeUsage(db, pulseId, after);
+      // Only when the LAST copy of that master leaves this Pulse.
+      if (typeof before === "string" && before && !(await stillUsed(db, pulseId, before))) {
+        await clearUsage(db, pulseId, before);
+      }
+      log(FN, "usage index updated", { pulseId, added: after, removed: before });
+    } catch (err) {
+      logError(FN, "usage index update failed", err, { pulseId, before, after });
+      throw err;
+    }
+  },
+);
+
+/**
+ * A Pulse was renamed — refresh the name this index denormalized.
+ *
+ * RM7 accepted showing the title of a Pulse the viewer cannot open; a title that
+ * silently stops matching the real one is a worse disclosure than none, because
+ * it is wrong rather than merely revealing.
+ */
+export const onPulseRenameSyncUsage = onDocumentWritten("pulses/{pulseId}", async (event) => {
+  const { pulseId } = event.params;
+  const after = event.data?.after;
+  if (!after?.exists) return; // deleted — the copies go with it (SF6)
+  const nameBefore = (event.data?.before?.exists ? event.data.before.data()?.name : null) ?? null;
+  const nameAfter = after.data()?.name ?? null;
+  if (nameBefore === nameAfter) return;
+
+  try {
+    const db = getFirestore();
+    const entries = await db.collectionGroup("usage").where("pulseId", "==", pulseId).get();
+    if (entries.empty) return;
+    const writer = db.bulkWriter();
+    for (const d of entries.docs) writer.update(d.ref, { pulseName: nameAfter ?? "" });
+    await writer.close();
+    log(FN, "usage names refreshed after rename", { pulseId, entries: entries.size });
+  } catch (err) {
+    logError(FN, "usage name refresh failed", err, { pulseId });
+    throw err;
+  }
+});

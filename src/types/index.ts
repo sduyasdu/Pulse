@@ -115,6 +115,17 @@ export interface Team {
   createdAt: Timestamp;
 }
 
+/** One Pulse a roster person appears in, at
+ * `workspaces/{wsId}/resources/{rid}/usage/{pulseId}` (RM7). Server-maintained;
+ * `pulseName` is denormalized so a Pulse the viewer cannot open can still be
+ * named — a disclosure that is deliberate and decided (RM19). */
+export interface RosterUsage {
+  pulseId: string;
+  pulseName: string;
+  workspaceId: string;
+  updatedAt: Timestamp;
+}
+
 /** A person in the workspace roster, at `workspaces/{wsId}/resources/{rid}`. */
 export interface MasterResource {
   id: string;

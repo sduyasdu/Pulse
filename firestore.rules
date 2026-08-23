@@ -276,6 +276,20 @@ service cloud.firestore {
       // someone is on the roster who never joined.
       match /resources/{masterResourceId} {
         allow read: if isWorkspaceMember(workspaceId);
+
+        // Where this person is used (RM7). Server-owned: the triggers that
+        // maintain it bypass rules, and a client that could write it could
+        // invent a Pulse or hide one.
+        //
+        // Readable by every workspace member, INCLUDING for Pulses they cannot
+        // open — that disclosure is deliberate and decided (RM19/RM7): the
+        // roster and those Pulses belong to the same organisation, and the
+        // intended follow-up is the person asking for access, which needs a name
+        // to ask about.
+        match /usage/{usagePulseId} {
+          allow read: if isWorkspaceMember(workspaceId);
+          allow write: if false;
+        }
         allow create: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner'
           && request.resource.data.get('linkedUid', null) == null;
         allow update: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner'
