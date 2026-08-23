@@ -21,6 +21,7 @@ import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
+import { RosterSection } from "@/components/dashboard/RosterSection";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 
 export function DashboardPage() {
@@ -292,6 +293,15 @@ export function DashboardPage() {
               </>
             )}
           </>
+        )}
+        {userDoc?.personalWorkspaceId && (
+          <RosterSection
+            workspaceId={userDoc.personalWorkspaceId}
+            // Only an owner curates the roster. A personal workspace is owned by
+            // the user whose id it carries, which is the only shape that exists
+            // today — shared workspaces will read workspaceRole instead.
+            canManage={userDoc.personalWorkspaceId === `personal-${uid}`}
+          />
         )}
       </main>
 
