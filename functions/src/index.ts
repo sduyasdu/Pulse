@@ -85,3 +85,8 @@ export { copyRosterToPulse } from "./rosterCopy";
 // it is "workspace members read" rather than a collection-group query nobody can
 // scope safely.
 export { onPulseResourceUsage, onPulseRenameSyncUsage } from "./roster";
+
+// RM7 — catching the usage index up on copies that predate its trigger, and
+// repairing a missed delivery. A maintainer without a way to catch up existing
+// rows is half a feature.
+export { rebuildRosterUsage, reconcileRosterUsage } from "./roster";

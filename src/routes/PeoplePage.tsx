@@ -6,11 +6,12 @@ import { PulseLockup } from "@/components/shared/Logo";
 import { confirmAt } from "@/stores/confirmStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
-import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf, roleOf, roleSelfHeal } from "@/services/firestore/roster";
+import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf, roleOf, roleSelfHeal, rebuildRosterUsage } from "@/services/firestore/roster";
 import { subscribeTeams, createTeam, renameTeam, deleteTeam, setTeamMembership } from "@/services/firestore/teams";
 import { subscribeWorkspaceMembers, subscribeWorkspace, updateResourceRoles } from "@/services/firestore/workspaces";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
 import { UsageDialog } from "@/components/people/UsageDialog";
+import { CardMenu } from "@/components/shared/CardMenu";
 import { subscribeMyPulses } from "@/services/firestore/pulses";
 import type { MasterResource, Team, WorkspaceMember, Workspace } from "@/types";
 import { colorForName } from "@/domain/constants";
@@ -85,6 +86,17 @@ export function PeoplePage() {
     if (!uid) return;
     return subscribeMyPulses(uid, (rows) => setMyPulseIds(new Set(rows.map((r) => r.pulseId))));
   }, [uid]);
+
+  // The usage index only knows about copies made since its trigger shipped, so
+  // it starts out blank for everything that already existed (RM7). Rebuilt once
+  // per visit: idempotent, and it means "where they're used" is right the first
+  // time somebody asks rather than after the nightly pass.
+  useEffect(() => {
+    if (!workspaceId) return;
+    void rebuildRosterUsage(workspaceId).catch(() => {
+      /* not a member, or offline — the dialog still shows whatever is indexed */
+    });
+  }, [workspaceId]);
 
   // Renaming a role rewrites it on everyone who had it. A rename that leaves the
   // old string behind is a fork, not a rename — the same cascade a Pulse already
@@ -483,27 +495,17 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-end gap-1">
-        {/* Available to every workspace member, not only an owner: seeing where
-            someone is staffed is a reading question, not a curation one. */}
-        <button
-          onClick={onShowUsage}
-          className="hoverable mono mr-auto flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]"
-          style={{ borderColor: "#E2DFD9", color: "#64748B" }}
-        >
-          <Icon name="timeline" size={11} />
-          {t("usage.button")}
-        </button>
-        {canManage && (
-          <button onClick={onEdit} title={t("common.edit")} aria-label={t("common.edit")} className="hoverable rounded border p-1" style={{ borderColor: "#E2DFD9", color: "#64748B" }}>
-            <Icon name="edit" size={13} />
-          </button>
-        )}
-        {canManage && (
-          <button onClick={(e) => void onRemove(r, e)} title={t("roster.deleteAction")} aria-label={t("roster.deleteAction")} className="hoverable rounded border p-1" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
-            <Icon name="delete" size={13} />
-          </button>
-        )}
+      <div className="mt-2 flex items-center justify-end">
+        {/* Where-they're-used is offered to every workspace member, not only an
+            owner: seeing where someone is staffed is a reading question, not a
+            curation one. So a non-owner gets a one-item menu, and an owner three. */}
+        <CardMenu
+          items={[
+            { label: t("usage.button"), icon: "timeline", onClick: () => onShowUsage() },
+            { label: t("common.edit"), icon: "edit", onClick: () => onEdit(), hidden: !canManage },
+            { label: t("roster.deleteAction"), icon: "delete", danger: true, onClick: (e) => void onRemove(r, e), hidden: !canManage },
+          ]}
+        />
       </div>
     </div>
   );

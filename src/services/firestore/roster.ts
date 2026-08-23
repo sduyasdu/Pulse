@@ -154,3 +154,17 @@ export async function fetchRosterUsage(workspaceId: string, masterId: string): P
   rows.sort((a, b) => (a.pulseName ?? "").localeCompare(b.pulseName ?? ""));
   return rows;
 }
+
+/**
+ * Catch the usage index up on copies that predate its trigger (RM7).
+ *
+ * Called when the People screen opens rather than left to the nightly pass: an
+ * index that answers nothing reads as a broken feature, and being right at 04:00
+ * is not a fix anyone can see. Idempotent, so calling it every visit is cheap in
+ * everything except the first one.
+ */
+export async function rebuildRosterUsage(workspaceId: string): Promise<{ written: number; removed: number }> {
+  const call = httpsCallable<{ workspaceId: string }, { written: number; removed: number }>(functions, "rebuildRosterUsage");
+  const { data } = await call({ workspaceId });
+  return data;
+}

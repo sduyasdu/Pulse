@@ -1,4 +1,6 @@
 import { onDocumentWritten, onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { log, logError } from "./lib/conventions";
 
@@ -491,6 +493,127 @@ export const onPulseRenameSyncUsage = onDocumentWritten("pulses/{pulseId}", asyn
     log(FN, "usage names refreshed after rename", { pulseId, entries: entries.size });
   } catch (err) {
     logError(FN, "usage name refresh failed", err, { pulseId });
+    throw err;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Rebuilding the usage index (RM7)
+//
+// The trigger above maintains the index from the moment it shipped, and knows
+// nothing about copies made before that — which is every copy that already
+// existed. The symptom is the honest one: "Where they're used" correctly reports
+// an index that was never populated.
+//
+// Same shape as SF11's counter, and the same lesson: a maintainer without a way
+// to catch up existing rows is half a feature. This is exposed twice — as a
+// callable the People screen invokes, so it converges without anyone
+// remembering, and on a schedule, so a missed trigger delivery also repairs
+// itself.
+// ---------------------------------------------------------------------------
+
+/** Recompute the whole index for one workspace from the Pulses themselves.
+ *
+ * Idempotent: it writes what should be there and deletes what should not, so
+ * running it twice changes nothing the second time. */
+export async function rebuildUsageForWorkspace(db: Db, workspaceId: string): Promise<{ written: number; removed: number }> {
+  const pulses = await db.collection("pulses").where("workspaceId", "==", workspaceId).get();
+
+  // masterId -> (pulseId -> pulseName), built from the source of truth: the
+  // copies themselves. Nothing here trusts the index it is repairing.
+  const wanted = new Map<string, Map<string, string>>();
+  for (const p of pulses.docs) {
+    const name = String(p.data()?.name ?? "");
+    const resources = await p.ref.collection("resources").get();
+    for (const r of resources.docs) {
+      const mid = r.data()?.masterId;
+      if (typeof mid !== "string" || !mid) continue;
+      if (!wanted.has(mid)) wanted.set(mid, new Map());
+      wanted.get(mid)!.set(p.id, name);
+    }
+  }
+
+  const masters = await db.collection(`workspaces/${workspaceId}/resources`).get();
+  const writer = db.bulkWriter();
+  let written = 0;
+  let removed = 0;
+
+  for (const m of masters.docs) {
+    const should = wanted.get(m.id) ?? new Map<string, string>();
+    const usageRef = m.ref.collection("usage");
+    const existing = await usageRef.get();
+    const have = new Set(existing.docs.map((d) => d.id));
+
+    for (const [pulseId, pulseName] of should) {
+      // Written unconditionally rather than only when missing: a stale
+      // `pulseName` is the other way this index goes wrong, and rewriting it
+      // costs the same as checking.
+      writer.set(usageRef.doc(pulseId), { pulseId, pulseName, workspaceId, updatedAt: Date.now() });
+      written += 1;
+    }
+    for (const id of have) {
+      if (!should.has(id)) { writer.delete(usageRef.doc(id)); removed += 1; }
+    }
+  }
+
+  await writer.close();
+  return { written, removed };
+}
+
+/**
+ * Rebuild on demand, for the caller's own workspace.
+ *
+ * Called from the People screen rather than left to the nightly pass, because
+ * "where is this person" answering nothing is the kind of wrong that reads as a
+ * broken feature, and waiting until 04:00 to be right is not a fix anyone can
+ * see.
+ */
+export const rebuildRosterUsage = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+  const workspaceId = typeof request.data?.workspaceId === "string" ? request.data.workspaceId : "";
+  if (!workspaceId) throw new HttpsError("invalid-argument", "A workspaceId is required.");
+
+  const db = getFirestore();
+  // The Admin SDK bypasses rules, so the membership check the rules would have
+  // made is made here — otherwise this would read every Pulse in a workspace for
+  // anyone who asked.
+  if (!(await db.doc(`workspaces/${workspaceId}/workspaceMembers/${uid}`).get()).exists) {
+    throw new HttpsError("permission-denied", "You are not a member of that workspace.");
+  }
+
+  try {
+    const result = await rebuildUsageForWorkspace(db, workspaceId);
+    log(FN, "usage index rebuilt on demand", { uid, workspaceId, ...result });
+    return result;
+  } catch (err) {
+    logError(FN, "usage rebuild failed", err, { uid, workspaceId });
+    throw new HttpsError("internal", "Could not rebuild the index.");
+  }
+});
+
+/** How many workspaces one nightly pass repairs. Far above anything real today;
+ * present so the job cannot grow into an unbounded scan unnoticed. */
+const RECONCILE_WORKSPACES = 200;
+
+/** Nightly repair, so a dropped trigger delivery does not leave the index wrong
+ * until somebody happens to open the dialog. */
+export const reconcileRosterUsage = onSchedule("every day 04:41", async () => {
+  const db = getFirestore();
+  try {
+    const workspaces = await db.collection("workspaces").select().limit(RECONCILE_WORKSPACES).get();
+    let written = 0;
+    let removed = 0;
+    for (const w of workspaces.docs) {
+      const r = await rebuildUsageForWorkspace(db, w.id);
+      written += r.written;
+      removed += r.removed;
+    }
+    // Logged even at zero — "ran and found nothing" and "did not run" are the
+    // two states worth telling apart.
+    log(FN, "usage index reconciled", { workspaces: workspaces.size, written, removed });
+  } catch (err) {
+    logError(FN, "usage reconcile failed", err);
     throw err;
   }
 });

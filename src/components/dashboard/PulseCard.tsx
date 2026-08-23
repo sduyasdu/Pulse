@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Icon } from "@/components/shared/Icon";
+import { CardMenu } from "@/components/shared/CardMenu";
 import { Link } from "react-router-dom";
 import { hiddenOf, type MyPulseIndexEntry } from "@/types";
 import { roleMeta } from "@/domain/permissions";
@@ -31,15 +30,10 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
   const hidden = hiddenOf(entry);
   const archived = (entry.archivedAt ?? null) !== null;
   const dimmed = hidden || archived;
-  const [menuOpen, setMenuOpen] = useState(false);
   const lang = useI18nStore((st) => st.lang);
   const summary = usePulseSummary(entry.pulseId);
   const subtaskCount = summary?.features.reduce((n, f) => n + (f.children?.length ?? 0), 0) ?? 0;
 
-  const stop = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
 
   return (
     <div
@@ -47,84 +41,26 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
       style={{ borderColor: "#E2DFD9", background: dimmed ? "#FAF9F5" : "#FFFFFF", minHeight: 108, opacity: dimmed ? 0.85 : 1 }}
     >
       {/* Actions menu — bottom-right, always visible, sits above the card's
-          Link so it doesn't navigate. Opens upward so it doesn't overflow. */}
+          Link so it doesn't navigate. One shared implementation (CardMenu), so
+          the click-catcher and the closing behaviour cannot drift from the other
+          cards that use it. */}
       <div className="absolute right-2 bottom-2" style={{ zIndex: 10 }}>
-        <button
-          onClick={(e) => { stop(e); setMenuOpen((o) => !o); }}
-          className="flex items-center justify-center rounded"
-          style={{ width: 26, height: 26, background: "#F1EFE8", color: "#64748B", fontSize: 18, lineHeight: 1, border: "1px solid #E2DFD9" }}
-          title={t("card.moreActions")}
-          aria-label={t("card.moreActions")}
-        >
-          <Icon name="more_horiz" size={18} />
-        </button>
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0" style={{ zIndex: 20 }} onClick={(e) => { stop(e); setMenuOpen(false); }} />
-            <div
-              className="absolute right-0 mb-1 rounded-lg border py-1"
-              style={{ bottom: "100%", zIndex: 30, minWidth: 168, background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.14)" }}
-            >
-              {/* Rename and Invite both write the (frozen) Pulse doc, so they
-                  go while archived. Duplicate stays: it writes a new, active
-                  Pulse and never touches this one. */}
-              {canInvite && !archived && (
-                <MenuItem label={t("card.rename")} icon="edit" onClick={(e) => { stop(e); setMenuOpen(false); onRenameClick(); }} />
-              )}
-              {canInvite && !archived && (
-                <MenuItem label={t("card.inviteCollaborator")} icon="person_add" onClick={(e) => { stop(e); setMenuOpen(false); onInviteClick(); }} />
-              )}
-              <MenuItem label={t("card.duplicate")} icon="content_copy" onClick={(e) => { stop(e); setMenuOpen(false); onDuplicateClick(); }} />
-              {hidden ? (
-                <MenuItem label={t("card.unhide")} icon="visibility" onClick={(e) => { stop(e); setMenuOpen(false); onUnhide(); }} />
-              ) : (
-                <MenuItem label={t("card.hide")} icon="visibility_off" onClick={(e) => { stop(e); setMenuOpen(false); onHide(); }} />
-              )}
-              {/* Archive is owner-only (HA1): it makes the Pulse read-only for
-                  every member, so it sits with the role that already carries the
-                  other Pulse-wide consequences. */}
-              {isOwner && (archived ? (
-                <MenuItem label={t("card.unarchive")} icon="unarchive" onClick={(e) => { stop(e); setMenuOpen(false); onUnarchive(); }} />
-              ) : (
-                <MenuItem
-                  label={t("card.archive")}
-                  icon="archive"
-                  onClick={(e) => {
-                    const pt = { clientX: e.clientX, clientY: e.clientY };
-                    stop(e);
-                    setMenuOpen(false);
-                    onArchive(pt);
-                  }}
-                />
-              ))}
-              {isOwner ? (
-                <MenuItem
-                  label={t("card.delete")}
-                  icon="delete"
-                  danger
-                  onClick={(e) => {
-                    const pt = { clientX: e.clientX, clientY: e.clientY };
-                    stop(e);
-                    setMenuOpen(false);
-                    onDelete(pt);
-                  }}
-                />
-              ) : (
-                <MenuItem
-                  label={t("card.leavePulse")}
-                  icon="logout"
-                  danger
-                  onClick={(e) => {
-                    const pt = { clientX: e.clientX, clientY: e.clientY };
-                    stop(e);
-                    setMenuOpen(false);
-                    onLeave(pt);
-                  }}
-                />
-              )}
-            </div>
-          </>
-        )}
+        <CardMenu
+          items={[
+            // Rename and Invite both write the (frozen) Pulse doc, so they go
+            // while archived. Duplicate stays: it writes a new, active Pulse and
+            // never touches this one.
+            { label: t("card.rename"), icon: "edit", onClick: () => onRenameClick(), hidden: !canInvite || archived },
+            { label: t("card.inviteCollaborator"), icon: "person_add", onClick: () => onInviteClick(), hidden: !canInvite || archived },
+            { label: t("card.duplicate"), icon: "content_copy", onClick: () => onDuplicateClick() },
+            { label: t("card.unhide"), icon: "visibility", onClick: () => onUnhide(), hidden: !hidden },
+            { label: t("card.hide"), icon: "visibility_off", onClick: () => onHide(), hidden },
+            { label: t("card.unarchive"), icon: "unarchive", onClick: () => onUnarchive(), hidden: !isOwner || !archived },
+            { label: t("card.archive"), icon: "archive", onClick: (e) => onArchive(e), hidden: !isOwner || archived },
+            { label: t("card.delete"), icon: "delete", danger: true, onClick: (e) => onDelete(e), hidden: !isOwner },
+            { label: t("card.leavePulse"), icon: "logout", danger: true, onClick: (e) => onLeave(e), hidden: isOwner },
+          ]}
+        />
       </div>
 
       <Link to={`/p/${entry.pulseId}`} className="flex-1">
@@ -198,14 +134,6 @@ function StatBadge({ n, text, bg, color }: { n: number; text: string; bg: string
   );
 }
 
-function MenuItem({ label, icon, danger, onClick }: { label: string; icon: string; danger?: boolean; onClick: (e: React.MouseEvent) => void }) {
-  return (
-    <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-yasdu-secondary" style={{ color: danger ? "#DC2626" : "#334155" }}>
-      <Icon name={icon} size={15} style={{ color: danger ? "#DC2626" : "#64748B" }} />
-      {label}
-    </button>
-  );
-}
 
 /** Locale-aware short date. The card has room for "17 Aug 2026", not for a
  * relative string that has to be recomputed and re-translated as it ages. */
