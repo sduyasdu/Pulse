@@ -6,7 +6,7 @@
 import type { HelpDoc } from "./types";
 
 export const help: HelpDoc = {
-  reviewedAgainst: "2026-07",
+  reviewedAgainst: "2026-08",
   sections: [
     {
       id: "canvas",
@@ -68,6 +68,23 @@ export const help: HelpDoc = {
         { term: "Capacity", text: "A person's occupation limit, set in the Capacity tab. Load above it shows red." },
         { term: "Assignment panel", text: "The bottom panel: one row per person, time-aligned with the canvas." },
         { term: "★ lead", text: "Marks who leads a task. A Task Lead can edit the tasks they lead." },
+      ],
+    },
+    {
+      id: "roster",
+      title: "People across Pulses",
+      body:
+        "People — from the dashboard — is your organisation's list of everyone you plan with, separate "
+        + "from any one Pulse. Add someone once there, then bring them into as many Pulses as you need.",
+      keywords: ["roster", "master", "organisation", "organization", "directory", "team", "role", "reuse", "shared", "everyone"],
+      bullets: [
+        { term: "Add to a Pulse", text: "In a Pulse's Team tab, use “from People”. Pick individuals, or a whole team at once." },
+        { term: "It's a copy", text: "Capacity and type are that Pulse's own. Name and role follow the organisation and update everywhere." },
+        { term: "Teams", text: "Group people on the People screen. Drag someone onto a team card, or use the buttons on their card." },
+        { term: "Role vs type", text: "Role is the organisation's and the same everywhere. Type is each Pulse's own way of grouping." },
+        { term: "Linked / Waiting", text: "Linked means that email belongs to a member. Waiting means they haven't joined yet — they link themselves when they do." },
+        { term: "Linking isn't access", text: "It says who someone is. They still need inviting to each Pulse before they can see it." },
+        { term: "Where they're used", text: "On a person's card. Lists every Pulse they're on, including ones you can't open yourself." },
       ],
     },
     {

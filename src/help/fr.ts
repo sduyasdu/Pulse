@@ -10,7 +10,7 @@
 import type { HelpDoc } from "./types";
 
 export const help: HelpDoc = {
-  reviewedAgainst: "2026-07",
+  reviewedAgainst: "2026-08",
   sections: [
     {
       id: "canvas",
@@ -71,6 +71,23 @@ export const help: HelpDoc = {
         { term: "Capacité", text: "La limite d'occupation d'une personne, définie dans l'onglet Capacité. Au-delà, l'affichage passe au rouge." },
         { term: "Panneau d'affectation", text: "Le panneau du bas : une ligne par personne, alignée dans le temps avec le canevas." },
         { term: "★ référent", text: "Indique qui pilote une tâche. Un Référent de tâche peut modifier les tâches qu'il pilote." },
+      ],
+    },
+    {
+      id: "roster",
+      title: "Les personnes entre Pulses",
+      body:
+        "Personnes — depuis le tableau de bord — est la liste des gens de votre organisation, distincte "
+        + "de tout Pulse. Ajoutez quelqu'un une fois, puis amenez-le dans autant de Pulses qu'il faut.",
+      keywords: ["effectif", "maitre", "organisation", "annuaire", "equipe", "role", "reutiliser", "partage", "tout le monde"],
+      bullets: [
+        { term: "Ajouter à un Pulse", text: "Dans l'onglet Équipe d'un Pulse, utilisez « depuis Personnes ». Des personnes, ou une équipe entière." },
+        { term: "C'est une copie", text: "La capacité et le type appartiennent à ce Pulse. Le nom et le rôle suivent l'organisation et se mettent à jour partout." },
+        { term: "Équipes", text: "Regroupez les gens sur l'écran Personnes. Glissez quelqu'un sur une carte d'équipe, ou utilisez les boutons de sa fiche." },
+        { term: "Rôle et type", text: "Le rôle est celui de l'organisation, identique partout. Le type est la façon de regrouper propre à chaque Pulse." },
+        { term: "Liée / En attente", text: "Liée : cet e-mail est celui d'un membre. En attente : la personne n'a pas encore rejoint — la liaison se fera seule." },
+        { term: "Lier ne donne pas accès", text: "Cela dit seulement de qui il s'agit. Il faut toujours l'inviter à chaque Pulse." },
+        { term: "Où elle intervient", text: "Sur sa fiche. Liste tous les Pulses où elle est, y compris ceux que vous ne pouvez pas ouvrir." },
       ],
     },
     {

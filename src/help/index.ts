@@ -12,6 +12,7 @@
 // Each locale is its own chunk, so a reader downloads the prose for their
 // language and no other.
 import type { HelpDoc, HelpSection } from "./types";
+import { COSTS_ENABLED } from "@/domain/flags";
 
 const LOADERS: Record<string, () => Promise<{ help: HelpDoc }>> = {
   en: () => import("./en"),
@@ -28,9 +29,31 @@ export function hasLocalizedHelp(lang: string): boolean {
   return lang in LOADERS;
 }
 
-export async function loadHelp(lang: string): Promise<HelpDoc> {
+/**
+ * The written document for a language, exactly as authored.
+ *
+ * Separate from `loadHelp` because **parity between locales is a property of the
+ * content, and visibility is a property of the build.** The parity tests compare
+ * every language against English and must see what was written; a section hidden
+ * by a flag would otherwise read as a missing translation.
+ */
+export async function loadHelpRaw(lang: string): Promise<HelpDoc> {
   const load = LOADERS[lang] ?? LOADERS.en;
   return (await load()).help;
+}
+
+/**
+ * What a reader actually gets.
+ *
+ * HL9 — a section ships with its feature. Costing is parked behind
+ * `COSTS_ENABLED` (Costs-Spec §21, CO21), so its section is filtered out rather
+ * than deleted: help explaining a panel nobody can find is worse than silence,
+ * and the prose is worth keeping for whatever the rethink lands on.
+ */
+export async function loadHelp(lang: string): Promise<HelpDoc> {
+  const doc = await loadHelpRaw(lang);
+  if (COSTS_ENABLED) return doc;
+  return { ...doc, sections: doc.sections.filter((s) => s.id !== "costs") };
 }
 
 /**

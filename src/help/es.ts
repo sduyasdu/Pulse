@@ -10,7 +10,7 @@
 import type { HelpDoc } from "./types";
 
 export const help: HelpDoc = {
-  reviewedAgainst: "2026-07",
+  reviewedAgainst: "2026-08",
   sections: [
     {
       id: "canvas",
@@ -72,6 +72,23 @@ export const help: HelpDoc = {
         { term: "Capacidad", text: "El límite de ocupación de cada persona, en la pestaña Capacidad. Por encima se ve en rojo." },
         { term: "Panel de asignación", text: "El panel inferior: una fila por persona, alineada en el tiempo con el lienzo." },
         { term: "★ líder", text: "Marca quién lidera una tarea. Un Líder de Tarea puede editar las tareas que lidera." },
+      ],
+    },
+    {
+      id: "roster",
+      title: "Personas entre Pulses",
+      body:
+        "Personas — desde el tablero — es la lista de gente de tu organización, separada de cualquier "
+        + "Pulse. Agregá a alguien una vez ahí y sumalo a todos los Pulses que necesites.",
+      keywords: ["plantel", "maestro", "organizacion", "directorio", "equipo", "rol", "reutilizar", "compartido", "todos"],
+      bullets: [
+        { term: "Sumar a un Pulse", text: "En la pestaña Equipo de un Pulse, usá “de Personas”. Elegí personas sueltas o un equipo entero." },
+        { term: "Es una copia", text: "La capacidad y el tipo son de ese Pulse. El nombre y el rol siguen a la organización y se actualizan en todos lados." },
+        { term: "Equipos", text: "Agrupá gente en la pantalla Personas. Arrastrá a alguien sobre un equipo, o usá los botones de su tarjeta." },
+        { term: "Rol vs tipo", text: "El rol es de la organización y es el mismo en todos lados. El tipo es la forma de agrupar propia de cada Pulse." },
+        { term: "Vinculada / En espera", text: "Vinculada: ese email es de un miembro. En espera: todavía no se unió — se vincula solo cuando lo haga." },
+        { term: "Vincular no da acceso", text: "Solo dice quién es. Igual hay que invitar a la persona a cada Pulse para que lo vea." },
+        { term: "Dónde participa", text: "En la tarjeta de cada persona. Lista todos los Pulses en los que está, incluso los que vos no podés abrir." },
       ],
     },
     {

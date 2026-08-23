@@ -12,7 +12,7 @@
 import type { HelpDoc } from "./types";
 
 export const help: HelpDoc = {
-  reviewedAgainst: "2026-07",
+  reviewedAgainst: "2026-08",
   sections: [
     {
       id: "canvas",
@@ -73,6 +73,23 @@ export const help: HelpDoc = {
         { term: "Kapazität", text: "Die Auslastungsgrenze einer Person, im Reiter Kapazität. Darüber wird es rot." },
         { term: "Zuweisungs-Panel", text: "Das untere Panel: eine Zeile pro Person, zeitlich zur Arbeitsfläche ausgerichtet." },
         { term: "★ Leitung", text: "Markiert, wer eine Aufgabe leitet. Eine Aufgabenleitung darf die von ihr geleiteten Aufgaben bearbeiten." },
+      ],
+    },
+    {
+      id: "roster",
+      title: "Personen über Pulses hinweg",
+      body:
+        "Personen — von der Übersicht aus — ist die Liste aller Menschen deiner Organisation, getrennt "
+        + "von einzelnen Pulses. Füge jemanden einmal dort hinzu und hole ihn in beliebig viele Pulses.",
+      keywords: ["pool", "master", "organisation", "verzeichnis", "team", "rolle", "wiederverwenden", "geteilt", "alle"],
+      bullets: [
+        { term: "Zu einem Pulse hinzufügen", text: "Im Team-Tab eines Pulse „aus Personen“ nutzen. Einzelne Personen oder ein ganzes Team." },
+        { term: "Es ist eine Kopie", text: "Kapazität und Typ gehören diesem Pulse. Name und Rolle folgen der Organisation und ändern sich überall." },
+        { term: "Teams", text: "Gruppiere Personen auf dem Personen-Bildschirm. Ziehe jemanden auf eine Teamkarte oder nutze die Schaltflächen auf der Karte." },
+        { term: "Rolle und Typ", text: "Die Rolle gehört der Organisation und ist überall gleich. Der Typ ist die Gruppierung des jeweiligen Pulse." },
+        { term: "Verknüpft / Wartet", text: "Verknüpft: Diese E-Mail gehört einem Mitglied. Wartet: Die Person ist noch nicht beigetreten — sie verknüpft sich dann selbst." },
+        { term: "Verknüpfen ist kein Zugriff", text: "Es sagt nur, wer jemand ist. Zu jedem Pulse muss die Person weiterhin eingeladen werden." },
+        { term: "Wo sie mitarbeitet", text: "Auf ihrer Karte. Listet alle Pulses auf, in denen sie ist — auch die, die du nicht öffnen kannst." },
       ],
     },
     {

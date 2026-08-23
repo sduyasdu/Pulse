@@ -20,6 +20,7 @@ export type HelpSectionId =
   | "effort"
   | "navigation"
   | "people"
+  | "roster"
   | "costs"
   | "plan"
   | "collab"

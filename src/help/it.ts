@@ -10,7 +10,7 @@
 import type { HelpDoc } from "./types";
 
 export const help: HelpDoc = {
-  reviewedAgainst: "2026-07",
+  reviewedAgainst: "2026-08",
   sections: [
     {
       id: "canvas",
@@ -71,6 +71,23 @@ export const help: HelpDoc = {
         { term: "Capacità", text: "Il limite di occupazione di una persona, impostato nella scheda Capacità. Oltre quello si vede in rosso." },
         { term: "Pannello di assegnazione", text: "Il pannello in basso: una riga per persona, allineata nel tempo con la tela." },
         { term: "★ responsabile", text: "Indica chi guida un'attività. Un Responsabile di attività può modificare le attività che guida." },
+      ],
+    },
+    {
+      id: "roster",
+      title: "Le persone tra i Pulse",
+      body:
+        "Persone — dalla bacheca — è l'elenco delle persone della tua organizzazione, separato da "
+        + "qualsiasi Pulse. Aggiungi qualcuno una volta lì, poi portalo in quanti Pulse ti servono.",
+      keywords: ["organico", "master", "organizzazione", "elenco", "team", "ruolo", "riusare", "condiviso", "tutti"],
+      bullets: [
+        { term: "Aggiungere a un Pulse", text: "Nella scheda Team di un Pulse, usa “da Persone”. Singole persone o un intero team." },
+        { term: "È una copia", text: "Capacità e tipo appartengono a quel Pulse. Nome e ruolo seguono l'organizzazione e si aggiornano ovunque." },
+        { term: "Team", text: "Raggruppa le persone nella schermata Persone. Trascina qualcuno su un team, o usa i pulsanti sulla sua scheda." },
+        { term: "Ruolo e tipo", text: "Il ruolo è dell'organizzazione ed è lo stesso ovunque. Il tipo è il modo di raggruppare di ogni Pulse." },
+        { term: "Collegata / In attesa", text: "Collegata: quell'e-mail è di un membro. In attesa: non è ancora entrata — si collegherà da sola." },
+        { term: "Collegare non dà accesso", text: "Dice solo di chi si tratta. Va comunque invitata a ogni Pulse." },
+        { term: "Dove è coinvolta", text: "Sulla sua scheda. Elenca tutti i Pulse in cui è, compresi quelli che tu non puoi aprire." },
       ],
     },
     {

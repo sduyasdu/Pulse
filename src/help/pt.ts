@@ -10,7 +10,7 @@
 import type { HelpDoc } from "./types";
 
 export const help: HelpDoc = {
-  reviewedAgainst: "2026-07",
+  reviewedAgainst: "2026-08",
   sections: [
     {
       id: "canvas",
@@ -71,6 +71,23 @@ export const help: HelpDoc = {
         { term: "Capacidade", text: "O limite de ocupação da pessoa, definido na aba Capacidade. Acima disso aparece em vermelho." },
         { term: "Painel de atribuição", text: "O painel inferior: uma linha por pessoa, alinhada no tempo com o canvas." },
         { term: "★ líder", text: "Marca quem lidera a tarefa. Um Líder de Tarefa pode editar as tarefas que lidera." },
+      ],
+    },
+    {
+      id: "roster",
+      title: "Pessoas entre Pulses",
+      body:
+        "Pessoas — no painel — é a lista de quem trabalha na sua organização, separada de qualquer "
+        + "Pulse. Adicione alguém uma vez ali e leve essa pessoa para quantos Pulses precisar.",
+      keywords: ["elenco", "mestre", "organizacao", "diretorio", "equipe", "funcao", "reutilizar", "compartilhado", "todos"],
+      bullets: [
+        { term: "Adicionar a um Pulse", text: "Na aba Equipe de um Pulse, use “de Pessoas”. Escolha pessoas ou uma equipe inteira." },
+        { term: "É uma cópia", text: "Capacidade e tipo são daquele Pulse. Nome e função seguem a organização e atualizam em todo lugar." },
+        { term: "Equipes", text: "Agrupe pessoas na tela Pessoas. Arraste alguém para um cartão de equipe, ou use os botões no cartão dela." },
+        { term: "Função vs tipo", text: "A função é da organização e é a mesma em todo lugar. O tipo é o jeito de agrupar de cada Pulse." },
+        { term: "Vinculada / Aguardando", text: "Vinculada: aquele e-mail é de um membro. Aguardando: ainda não entrou — vincula sozinha quando entrar." },
+        { term: "Vincular não dá acesso", text: "Diz apenas quem é a pessoa. Ela ainda precisa ser convidada para cada Pulse." },
+        { term: "Onde participa", text: "No cartão da pessoa. Lista todos os Pulses em que ela está, inclusive os que você não pode abrir." },
       ],
     },
     {
