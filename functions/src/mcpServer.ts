@@ -55,7 +55,20 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  * refusal happens inside the client, after a response we consider successful.
  * The icon is served correctly at `/favicon.ico` and does not need this.
  */
-const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.5.0" };
+/**
+ * Mirrors `COSTS_ENABLED` in `src/domain/flags.ts` — functions cannot import from
+ * the app, so this is a second copy that **must be flipped with it**
+ * (`Costs-Spec.md` §21, CO21). Hiding costs from the UI while an assistant reads
+ * them aloud is not hiding them.
+ *
+ * Gating the tool rather than deleting it: the whole costing model is being
+ * rethought, and `get_costs` is the reference for how a role-gated read is
+ * shaped here — including the note it returns when an empty result might mean
+ * "no access" rather than "no costs".
+ */
+const COSTS_ENABLED = false;
+
+const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.6.0" };
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -359,7 +372,7 @@ export const clampLimit = (raw: unknown, fallback: number) =>
 //
 // Phase 2's writes flip these per tool, and that is a submission-affecting
 // change to re-declare, not an implementation detail.
-export const TOOLS = [
+const ALL_TOOLS = [
   {
     name: "list_pulses",
     title: "List Pulses",
@@ -556,6 +569,13 @@ export const overlaps = (f: Record<string, unknown>, from: number, to: number) =
   const x = Number(f.x ?? 0);
   return x <= to && x + Number(f.duration ?? 1) >= from;
 };
+
+/**
+ * The advertised surface. Filtering here rather than at each call site means
+ * `tools/list` and `tools/call` cannot disagree: a tool that is not listed is
+ * not found, and the METHOD_NOT_FOUND path already handles that.
+ */
+export const TOOLS = ALL_TOOLS.filter((t) => COSTS_ENABLED || t.name !== "get_costs");
 
 async function callTool(caller: Caller, name: string, args: Record<string, unknown>): Promise<unknown> {
   const pulseId = typeof args.pulseId === "string" ? args.pulseId : "";

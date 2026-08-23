@@ -3,6 +3,7 @@ import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRol
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { subscribeCosts, createCost, updateCost, deleteCost, newCostId } from "@/services/firestore/costs";
 import { subscribeRates, setResourceRate, deleteResourceRate } from "@/services/firestore/rates";
+import { COSTS_ENABLED } from "@/domain/flags";
 import { subscribeEpics, createEpic, updateEpic, deleteEpic, newEpicId } from "@/services/firestore/epics";
 import { subscribeFeatures, createFeature, updateFeature, deleteFeature, newFeatureId } from "@/services/firestore/features";
 import {
@@ -164,7 +165,9 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       }),
       subscribeEpics(pulseId, (epics) => set({ epics })),
       subscribeResources(pulseId, (resources) => set({ resources })),
-      subscribeRates(pulseId, (rates) => set({ rates })),
+      // Parked with the rest of costing (CO21). A hidden panel that still streams
+      // a collection bills reads for something nobody can see.
+      ...(COSTS_ENABLED ? [subscribeRates(pulseId, (rates) => set({ rates }))] : []),
       subscribePulseMembers(pulseId, (members) => {
         membersArrived = true;
         set({ members });

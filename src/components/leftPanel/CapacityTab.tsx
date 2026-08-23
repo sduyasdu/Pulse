@@ -8,6 +8,7 @@ import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { confirmAt } from "@/stores/confirmStore";
 import { canViewPeopleCost } from "@/domain/permissions";
+import { COSTS_ENABLED } from "@/domain/flags";
 import { ResourceOriginBadge } from "@/components/shared/ResourceOriginBadge";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
@@ -85,7 +86,9 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
 
   // Pay rates are admin-only (Costs-Spec §8.7 / CO15).
   const me = uid ? members.find((m) => m.uid === uid) : undefined;
-  const seesPeopleCost = !!me && canViewPeopleCost(me);
+  // AND the flag: the capability is unchanged and still correct, the surface
+  // is simply parked (CO21).
+  const seesPeopleCost = COSTS_ENABLED && !!me && canViewPeopleCost(me);
   const rateOf = (rid: string) => rates.find((x) => x.resourceId === rid)?.hourlyCost ?? null;
 
   const [query, setQuery] = useState("");

@@ -328,5 +328,12 @@ assert(!isAllowedRedirect("https://127.0.0.1:8080/cb"), "redirect: https loopbac
   assert((await db.doc("mcpRefreshTokens/t_live").get()).exists, "sweep: the live token still survives a second pass");
 }
 
+// CO21 — the costing surface is parked, and the tool list has to agree with the
+// UI. A tool that is still advertised while the app hides the data is not
+// hidden; it is hidden from everyone except the assistant.
+assert(!TOOLS.some((t) => t.name === "get_costs"), "parked: get_costs is not advertised while costing is hidden");
+assert(TOOLS.length === 8, "parked: the other eight tools are untouched");
+assert(TOOLS.every((t) => t.annotations?.readOnlyHint === true), "parked: every advertised tool is still annotated (MP1)");
+
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
 process.exit(failed ? 1 : 0);

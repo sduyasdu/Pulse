@@ -27,6 +27,7 @@ import { Icon } from "@/components/shared/Icon";
 import { Spinner } from "@/components/shared/Spinner";
 import { AssignmentPanel } from "@/components/assignmentPanel/AssignmentPanel";
 import { CostPanel } from "@/components/costPanel/CostPanel";
+import { COSTS_ENABLED } from "@/domain/flags";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
@@ -258,6 +259,8 @@ export function PulsePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [assignPanelOpen, setAssignPanelOpen] = useState(true);
   // Which view occupies the bottom panel — assignments or costs (Costs-Spec §6).
+  // Pinned to "assign" while costing is parked (CO21) — with the switch gone
+  // there is no way back from "cost", so it must never start there.
   const [bottomPanel, setBottomPanel] = useState<"assign" | "cost">("assign");
   // Only one right-edge drawer at a time — two overlapping panels is a layout bug
   // waiting to be filed (Help-Spec §2).
@@ -594,7 +597,7 @@ export function PulsePage() {
 
         {viewMode === "canvas" && assignPanelOpen && (
         <div style={{ height: assignPanelH, flexShrink: 0 }}>
-          {bottomPanel === "assign" ? (
+          {bottomPanel === "assign" || !COSTS_ENABLED ? (
             <AssignmentPanel
               offsetX={offsetX}
               dayWidth={timelineBounds.dayWidth}
@@ -608,7 +611,7 @@ export function PulsePage() {
               selectedFeature={selectedFeature}
               onCollapse={() => setAssignPanelOpen(false)}
               labelWidth={sidebarOpen ? 320 : 30}
-              viewSwitch={<BottomPanelSwitch value={bottomPanel} onChange={setBottomPanel} />}
+              viewSwitch={COSTS_ENABLED ? <BottomPanelSwitch value={bottomPanel} onChange={setBottomPanel} /> : null}
             />
           ) : (
             <CostPanel
