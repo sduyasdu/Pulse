@@ -17,6 +17,10 @@ interface TeamTabProps {
   setFilterResource: (id: string | null) => void;
 }
 
+/** One look for both add buttons — same padding, same icon size, same colour. */
+const ADD_BTN = "hoverable mono text-xs flex items-center gap-1 px-2 py-0.5 rounded";
+const ADD_BTN_STYLE = { background: "#F7E8DA", color: "#D85A28" } as const;
+
 export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabProps) {
   const t = useT();
   const resources = usePulseStore((s) => s.resources);
@@ -110,21 +114,20 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
       </div>
       <div className="flex items-center justify-between">
         <span className="mono text-xs" style={{ color: "#64748B" }}>{t("team.peopleCount", { n: filtered.length })}</span>
+        {/* Both add buttons share one class and one icon size, so they read as a
+            pair of equal choices rather than a button and an afterthought. */}
         {canEdit && (
-          <button onClick={() => setAdding(true)} className="mono text-xs flex items-center gap-1 px-2 py-0.5 rounded" style={{ background: "#F7E8DA", color: "#D85A28" }}>
+          <button onClick={() => setAdding(true)} className={ADD_BTN} style={ADD_BTN_STYLE} title={t("team.addNew")}>
+            <Icon name="person_add" size={12} />
             {t("team.add")}
           </button>
         )}
         {/* Only offered when this Pulse belongs to a workspace — the roster is a
             property of the org, and there is nothing to pull from without one. */}
         {canEdit && pulse?.workspaceId && (
-          <button
-            onClick={() => setPicking(true)}
-            title={t("team.addFromRoster")}
-            className="mono text-xs flex items-center gap-1 px-2 py-0.5 rounded"
-            style={{ background: "#F7E8DA", color: "#D85A28" }}
-          >
+          <button onClick={() => setPicking(true)} className={ADD_BTN} style={ADD_BTN_STYLE} title={t("team.addFromRoster")}>
             <Icon name="group" size={12} />
+            {t("team.addFrom")}
           </button>
         )}
       </div>
@@ -192,7 +195,22 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                 title={r.linkedUid ? t("team.linkedAccount") : r.linkedEmail ? t("team.linkedWaiting") : t("team.freeform")}
               />
               <div className="overflow-hidden flex-1">
-                <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                <div className="flex items-center gap-1">
+                  {/* Where this person came from. It decides what is editable
+                      here — a roster person's name and role are managed at the
+                      org level and read-only in the Pulse (RM22) — so it is
+                      worth being able to see at a glance rather than by
+                      discovering a disabled field. */}
+                  <span
+                    className="flex shrink-0 items-center justify-center rounded"
+                    title={r.masterId ? t("team.fromRoster") : t("team.localOnly")}
+                    aria-label={r.masterId ? t("team.fromRoster") : t("team.localOnly")}
+                    style={{ width: 14, height: 14, background: r.masterId ? "#EAF0FA" : "#F4F5F7" }}
+                  >
+                    <Icon name={r.masterId ? "group" : "person"} size={10} style={{ color: r.masterId ? "#1B3A63" : "#94A3B8" }} />
+                  </span>
+                  <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                </div>
                 <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · {t("team.limit", { n: r.capacity })}</div>
               </div>
               {active && <span className="mono text-xs" style={{ color: "#EE7240" }}>●</span>}
