@@ -1,6 +1,7 @@
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Workspace, WorkspaceMember } from "@/types";
+import { emailKey } from "./emailKey";
 
 /**
  * Creates a personal workspace for a brand-new user and grants them
@@ -12,7 +13,7 @@ import type { Workspace, WorkspaceMember } from "@/types";
  * Committing the workspace doc first (and awaiting it) makes it visible
  * to the second write's rule evaluation.
  */
-export async function createPersonalWorkspace(uid: string, displayName: string | null): Promise<string> {
+export async function createPersonalWorkspace(uid: string, displayName: string | null, email?: string | null): Promise<string> {
   const workspaceRef = doc(db, "workspaces", `personal-${uid}`);
   const workspace: Workspace = {
     id: workspaceRef.id,
@@ -23,7 +24,10 @@ export async function createPersonalWorkspace(uid: string, displayName: string |
   };
   await setDoc(workspaceRef, workspace);
 
-  const member: WorkspaceMember = { uid, role: "owner", joinedAt: Date.now() };
+  // `email` is denormalized here so the roster can resolve a linked email to a
+  // uid in one query (RM16). Normalized on the way in, because it is compared
+  // against `MasterResource.linkedEmail`, which is stored the same way.
+  const member: WorkspaceMember = { uid, role: "owner", joinedAt: Date.now(), ...(email ? { email: emailKey(email) } : {}) };
   await setDoc(doc(db, "workspaces", workspaceRef.id, "workspaceMembers", uid), member);
 
   return workspaceRef.id;

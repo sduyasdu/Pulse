@@ -17,7 +17,7 @@ export async function ensureUserDoc(uid: string, email: string, displayName: str
   const existing = await getDoc(userRef);
   if (existing.exists()) return;
 
-  const personalWorkspaceId = await createPersonalWorkspace(uid, displayName);
+  const personalWorkspaceId = await createPersonalWorkspace(uid, displayName, email);
   const user: UserDoc = {
     uid,
     email,

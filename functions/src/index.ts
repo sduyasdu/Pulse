@@ -54,3 +54,8 @@ export { mcp, mcpMetadata } from "./mcpServer";
 // function — deploying it needs the Cloud Scheduler API enabled. Exists to make
 // a retention claim in the privacy policy true, not to close an exploit.
 export { mcpCleanup } from "./mcpCleanup";
+
+// RM16 — resource master link resolution (Resource-Master-Spec §5). The ONLY
+// writer of `MasterResource.linkedUid`: the email is the durable intent a client
+// sets, the uid is derived from real membership.
+export { onMasterResourceWriteResolve, onWorkspaceMemberJoinResolve, onWorkspaceMemberLeaveUnresolve } from "./roster";

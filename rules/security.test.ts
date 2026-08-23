@@ -1290,3 +1290,79 @@ describe("plan quotas — resources per Pulse (Resource-Master-Spec §8, RM10)",
     );
   });
 });
+
+describe("resource master — the workspace roster (Resource-Master-Spec §1, RM1/RM6/RM16)", () => {
+  const WS = "wsr";
+  const RID = "m_ana";
+
+  async function seedRoster(over: Record<string, unknown> = {}) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: Date.now(), email: "alice@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "bob"), { uid: "bob", role: "member", joinedAt: Date.now(), email: "bob@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "resources", RID), {
+        id: RID, name: "Ana", initials: "AN", type: "dev", capacity: 100,
+        linkedEmail: "ana@example.com", linkedUid: null, createdAt: Date.now(), ...over,
+      });
+    });
+  }
+
+  const alice = () => dbAs("alice", "alice@example.com"); // workspace owner
+  const bob = () => dbAs("bob", "bob@example.com");       // workspace member
+  const carol = () => dbAs("carol", "carol@example.com"); // outside the workspace
+
+  it("lets any workspace member read the roster — they need it to staff a Pulse", async () => {
+    await seedRoster();
+    await assertSucceeds(getDoc(doc(alice(), "workspaces", WS, "resources", RID)));
+    await assertSucceeds(getDoc(doc(bob(), "workspaces", WS, "resources", RID)));
+  });
+
+  it("keeps the roster invisible outside the workspace", async () => {
+    await seedRoster();
+    await assertFails(getDoc(doc(carol(), "workspaces", WS, "resources", RID)));
+    await assertFails(getDoc(doc(dbAs(null), "workspaces", WS, "resources", RID)));
+  });
+
+  it("lets an owner curate it", async () => {
+    await seedRoster();
+    await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", RID), { name: "Ana Torres" }));
+    await assertSucceeds(deleteDoc(doc(alice(), "workspaces", WS, "resources", RID)));
+  });
+
+  it("denies a plain member curating it", async () => {
+    await seedRoster();
+    await assertFails(updateDoc(doc(bob(), "workspaces", WS, "resources", RID), { name: "Hijacked" }));
+    await assertFails(deleteDoc(doc(bob(), "workspaces", WS, "resources", RID)));
+  });
+
+  // The point of RM16: the email is the intent and a client writes it, but the
+  // uid is resolved server-side against real membership. A client that could
+  // write the uid could forge the "live" half of RM20's live/waiting badge —
+  // claiming someone is on the roster who never joined.
+  it("lets an owner set the linked EMAIL", async () => {
+    await seedRoster();
+    await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", RID), { linkedEmail: "someone@example.com" }));
+  });
+
+  it("denies even an owner writing the resolved linkedUid", async () => {
+    await seedRoster();
+    await assertFails(updateDoc(doc(alice(), "workspaces", WS, "resources", RID), { linkedUid: "bob" }));
+  });
+
+  it("denies creating a roster entry that arrives pre-resolved", async () => {
+    await seedRoster();
+    await assertFails(
+      setDoc(doc(alice(), "workspaces", WS, "resources", "m_forged"), {
+        id: "m_forged", name: "Forged", initials: "FG", type: null, capacity: 100,
+        linkedEmail: "bob@example.com", linkedUid: "bob", createdAt: Date.now(),
+      }),
+    );
+  });
+
+  it("allows an unrelated edit to a resource that is already resolved", async () => {
+    await seedRoster({ linkedUid: "bob" });
+    // The rule pins linkedUid to its current value rather than forbidding the
+    // field, or a resolved resource could never be renamed again.
+    await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", RID), { name: "Bob B" }));
+  });
+});

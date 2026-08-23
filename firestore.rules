@@ -259,6 +259,30 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(SERVER_COUNTERS());
       allow delete: if false; // not supported in v1
 
+      // ---- resource master (Resource-Master-Spec §1, RM1/RM6/RM16) ----
+      // The org's roster. Every workspace member may READ it — they need it to
+      // build a Pulse — but only an owner curates it, which is also the shape
+      // team `manage` will extend (RM5).
+      //
+      // A Pulse NEVER reads this. It holds its own copy, because Pulse
+      // membership is independent of workspace membership (RM1); making a Pulse
+      // depend on this collection would either break for invited collaborators
+      // or expose the whole roster to them.
+      //
+      // `linkedUid` is SERVER-OWNED. `linkedEmail` is the intent and a client
+      // writes it; the uid is resolved by trigger against real membership
+      // (RM16). A client that could write the uid could forge the "live"
+      // half of the live/waiting distinction the UI shows (RM20) — claiming
+      // someone is on the roster who never joined.
+      match /resources/{masterResourceId} {
+        allow read: if isWorkspaceMember(workspaceId);
+        allow create: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner'
+          && request.resource.data.get('linkedUid', null) == null;
+        allow update: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner'
+          && request.resource.data.get('linkedUid', null) == resource.data.get('linkedUid', null);
+        allow delete: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
+      }
+
       match /workspaceMembers/{memberUid} {
         allow read: if isSignedIn() && (memberUid == request.auth.uid || isWorkspaceMember(workspaceId));
         allow create: if isSignedIn() && memberUid == request.auth.uid

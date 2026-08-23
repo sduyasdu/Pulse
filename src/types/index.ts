@@ -79,6 +79,38 @@ export interface WorkspaceMember {
   uid: string;
   role: WorkspaceRole;
   joinedAt: Timestamp;
+  /** Denormalized on join, in `emailKey()` form (Resource-Master-Spec RM16).
+   * Lets the roster resolve `MasterResource.linkedEmail` to a uid with one
+   * query instead of a member read followed by a `users/{uid}` lookup. Absent
+   * on member docs written before the roster existed. */
+  email?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Resource master (Resource-Master-Spec.md) — the workspace roster a Pulse
+// copies from. A Pulse never reads these: it holds its own copy, because Pulse
+// membership is independent of workspace membership (RM1).
+// ---------------------------------------------------------------------------
+
+/** A person in the workspace roster, at `workspaces/{wsId}/resources/{rid}`. */
+export interface MasterResource {
+  id: string;
+  name: string;
+  initials: string;
+  type: string | null;
+  /** The default a copy starts from. Never propagates after that — capacity is
+   * per-Pulse by nature (RM2). */
+  capacity: number;
+  /** WHO this is, durably (RM6). Stored in `emailKey()` form. May name someone
+   * who has no account yet — that is the normal case for a roster. */
+  linkedEmail?: string | null;
+  /** What `linkedEmail` resolved to, once that person was a workspace member.
+   * **Server-owned** — resolved by trigger (RM16), never written by a client,
+   * or the UI's live/waiting distinction (RM20) could be forged. */
+  linkedUid?: string | null;
+  /** Teams this person belongs to (RM4). Many-to-many via array-contains. */
+  teamIds?: string[];
+  createdAt: Timestamp;
 }
 
 // ---------------------------------------------------------------------------
