@@ -35,6 +35,7 @@ export function PeoplePage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [teamQuery, setTeamQuery] = useState("");
   const [editing, setEditing] = useState<MasterResource | "new" | null>(null);
   const [addingTeam, setAddingTeam] = useState(false);
   const [teamDraft, setTeamDraft] = useState("");
@@ -64,6 +65,12 @@ export function PeoplePage() {
     for (const w of members) if (w.uid && w.photoURL) m.set(w.uid, w.photoURL);
     return m;
   }, [members]);
+
+  const tq = teamQuery.trim().toLowerCase();
+  const visibleTeams = useMemo(
+    () => (teams ?? []).filter((x) => !tq || (x.name ?? "").toLowerCase().includes(tq)),
+    [teams, tq],
+  );
 
   const q = query.trim().toLowerCase();
   const matches = useMemo(
@@ -137,45 +144,17 @@ export function PeoplePage() {
           </div>
         )}
 
-        <div className="mt-6 mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative order-1 w-full sm:flex-1 sm:max-w-[420px]">
-            <Icon name="search" size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("people.searchPlaceholder")}
-              className="w-full rounded-lg border text-sm"
-              style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "11px 36px", outline: "none" }}
-            />
-            {query && (
-              <button onClick={() => setQuery("")} aria-label={t("dashboard.clearSearch")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }}>
-                <Icon name="close" size={15} />
-              </button>
-            )}
-          </div>
-          {canManage && (
-            <button
-              onClick={() => setEditing("new")}
-              className="hoverable order-2 flex items-center gap-1.5 self-end rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg sm:ml-auto sm:self-auto"
-              style={{ background: "#D85A28" }}
-            >
-              <Icon name="person_add" size={16} />
-              {t("roster.add")}
-            </button>
-          )}
-        </div>
-
         {/* ---- teams ---------------------------------------------------- */}
-        <div className="mb-3 flex items-center gap-2">
-          <h2 className="font-display text-sm font-semibold text-yasdu-fg">{t("people.teams")}</h2>
-          {teams && <span className="mono text-xs" style={{ color: "#94A3B8" }}>{teams.length}</span>}
-          {canManage && !addingTeam && (
-            <button onClick={() => setAddingTeam(true)} className="hoverable mono ml-auto flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold border-yasdu-orange-soft bg-yasdu-accent text-yasdu-primary">
-              <Icon name="add" size={14} />
-              {t("people.addTeam")}
-            </button>
-          )}
-        </div>
+        <SectionHead
+          title={t("people.teams")}
+          count={teams?.length}
+          searchValue={teamQuery}
+          onSearch={setTeamQuery}
+          searchPlaceholder={t("people.searchTeamsPlaceholder")}
+          addLabel={t("people.addTeam")}
+          addIcon="group"
+          onAdd={canManage && !addingTeam ? () => setAddingTeam(true) : undefined}
+        />
 
         {addingTeam && (
           <div className="mb-3 flex items-center gap-2">
@@ -211,9 +190,13 @@ export function PeoplePage() {
           </div>
         )}
 
-        {teams && teams.length > 0 ? (
-          <div className="mb-8 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-            {teams.map((team) => {
+        {teams && teams.length > 0 && visibleTeams.length === 0 ? (
+          <p className="mb-10 rounded-xl border border-dashed px-4 py-6 text-center text-xs" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
+            {t("people.noTeamMatch", { query: teamQuery.trim() })}
+          </p>
+        ) : visibleTeams.length > 0 ? (
+          <div className="mb-10 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+            {visibleTeams.map((team) => {
               const members = (rows ?? []).filter((r) => (r.teamIds ?? []).includes(team.id));
               const over = dropTeam === team.id;
               return (
@@ -276,13 +259,26 @@ export function PeoplePage() {
             })}
           </div>
         ) : (
-          <p className="mb-8 rounded-xl border border-dashed px-4 py-6 text-center text-xs" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
+          <p className="mb-10 rounded-xl border border-dashed px-4 py-6 text-center text-xs" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
             {t("people.noTeams")}
           </p>
         )}
 
         {/* ---- people ---------------------------------------------------- */}
-        <h2 className="font-display mb-3 text-sm font-semibold text-yasdu-fg">{t("roster.title")}</h2>
+        {/* A rule between the two, so "which section am I in" is answered by
+            the layout rather than by reading the headings. */}
+        <div className="mb-8 border-t" style={{ borderColor: "#E2DFD9" }} />
+
+        <SectionHead
+          title={t("roster.title")}
+          count={rows?.length}
+          searchValue={query}
+          onSearch={setQuery}
+          searchPlaceholder={t("people.searchPlaceholder")}
+          addLabel={t("roster.add")}
+          addIcon="person_add"
+          onAdd={canManage ? () => setEditing("new") : undefined}
+        />
 
         {error ? (
           <p className="rounded-lg px-3 py-2 text-xs" style={{ background: "#FDECEA", border: "1px solid #F3C7C1", color: "#8C2F22" }}>{t("roster.loadError")}</p>
@@ -405,6 +401,61 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A section's own heading, search and add button.
+ *
+ * Shared so the two sections cannot drift into looking like different features —
+ * they are the same kind of thing (a list you search and add to), and the only
+ * differences that should be visible are the words and the icon.
+ */
+function SectionHead({ title, count, searchValue, onSearch, searchPlaceholder, addLabel, addIcon, onAdd }: {
+  title: string;
+  count?: number;
+  searchValue: string;
+  onSearch: (v: string) => void;
+  searchPlaceholder: string;
+  addLabel: string;
+  addIcon: string;
+  onAdd?: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="mb-3">
+      <div className="mb-2 flex items-center gap-2">
+        <h2 className="font-display text-sm font-semibold text-yasdu-fg">{title}</h2>
+        {count !== undefined && <span className="mono text-xs" style={{ color: "#94A3B8" }}>{count}</span>}
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative order-1 w-full sm:flex-1 sm:max-w-[420px]">
+          <Icon name="search" size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8", pointerEvents: "none" }} />
+          <input
+            value={searchValue}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="w-full rounded-lg border text-sm"
+            style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", padding: "11px 36px", outline: "none" }}
+          />
+          {searchValue && (
+            <button onClick={() => onSearch("")} aria-label={t("dashboard.clearSearch")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }}>
+              <Icon name="close" size={15} />
+            </button>
+          )}
+        </div>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="hoverable order-2 flex items-center gap-1.5 self-end rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg sm:ml-auto sm:self-auto"
+            style={{ background: "#D85A28" }}
+          >
+            <Icon name={addIcon} size={16} />
+            {addLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

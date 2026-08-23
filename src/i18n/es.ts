@@ -14,6 +14,8 @@ export const es: Dict = {
   "people.searchPlaceholder": "Buscar por nombre, rol o email",
   "people.noMatch": "Nadie coincide con â{query}â.",
   "people.teams": "Equipos",
+  "people.searchTeamsPlaceholder": "Buscar equipos por nombre",
+  "people.noTeamMatch": "NingÃºn equipo coincide con â{query}â.",
   "people.writeError": "Ese cambio no se guardó.",
   "people.addTeam": "Agregar equipo",
   "people.teamNamePlaceholder": "Nombre del equipo, luego Enter",

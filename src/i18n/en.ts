@@ -19,6 +19,8 @@ export const en = {
   "people.searchPlaceholder": "Search people by name, role or email",
   "people.noMatch": "No one matches â{query}â.",
   "people.teams": "Teams",
+  "people.searchTeamsPlaceholder": "Search teams by name",
+  "people.noTeamMatch": "No teams match â{query}â.",
   "people.writeError": "That change didn't save.",
   "people.addTeam": "Add team",
   "people.teamNamePlaceholder": "Team name, then Enter",

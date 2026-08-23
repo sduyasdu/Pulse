@@ -14,6 +14,8 @@ export const de: Dict = {
   "people.searchPlaceholder": "Nach Name, Rolle oder E-Mail suchen",
   "people.noMatch": "Niemand passt zu â{query}â.",
   "people.teams": "Teams",
+  "people.searchTeamsPlaceholder": "Teams nach Namen suchen",
+  "people.noTeamMatch": "Keine Teams passen zu â{query}â.",
   "people.writeError": "Diese Änderung wurde nicht gespeichert.",
   "people.addTeam": "Team hinzufÃ¼gen",
   "people.teamNamePlaceholder": "Teamname, dann Enter",
