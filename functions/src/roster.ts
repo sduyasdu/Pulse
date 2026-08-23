@@ -339,8 +339,16 @@ export const onMasterResourceWritePropagate = onDocumentWritten(
  *
  * `collectionGroup("resources")` also spans `workspaces/*​/resources`, i.e. the
  * masters themselves; harmless, because a master carries no `masterId` and so
- * never matches. Single-field collection-group queries are served by Firestore's
- * automatic index (same as SF6's `myPulses` sweep).
+ * never matches.
+ *
+ * **It needs an explicit index, and this is where that was learned the hard
+ * way.** An earlier version of this comment claimed single-field collection-group
+ * queries are served by Firestore's automatic index. They are not: automatic
+ * single-field indexes are COLLECTION-scoped, and a collection-group query needs
+ * a `fieldOverrides` entry with `COLLECTION_GROUP` scope — see
+ * `firestore.indexes.json`. Without it every call fails with FAILED_PRECONDITION,
+ * which the trigger logs and retries forever while the feature silently does
+ * nothing.
  *
  * **Phase 6 will add a second half.** RM13 requires the detach to clear
  * `inherited` on `pulses/{id}/rates/{resourceId}` too — a rate still marked as
