@@ -8,6 +8,7 @@ import { clamp } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { confirmAt } from "@/stores/confirmStore";
 import { canViewPeopleCost } from "@/domain/permissions";
+import { ResourceOriginBadge } from "@/components/shared/ResourceOriginBadge";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
 
@@ -110,7 +111,13 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
   const overLimit = resources.filter((r) => utilizationPct(features, r) > 100).length;
 
   const q = query.trim().toLowerCase();
-  const filtered = resources.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q));
+  // Same axes as the Team tab, so the two searches cannot disagree about what
+  // "matches". `type` holds the org ROLE on a roster-linked person (RM22) and
+  // the Pulse's own type on a local one, so one field covers both.
+  const filtered = resources.filter((r) => !q
+    || r.name.toLowerCase().includes(q)
+    || (r.type || "").toLowerCase().includes(q)
+    || (r.linkedEmail || "").toLowerCase().includes(q));
 
   // Three forward 4-week windows from today for the per-resource load
   // indicators (avg allocation over the window ÷ the person's capacity).
@@ -221,7 +228,10 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
             <div className="flex items-center gap-2">
               <ResourceBadge resourceId={r.id} size={24} />
               <div className="flex-1 overflow-hidden">
-                <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} renameTitle={t("capacity.clickToRename")} />
+                <div className="flex items-center gap-1">
+                  <ResourceOriginBadge masterId={r.masterId} />
+                  <ResourceNameInput name={r.name} disabled={!canEdit} onCommit={(name) => void patchResource(r.id, { name })} renameTitle={t("capacity.clickToRename")} />
+                </div>
                 <div className="mono text-xs" style={{ color: "#64748B" }}>{t("capacity.peakLine", { peak, limit: r.capacity, used: pct })}</div>
               </div>
               {rows.length === 0 && <span className="mono text-xs px-1.5 py-0.5 rounded" style={{ background: "#F1F5F9", color: "#64748B" }}>{t("capacity.idle")}</span>}
@@ -245,25 +255,37 @@ export function CapacityTab({ canEdit }: CapacityTabProps) {
             </div>
             <div className="flex items-center gap-2 mt-2">
               <div className="flex-1">
-                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.type")}</span>
-                <select
-                  value={r.type || ""}
-                  // A resource copied from the roster wears the ORG's role, which
-                  // is managed at workspace level and propagated down (RM22).
-                  // Editing it here would be undone by the next propagation, so
-                  // it is read-only rather than a trap.
-                  disabled={!canEdit || !!r.masterId}
-                  title={r.masterId ? t("capacity.typeFromRoster") : undefined}
-                  onChange={(e) => void patchResource(r.id, { type: e.target.value || null })}
-                  className="mono text-xs border rounded px-1 py-0.5 w-full"
-                  style={{ borderColor: "#E2DFD9", ...(r.masterId ? { background: "#F8FAFC", color: "#64748B" } : {}) }}
-                >
-                  <option value="">{t("common.none")}</option>
-                  {resourceTypes.map((rt) => (
-                    <option key={rt} value={rt}>{rt}</option>
-                  ))}
-                  {r.type && !resourceTypes.includes(r.type) && <option value={r.type}>{r.type}</option>}
-                </select>
+                <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>
+                  {r.masterId ? t("capacity.role") : t("capacity.type")}
+                </span>
+                {r.masterId ? (
+                  // Stated, not offered. A disabled <select> reads as a control
+                  // that is broken or that you lack permission for; this is
+                  // neither — the org owns this value and propagates it (RM22),
+                  // so it is shown as the fact it is, with a title saying where
+                  // to change it.
+                  <div
+                    className="mono text-xs rounded px-1 py-0.5 w-full truncate"
+                    title={t("capacity.typeFromRoster")}
+                    style={{ background: "#F8FAFC", border: "1px solid #EEF1F4", color: "#475569" }}
+                  >
+                    {r.type || t("common.none")}
+                  </div>
+                ) : (
+                  <select
+                    value={r.type || ""}
+                    disabled={!canEdit}
+                    onChange={(e) => void patchResource(r.id, { type: e.target.value || null })}
+                    className="mono text-xs border rounded px-1 py-0.5 w-full"
+                    style={{ borderColor: "#E2DFD9" }}
+                  >
+                    <option value="">{t("common.none")}</option>
+                    {resourceTypes.map((rt) => (
+                      <option key={rt} value={rt}>{rt}</option>
+                    ))}
+                    {r.type && !resourceTypes.includes(r.type) && <option value={r.type}>{r.type}</option>}
+                  </select>
+                )}
               </div>
               <div style={{ width: 112 }}>
                 <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{t("capacity.limitPct")}</span>

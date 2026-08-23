@@ -488,6 +488,7 @@ export const pt: Dict = {
   "capacity.clickToRename": "Clique para renomear",
   "capacity.peakLine": "pico {peak}% · limite {limit}% · {used}% usado",
   "capacity.type": "TIPO",
+  "capacity.role": "Função",
   "capacity.typeFromRoster": "Esta função vem da lista de Pessoas da sua organização e é gerenciada lá.",
   "capacity.limitPct": "LIMITE %",
   "capacity.limitNote": "O limite é o máximo % que uma pessoa pode ser atribuída. As barras mostram a carga do dia mais ocupado em relação a esse limite; vermelho indica sobrecarga.",

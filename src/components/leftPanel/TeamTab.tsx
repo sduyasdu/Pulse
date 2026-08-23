@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { emailKey } from "@/services/firestore/emailKey";
 import { AddFromRosterDialog } from "./AddFromRosterDialog";
+import { ResourceOriginBadge, ORIGIN_ORANGE } from "@/components/shared/ResourceOriginBadge";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useAuthStore } from "@/stores/authStore";
 import { allocInRange } from "@/domain/assignments";
@@ -19,7 +20,7 @@ interface TeamTabProps {
 
 /** One look for both add buttons — same padding, same icon size, same colour. */
 const ADD_BTN = "hoverable mono text-xs flex items-center gap-1 px-2 py-0.5 rounded";
-const ADD_BTN_STYLE = { background: "#F7E8DA", color: "#D85A28" } as const;
+const ADD_BTN_STYLE = ORIGIN_ORANGE;
 
 export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabProps) {
   const t = useT();
@@ -77,7 +78,13 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
   };
 
   const q = query.trim().toLowerCase();
-  const filtered = resources.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.type || "").toLowerCase().includes(q));
+  // `type` holds the org ROLE on a roster-linked person (RM22) and the Pulse's
+  // own type on a local one, so one field covers both. Email is searched too —
+  // it is often the only thing someone remembers about a colleague.
+  const filtered = resources.filter((r) => !q
+    || r.name.toLowerCase().includes(q)
+    || (r.type || "").toLowerCase().includes(q)
+    || (r.linkedEmail || "").toLowerCase().includes(q));
 
   // Three forward 4-week windows from today, for the per-resource load
   // indicators (avg allocation over the window ÷ the person's capacity).
@@ -196,24 +203,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               />
               <div className="overflow-hidden flex-1">
                 <div className="flex items-center gap-1">
-                  {/* Where this person came from. It decides what is editable
-                      here — a roster person's name and role are managed at the
-                      org level and read-only in the Pulse (RM22) — so it is
-                      worth being able to see at a glance rather than by
-                      discovering a disabled field. */}
-                  <span
-                    className="flex shrink-0 items-center justify-center rounded"
-                    title={r.masterId ? t("team.fromRoster") : t("team.localOnly")}
-                    aria-label={r.masterId ? t("team.fromRoster") : t("team.localOnly")}
-                    // Roster-linked wears the same orange as the two add
-                    // buttons, and literally the same constant — "from the
-                    // organisation" should look like the button that brings
-                    // people from it. Local stays neutral grey, so the coloured
-                    // one is the one that carries meaning.
-                    style={{ width: 14, height: 14, background: r.masterId ? ADD_BTN_STYLE.background : "#F4F5F7" }}
-                  >
-                    <Icon name={r.masterId ? "group" : "person"} size={10} style={{ color: r.masterId ? ADD_BTN_STYLE.color : "#94A3B8" }} />
-                  </span>
+                  <ResourceOriginBadge masterId={r.masterId} />
                   <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
                 </div>
                 <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · {t("team.limit", { n: r.capacity })}</div>

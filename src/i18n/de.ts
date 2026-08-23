@@ -488,6 +488,7 @@ export const de: Dict = {
   "capacity.clickToRename": "Zum Umbenennen klicken",
   "capacity.peakLine": "Spitze {peak}% · Limit {limit}% · {used}% genutzt",
   "capacity.type": "TYP",
+  "capacity.role": "Rolle",
   "capacity.typeFromRoster": "Diese Rolle stammt aus der Personenliste deiner Organisation und wird dort verwaltet.",
   "capacity.limitPct": "LIMIT %",
   "capacity.limitNote": "Das Limit ist der maximale %-Satz, mit dem eine Person eingeplant werden darf. Die Balken zeigen ihre Auslastung am geschäftigsten Tag gegenüber diesem Limit; Rot bedeutet Überlastung.",
