@@ -14,6 +14,7 @@ export const fr: Dict = {
   "people.searchPlaceholder": "Rechercher par nom, rÃ´le ou e-mail",
   "people.noMatch": "Personne ne correspond Ã  Â« {query} Â».",
   "people.teams": "Ãquipes",
+  "people.writeError": "Cette modification n'a pas été enregistrée.",
   "people.addTeam": "Ajouter une Ã©quipe",
   "people.teamNamePlaceholder": "Nom de l'Ã©quipe, puis EntrÃ©e",
   "people.noTeams": "Pas encore d'Ã©quipe. CrÃ©ez-en une pour regrouper vos personnes â on peut appartenir Ã  plusieurs.",

@@ -11,6 +11,8 @@ import {
 import { readFileSync } from "node:fs";
 import {
   collection,
+  arrayRemove,
+  arrayUnion,
   deleteDoc,
   doc,
   type Firestore,
@@ -1492,5 +1494,39 @@ describe("workspace member self-update (avatar only)", () => {
   it("still lets the owner change a member's role", async () => {
     await seedMembers();
     await assertSucceeds(updateDoc(doc(dbAs("alice", "alice@example.com"), "workspaces", WS, "workspaceMembers", "bob"), { role: "owner" }));
+  });
+});
+
+describe("team membership writes (RM4) — arrayUnion/arrayRemove on a roster entry", () => {
+  const WS = "wtm";
+
+  async function seedFor(over: Record<string, unknown> = {}) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: 1, email: "alice@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "resources", "m1"), {
+        id: "m1", name: "Ana", initials: "AN", type: null, capacity: 100, createdAt: Date.now(), ...over,
+      });
+    });
+  }
+
+  const alice = () => dbAs("alice", "alice@example.com");
+
+  it("allows adding a team to a resource that has no teamIds field yet", async () => {
+    await seedFor();
+    await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", "m1"), { teamIds: arrayUnion("t1") }));
+  });
+
+  it("allows removing a team", async () => {
+    await seedFor({ teamIds: ["t1", "t2"] });
+    await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", "m1"), { teamIds: arrayRemove("t1") }));
+  });
+
+  // The case the linkedUid pin could plausibly break: a RESOLVED resource being
+  // regrouped. The rule pins the uid to its current value rather than forbidding
+  // the field, so this must still pass.
+  it("allows regrouping a resource whose link has resolved", async () => {
+    await seedFor({ linkedEmail: "ana@example.com", linkedUid: "alice", teamIds: ["t1"] });
+    await assertSucceeds(updateDoc(doc(alice(), "workspaces", WS, "resources", "m1"), { teamIds: arrayRemove("t1") }));
   });
 });

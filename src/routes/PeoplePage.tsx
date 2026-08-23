@@ -75,9 +75,25 @@ export function PeoplePage() {
     [rows, q],
   );
 
+  // Every write on this page reports its failure. They were fire-and-forget
+  // (`void promise`), which is the exact shape that makes a refused write look
+  // like a broken UI: nothing changes, nothing says why, and the bug reads as
+  // "the badge didn't update". Same lesson as the swallowed onSnapshot error in
+  // CLAUDE.md — a write that fails is a fault, not a no-op.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const run = (p: Promise<unknown>, what: string) => {
+    setActionError(null);
+    void p.catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Console too: the message reaches the customer, the stack reaches us.
+      console.error(`[People] ${what} failed`, err);
+      setActionError(msg);
+    });
+  };
+
   const assign = (resourceId: string, teamId: string, member: boolean) => {
     if (!canManage) return;
-    void setTeamMembership(workspaceId, resourceId, teamId, member);
+    run(setTeamMembership(workspaceId, resourceId, teamId, member), member ? "assign" : "unassign");
   };
 
   const removeTeam = async (team: Team, e: { clientX: number; clientY: number }) => {
@@ -87,7 +103,7 @@ export function PeoplePage() {
       detail: t("people.deleteTeamDetail"),
       confirmLabel: t("people.deleteTeamAction"),
     });
-    if (ok) void deleteTeam(workspaceId, team.id);
+    if (ok) run(deleteTeam(workspaceId, team.id), "delete team");
   };
 
   const removePerson = async (r: MasterResource, e: { clientX: number; clientY: number }) => {
@@ -96,7 +112,7 @@ export function PeoplePage() {
       detail: t("roster.deleteDetail"),
       confirmLabel: t("roster.deleteAction"),
     });
-    if (ok) void deleteMasterResource(workspaceId, r.id);
+    if (ok) run(deleteMasterResource(workspaceId, r.id), "delete person");
   };
 
   return (
@@ -112,6 +128,14 @@ export function PeoplePage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="font-display text-lg font-semibold text-yasdu-fg">{t("roster.title")}</h1>
         <p className="mt-1 text-xs" style={{ color: "#94A3B8" }}>{t("people.intro")}</p>
+
+        {actionError && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "#FDECEA", border: "1px solid #F3C7C1", color: "#8C2F22" }}>
+            <Icon name="info" size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span className="min-w-0 flex-1">{t("people.writeError")}<span className="mono block opacity-70">{actionError}</span></span>
+            <button onClick={() => setActionError(null)} aria-label={t("common.close")} style={{ color: "#8C2F22" }}><Icon name="close" size={13} /></button>
+          </div>
+        )}
 
         <div className="mt-6 mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative order-1 w-full sm:flex-1 sm:max-w-[420px]">
@@ -162,7 +186,7 @@ export function PeoplePage() {
               placeholder={t("people.teamNamePlaceholder")}
               onKeyDown={async (e) => {
                 if (e.key === "Enter" && teamDraft.trim()) {
-                  await createTeam(workspaceId, teamDraft, (teams ?? []).map((x) => x.color));
+                  run(createTeam(workspaceId, teamDraft, (teams ?? []).map((x) => x.color)), "create team");
                   setTeamDraft(""); setAddingTeam(false);
                 }
                 if (e.key === "Escape") { setTeamDraft(""); setAddingTeam(false); }
@@ -174,7 +198,7 @@ export function PeoplePage() {
               onMouseDown={(e) => e.preventDefault()}
               onClick={async () => {
                 if (!teamDraft.trim()) return;
-                await createTeam(workspaceId, teamDraft, (teams ?? []).map((x) => x.color));
+                run(createTeam(workspaceId, teamDraft, (teams ?? []).map((x) => x.color)), "create team");
                 setTeamDraft(""); setAddingTeam(false);
               }}
               disabled={!teamDraft.trim()}
@@ -214,7 +238,7 @@ export function PeoplePage() {
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: team.color, flexShrink: 0 }} />
                     <input
                       defaultValue={team.name}
-                      onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== team.name) void renameTeam(workspaceId, team.id, v); }}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== team.name) run(renameTeam(workspaceId, team.id, v), "rename team"); }}
                       readOnly={!canManage}
                       className="min-w-0 flex-1 bg-transparent text-xs font-semibold outline-none"
                       style={{ color: "#1F2330" }}
