@@ -41,7 +41,7 @@ export function PeoplePage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [teamQuery, setTeamQuery] = useState("");
-  const [editing, setEditing] = useState<MasterResource | "new" | null>(null);
+  const [editing, setEditing] = useState<MasterResource | null>(null);
   const [showingUsage, setShowingUsage] = useState<MasterResource | null>(null);
   // The viewer's own Pulses. The usage index names Pulses they may not be able
   // to open (RM7), and this is the cheapest way to tell which — one index they
@@ -367,21 +367,27 @@ export function PeoplePage() {
           searchValue={query}
           onSearch={setQuery}
           searchPlaceholder={t("people.searchPlaceholder")}
-          addLabel={t("roster.add")}
-          addIcon="person_add"
-          onAdd={canManage ? () => setEditing("new") : undefined}
+          // No add button: the first card in the grid IS the add form, so a
+          // second entry point that looked different would be one too many.
         />
 
         {error ? (
           <p className="rounded-lg px-3 py-2 text-xs" style={{ background: "#FDECEA", border: "1px solid #F3C7C1", color: "#8C2F22" }}>{t("roster.loadError")}</p>
         ) : rows === null ? (
           <Spinner size={20} label={t("common.loading")} className="py-8" />
-        ) : matches.length === 0 ? (
-          <p className="rounded-xl border border-dashed px-4 py-8 text-center text-xs" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
-            {q ? t("people.noMatch", { query: query.trim() }) : t("roster.empty")}
-          </p>
         ) : (
-          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+          <>
+            {/* The grid renders even when empty, because the add form lives in
+                it. Gating it on `matches.length` hid the only way to add a person
+                exactly when a workspace had none — the affordance missing at the
+                one moment it is needed. */}
+            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+            {canManage && (
+              <AddPersonCard
+                roles={roles}
+                onAdd={(values) => run(createMasterResource(workspaceId, values), "add person")}
+              />
+            )}
             {matches.map((r) => (
               <PersonCard
                 key={r.id}
@@ -398,7 +404,13 @@ export function PeoplePage() {
                 onToggleTeam={(teamId, member) => assign(r.id, teamId, member)}
               />
             ))}
-          </div>
+            </div>
+            {matches.length === 0 && (
+              <p className="mt-3 rounded-xl border border-dashed px-4 py-6 text-center text-xs" style={{ borderColor: "#E2DFD9", color: "#94A3B8" }}>
+                {q ? t("people.noMatch", { query: query.trim() }) : t("roster.empty")}
+              </p>
+            )}
+          </>
         )}
       </main>
 
@@ -414,13 +426,9 @@ export function PeoplePage() {
       {editing && (
         <MasterResourceDialog
           roles={roles}
-          resource={editing === "new" ? null : editing}
+          resource={editing}
           onClose={() => setEditing(null)}
-          onSave={async (values) => {
-            if (editing === "new") await createMasterResource(workspaceId, values);
-            else await patchMasterResource(workspaceId, editing.id, values);
-            setEditing(null);
-          }}
+          onSave={async (values) => { await patchMasterResource(workspaceId, editing.id, values); setEditing(null); }}
         />
       )}
     </div>
@@ -518,6 +526,82 @@ function PersonCard({ r, teams, canManage, photo, dragging, onDragStart, onDragE
 }
 
 /**
+ * The add form, shaped like a person card and sitting first in the grid.
+ *
+ * Adding used to open a dialog, which is a lot of ceremony for five short
+ * fields — and it put the most common action behind a click that hides the list
+ * you are adding to. The fields are the same ones the edit dialog offers, so
+ * nothing is lost by not opening it.
+ *
+ * Initials are derived from the name rather than asked for: they are the field
+ * nobody wants to fill and the one with an obvious default. The edit dialog can
+ * still override them.
+ */
+function AddPersonCard({ roles, onAdd }: {
+  roles: string[];
+  onAdd: (values: { name: string; role: string | null; capacity: number; linkedEmail: string | null }) => void;
+}) {
+  const t = useT();
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [capacity, setCapacity] = useState("100");
+  const [email, setEmail] = useState("");
+
+  const submit = () => {
+    if (!name.trim()) return;
+    onAdd({
+      name: name.trim(),
+      role: role.trim() || null,
+      // Clamped rather than rejected: a typo of 0 or 10000 should be corrected,
+      // not returned as a form error over one digit.
+      capacity: Math.max(1, Math.min(1000, Number(capacity) || 100)),
+      linkedEmail: email.trim() || null,
+    });
+    setName(""); setRole(""); setCapacity("100"); setEmail("");
+  };
+
+  // Enter submits from any field, so the form can be filled without reaching for
+  // the mouse; Escape clears it.
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") submit();
+    if (e.key === "Escape") { setName(""); setRole(""); setCapacity("100"); setEmail(""); }
+  };
+
+  const field = "w-full rounded border px-2 py-1 text-xs outline-none";
+  return (
+    <div className="flex h-full flex-col gap-1.5 rounded-xl border border-dashed p-3" style={{ borderColor: "#F0A875", background: "#FFFDFA" }}>
+      <span className="mono text-[10px] uppercase tracking-wide" style={{ color: "#D85A28" }}>{t("roster.addTitle")}</span>
+      <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKey} placeholder={t("roster.namePlaceholder")} className={field} style={{ borderColor: "#E2DFD9" }} />
+      <div className="flex gap-1.5">
+        <select value={role} onChange={(e) => setRole(e.target.value)} onKeyDown={onKey} className={field} style={{ borderColor: "#E2DFD9", color: role ? "#1F2330" : "#94A3B8" }}>
+          <option value="">{t("roster.typeLabel")}</option>
+          {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <input
+          value={capacity}
+          onChange={(e) => setCapacity(e.target.value)}
+          onKeyDown={onKey}
+          inputMode="numeric"
+          title={t("roster.capacityLabel")}
+          className={field}
+          style={{ borderColor: "#E2DFD9", width: 64, flexShrink: 0 }}
+        />
+      </div>
+      <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onKey} inputMode="email" placeholder={t("roster.emailPlaceholder")} className={field} style={{ borderColor: "#E2DFD9" }} />
+      <button
+        onClick={submit}
+        disabled={!name.trim()}
+        className="hoverable mt-auto flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-yasdu-primary-fg disabled:opacity-40"
+        style={{ background: "#D85A28" }}
+      >
+        <Icon name="person_add" size={14} />
+        {t("roster.add")}
+      </button>
+    </div>
+  );
+}
+
+/**
  * A section's own heading, search and add button.
  *
  * Shared so the two sections cannot drift into looking like different features —
@@ -530,8 +614,10 @@ function SectionHead({ title, count, searchValue, onSearch, searchPlaceholder, a
   searchValue: string;
   onSearch: (v: string) => void;
   searchPlaceholder: string;
-  addLabel: string;
-  addIcon: string;
+  /** Optional as a set: People adds inline from the grid, so it has no button
+   * here. A section with an add button needs all three. */
+  addLabel?: string;
+  addIcon?: string;
   onAdd?: () => void;
 }) {
   const t = useT();
@@ -557,7 +643,7 @@ function SectionHead({ title, count, searchValue, onSearch, searchPlaceholder, a
             </button>
           )}
         </div>
-        {onAdd && (
+        {onAdd && addLabel && addIcon && (
           <button
             onClick={onAdd}
             className="hoverable order-2 flex items-center gap-1.5 self-end rounded-lg px-3.5 py-2 text-sm font-semibold text-yasdu-primary-fg sm:ml-auto sm:self-auto"
