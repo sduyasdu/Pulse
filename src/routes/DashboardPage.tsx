@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { PulseLockup } from "@/components/shared/Logo";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseHidden, updateMyPulseArchivedAt, updateMyPulseCreatedAt, setPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
 import { countPulseMembers, fetchMembership, leavePulse } from "@/services/firestore/memberships";
@@ -21,7 +21,6 @@ import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
-import { RosterSection } from "@/components/dashboard/RosterSection";
 import { backfillMyWorkspaceEmail } from "@/services/firestore/workspaces";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 
@@ -304,14 +303,23 @@ export function DashboardPage() {
             )}
           </>
         )}
+        {/* People live on their own screen (Resource-Master-Spec §9). The
+            dashboard points at it rather than embedding it: curating an org's
+            roster is a different job from looking at Pulses, and teams need the
+            room. */}
         {userDoc?.personalWorkspaceId && (
-          <RosterSection
-            workspaceId={userDoc.personalWorkspaceId}
-            // Only an owner curates the roster. A personal workspace is owned by
-            // the user whose id it carries, which is the only shape that exists
-            // today — shared workspaces will read workspaceRole instead.
-            canManage={userDoc.personalWorkspaceId === `personal-${uid}`}
-          />
+          <Link
+            to="/people"
+            className="hoverable mt-12 flex items-center gap-3 rounded-xl border p-4"
+            style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}
+          >
+            <Icon name="group" size={20} style={{ color: "#D85A28" }} />
+            <span className="min-w-0 flex-1">
+              <span className="font-display block text-sm font-semibold text-yasdu-fg">{t("roster.title")}</span>
+              <span className="block text-xs" style={{ color: "#94A3B8" }}>{t("people.open")}</span>
+            </span>
+            <Icon name="chevron_right" size={18} style={{ color: "#94A3B8" }} />
+          </Link>
         )}
       </main>
 

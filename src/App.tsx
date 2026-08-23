@@ -16,6 +16,9 @@ installActivityRecorder();
 const LoginPage = lazy(() => import("@/routes/LoginPage").then((m) => ({ default: m.LoginPage })));
 const DashboardPage = lazy(() => import("@/routes/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PulsePage = lazy(() => import("@/routes/PulsePage").then((m) => ({ default: m.PulsePage })));
+// Lazy like every other route: the roster is a management screen most sessions
+// never open, so it should not sit in the dashboard's bundle.
+const PeoplePage = lazy(() => import("@/routes/PeoplePage").then((m) => ({ default: m.PeoplePage })));
 const JoinPage = lazy(() => import("@/routes/JoinPage").then((m) => ({ default: m.JoinPage })));
 const AuthorizePage = lazy(() => import("@/routes/AuthorizePage").then((m) => ({ default: m.AuthorizePage })));
 
@@ -44,6 +47,14 @@ function App() {
             element={
               <RequireAuth>
                 <DashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/people"
+            element={
+              <RequireAuth>
+                <PeoplePage />
               </RequireAuth>
             }
           />

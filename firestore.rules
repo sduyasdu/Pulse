@@ -283,6 +283,18 @@ service cloud.firestore {
         allow delete: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
       }
 
+      // ---- teams (RM4) ----
+      // Grouping only for now. Sharing a team with another user is RM5 and adds
+      // `use` / `manage`; deliberately NOT the Pulse role model, which would make
+      // this the product's third authorization system.
+      //
+      // Membership is `teamIds[]` on the resource, so a team document holds no
+      // people and this rule governs the label, not the roster.
+      match /teams/{teamId} {
+        allow read: if isWorkspaceMember(workspaceId);
+        allow create, update, delete: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner';
+      }
+
       match /workspaceMembers/{memberUid} {
         allow read: if isSignedIn() && (memberUid == request.auth.uid || isWorkspaceMember(workspaceId));
         allow create: if isSignedIn() && memberUid == request.auth.uid

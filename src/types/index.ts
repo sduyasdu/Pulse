@@ -92,6 +92,19 @@ export interface WorkspaceMember {
 // membership is independent of workspace membership (RM1).
 // ---------------------------------------------------------------------------
 
+/** A grouping of roster people, at `workspaces/{wsId}/teams/{teamId}` (RM4).
+ *
+ * Membership lives on the *resource* as `teamIds[]`, not as a list here — a
+ * person belongs to many teams, and an array on the resource answers both
+ * directions with `array-contains` and needs no join collection. */
+export interface Team {
+  id: string;
+  name: string;
+  /** Card accent. Chosen from a fixed palette so a workspace stays legible. */
+  color: string;
+  createdAt: Timestamp;
+}
+
 /** A person in the workspace roster, at `workspaces/{wsId}/resources/{rid}`. */
 export interface MasterResource {
   id: string;

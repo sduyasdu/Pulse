@@ -1414,3 +1414,41 @@ describe("pulse resource links — email is the intent, uid is resolved (RM6/RM1
     await assertSucceeds(updateDoc(doc(alice(), "pulses", P, "resources", "r1"), { name: "Ana T" }));
   });
 });
+
+describe("teams (Resource-Master-Spec RM4)", () => {
+  const WS = "wt";
+
+  async function seedTeam() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: false, ownerId: "alice", createdAt: Date.now() });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "alice"), { uid: "alice", role: "owner", joinedAt: Date.now(), email: "alice@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "bob"), { uid: "bob", role: "member", joinedAt: Date.now(), email: "bob@example.com" });
+      await setDoc(doc(db, "workspaces", WS, "teams", "t1"), { id: "t1", name: "Platform", color: "#D85A28", createdAt: Date.now() });
+    });
+  }
+
+  it("lets any workspace member read teams — they group the roster everyone reads", async () => {
+    await seedTeam();
+    await assertSucceeds(getDoc(doc(dbAs("bob", "bob@example.com"), "workspaces", WS, "teams", "t1")));
+  });
+
+  it("keeps teams invisible outside the workspace", async () => {
+    await seedTeam();
+    await assertFails(getDoc(doc(dbAs("carol", "carol@example.com"), "workspaces", WS, "teams", "t1")));
+  });
+
+  it("lets an owner create, rename and delete a team", async () => {
+    await seedTeam();
+    const alice = dbAs("alice", "alice@example.com");
+    await assertSucceeds(setDoc(doc(alice, "workspaces", WS, "teams", "t2"), { id: "t2", name: "Design", color: "#0F766E", createdAt: Date.now() }));
+    await assertSucceeds(updateDoc(doc(alice, "workspaces", WS, "teams", "t1"), { name: "Core" }));
+    await assertSucceeds(deleteDoc(doc(alice, "workspaces", WS, "teams", "t1")));
+  });
+
+  it("denies a plain member changing teams", async () => {
+    await seedTeam();
+    const bob = dbAs("bob", "bob@example.com");
+    await assertFails(updateDoc(doc(bob, "workspaces", WS, "teams", "t1"), { name: "Hijacked" }));
+    await assertFails(deleteDoc(doc(bob, "workspaces", WS, "teams", "t1")));
+  });
+});
