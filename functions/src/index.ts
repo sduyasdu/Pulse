@@ -64,3 +64,9 @@ export { onMasterResourceWriteResolve, onWorkspaceMemberJoinResolve, onWorkspace
 // resource copied from the roster arrives with an email and no uid — the
 // master's uid means "in the workspace" and says nothing about THIS Pulse.
 export { onPulseResourceWriteResolve, onPulseMemberJoinResolve } from "./roster";
+
+// RM15 — bulk copy from the roster into a Pulse. A callable rather than a client
+// loop because the resource counter is async: parallel creates all see the same
+// stale count, so the rule would stop the next OPERATION and none of the writes
+// inside this one.
+export { copyRosterToPulse } from "./rosterCopy";

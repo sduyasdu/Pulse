@@ -66,7 +66,7 @@ enables §6 and §3 — never indirection at read time.
 pulses/{pulseId}/resources/{rid}
   … existing fields (name, initials, type, capacity) …
   masterId?: string      // the workspace resource this was copied from
-  inherited?: string[]   // fields still tracking the master (see §3)
+                         // — presence alone means "identity tracks the master"
   linkedEmail?: string   // WHO this is meant to be — durable         (see §5)
   linkedUid?: string     // who it resolved to, if they have an account
 ```
@@ -84,9 +84,16 @@ their number keeps reverting. So each field belongs to exactly one class:
 | **Never** | capacity, allocations | Per-Pulse *by nature* — someone is 100% here and 30% there. The master's value is a default used at copy time only. |
 | **Unless overridden** | hourly rate | Tracks the master until someone sets it in this Pulse, then never again. See §7. |
 
-**Unless-overridden** needs the `inherited` marker on the copy. Without it there
-is no way to distinguish "this equals the master because it was copied" from
-"someone typed this exact value here on purpose".
+**Unless-overridden** needs an `inherited` marker. Without it there is no way to
+distinguish "this equals the master because it was copied" from "someone typed
+this exact value here on purpose".
+
+**That marker lives on the rate document, not on the resource** — rate is the only
+field in that class, and rates are a separate collection (§7). The resource
+itself needs no marker: `masterId` being present *is* the statement that identity
+tracks the master, capacity never tracks it, and detaching clears the one field.
+An earlier draft of this section put an `inherited` array on the resource; it
+would have marked nothing.
 
 **Derived** is not a weaker form of propagation — it is the absence of it.
 `linkedUid` is computed locally against *this* Pulse's membership, and pushing a
@@ -491,10 +498,10 @@ Each phase is shippable and leaves the product coherent.
    The `get()` budget §8.2 warned about was measured, not assumed: 103 rules tests
    pass with the quota check in place.
 1. **Masters + copy into a Pulse**, the bulk path as a callable (RM15), with
-   linking by email and the two resolution triggers (RM16). `masterId`,
-   `inherited` and `linkedEmail` written from the very first copy, even though
-   nothing propagates yet — retrofitting provenance onto copies that already
-   exist means guessing. The email is stored in the clear (RM19).
+   linking by email and the two resolution triggers (RM16). `masterId` and
+   `linkedEmail` written from the very first copy, even though nothing propagates
+   yet — retrofitting provenance onto copies that already exist means guessing.
+   The email is stored in the clear (RM19).
 2. **Usage index + "where used"**, with the RM7 disclosure implemented as decided.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
@@ -610,10 +617,13 @@ Each phase is shippable and leaves the product coherent.
     the Pulse instead), and an absent counter reads as **zero**, so every existing
     Pulse is uncapped until backfilled — SF11's own backfill was specified and
     never run. Deploy order is counter → backfill → rule → UI.
-11. **RM11 — Phase in the order of §11 → DECIDED.** Provenance fields
-    (`masterId`, `inherited`) are written from the first copy even though nothing
-    propagates until phase 5, because retrofitting provenance onto copies that
-    already exist means guessing which of them came from where.
+11. **RM11 — Phase in the order of §11 → DECIDED.** Provenance (`masterId`) is
+    written from the first copy even though nothing propagates until phase 5,
+    because retrofitting it onto copies that already exist means guessing which
+    of them came from where. Note the corrected scope: the `inherited` marker
+    belongs to the **rate document** (RM9), which is the only unless-overridden
+    field — an earlier draft put an array on the resource that would have marked
+    nothing.
 
 12. **RM13 — Deleting a master DETACHES its copies; it never deletes them →
     DECIDED (product).** A Pulse's plan must not lose its people because someone
