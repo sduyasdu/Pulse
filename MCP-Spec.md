@@ -1,8 +1,11 @@
 # Pulse — MCP Server Spec
 
-Status: **Design agreed — MC1–MC10 and MC14 decided; MC11–MC13 open with recommendations
-(none blocking). v1 is read-only, customer-facing, and hosted by Pulse.
-MC2/MC4/MC6 were revised 2026-08-17 when remote replaced local — see each.**
+Status: **Phase 0 BUILT and live — read-only, customer-facing, hosted by Pulse,
+nine tools. MC1–MC10, MC14–MC32 decided; MC12 is the only one still open.
+MC11 is superseded by MC29 (rate limiting, built). MC13 shipped as recommended.
+Revised as it was built: MC2/MC4/MC6 on 2026-08-17 when remote replaced local,
+MC15 by MC20 and then MC25, MC17 corrected by MC19 — see each. RM21 adds three
+more tools, specified in `Resource-Master-Spec.md`.**
 · Owner: product + eng ·
 Related: `Permissions-Spec.md` (the roles every tool inherits),
 `Plans-Spec.md` (quotas an MCP write consumes), `Server-Functions-Spec.md`
@@ -185,6 +188,27 @@ Pulse v1 is resources plus read-shaped tools.
 | `search_comments` | tool | comments, newest first, with what each is attached to and whether it is a reply |
 | `get_activity` | tool | recent changes on a Pulse |
 
+**Planned, not built — `Resource-Master-Spec.md` §10 / RM21.** Listed here so the
+tool surface has one home, and marked so nobody reads them as shipped:
+
+| Name | Kind | Returns | RM phase |
+| --- | --- | --- | --- |
+| `search_roster` | tool | the **workspace's** people — name, type, teams, link state, master rate where permitted | 1 |
+| `get_resource_usage` | tool | which Pulses one person is on, and whether they have assignments there | 2 |
+| `list_teams` | tool | teams in the workspace, with their sizes | 3 |
+
+These are the first tools to answer a question **across** Pulses. Two notes that
+matter more than the shapes:
+
+- **`search_roster` must not blur into `search_resources`.** The existing tool is
+  Pulse-scoped and takes a `pulseId`; the new one is workspace-scoped. Overlapping
+  descriptions are how an assistant picks the wrong tool, so the scope has to be
+  unmistakable in both.
+- **They add no authorization.** Reading as the customer (§1) means a
+  non-workspace-member gets a 403 that `listAsUser` turns into an empty result,
+  and master rates stay behind their own workspace-owner-only collection — with
+  the same "empty may mean no access" note `get_costs` already carries.
+
 **Every one is bounded.** No tool returns "everything": each takes a limit with a
 sane default and a hard ceiling, and paginates. This is not politeness — an
 assistant asked to "look at my roadmap" will happily enumerate, and Firestore
@@ -330,18 +354,22 @@ assistant relays.
     approved. What tier it lands on, and whether existing free connections are
     grandfathered, are deliberately left to when there is usage data.
 
-11. **MC11 — Rate limiting per connection?** *Recommend: yes, a simple per-connection
-    ceiling in the callable, once Phase 0 shows the real shape of traffic.* An
-    assistant in a loop is the plausible failure, and it spends the customer's
-    money and Pulse's quota at once.
+11. **MC11 — Rate limiting per connection? → SUPERSEDED by MC29 (built).** The
+    recommendation here — a per-connection ceiling once Phase 0 showed the real
+    shape of traffic — is what MC29 implements, with the counters on the
+    connection document so the limiter costs no extra read or write. Kept for the
+    reasoning: an assistant in a loop is the plausible failure, and it spends the
+    customer's money and Pulse's quota at once.
 12. **MC12 — Connection lifetime.** Should a connection expire after N days
     unused? *Recommend: no hard expiry, but surface `lastUsedAt` prominently and
     prompt to prune. A connection that stops working silently is worse support load
     than one the customer chose to keep.*
-13. **MC13 — Does the assistant see cost data by default?** `get_costs` mirrors
-    `viewPeopleCost`, so admins see people cost and others don't. *Recommend:
-    keep it mirrored rather than adding a separate MCP-level toggle — a second
-    permission axis for the same data is how the two drift.*
+13. **MC13 — Does the assistant see cost data by default? → DECIDED as
+    recommended, and shipped.** `get_costs` mirrors `viewPeopleCost`, so admins
+    see people cost and others do not, with no separate MCP-level toggle — a
+    second permission axis over the same data is how the two drift. Built that
+    way, and the tool carries a note saying an empty result may mean no access
+    rather than no costs, because those are indistinguishable to a reader.
 14. **MC14 — Pulse re-mints the token on every refresh → DECIDED (§2.1).**
     The claims carrying `connectionId` and `scope` are re-issued hourly from the
     connection record, so nothing depends on whether Firebase preserves custom
@@ -664,3 +692,30 @@ assistant relays.
     Malformed rows (no connection reference) are swept too — unvalidatable and
     unusable. Bounded per run and idempotent, so a retry or an overlapping
     schedule cannot do damage.
+32. **MC32 — The resource-master tools are specified in `Resource-Master-Spec.md`,
+    not here (RM21).** `search_roster`, `get_resource_usage` and `list_teams` are
+    listed in §5 and phased with the feature that creates the data, because a tool
+    is only as decided as the model underneath it. Three consequences belong to
+    this spec, though:
+    **They inherit permissions rather than adding any.** The service reads as the
+    customer (§1), so workspace scoping and the workspace-owner-only master rates
+    enforce themselves. This is the payoff MC-era §1 was arguing for: a new
+    collection becomes readable through MCP with no second copy of the rule, and
+    a rules bug stays one bug.
+    **`get_resource_usage` extends an existing disclosure to a new channel.**
+    Per RM7 it names Pulses the caller cannot open. That was already decided for
+    the UI, but an assistant *saying* it is more startling than a list showing it,
+    so the tool description must state that these are Pulses the user has no
+    access to — the assistant should explain the boundary rather than imply the
+    user can go and look.
+    **Adding them is a surface change**, so `SERVER_INFO.version` moves, each
+    needs `title` and behaviour hints (`MCP-Publishing-Spec.md` MP1), and every
+    connected customer reconnects before they appear (MC15, MC19). If the
+    directory listings (MP5) have shipped by then, the annotations are also a
+    re-submission concern rather than a detail.
+    *Deferred with the reasoning recorded so it is not re-proposed casually:*
+    cross-Pulse people load — the most valuable question the roster makes askable
+    and the most expensive, N Pulses × the per-Pulse cost against tools already
+    capped at `MAX_LIMIT`, which is the exact shape MC29's rate limiting exists
+    for. Build a purpose-made aggregate if demand appears; do not fan out
+    `get_people_load`.

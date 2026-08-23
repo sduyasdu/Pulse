@@ -1,6 +1,6 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Design agreed — RM1–RM11, RM13, RM15–RM20 decided; RM12 and RM14 open,
+Status: **Design agreed — RM1–RM11, RM13, RM15–RM21 decided; RM12 and RM14 open,
 neither blocking. Nothing built.** ·
 Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
@@ -422,7 +422,59 @@ A new dashboard section is not just a route:
 - **Help** — a permission-granting, sharing-capable feature with no explanation is
   one nobody trusts.
 
-## 10. Phasing
+## 10. MCP surface (RM21)
+
+The roster is the first thing in Pulse that answers a question **across** Pulses,
+which is exactly the shape an assistant is good at. Three tools, and they inherit
+their permissions rather than declaring any.
+
+| Tool | Returns | Phase |
+| --- | --- | --- |
+| `search_roster` | the workspace's people: name, type, teams, link state (§5.6), master rate where the caller may see it | 1 |
+| `get_resource_usage` | which Pulses one person is on, and whether they have assignments there (RM7, RM8) | 2 |
+| `list_teams` | teams in the workspace with their sizes | 3 |
+
+**`search_roster` is deliberately not `search_resources`.** The existing tool
+answers "who is on *this Pulse*" and takes a `pulseId`; this one answers "who
+does this organisation have". Two tools whose descriptions do not separate
+cleanly is how an assistant picks the wrong one, so the names and descriptions
+have to make the scope obvious — `search_resources` stays Pulse-scoped and
+unchanged.
+
+**Permissions come for free, and that is the point.** The MCP service reads as
+the customer through the Firestore REST API (`MCP-Spec.md` §1), so a caller who
+is not a workspace member gets a 403 on the roster, which `listAsUser` turns into
+an empty result. No new check, no second copy of the rule. The same applies to
+master rates: they live in their own workspace-owner-only collection (§7), so a
+caller who cannot read them simply gets none — and the result carries the same
+"empty may mean no access" note `get_costs` and `search_resources` already use,
+because an absent rate must not read as a free person.
+
+**`get_resource_usage` surfaces RM19's and RM7's disclosure through a new
+channel.** It will name Pulses the caller cannot open. That is the same decision
+already taken for the UI, but an assistant *saying* it out loud is more startling
+than seeing it in a list, so the tool description must state plainly that these
+are Pulses the user has no access to — the assistant should explain the boundary,
+not imply the user can go and look.
+
+**Deliberately not built: cross-Pulse people load.** "Who is over-committed across
+everything" is the most valuable question the roster makes askable, and the most
+expensive: it means reading features from every Pulse a person appears in, N ×
+the per-Pulse cost, against tools already capped at 200 documents (`MC29`'s rate
+limits exist for exactly this shape of request). The usage index makes it
+*possible* — it says which Pulses to look at — but it should wait for evidence
+that people ask for it, and then probably be a purpose-built aggregate rather
+than a fan-out of `get_people_load`.
+
+**Copying a resource into a Pulse is a Phase 2 write tool**, not a read. It is a
+good first candidate when MCP writes land: bounded, idempotent-ish, and the
+callable already has to exist for the UI (RM15).
+
+Adding these is a **tool-surface change**: bump `SERVER_INFO.version`, annotate
+each with `title` and the behaviour hints (`MCP-Publishing-Spec.md` MP1), and
+expect every connected customer to reconnect before they appear (`MC15`, `MC19`).
+
+## 11. Phasing
 
 Each phase is shippable and leaves the product coherent.
 
@@ -550,7 +602,7 @@ Each phase is shippable and leaves the product coherent.
     the Pulse instead), and an absent counter reads as **zero**, so every existing
     Pulse is uncapped until backfilled — SF11's own backfill was specified and
     never run. Deploy order is counter → backfill → rule → UI.
-11. **RM11 — Phase in the order of §10 → DECIDED.** Provenance fields
+11. **RM11 — Phase in the order of §11 → DECIDED.** Provenance fields
     (`masterId`, `inherited`) are written from the first copy even though nothing
     propagates until phase 5, because retrofitting provenance onto copies that
     already exist means guessing which of them came from where.
@@ -641,6 +693,21 @@ Each phase is shippable and leaves the product coherent.
     a waiting link means no My-Beat visibility and no notifications, because SF1's
     `assignedUids` has no uid to carry. Offering the invite from that row is the
     natural affordance, and the mirror of RM14.
+20. **RM21 — The roster gets three MCP tools, and they inherit permissions →
+    DECIDED (§10).** `search_roster` (phase 1), `get_resource_usage` (phase 2),
+    `list_teams` (phase 3). Named to separate cleanly from the Pulse-scoped
+    `search_resources`, because two tools whose descriptions overlap is how an
+    assistant picks the wrong one. No new authorization: the service reads as the
+    customer, so a non-workspace-member gets a 403 that becomes an empty result,
+    and master rates stay behind their own workspace-owner-only collection — with
+    the same "empty may mean no access" note the cost tools already carry.
+    `get_resource_usage` will name Pulses the caller cannot open, per RM7; its
+    description must say so, because an assistant stating it aloud is more
+    startling than a list showing it. *Rejected for now: cross-Pulse people load*
+    — the most valuable question the roster makes askable and the most expensive,
+    N Pulses × the per-Pulse read cost against tools already capped at 200
+    documents. Wait for evidence of demand, then build a purpose-made aggregate
+    rather than fanning out `get_people_load`.
 
 ## Open
 
