@@ -1,6 +1,13 @@
 # Pulse — Costs Spec (cost types, AI tokens & pricing)
 
-Status: **AI costing shipped. People costing (§8) ready to build — CO13/17/20 resolved; CO14–CO16, CO18, CO19 open; CO1/3/6/12 open (implementation-level)** · Owner: product + eng ·
+Status: **PARKED 2026-08-23 — the whole costing model is being rethought (CO21).
+The feature is HIDDEN, not removed: every cost surface is behind one flag, the
+data and its rules are untouched, and nothing recorded is lost. What follows
+describes what was built and why, and is kept as the record the rethink starts
+from — not as a description of what customers can currently see.**
+Previously: AI costing shipped; people costing (§8) ready to build — CO13/17/20
+resolved; CO14–CO16, CO18, CO19 open; CO1/3/6/12 open (implementation-level).
+· Owner: product + eng ·
 Related: **`Costs-Build-Plan.md`** (phased implementation plan),
 `Pulse-Product-Spec.md` (§3 Core entities, §6 Resource & assignment views),
 `Permissions-Spec.md` (capabilities), `Plans-Spec.md` (entitlement gating),
@@ -859,3 +866,82 @@ None of these blocks starting the build; each can be settled by whoever picks it
 > `Plans-Spec.md` §3.1 lists cost tracking as a **gating candidate only** — whether
 > it's gated at all is open (PL2/PL3), with the caveat that recorded spend is history
 > and a downgrade must never drop entries.
+
+---
+
+## 21. Parking the feature (2026-08-23)
+
+The costing model is being rethought from the top. Until that lands, the whole
+surface is hidden from customers.
+
+### 21.1 What is hidden
+
+Four mount points, and they are the complete list — the inventory matters more
+than the decision, because "hide the cost stuff" is the kind of instruction that
+leaves one panel behind:
+
+| Surface | Where |
+| --- | --- |
+| The cost view in the bottom panel, and the switch that reaches it | `src/routes/PulsePage.tsx` (`CostPanel`, and the assignments/costs toggle) |
+| Cost entries on a task | `src/components/leftPanel/FeatureCosts.tsx`, mounted from `DetailsTab` |
+| The hourly-rate editor | `src/components/leftPanel/CapacityTab.tsx` (the `seesPeopleCost` block) |
+| `get_costs` | `functions/src/mcpServer.ts` — see §21.4 |
+
+Also stopped: the `rates` subscription in `pulseStore`. A hidden panel that still
+streams a collection costs reads for something nobody can see.
+
+### 21.2 Hidden, not deleted (CO21)
+
+**No data is touched.** `pulses/{id}/costs` and `pulses/{id}/rates` keep every
+document, and `firestore.rules` is unchanged — rates stay behind
+`canViewPeopleCost`, costs stay member-readable. Hiding is a product decision
+about what to show; it is not a reason to weaken or destroy what customers
+recorded.
+
+That also means the rules tests stay green and stay meaningful: the data model
+they protect is exactly as it was.
+
+### 21.3 One flag, not four edits
+
+A single exported constant gates all of it, so re-enabling is one line and no
+surface can be forgotten or come back subtly different from the others. Deleting
+the components would make the rethink start from a blank page instead of from
+something that works, and would throw away the one thing a rewrite most wants:
+a reference implementation of the awkward parts (micros arithmetic, the
+`viewPeopleCost` gate, the cost-type model).
+
+### 21.4 The MCP tool goes too
+
+`get_costs` is removed from the tool list under the same flag. Hiding costs from
+the UI while an assistant can still read them out loud is not hiding them.
+
+Consequences, which are the usual ones for a tool-surface change (MC15, MC19):
+`SERVER_INFO.version` moves, and **every connected customer must reconnect**
+before the change reaches them. Until they do, their assistant will keep offering
+a tool whose data the app no longer shows.
+
+### 21.5 What this blocks
+
+`Resource-Master-Spec.md` phase 6 — master-level rates with per-Pulse overrides
+(RM9) — is **parked with it**. It is the most expensive part of that plan and it
+would be built against a model that is about to change.
+
+---
+
+## Decisions (continued)
+
+21. **CO21 — The costing surface is hidden behind one flag; nothing is deleted
+    and no data is touched → DECIDED (product).** The model is being rethought,
+    and shipping a half-trusted costing feature while that happens is worse than
+    showing none. *Rejected: deleting the components* — the rethink would start
+    from a blank page rather than from a working reference for the parts that are
+    genuinely hard (micros arithmetic, the `viewPeopleCost` gate, the cost-type
+    model), and every one of those would have to be rediscovered.
+    *Rejected: leaving it visible but marked beta* — customers were already using
+    it; a label does not make a number they cannot act on any less confusing.
+    *Rejected: removing the data* — a product decision must not destroy what a
+    customer recorded, and the rules already protect it correctly.
+    **The obligation this creates:** while hidden, recorded costs are unreachable
+    from the product. That is acceptable for a rethink measured in weeks and not
+    in quarters; if it runs longer, an export is owed before anyone argues the
+    data is safe merely because it still exists.

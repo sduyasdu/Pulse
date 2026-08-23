@@ -1,6 +1,7 @@
 # Resource Master — one roster, many Pulses
 
-Status: **Phase 0 BUILT and live (2026-08-22) — the resource counter, its daily
+Status: **Phase 6 (master rates) PARKED — see Costs-Spec §21.
+Phase 0 BUILT and live (2026-08-22) — the resource counter, its daily
 reconcile, and the `maxResourcesPerPulse` rule. Phases 1–6 not started.
 RM1–RM11, RM13, RM15–RM21 decided; RM12 and RM14 open, neither blocking.** ·
 Owner: product + eng ·
@@ -507,8 +508,11 @@ Each phase is shippable and leaves the product coherent.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
 5. **Propagation** switched on, per RM2's classes.
-6. **Master rates** — last, because it is the one that touches money and the one
-   whose propagation can be wrong in currency (§7).
+6. **Master rates** — **PARKED**. The whole costing model is being rethought
+   (`Costs-Spec.md` §21 / CO21) and the surface is hidden, so building
+   master-level rates now would be building against a model that is about to
+   change. §7 and RM9 stay as the record of what was decided and why; resume when
+   the rethink lands.
 
 ---
 
