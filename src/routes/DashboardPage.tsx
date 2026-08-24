@@ -357,7 +357,8 @@ export function DashboardPage() {
         <InviteDialog
           pulseName={invitingPulse.name}
           pulseId={invitingPulse.pulseId}
-          canEdit={invitingPulse.role !== "viewer"}
+          currentUid={firebaseUser?.uid ?? ""}
+          cachedRole={invitingPulse.role}
           onClose={() => setInvitingPulse(null)}
         />
       )}

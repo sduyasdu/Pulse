@@ -4,9 +4,25 @@ import type { PulseMember, PulseRole } from "@/types";
 import { capsForRole } from "@/domain/permissions";
 import { emailKey } from "./emailKey";
 
-export function subscribePulseMembers(pulseId: string, cb: (members: PulseMember[]) => void): () => void {
-  return onSnapshot(collection(db, "pulses", pulseId, "pulseMembers"), (snap) =>
-    cb(snap.docs.map((d) => d.data() as PulseMember)),
+/** Live roster for a Pulse.
+ *
+ * `onError` is optional only because the in-Pulse callers cannot reach this
+ * without already being members — by the time the canvas renders, a denial here
+ * would mean something has gone wrong upstream. The dashboard is the case that
+ * needs it: it opens this dialog from a cached index entry, so "you were
+ * removed from this Pulse" is a completely ordinary thing for the read to hit,
+ * and without a path to the screen it would render as a Pulse with no members
+ * at all. A read that fails is a fault; a read that returns nothing is a
+ * state. */
+export function subscribePulseMembers(
+  pulseId: string,
+  cb: (members: PulseMember[]) => void,
+  onError?: (message: string) => void,
+): () => void {
+  return onSnapshot(
+    collection(db, "pulses", pulseId, "pulseMembers"),
+    (snap) => cb(snap.docs.map((d) => d.data() as PulseMember)),
+    (err) => onError?.(err.message),
   );
 }
 

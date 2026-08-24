@@ -335,8 +335,6 @@ export const fr: Dict = {
   "dialog.copyEmptyDetail": "Un Pulse vierge — rien n'est copié, seulement le nom.",
 
   // invite
-  "invite.inviteTo": "Inviter à « {name} »",
-  "invite.shareLinkHint": "Partagez un lien — l'accès est accordé dès que la personne l'ouvre et se connecte.",
   "invite.copyRoleLink": "Copier le lien d'invitation {role}",
   "invite.shareRoleLink": "Partager le lien d’invitation ({role})",
   "invite.copyLink": "Copier le lien",
@@ -346,7 +344,6 @@ export const fr: Dict = {
   "invite.anyoneCanJoin": "Toute personne disposant de ce lien peut rejoindre en tant que {role}. Partagez-le comme vous voulez — Slack, e-mail, etc. Vous pouvez le révoquer à tout moment.",
   "invite.kindEmail": "Une personne",
   "invite.kindLink": "Toute personne ayant le lien",
-  "invite.bothKindsHint": "Invitez une personne précise, ou partagez un lien utilisable par n'importe qui.",
   "invite.emailPlaceholder": "nom@entreprise.com",
   "invite.createAndCopy": "Inviter",
   "invite.emailHint": "Seul le propriétaire de cette adresse peut accepter, en tant que {role} — le lien ne sert à personne d'autre, vous pouvez donc le coller dans une conversation.",
@@ -369,6 +366,7 @@ export const fr: Dict = {
   "collab.removeTitle": "Retirer ce collaborateur",
   "collab.pending": "Invitations en attente",
   "collab.loadInvitesError": "Impossible de charger les invitations en attente.",
+  "collab.loadMembersError": "Impossible de charger les collaborateurs. Vous n'avez peut-être plus accès à ce Pulse.",
   "collab.noPending": "Aucune invitation en attente. Les personnes invitées apparaissent ici jusqu'à ce qu'elles se connectent avec cette adresse.",
   "collab.cancelInvite": "Annuler cette invitation",
   "collab.inviteByLink": "Inviter par lien",

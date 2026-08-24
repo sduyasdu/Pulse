@@ -341,8 +341,6 @@ export const en = {
   "dialog.copyEmptyDetail": "A blank Pulse — nothing is copied, just the name.",
 
   // ── invite dialog + link panel ──────────────────────────────────────────────
-  "invite.inviteTo": "Invite to “{name}”",
-  "invite.shareLinkHint": "Share a link — they get access the moment they open it and sign in.",
   "invite.copyRoleLink": "Copy {role} invite link",
   "invite.shareRoleLink": "Share {role} invite link",
   "invite.copyLink": "Copy the link",
@@ -352,7 +350,6 @@ export const en = {
   "invite.anyoneCanJoin": "Anyone with this link can join as {role}. Send it however you like — Slack, email, etc. Revoke it anytime.",
   "invite.kindEmail": "One person",
   "invite.kindLink": "Anyone with the link",
-  "invite.bothKindsHint": "Invite one named person, or share a link anyone can use.",
   "invite.emailPlaceholder": "name@company.com",
   "invite.createAndCopy": "Invite",
   "invite.emailHint": "Only the person who owns this address can accept, as {role} — the link is useless to anyone else, so it's safe to paste in a chat.",
@@ -375,6 +372,7 @@ export const en = {
   "collab.removeTitle": "Remove this collaborator",
   "collab.pending": "Pending invitations",
   "collab.loadInvitesError": "Couldn't load pending invitations.",
+  "collab.loadMembersError": "Couldn't load the collaborators. You may no longer have access to this Pulse.",
   "collab.noPending": "No pending invitations. Invited people appear here until they sign in with that email.",
   "collab.cancelInvite": "Cancel this invitation",
   "collab.inviteByLink": "Invite by link",

@@ -335,8 +335,6 @@ export const de: Dict = {
   "dialog.copyEmptyDetail": "Ein leeres Pulse — nichts wird kopiert, nur der Name.",
 
   // invite
-  "invite.inviteTo": "Zu „{name}“ einladen",
-  "invite.shareLinkHint": "Teile einen Link — der Zugriff wird gewährt, sobald er geöffnet und angemeldet wird.",
   "invite.copyRoleLink": "{role}-Einladungslink kopieren",
   "invite.shareRoleLink": "Einladungslink teilen ({role})",
   "invite.copyLink": "Link kopieren",
@@ -346,7 +344,6 @@ export const de: Dict = {
   "invite.anyoneCanJoin": "Jeder mit diesem Link kann als {role} beitreten. Teile ihn, wie du willst — Slack, E-Mail usw. Du kannst ihn jederzeit widerrufen.",
   "invite.kindEmail": "Eine Person",
   "invite.kindLink": "Alle mit dem Link",
-  "invite.bothKindsHint": "Lade eine bestimmte Person ein oder teile einen Link, den jeder nutzen kann.",
   "invite.emailPlaceholder": "name@firma.de",
   "invite.createAndCopy": "Einladen",
   "invite.emailHint": "Nur wer diese Adresse besitzt, kann annehmen — als {role}. Für alle anderen ist der Link wertlos, du kannst ihn also in einen Chat kopieren.",
@@ -369,6 +366,7 @@ export const de: Dict = {
   "collab.removeTitle": "Diesen Mitarbeiter entfernen",
   "collab.pending": "Ausstehende Einladungen",
   "collab.loadInvitesError": "Ausstehende Einladungen konnten nicht geladen werden.",
+  "collab.loadMembersError": "Die Mitarbeitenden konnten nicht geladen werden. Vielleicht hast du keinen Zugriff mehr auf diesen Pulse.",
   "collab.noPending": "Keine ausstehenden Einladungen. Eingeladene Personen erscheinen hier, bis sie sich mit dieser E-Mail anmelden.",
   "collab.cancelInvite": "Diese Einladung stornieren",
   "collab.inviteByLink": "Per Link einladen",

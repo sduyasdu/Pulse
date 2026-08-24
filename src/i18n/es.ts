@@ -335,8 +335,6 @@ export const es: Dict = {
   "dialog.copyEmptyDetail": "Un Pulse en blanco — no se copia nada, solo el nombre.",
 
   // invite
-  "invite.inviteTo": "Invitar a «{name}»",
-  "invite.shareLinkHint": "Compartí un enlace — tendrán acceso en cuanto lo abran e inicien sesión.",
   "invite.copyRoleLink": "Copiar enlace de invitación de {role}",
   "invite.shareRoleLink": "Compartir enlace de invitación ({role})",
   "invite.copyLink": "Copiar el enlace",
@@ -346,7 +344,6 @@ export const es: Dict = {
   "invite.anyoneCanJoin": "Cualquiera con este enlace puede unirse como {role}. Compartilo como quieras — Slack, correo, etc. Podés revocarlo cuando quieras.",
   "invite.kindEmail": "Una persona",
   "invite.kindLink": "Cualquiera con el enlace",
-  "invite.bothKindsHint": "Invitá a una persona concreta, o compartí un enlace que cualquiera pueda usar.",
   "invite.emailPlaceholder": "nombre@empresa.com",
   "invite.createAndCopy": "Invitar",
   "invite.emailHint": "Solo quien sea dueño de esa dirección puede aceptar, como {role} — el enlace no le sirve a nadie más, así que podés pegarlo en un chat.",
@@ -369,6 +366,7 @@ export const es: Dict = {
   "collab.removeTitle": "Quitar a este colaborador",
   "collab.pending": "Invitaciones pendientes",
   "collab.loadInvitesError": "No se pudieron cargar las invitaciones pendientes.",
+  "collab.loadMembersError": "No se pudieron cargar los colaboradores. Puede que ya no tengas acceso a este Pulse.",
   "collab.noPending": "No hay invitaciones pendientes. Las personas invitadas aparecen acá hasta que inicien sesión con ese correo.",
   "collab.cancelInvite": "Cancelar esta invitación",
   "collab.inviteByLink": "Invitar con enlace",
