@@ -73,7 +73,7 @@ last one being what makes search useful rather than decorative (§4's shape):
 | salary, pay, rate | Costs | "hourly cost" |
 | zoom, bigger | Getting around | "day width", "view zoom" |
 | timesheet, hours | Costs | "hours × rate" |
-| permission, share | Working together | "roles", "invite link" |
+| permission, share, confirm email | Working together | "roles", "both invite kinds", "confirming your address" |
 
 Keywords are localized like everything else, so a Spanish reader typing *sueldo* lands
 on Costs.
@@ -111,7 +111,7 @@ a newcomer hits first, not by how the code is organized.
 | 4 | **People and load** | Team tab, drag a person onto a task, % allocation, capacity limit, utilization, the Assignment-by-resource panel. |
 | 5 | **Costs** | AI spend recorded per task; labour derived from assignment × hours × rate; the Cost view's pivots and totals; rates are admin-only. |
 | 6 | **Plan vs. actual** | Freeze a baseline with *set plan*; the Delays toggle draws planned vs. real spans with deltas. |
-| 7 | **Working together** | Roles in one line each, the invite link, comments and @-mentions, activity log, who's viewing now. |
+| 7 | **Working together** | Roles in one line each; **both invite kinds** — one named person vs. anyone with the link — and that accepting needs a confirmed address (`Collaboration-Spec.md` **D15–D17**); comments and @-mentions, activity log, who's viewing now. |
 | 8 | **Board, filters, undo** | The Kanban view and custom statuses; search/status/epic filters and My Beat; ⌘Z / ⇧⌘Z. |
 
 **Editorial rules** (as load-bearing as the structure):
