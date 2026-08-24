@@ -84,7 +84,7 @@ Enforcement is two-layer, and the rules layer is authoritative:
 The role model is **coarse: per-Pulse, whole-Pulse.** No per-epic, per-field, or
 "comment-only" role, and editors — not just owners — can invite (§3.8).
 
-### 1.4 Invite-by-email via the discovery index (being replaced — §3.1)
+### 1.4 Invite-by-email via the discovery index (kept — see D15)
 
 There are **no collection-group queries** anywhere in the model. The file-level
 comment in `firestore.rules:1-25` explains why: the emulator rejects any
@@ -105,13 +105,16 @@ docs in one batch:
    owner of that email (`emailId == myEmail()`, `firestore.rules:93-98`).
 
 **No email is actually sent.** `inviteToPulse` writes Firestore docs and nothing
-else — no Cloud Function, no mail extension (`functions/` does not exist; no
-`nodemailer`/`sendgrid`/`firestore-send-email` anywhere in the tree). The UI is
-honest about this: `InviteDialog` says *"They'll get access as soon as they sign
-in with this email"* (`InviteDialog.tsx:41-43`); "sent" means "indexed." An
-invitee only learns they were invited if they independently sign in with that
-email. This "forget email delivery for now" state is exactly what §3.1 replaces —
-and because email was never delivered, replacing it loses no working behavior.
+else. `functions/` does exist now (it did not when this was written), but it
+contains no mail extension and no `nodemailer`/`sendgrid`/`firestore-send-email`
+— "sent" still means "indexed."
+
+What changed is that the invitee is no longer left to discover it by accident.
+`inviteUrl` (`invites.ts`) pairs every invite doc with a URL the inviter can
+paste anywhere, and `InviteAcceptPage` (`routes/InviteAcceptPage.tsx`) redeems
+it. Delivery is still the inviter's job; the difference is that they now have
+something to deliver. See **D15** for why this kind was kept rather than
+retired, and **D17** for why the URL carries no secret.
 
 ### 1.5 Accepting / joining
 
@@ -126,8 +129,18 @@ and because email was never delivered, replacing it loses no working behavior.
 - Writes the `users/{uid}/myPulses/{pulseId}` dashboard entry
   (`MyPulseIndexEntry`, `types/index.ts:108-115`).
 - Batch-deletes both the `invites` doc and the `inviteIndex` pointer.
-- On any failure (e.g. invite revoked mid-flight) it drops just that stale
-  pointer and continues (`users.ts:66-72`) — one bad invite never fails the batch.
+- On any failure it **keeps** the pointer and continues. It used to delete it,
+  which was safe only while every failure meant "revoked". Under **D16** a
+  refusal is now routine and temporary — an unconfirmed address fails this write
+  on every sign-in — so deleting on failure would have destroyed valid
+  invitations belonging to people who simply had not clicked their confirmation
+  link yet.
+- The `inviteIndex` read itself is now refused for an unconfirmed address
+  (D16), and this runs inside sign-in bootstrap. It is caught and treated as
+  "nothing pending", because letting it throw would leave every unconfirmed
+  account — including one that registered seconds ago — unable to load the app
+  at all. `UnverifiedBanner` is what makes the state visible instead
+  (`components/dashboard/UnverifiedBanner.tsx`).
 
 The Pulse creator's own membership is the other create path
 (`firestore.rules:110-114`, "Case 1"): `createPulse` self-writes an `owner`
@@ -868,11 +881,12 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
 
 ## 7. Open questions / decisions to confirm (D-list)
 
-1. **D1 — Copy-link invites, link-only. ✅ DECIDED (fully link-only).**
-   `pulses/{p}/joinLinks/{token}` (token-as-id), default viewer / optional editor,
-   token-validated self-join, revoke = delete / regenerate = new token; **retire
-   email invites & `inviteIndex`** after a one-release deprecation window. No
-   email, no server. Email-address invites are *not* retained as a secondary path.
+1. **D1 — Copy-link invites. ✅ DECIDED, but its "link-only" half is
+   SUPERSEDED by D15.** The link mechanism shipped as described:
+   default viewer / optional editor, token-validated self-join, revoke =
+   regenerate. What did *not* happen is the retirement — `invites`,
+   `inviteIndex` and `resolvePendingInvites` are all live and now carry the
+   second invite kind. Read D1 as "add copy-links", not "remove email invites".
 2. **D2 — Teams via the workspace layer.** *Recommend:* union-cascade
    (team membership grants all team Pulses; per-Pulse guests still allowed;
    effective role = max(team, per-Pulse)); team roles unified to
@@ -954,3 +968,93 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     (c) *a server-side reconciler* — the index is self-owned by construction
     (§1.6) and a member's own client is already at the exact spot where both
     facts are known.
+
+15. **D15 — Ship *both* invite kinds. Reverses the retirement half of D1. ✅ DECIDED.**
+    An **open link** (`/join/:pulseId/:token/:role`) and an **email-bounded
+    invite** (`/invite/:pulseId?to=…`, backed by `pulses/{p}/invites/{email}`)
+    are both offered, on a two-tab switch in `InvitePanel.tsx` sharing one role
+    picker. Email leads; the link is one click away.
+    *Why:* D1 argued that retiring email invites "loses no working behavior,
+    because email was never delivered" — true, and it misses what the two things
+    are. An open link is a **capability**: holding the URL is the entire
+    qualification, so it is perfect for a team channel and wrong for one named
+    person, because it cannot be forwarded without also being given away. There
+    is no way to say "this is for Ana" with a token. D1 proposed to cover that
+    with `linkResourceId` auto-binding, which binds a *resource row* and still
+    lets whoever opens the URL in. Binding a **person** needs an identity claim,
+    and the `invites` tree already had one.
+    *Rejected:* (a) *link-only, per D1* — leaves no way to invite an individual,
+    and mints a reusable capability every time someone wants to add one
+    colleague; (b) *email-only* — the open link is genuinely better for "everyone
+    in this channel", and it already worked; (c) *one link that is bounded when
+    an address is supplied* — the security properties are opposite (secret vs.
+    identity) and collapsing them into one control makes it impossible to see
+    which one you are holding.
+
+16. **D16 — An email grants access only when the address is confirmed. ✅ DECIDED.**
+    `myVerifiedEmail()` (`firestore.rules`) returns `myEmail()` only when
+    `request.auth.token.email_verified == true`, and empty otherwise. It gates
+    `pulseMembers.create` Case 2 (accepting), the `invites/{email}` `get`, and
+    `inviteIndex/{email}/pending` read/delete. `registerWithEmail` now sends the
+    confirmation mail, and `resendVerification` / `recheckVerification`
+    (`authStore.ts`) are the ways out.
+    *Why:* password signup lets anyone register any address without proving
+    anything. An invitation addressed to a colleague who has not signed up yet
+    therefore went to **whoever registered that address first** — and since the
+    invite resolves silently at sign-in, neither the inviter nor the real
+    recipient would ever see it happen. The reads are gated too: a squatter who
+    cannot accept could still *enumerate* which Pulses an address was invited
+    to, by whom, and as what.
+    *Cost, accepted:* existing unconfirmed password accounts cannot accept
+    invitations until they confirm. This is why the client half ships first
+    (CLAUDE.md: a gate that restricts what the live client already does breaks
+    it) and why the refusal is surfaced in three places rather than failing
+    silently — `UnverifiedBanner` on the dashboard, and the `unverified` state
+    of `InviteAcceptPage`.
+    *Rejected:* (a) *trusting `email` alone* — the status quo, and the hole
+    above; (b) *verifying only at accept time and leaving the reads open* —
+    keeps the disclosure for no benefit; (c) *blocking unconfirmed accounts from
+    signing in at all* — far more disruptive than the problem, and it breaks
+    Pulses they legitimately own.
+
+17. **D17 — The email-bounded link carries no token. ✅ DECIDED.**
+    `/invite/:pulseId?to=<email>` contains a destination and a display hint, and
+    nothing else. The grant lives in `pulses/{p}/invites/{email}` and is decided
+    against the caller's verified claim.
+    *Why:* a token would be a second, weaker key to the same door. The question
+    this link asks is "do you control this address", and only the invite doc can
+    answer it — so a secret in the URL would add a way in that bypasses the
+    check the whole feature exists for. The consequence is the useful one:
+    forwarding the URL accomplishes nothing.
+    *`?to=` is display-only and never trusted.* It exists for one case: someone
+    signed in as the wrong account cannot read the invite doc at all, so the URL
+    is the only place the page can learn which address the invitation is for.
+    It is validated against an email shape before rendering
+    (`displayableEmail`), because it is attacker-controllable text appearing in
+    a sentence that reads as Pulse speaking.
+    *Rejected:* (a) *token + email* — the token becomes the real credential the
+    moment anything falls back to it; (b) *no `?to=` at all* — "permission
+    denied" is all the page could say to someone in the extremely common
+    wrong-account case.
+
+18. **D18 — The invite form proposes linked people who lack access. ✅ DECIDED.**
+    `candidatesFrom` (`EmailInvitePanel.tsx`) lists this Pulse's resources that
+    carry a `linkedEmail` but no `linkedUid`, minus current members and
+    outstanding invites, deduped by address. One click invites them at the
+    chosen role and copies their link.
+    *Why:* `linkedUid` is set only when the address resolved against **this
+    Pulse's membership** (`Resource-Master-Spec.md` RM19 and the resolvers in
+    `functions/src/roster.ts`), so its absence is already the app's own record
+    of "we know exactly who this is, and they cannot open the Pulse." The Pulse
+    is holding the address; making the inviter notice the gap and retype it is
+    work the data has already done.
+    *Member emails are checked as well*, despite `linkedUid` covering it in
+    theory: membership docs predating `PulseMember.email` have none, and the
+    resolver only fills `linkedUid` when it runs. Suggesting an existing
+    collaborator would produce an invitation that can never be accepted.
+    *Rejected:* (a) *suggesting every linked resource* — the ones with
+    `linkedUid` are already in, so most rows would be no-ops; (b) *auto-inviting
+    on link* — RM's own rule is that master-level linking implies nothing about
+    Pulse access, and this would quietly reverse it; (c) *a separate "invite
+    everyone missing" button* — role is per-person, and one button cannot ask.
+

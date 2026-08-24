@@ -34,6 +34,18 @@ service cloud.firestore {
       return ('email' in request.auth.token) ? request.auth.token.email.lower() : '';
     }
 
+    // The address, but ONLY if the provider says it was confirmed.
+    //
+    // `myEmail()` is a claim: email/password signup lets anyone register any
+    // address without ever confirming it, so an invitation addressed to a
+    // colleague who has not signed up yet could be claimed by whoever registers
+    // that address first. Use this — not `myEmail()` — wherever an email decides
+    // ACCESS. Google sign-in supplies a verified address; password users confirm
+    // via the link sent at signup (authStore.resendVerification re-sends it).
+    function myVerifiedEmail() {
+      return (request.auth.token.get('email_verified', false) == true) ? myEmail() : '';
+    }
+
     // ---- quotas (Plans-Spec §5, PL5 option b) ----
     // Counters SF11 owns and clients may never write. Named once so the
     // workspace create/update rules and any future counter stay in step.
@@ -352,7 +364,12 @@ service cloud.firestore {
     // ---- invite discovery index (pre-membership, keyed by email) ----
     match /inviteIndex/{emailId} {
       match /pending/{pulseId} {
-        allow read, delete: if isSignedIn() && emailId == myEmail();
+        // Verified, like acceptance itself. Someone who registers an address
+        // they do not own cannot accept its invitations, but on the unverified
+        // claim they could still SEE which Pulses that address was invited to,
+        // by whom, and as what — a smaller leak than access, and one with no
+        // reason to exist.
+        allow read, delete: if isSignedIn() && emailId == myVerifiedEmail();
         allow create: if canEditPulse(pulseId);
         allow update: if false;
       }
@@ -420,9 +437,10 @@ service cloud.firestore {
           ||
           // Case 2 (legacy, being retired): invited user accepts an invite
           // addressed to their own verified email; role must match the invite's.
-          (myEmail() != '' &&
-            exists(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())) &&
-            get(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myEmail())).data.role == request.resource.data.role)
+          // VERIFIED, because this is the one place an email grants access.
+          (myVerifiedEmail() != '' &&
+            exists(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myVerifiedEmail())) &&
+            get(/databases/$(database)/documents/pulses/$(pulseId)/invites/$(myVerifiedEmail())).data.role == request.resource.data.role)
           ||
           // Case 3: joining via a valid copy-link (token + role match the
           // Pulse's active `invite`). Not while archived: a link circulating
@@ -481,12 +499,22 @@ service cloud.firestore {
         // here. Owner/editor can look up a specific invite; the invited
         // user can read their own directly once they know the pulseId
         // (which they will, via /inviteIndex).
-        allow get: if canEditPulse(pulseId) || (isSignedIn() && resource.data.email == myEmail());
+        allow get: if canEditPulse(pulseId) || (isSignedIn() && resource.data.email == myVerifiedEmail());
         // Owner/editor can enumerate this Pulse's outstanding invites to show a
         // "pending invitations" list. Still no collection-group list — this is a
         // plain list under a concrete pulseId (see file-level comment).
         allow list: if canEditPulse(pulseId);
-        allow create: if canEditPulse(pulseId) && request.resource.data.email == emailId;
+        // Role allow-list mirrors the one on the pulse doc's `invite` field:
+        // an EDITOR must not be able to mint an owner. Case 2 grants exactly
+        // the role written here, so without this an editor could invite a
+        // second account they control as owner and then have it remove the real
+        // one. Owners are exempt because they can already promote anyone via
+        // setMemberRole — inviting straight to owner grants them nothing new
+        // and is the natural shape of a handover.
+        allow create: if canEditPulse(pulseId)
+          && request.resource.data.email == emailId
+          && (request.resource.data.role in ['viewer', 'editor', 'taskLead', 'myBeatViewer']
+              || isPulseOwner(pulseId));
         allow update: if false;
         // Owner/editor can revoke; an invited user can also clear their own
         // invite doc once they've accepted it (emailId is their own email).

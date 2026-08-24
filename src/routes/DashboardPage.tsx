@@ -23,6 +23,7 @@ import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
 import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto } from "@/services/firestore/workspaces";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
+import { UnverifiedBanner } from "@/components/dashboard/UnverifiedBanner";
 
 export function DashboardPage() {
   const { firebaseUser, userDoc } = useAuthStore();
@@ -262,6 +263,10 @@ export function DashboardPage() {
             {t("dashboard.newPulse")}
           </button>
         </div>
+
+        {/* Above the quota banner: an unconfirmed address blocks invitations
+            entirely, which is a harder stop than being near a plan limit. */}
+        <UnverifiedBanner />
 
         <PulseQuotaBanner quota={quota} workspaceId={userDoc?.personalWorkspaceId ?? null} onUpgrade={() => setBillingOpen(true)} />
 

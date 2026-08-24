@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import type { InviteLink, PulseRole } from "@/types";
 import { getPulseInviteLink, setPulseInviteLink, clearPulseInviteLink } from "@/services/firestore/joinLinks";
-import { ASSIGNABLE_ROLES, roleMeta } from "@/domain/permissions";
+import { roleMeta } from "@/domain/permissions";
 import { logDirectActivity } from "@/domain/activityRecorder";
 import { canNativeShare, copyText, shareOrCopy } from "@/domain/share";
 import { Icon } from "@/components/shared/Icon";
 import { useT } from "@/i18n";
 
-/** Copy-link invite control: pick a role, copy a shareable join link, and
- * revoke it. No email is sent — the user shares the link however they like. */
-export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit: boolean }) {
+/** The open kind of invite link: a capability. Whoever opens the URL joins as
+ * `role`, no questions asked — which is what makes it right for a team channel
+ * and wrong for one named person (use `EmailInvitePanel` for that).
+ *
+ * The role comes from `InvitePanel`, which owns the picker both kinds share. */
+export function InviteLinkPanel({ pulseId, canEdit, role }: { pulseId: string; canEdit: boolean; role: PulseRole }) {
   const t = useT();
   const [invite, setInvite] = useState<InviteLink | null | undefined>(undefined); // undefined = loading
-  const [role, setRole] = useState<PulseRole>("viewer");
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
   useEffect(() => {
     let cancelled = false;
     void getPulseInviteLink(pulseId)
-      .then((i) => { if (!cancelled) { setInvite(i); if (i) setRole(i.role); } })
+      .then((i) => { if (!cancelled) setInvite(i); })
       .catch(() => { if (!cancelled) setInvite(null); });
     return () => { cancelled = true; };
   }, [pulseId]);
@@ -84,21 +86,6 @@ export function InviteLinkPanel({ pulseId, canEdit }: { pulseId: string; canEdit
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="grid grid-cols-2 gap-2">
-        {ASSIGNABLE_ROLES.map((r) => (
-          <button
-            type="button"
-            key={r.value}
-            onClick={() => setRole(r.value)}
-            className="rounded-lg border px-3 py-2 text-left text-xs"
-            style={{ borderColor: role === r.value ? "#EE7240" : "#E2DFD9", background: role === r.value ? "#FFF7F1" : "#FFFFFF" }}
-          >
-            <div className="font-semibold text-yasdu-fg">{r.label}</div>
-            <div className="text-yasdu-muted">{r.hint}</div>
-          </button>
-        ))}
-      </div>
-
       <button
         type="button"
         onClick={() => void sendLink()}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -24,6 +25,11 @@ interface AuthState {
    * is in flight — the dashboard should wait for this before querying
    * myPulses, since a freshly-accepted invite might not be indexed yet. */
   bootstrapping: boolean;
+  /** Whether the signed-in address is confirmed. Mirrored into the store rather
+   * than read off `firebaseUser.emailVerified`, because `reload()` mutates that
+   * object in place — nothing re-renders, and the banner telling someone to
+   * confirm their address would stay up after they had. */
+  emailVerified: boolean;
   error: string | null;
   init: () => () => void;
   signInWithGoogle: () => Promise<void>;
@@ -33,12 +39,26 @@ interface AuthState {
    * state. `language: null` clears the override. */
   saveProfile: (patch: { displayName?: string | null; photoURL?: string | null; language?: string | null }) => Promise<void>;
   signOutUser: () => Promise<void>;
+  /** Re-send the confirmation link. Needed because an unverified address cannot
+   * accept an emailed invitation (firestore.rules), and the mail sent at signup
+   * is easy to lose. Returns false when there is nothing to send — already
+   * verified, or signed in with Google, which supplies a verified address. */
+  resendVerification: () => Promise<boolean>;
+  /** Ask the server whether the address has been confirmed since sign-in, mint
+   * a token carrying the new claim, and — if it has — sweep up the invitations
+   * that were unacceptable until now. Returns the confirmed state. */
+  recheckVerification: () => Promise<boolean>;
 }
 
 async function bootstrap(user: FirebaseUser): Promise<UserDoc | null> {
   const email = user.email ?? "";
   await ensureUserDoc(user.uid, email, user.displayName, user.photoURL);
-  if (email) await resolvePendingInvites(user.uid, email);
+  // Confirming happens in whatever tab the mail client opened, so a session
+  // that started before the click still carries a token saying otherwise. One
+  // reload for the unconfirmed — never for the rest, who are the common case
+  // and would be paying a round trip for nothing.
+  if (!user.emailVerified) await user.reload().catch(() => {});
+  if (email && user.emailVerified) await resolvePendingInvites(user.uid, email);
   const snap = await getDoc(doc(db, "users", user.uid));
   return snap.exists() ? (snap.data() as UserDoc) : null;
 }
@@ -48,11 +68,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   userDoc: null,
   initializing: true,
   bootstrapping: false,
+  emailVerified: false,
   error: null,
 
   init: () => {
     return onAuthStateChanged(auth, async (user) => {
-      set({ firebaseUser: user, initializing: false });
+      set({ firebaseUser: user, initializing: false, emailVerified: !!user?.emailVerified });
       if (!user) {
         set({ userDoc: null });
         return;
@@ -60,7 +81,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ bootstrapping: true });
       try {
         const userDoc = await bootstrap(user);
-        set({ userDoc, bootstrapping: false });
+        // bootstrap() may have reloaded the user; publish what it found.
+        set({ userDoc, bootstrapping: false, emailVerified: user.emailVerified });
         // Resolution order: localStorage override → userDoc.language → browser.
         // syncFromUserDoc is a no-op if a local override is already set.
         useI18nStore.getState().syncFromUserDoc(isLang(userDoc?.language) ? userDoc.language : null);
@@ -94,6 +116,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ error: null });
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // Accepting an emailed invitation requires a verified address, so the
+      // confirmation has to be offered at the one moment the user is definitely
+      // paying attention. Best effort: a failure here must not fail the signup
+      // they just completed — `resendVerification` is the way back.
+      await sendEmailVerification(cred.user).catch(() => {});
       if (displayName.trim()) {
         await updateProfile(cred.user, { displayName: displayName.trim() });
       }
@@ -108,6 +135,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!firebaseUser) throw new Error("Not signed in.");
     await updateUserProfile(firebaseUser.uid, patch);
     if (userDoc) set({ userDoc: { ...userDoc, ...patch } });
+  },
+
+  resendVerification: async () => {
+    const user = auth.currentUser;
+    if (!user || user.emailVerified) return false;
+    try {
+      await sendEmailVerification(user);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  recheckVerification: async () => {
+    const user = auth.currentUser;
+    if (!user) return false;
+    await user.reload().catch(() => {});
+    if (!user.emailVerified) {
+      set({ emailVerified: false });
+      return false;
+    }
+    // The rules read the claim in the token, not the account record, so the
+    // sweep below would still be denied without this.
+    await user.getIdToken(true).catch(() => {});
+    set({ emailVerified: true });
+    if (user.email) await resolvePendingInvites(user.uid, user.email).catch(() => 0);
+    return true;
   },
 
   signOutUser: async () => {

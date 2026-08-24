@@ -7,7 +7,7 @@ import { confirmAt } from "@/stores/confirmStore";
 import { roleMeta, ASSIGNABLE_ROLES } from "@/domain/permissions";
 import { logDirectActivity } from "@/domain/activityRecorder";
 import { useT } from "@/i18n";
-import { InviteLinkPanel } from "./InviteLinkPanel";
+import { InvitePanel } from "./InvitePanel";
 
 interface CollaboratorsDialogProps {
   pulseId: string;
@@ -260,7 +260,12 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
         {canManage && (
           <div className="mt-1 flex flex-col gap-2 border-t pt-4" style={{ borderColor: "#E2DFD9" }}>
             <div className="mono text-[11px] uppercase tracking-wide text-yasdu-muted">{t("collab.inviteByLink")}</div>
-            <InviteLinkPanel pulseId={pulseId} canEdit={canManage} />
+            <InvitePanel
+              pulseId={pulseId}
+              canEdit={canManage}
+              invitedEmails={invites.map((i) => i.email)}
+              onInvited={() => void reloadInvites()}
+            />
           </div>
         )}
 

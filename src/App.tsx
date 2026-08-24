@@ -20,6 +20,7 @@ const PulsePage = lazy(() => import("@/routes/PulsePage").then((m) => ({ default
 // never open, so it should not sit in the dashboard's bundle.
 const PeoplePage = lazy(() => import("@/routes/PeoplePage").then((m) => ({ default: m.PeoplePage })));
 const JoinPage = lazy(() => import("@/routes/JoinPage").then((m) => ({ default: m.JoinPage })));
+const InviteAcceptPage = lazy(() => import("@/routes/InviteAcceptPage").then((m) => ({ default: m.InviteAcceptPage })));
 const AuthorizePage = lazy(() => import("@/routes/AuthorizePage").then((m) => ({ default: m.AuthorizePage })));
 
 function RouteFallback() {
@@ -71,6 +72,18 @@ function App() {
             element={
               <RequireAuth>
                 <JoinPage />
+              </RequireAuth>
+            }
+          />
+          {/* The email-bounded invite's landing page. Separate route from
+              /join because it is a different kind of thing: /join carries the
+              grant in the URL, this one carries only a destination and the
+              grant is decided by who signs in. */}
+          <Route
+            path="/invite/:pulseId"
+            element={
+              <RequireAuth>
+                <InviteAcceptPage />
               </RequireAuth>
             }
           />

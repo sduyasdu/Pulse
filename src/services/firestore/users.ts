@@ -1,6 +1,6 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { McpConnection, MyPulseIndexEntry, PendingInviteEntry, PulseMember, UserDoc } from "@/types";
+import type { McpConnection, PendingInviteEntry, UserDoc } from "@/types";
 
 /** Update the signed-in user's own profile fields (name / avatar / language).
  * `language: null` clears the stored override (revert to browser detection). */
@@ -9,6 +9,7 @@ export async function updateUserProfile(uid: string, patch: { displayName?: stri
 }
 import { createPersonalWorkspace } from "./workspaces";
 import { emailKey } from "./emailKey";
+import { acceptInvite } from "./invites";
 
 /** Idempotent: creates users/{uid} + a personal workspace the first time a
  * user signs in; a no-op on every subsequent sign-in. */
@@ -40,7 +41,21 @@ export async function ensureUserDoc(uid: string, email: string, displayName: str
  */
 export async function resolvePendingInvites(uid: string, email: string): Promise<number> {
   const key = emailKey(email);
-  const pendingSnap = await getDocs(collection(db, "inviteIndex", key, "pending"));
+
+  // Denied, not empty — and here that distinction is already resolved rather
+  // than lost: reading this index needs a confirmed address, so a refusal means
+  // exactly one thing and the caller knows it from `emailVerified` without
+  // being told. What must not happen is the throw escaping: this runs inside
+  // sign-in bootstrap, so an uncaught denial would leave every unconfirmed
+  // account — including one that registered thirty seconds ago — staring at an
+  // error instead of the app, over an optional sweep for invitations they may
+  // not even have. `UnverifiedBanner` is what surfaces the state.
+  let pendingSnap;
+  try {
+    pendingSnap = await getDocs(collection(db, "inviteIndex", key, "pending"));
+  } catch {
+    return 0;
+  }
   if (pendingSnap.empty) return 0;
 
   let resolved = 0;
@@ -48,33 +63,22 @@ export async function resolvePendingInvites(uid: string, email: string): Promise
     const pulseId = pendingDoc.id;
     const pending = pendingDoc.data() as PendingInviteEntry;
     try {
-      const member: PulseMember = { uid, email: key, role: pending.role, joinedAt: Date.now() };
-      await setDoc(doc(db, "pulses", pulseId, "pulseMembers", uid), member);
-
-      const pulseSnap = await getDoc(doc(db, "pulses", pulseId));
-      const pulseName = pulseSnap.exists() ? (pulseSnap.data().name as string) : "Untitled Pulse";
-      const pulseWorkspaceId = pulseSnap.exists() ? (pulseSnap.data().workspaceId as string) : "";
-      const indexEntry: MyPulseIndexEntry = {
-        pulseId,
-        name: pulseName,
-        workspaceId: pulseWorkspaceId,
-        role: pending.role,
-        joinedAt: Date.now(),
-      };
-      await setDoc(doc(db, "users", uid, "myPulses", pulseId), indexEntry);
-
-      const cleanup = writeBatch(db);
-      cleanup.delete(doc(db, "pulses", pulseId, "invites", key));
-      cleanup.delete(doc(db, "inviteIndex", key, "pending", pulseId));
-      await cleanup.commit();
-
+      await acceptInvite(pulseId, uid, key, pending.role);
       resolved++;
     } catch {
-      // The authoritative invite doc may have been revoked between listing
-      // the index and accepting it — skip and leave the stale pointer for
-      // the user to clean up (or a future run) rather than failing the
-      // whole batch of invites.
-      await deleteDoc(doc(db, "inviteIndex", key, "pending", pulseId)).catch(() => {});
+      // Leave the pointer. It used to be deleted here, which the comment above
+      // it already said it should not be — and the two disagreed silently
+      // because every failure looked alike.
+      //
+      // They are not alike. A revoked invite and a REFUSED one fail the same
+      // way from here, and refusals are now routine: accepting an emailed invite
+      // requires a confirmed address, so anyone who has not confirmed theirs
+      // fails this write every time they sign in. Deleting on failure would
+      // destroy a valid invitation because its recipient had not clicked a link
+      // yet — and the invite link is the route that then can't work either.
+      //
+      // The cost of keeping it is one failed write per sign-in for a genuinely
+      // revoked invite. The cost of removing it was losing invitations.
     }
   }
   return resolved;

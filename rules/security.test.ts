@@ -53,11 +53,22 @@ async function seed(fn: (db: Firestore) => Promise<void>) {
   await testEnv.withSecurityRulesDisabled(async (ctx) => fn(ctx.firestore()));
 }
 
+/** A signed-in caller with a CONFIRMED address — the normal case, since Google
+ * supplies one and password users confirm at signup. Anywhere an email decides
+ * access, the rules require `email_verified` (see `myVerifiedEmail`), so a
+ * helper that omitted it would make every legitimate flow look broken. */
 function dbAs(uid: string | null, email?: string) {
   const ctx = uid
-    ? testEnv.authenticatedContext(uid, email ? { email } : undefined)
+    ? testEnv.authenticatedContext(uid, email ? { email, email_verified: true } : undefined)
     : testEnv.unauthenticatedContext();
   return ctx.firestore();
+}
+
+/** Signed in, address NOT confirmed. The attacker in the case this guards
+ * against: register the address of a colleague who has not signed up yet, never
+ * confirm it, and claim their invitation. */
+function dbAsUnverified(uid: string, email: string) {
+  return testEnv.authenticatedContext(uid, { email, email_verified: false }).firestore();
 }
 
 async function seedPulse(pulseId: string, createdBy: string, members: Record<string, { email: string; role: string }>) {
@@ -1569,3 +1580,92 @@ describe("roster usage index (RM7)", () => {
     await assertFails(deleteDoc(doc(alice, "workspaces", WS, "resources", "m1", "usage", "p_secret")));
   });
 });
+
+describe("an emailed invite needs a CONFIRMED address", () => {
+  const P = "p_verify";
+
+  async function seedInvited() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", P), {
+        id: P, workspaceId: "w1", name: "Target", createdBy: "alice",
+        createdAt: Date.now(), updatedAt: Date.now(), graphConfig: { stepPx: 16, workPerStep: 1 },
+      });
+      await setDoc(doc(db, "pulses", P, "pulseMembers", "alice"), { uid: "alice", email: "alice@example.com", role: "owner", joinedAt: Date.now() });
+      await setDoc(doc(db, "pulses", P, "invites", "victim@example.com"), {
+        email: "victim@example.com", role: "editor", invitedBy: "alice", createdAt: Date.now(),
+      });
+      await setDoc(doc(db, "inviteIndex", "victim@example.com", "pending", P), {
+        pulseId: P, role: "editor", invitedBy: "alice", createdAt: Date.now(),
+      });
+    });
+  }
+
+  const accept = (db: Firestore, uid: string, email: string) =>
+    setDoc(doc(db, "pulses", P, "pulseMembers", uid), { uid, email, role: "editor", joinedAt: Date.now() });
+
+  it("lets the real invitee in once their address is confirmed", async () => {
+    await seedInvited();
+    await assertSucceeds(accept(dbAs("victim", "victim@example.com"), "victim", "victim@example.com"));
+  });
+
+  // The whole point. Password signup lets anyone register any address without
+  // confirming it, so before this rule an invitation addressed to someone who
+  // had not signed up yet went to whoever registered it first.
+  it("refuses a squatter who registered the address but never confirmed it", async () => {
+    await seedInvited();
+    await assertFails(accept(dbAsUnverified("squatter", "victim@example.com"), "squatter", "victim@example.com"));
+  });
+
+  it("refuses an unconfirmed address even reading the invitation", async () => {
+    await seedInvited();
+    const squatter = dbAsUnverified("squatter", "victim@example.com");
+    await assertFails(getDoc(doc(squatter, "inviteIndex", "victim@example.com", "pending", P)));
+    await assertFails(getDoc(doc(squatter, "pulses", P, "invites", "victim@example.com")));
+  });
+
+  it("still lets a confirmed invitee find their own pending invitations", async () => {
+    await seedInvited();
+    await assertSucceeds(getDoc(doc(dbAs("victim", "victim@example.com"), "inviteIndex", "victim@example.com", "pending", P)));
+  });
+});
+
+describe("an editor cannot mint an owner through an invite", () => {
+  const P = "p_escalate";
+
+  async function seedPulse2() {
+    await seed(async (db) => {
+      await setDoc(doc(db, "pulses", P), {
+        id: P, workspaceId: "w1", name: "Target", createdBy: "alice",
+        createdAt: Date.now(), updatedAt: Date.now(), graphConfig: { stepPx: 16, workPerStep: 1 },
+      });
+      await setDoc(doc(db, "pulses", P, "pulseMembers", "alice"), { uid: "alice", email: "alice@example.com", role: "owner", joinedAt: Date.now() });
+      await setDoc(doc(db, "pulses", P, "pulseMembers", "eve"), { uid: "eve", email: "eve@example.com", role: "editor", joinedAt: Date.now() });
+    });
+  }
+
+  const invite = (db: Firestore, email: string, role: string) =>
+    setDoc(doc(db, "pulses", P, "invites", email), { email, role, invitedBy: "eve", createdAt: Date.now() });
+
+  it("lets an editor invite at the ordinary roles", async () => {
+    await seedPulse2();
+    const eve = dbAs("eve", "eve@example.com");
+    await assertSucceeds(invite(eve, "a@example.com", "viewer"));
+    await assertSucceeds(invite(eve, "b@example.com", "editor"));
+    await assertSucceeds(invite(eve, "c@example.com", "taskLead"));
+    await assertSucceeds(invite(eve, "d@example.com", "myBeatViewer"));
+  });
+
+  // Case 2 grants exactly the role on the invite doc, so an owner-roled invite
+  // is an owner grant. Without this an editor could seat an account they
+  // control as owner and have it remove the real one.
+  it("refuses an editor writing an owner-roled invite", async () => {
+    await seedPulse2();
+    await assertFails(invite(dbAs("eve", "eve@example.com"), "mine@example.com", "owner"));
+  });
+
+  it("still lets an OWNER invite straight to owner — a handover", async () => {
+    await seedPulse2();
+    await assertSucceeds(invite(dbAs("alice", "alice@example.com"), "successor@example.com", "owner"));
+  });
+});
+
