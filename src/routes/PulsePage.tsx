@@ -12,6 +12,7 @@ import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
+import { useJustAddedTask, filterSignatureOf } from "@/hooks/useJustAddedTask";
 import { roleMeta, capsOf } from "@/domain/permissions";
 import { effectiveEditScope, pulseLock } from "@/domain/pulseLock";
 import { useT } from "@/i18n";
@@ -252,6 +253,12 @@ export function PulsePage() {
   const [featureStatusFilter, setFeatureStatusFilter] = useState<Set<string>>(new Set());
   const [epicFilter, setEpicFilter] = useState<Set<string>>(new Set());
   const [compactFilter, setCompactFilter] = useState(true);
+
+  // A task you just created stays visible even when the filters exclude it —
+  // see the hook for why, and for when the exemption ends.
+  const { justAddedId, markAdded, noteSelection } = useJustAddedTask(
+    filterSignatureOf({ query: featureQuery, statuses: featureStatusFilter, epics: epicFilter, resource: filterResource, mineOnly: myTasksOnly }),
+  );
   const [epicsShrunk, setEpicsShrunk] = useState(false);
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -310,8 +317,9 @@ export function PulsePage() {
 
   const handleSelect = useCallback((id: string | null) => {
     setSelectedId(id);
+    noteSelection(id);
     if (id) setRightTab("details");
-  }, []);
+  }, [noteSelection]);
 
   const weekends = useMemo(() => {
     if (density !== "day") return [];
@@ -351,7 +359,16 @@ export function PulsePage() {
 
   const handleAddTask = async () => {
     const id = await canvasRef.current?.addTaskAtCenter();
-    if (id) handleSelect(id);
+    if (!id) return;
+    markAdded(id);
+    handleSelect(id);
+    // Being un-filtered is not the same as being on screen: a new task lands on
+    // today's column whatever the canvas is scrolled to, so if today is out of
+    // view it is still nowhere to be seen. Only scrolls when it has to.
+    const today = todayIndex();
+    if (today < timelineBounds.startDay || today > timelineBounds.endDay) {
+      canvasRef.current?.centerOnDay(today);
+    }
   };
   const handleAddEpic = async () => {
     await canvasRef.current?.addEpicAtCenter();
@@ -511,6 +528,8 @@ export function PulsePage() {
               epicFilter={epicFilter}
               filterResource={filterResource}
               myResourceIds={myResourceFilter}
+              alwaysShowId={justAddedId}
+              onTaskCreated={markAdded}
             />
           ) : (
             <CanvasView
@@ -532,6 +551,7 @@ export function PulsePage() {
               epicFilter={epicFilter}
               compactFilter={compactFilter}
               myResourceIds={myResourceFilter}
+              alwaysShowId={justAddedId}
               referenceDay={referenceDay}
               canEdit={canEdit}
               canEditFeature={canEditFeature}
