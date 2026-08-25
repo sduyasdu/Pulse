@@ -745,8 +745,6 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     },
   }));
 
-  const q = featureQuery.trim().toLowerCase();
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden no-select" style={{ background: "#FDFCF8" }}>
       {/* Ruler */}
@@ -902,12 +900,16 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const unassigned = !box.resources || box.resources.length === 0;
               const selected = selectedId === box.id;
               const dragOver = dragOverBoxId === box.id;
-              const matchesRes = matchesResourceFilter(box, filterResource);
-              const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
-              const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
-              const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
-              const matchesMine = !myResourceIds || (box.resources || []).some((r) => myResourceIds.includes(r)) || (box.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
-              const matches = matchesRes && matchesQuery && matchesStatus && matchesEpic && matchesMine;
+              // `matchOf`, not a fifth copy of the predicate. This block used to
+              // recompute the whole thing inline, which is how the just-added
+              // exemption came to work in compact mode and not here: the
+              // compactor asked matchOf, the renderer asked itself, and the new
+              // task was dropped to 0.22 and greyed while claiming to be
+              // exempt. The file's own comment above matchOf warned that three
+              // copies is how they end up disagreeing; this was the fourth.
+              const exempt = !!alwaysShowId && box.id === alwaysShowId;
+              const matches = matchOf(box);
+              const matchesRes = exempt || matchesResourceFilter(box, filterResource);
               // Selecting a resource HIDES the rest rather than fading them.
               // The canvas dimmed to 0.22 while the Kanban filtered the same
               // predicate out of its array — so the identical click narrowed one
@@ -1011,6 +1013,16 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{box.attachments!.length}</span>}
                     {box.ai && <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} className="flex-shrink-0" />}
                     {box.status === "done" && <Icon name="lock" size={13} title="Done — locked. Change its status to edit." className="flex-shrink-0" />}
+                    {/* Why this one is here when the filter says it shouldn't
+                        be. Without it the exemption reads as the filter having
+                        quietly failed — and the task is at full opacity
+                        precisely so it doesn't have to be squinted at, which
+                        removes the only other clue that it is a special case.
+                        Sits with the other per-task state icons rather than
+                        inventing a second place for them. */}
+                    {exempt && filterActive && (
+                      <Icon name="filter_alt" size={12} title="Just added — shown even though the filter excludes it" className="flex-shrink-0" style={{ color: "#D85A28" }} />
+                    )}
                   </div>
                   {epicsShrunk ? null : !expanded ? (
                     <div className="px-2 py-1.5 flex flex-col justify-end" style={{ height: bodyHeight, position: "relative" }}>
