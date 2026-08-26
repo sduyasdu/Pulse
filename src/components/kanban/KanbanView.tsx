@@ -23,10 +23,11 @@ interface KanbanViewProps {
   featureStatusFilter: Set<string>;
   epicFilter: Set<string>;
   filterResource: string | null;
-  /** Exempt from the filters — the task just created (see PulsePage). The
-   * board picks up the column's status and epic on create, so those two never
-   * hid it; a text query, a resource filter or the date period did. */
-  alwaysShowId?: string | null;
+  /** Exempt from the filters — every task created since the filter last
+   * changed (see PulsePage). The board picks up the column's status and epic on
+   * create, so those two never hid one; a text query, a resource filter or the
+   * date period did. */
+  alwaysShowIds?: ReadonlySet<string>;
   /** Told when a card is created here, so the exemption above can be granted
    * for it. Distinct from `onSelect`, which also fires for ordinary clicks. */
   onTaskCreated?: (id: string) => void;
@@ -35,7 +36,7 @@ interface KanbanViewProps {
   myResourceIds: string[] | null;
 }
 
-export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds, alwaysShowId, onTaskCreated }: KanbanViewProps) {
+export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
   const t = useT();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
@@ -79,7 +80,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const visibleFeatures = useMemo(
     () =>
       features.filter((f) => {
-        if (f.id === alwaysShowId) return true;
+        if (alwaysShowIds?.has(f.id)) return true;
         const matchesQuery = !q || (f.title || "").toLowerCase().includes(q) || (f.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
         const matchesEpic = epicFilter.size === 0 || (f.epicId != null && epicFilter.has(f.epicId));
         const matchesRes = !filterResource || (f.resources || []).includes(filterResource) || (f.children || []).some((c) => (c.resources || []).includes(filterResource));
@@ -87,7 +88,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
         const matchesDate = taskActiveInPeriod(f, datePeriod);
         return matchesQuery && matchesEpic && matchesRes && matchesMine && matchesDate;
       }),
-    [features, q, epicFilter, filterResource, myResourceIds, datePeriod, alwaysShowId],
+    [features, q, epicFilter, filterResource, myResourceIds, datePeriod, alwaysShowIds],
   );
 
   // When a filter narrows the tasks, don't resurrect the hidden epics as empty

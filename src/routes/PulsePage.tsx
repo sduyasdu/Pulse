@@ -12,7 +12,7 @@ import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
-import { useJustAddedTask, filterSignatureOf } from "@/hooks/useJustAddedTask";
+import { useJustAddedTasks, filterSignatureOf } from "@/hooks/useJustAddedTasks";
 import { roleMeta, capsOf } from "@/domain/permissions";
 import { effectiveEditScope, pulseLock } from "@/domain/pulseLock";
 import { useT } from "@/i18n";
@@ -256,7 +256,7 @@ export function PulsePage() {
 
   // A task you just created stays visible even when the filters exclude it —
   // see the hook for why, and for when the exemption ends.
-  const { justAddedId, markAdded, noteSelection } = useJustAddedTask(
+  const { justAddedIds, markAdded } = useJustAddedTasks(
     filterSignatureOf({ query: featureQuery, statuses: featureStatusFilter, epics: epicFilter, resource: filterResource, mineOnly: myTasksOnly }),
   );
   const [epicsShrunk, setEpicsShrunk] = useState(false);
@@ -317,9 +317,8 @@ export function PulsePage() {
 
   const handleSelect = useCallback((id: string | null) => {
     setSelectedId(id);
-    noteSelection(id);
     if (id) setRightTab("details");
-  }, [noteSelection]);
+  }, []);
 
   const weekends = useMemo(() => {
     if (density !== "day") return [];
@@ -528,7 +527,7 @@ export function PulsePage() {
               epicFilter={epicFilter}
               filterResource={filterResource}
               myResourceIds={myResourceFilter}
-              alwaysShowId={justAddedId}
+              alwaysShowIds={justAddedIds}
               onTaskCreated={markAdded}
             />
           ) : (
@@ -551,7 +550,7 @@ export function PulsePage() {
               epicFilter={epicFilter}
               compactFilter={compactFilter}
               myResourceIds={myResourceFilter}
-              alwaysShowId={justAddedId}
+              alwaysShowIds={justAddedIds}
               referenceDay={referenceDay}
               canEdit={canEdit}
               canEditFeature={canEditFeature}

@@ -86,11 +86,11 @@ interface CanvasViewProps {
   /** "My Pulse": when set, only tasks involving one of these resource ids (the
    * viewer's linked account) count as matching. Null = off. */
   myResourceIds: string[] | null;
-  /** A task that counts as matching whatever the filters say — the one just
-   * created. A new task matches almost no filter by construction, so without
-   * this it is added, selected and invisible. Owned by PulsePage, which decides
-   * when the exemption ends. */
-  alwaysShowId?: string | null;
+  /** Tasks that count as matching whatever the filters say — everything added
+   * since the filter last changed. A new task matches almost no filter by
+   * construction, so without this it is added, selected and invisible. Owned by
+   * PulsePage, which decides when the exemption ends. */
+  alwaysShowIds?: ReadonlySet<string>;
   /** Day-index the vertical marker line sits on (a selectable reference date;
    * defaults to today). */
   referenceDay: number;
@@ -104,7 +104,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, alwaysShowId, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, alwaysShowIds, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -247,7 +247,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || !!filterResource || !!myResourceIds;
   const matchOf = useCallback(
     (box: Feature) => {
-      if (box.id && box.id === alwaysShowId) return true;
+      if (alwaysShowIds?.has(box.id)) return true;
       const mRes = !filterResource || (box.resources || []).includes(filterResource) || (box.children || []).some((c) => (c.resources || []).includes(filterResource));
       const mQuery = !qLower || (box.title || "").toLowerCase().includes(qLower) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(qLower));
       const mStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
@@ -255,7 +255,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const mMine = !myResourceIds || (box.resources || []).some((r) => myResourceIds.includes(r)) || (box.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
       return mRes && mQuery && mStatus && mEpic && mMine;
     },
-    [filterResource, qLower, featureStatusFilter, epicFilter, myResourceIds, alwaysShowId],
+    [filterResource, qLower, featureStatusFilter, epicFilter, myResourceIds, alwaysShowIds],
   );
 
   // "Hide + compact" filter mode: keep only matching tasks and repack them
@@ -929,7 +929,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               // task was dropped to 0.22 and greyed while claiming to be
               // exempt. The file's own comment above matchOf warned that three
               // copies is how they end up disagreeing; this was the fourth.
-              const exempt = !!alwaysShowId && box.id === alwaysShowId;
+              const exempt = !!alwaysShowIds?.has(box.id);
               const matches = matchOf(box);
               const matchesRes = exempt || matchesResourceFilter(box, filterResource);
               // Selecting a resource HIDES the rest rather than fading them.
