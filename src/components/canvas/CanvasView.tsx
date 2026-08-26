@@ -3,7 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useTaskCascade } from "@/hooks/useTaskCascade";
-import { cascadeStepPx } from "@/domain/taskCascade";
+import { newTaskHeightPx } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -752,7 +752,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       // would not otherwise be fully on screen.
       if (cont) {
         const boxTop = y * viewZoom;
-        const boxBottom = boxTop + cascadeStepPx(graph) * viewZoom;
+        const boxBottom = boxTop + newTaskHeightPx(graph) * viewZoom;
         if (boxBottom > scrollTop + visH) cont.scrollTop = Math.max(0, boxBottom - visH + 24);
         else if (boxTop < scrollTop) cont.scrollTop = Math.max(0, boxTop - 24);
       }

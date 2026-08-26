@@ -5,7 +5,9 @@ import type { GraphConfig } from "@/types";
  *
  * Every new task is created at today's column and the vertical middle of the
  * viewport, so adding two in a row put the second exactly on the first and the
- * first was simply gone. This offsets each one right and down from the last.
+ * first was simply gone. This offsets each one right and down from the last —
+ * far enough that every task's header stays readable, close enough that a run
+ * of them still fits on screen.
  *
  * The slot is not a counter. It is the lowest index no live task is sitting on,
  * which is what makes the cascade give ground: place a task deliberately — move
@@ -38,10 +40,21 @@ export interface CascadeFeature {
 
 /** A new task is always one work-step tall (`work: 1`, and the step count is
  * clamped to a floor of 1), so its height is knowable without measuring: 30 for
- * the header + 18 padding + one step. The gap is what stops consecutive boxes
- * sharing an edge. */
+ * the header + 18 padding + one step. */
+export function newTaskHeightPx(graph: GraphConfig): number {
+  return 30 + 18 + graph.stepPx;
+}
+
+/** How much of a task the next one leaves uncovered. The cascade overlaps
+ * rather than clearing: a full-height step is tidy but walks off the bottom of
+ * the viewport after three or four adds, and what actually has to stay legible
+ * is the header — the title, the status dot, the state icons — which is the top
+ * 30px of a 64px box. Covering the bottom fifth costs none of that. */
+export const CASCADE_VISIBLE_FRACTION = 0.8;
+
+/** Vertical distance between consecutive new tasks. */
 export function cascadeStepPx(graph: GraphConfig): number {
-  return 30 + 18 + graph.stepPx + 8;
+  return Math.round(newTaskHeightPx(graph) * CASCADE_VISIBLE_FRACTION);
 }
 
 /** Days each successive task shifts right. Deliberately one: on this canvas x

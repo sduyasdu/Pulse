@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import {
   CASCADE_STEP_DAYS,
+  CASCADE_VISIBLE_FRACTION,
   cascadeOffsetFor,
   cascadeStepPx,
+  newTaskHeightPx,
   lowestFreeSlot,
   reconcileClaims,
   type CascadeClaim,
@@ -31,12 +33,30 @@ describe("where the next new task goes", () => {
     expect(cascadeOffsetFor(3, graph)).toEqual({ dx: 3 * CASCADE_STEP_DAYS, dy: 3 * step });
   });
 
-  // A new task is 30 + 18 + one step tall, so the vertical step clears it
-  // completely rather than merely offsetting it — the point is that both stay
-  // fully visible, not that the second one peeks out.
-  it("steps down by more than a new task's full height", () => {
-    const newTaskHeight = 30 + 18 + graph.stepPx;
-    expect(cascadeStepPx(graph)).toBeGreaterThan(newTaskHeight);
+  // Overlapping on purpose: a full-height step walks off the bottom of the
+  // viewport after three or four adds. The next task covers the previous one's
+  // bottom fifth and no more.
+  it("leaves four fifths of the previous task showing", () => {
+    const h = newTaskHeightPx(graph);
+    // Stated as the property, not as the formula — asserting
+    // round(h * FRACTION) against round(h * FRACTION) would pass for any
+    // fraction at all, including the full-clearance one this replaced.
+    const overlap = h - cascadeStepPx(graph);
+    expect(overlap / h).toBeCloseTo(1 - CASCADE_VISIBLE_FRACTION, 2);
+    expect(overlap).toBe(13); // 20% of a 64px box, at the default row height
+  });
+
+  // The part that must never be covered. A box's header is its top 30px — the
+  // title, the status dot, the attachment and lock icons — so the step has to
+  // clear it or a stacked task becomes unidentifiable.
+  it("never covers the previous task's header", () => {
+    for (const stepPx of [8, 16, 24, 40]) {
+      expect(cascadeStepPx({ stepPx, workPerStep: 1 })).toBeGreaterThan(30);
+    }
+  });
+
+  it("still steps down by less than a full task, so a run stays on screen", () => {
+    expect(cascadeStepPx(graph)).toBeLessThan(newTaskHeightPx(graph));
   });
 
   it("scales the step with the Pulse's own row height", () => {
