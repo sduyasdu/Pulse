@@ -73,6 +73,7 @@ export const en = {
   "common.create": "Create",
   "common.done": "Done",
   "common.retry": "Try again",
+  "common.loadError": "Couldn't load this. You may have lost access, or the connection dropped.",
   "common.close": "Close",
   "common.delete": "Delete",
   "common.remove": "Remove",

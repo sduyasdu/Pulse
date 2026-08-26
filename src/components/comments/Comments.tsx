@@ -18,8 +18,12 @@ export function Comments({ pulseId, targetId }: { pulseId: string; targetId: str
   const members = usePulseStore((s) => s.members);
   const featureTitle = usePulseStore((s) => (targetId ? s.features.find((f) => f.id === targetId)?.title ?? t("comments.aTask") : t("comments.thePulse")));
   const [comments, setComments] = useState<Comment[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => subscribeCommentsFor(pulseId, targetId, setComments), [pulseId, targetId]);
+  useEffect(() => {
+    setError(null);
+    return subscribeCommentsFor(pulseId, targetId, setComments, setError);
+  }, [pulseId, targetId]);
 
   const add = async (parentId: string | null, text: string) => {
     if (!uid) return;
@@ -36,6 +40,10 @@ export function Comments({ pulseId, targetId }: { pulseId: string; targetId: str
   return (
     <div>
       <div className="mono mb-1.5" style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("pulse.comments")}</div>
+      {/* Above the thread rather than replacing it: a refusal here leaves the
+          composer usable, and an empty thread would otherwise read as "no one
+          has commented" on a task that may be full of discussion. */}
+      {error && <div className="mb-1.5 text-xs text-red-600">{t("common.loadError")}</div>}
       <CommentThread comments={comments} currentUid={uid} canModerate={isOwner} onAdd={add} onDelete={del} onEdit={edit} />
     </div>
   );

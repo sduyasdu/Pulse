@@ -68,6 +68,7 @@ export const fr: Dict = {
   "common.create": "Créer",
   "common.done": "Terminé",
   "common.retry": "Réessayer",
+  "common.loadError": "Chargement impossible. Vous avez peut-être perdu l'accès, ou la connexion a été coupée.",
   "common.close": "Fermer",
   "common.delete": "Supprimer",
   "common.remove": "Retirer",

@@ -50,13 +50,17 @@ export function subscribeActivity(
   pulseId: string,
   cb: (entries: ActivityEntry[]) => void,
   opts?: { beatUid?: string; max?: number },
+  onError?: (message: string) => void,
 ): () => void {
   const base = collection(db, "pulses", pulseId, "activity");
   const max = opts?.max ?? 200;
   const q = opts?.beatUid
     ? query(base, where("scopeUids", "array-contains", opts.beatUid), orderBy("at", "desc"), qLimit(max))
     : query(base, orderBy("at", "desc"), qLimit(max));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ActivityEntry)), () => cb([]));
+  // An audit log is read to answer "did this happen?", so a refusal that
+  // renders as "nothing has happened" is worse here than almost anywhere: it
+  // does not merely hide the record, it actively asserts there isn't one.
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ActivityEntry)), (err) => onError?.(err.message));
 }
 
 /**
@@ -70,11 +74,12 @@ export function subscribeFeatureActivity(
   featureId: string,
   cb: (entries: ActivityEntry[]) => void,
   opts?: { beatUid?: string; max?: number },
+  onError?: (message: string) => void,
 ): () => void {
   const base = collection(db, "pulses", pulseId, "activity");
   const max = opts?.max ?? 50;
   const q = opts?.beatUid
     ? query(base, where("entityId", "==", featureId), where("scopeUids", "array-contains", opts.beatUid), orderBy("at", "desc"), qLimit(max))
     : query(base, where("entityId", "==", featureId), orderBy("at", "desc"), qLimit(max));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ActivityEntry)), () => cb([]));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ActivityEntry)), (err) => onError?.(err.message));
 }

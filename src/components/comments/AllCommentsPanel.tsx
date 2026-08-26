@@ -62,7 +62,11 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
   // afterwards, until My Beat next changes.
   useEffect(() => setOnlyMine(myBeat), [myBeat]);
 
-  useEffect(() => subscribeAllComments(pulseId, setAll), [pulseId]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setError(null);
+    return subscribeAllComments(pulseId, setAll, setError);
+  }, [pulseId]);
   // Re-attach the composer to whatever is now selected on the canvas.
   useEffect(() => setDetach(false), [selectedFeatureId, selectedResourceId]);
   // Keep the newest comment (nearest the bottom composer) in view.
@@ -237,7 +241,9 @@ export function AllCommentsPanel({ pulseId, onSelectTask, selectedFeatureId, sel
 
       {/* One flat conversation — scrolls between the filter and the composer. */}
       <div ref={feedRef} className="flex-1 overflow-y-auto p-3" style={{ minHeight: 0 }}>
-        {visible.length === 0 ? (
+        {error ? (
+          <span className="text-xs text-red-600">{t("common.loadError")}</span>
+        ) : visible.length === 0 ? (
           <span className="text-xs" style={{ color: "#94A3B8" }}>
             {all.length === 0
               ? t("comments.empty")

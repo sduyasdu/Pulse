@@ -68,6 +68,7 @@ export const es: Dict = {
   "common.create": "Crear",
   "common.done": "Listo",
   "common.retry": "Reintentar",
+  "common.loadError": "No se pudo cargar. Puede que hayas perdido el acceso o que se haya cortado la conexión.",
   "common.close": "Cerrar",
   "common.delete": "Eliminar",
   "common.remove": "Quitar",

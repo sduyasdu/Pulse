@@ -15,6 +15,11 @@ export function subscribeRates(pulseId: string, cb: (rates: ResourceRate[]) => v
   return onSnapshot(
     collection(db, "pulses", pulseId, "rates"),
     (snap) => cb(snap.docs.map((d) => d.data() as ResourceRate)),
+    // Kept, unlike every other listener in this folder: rejection IS the
+    // mechanism here. The rules refuse this read for anyone who is not an
+    // admin, so "empty" is the correct and expected answer for most callers
+    // rather than a swallowed fault (see pulseStore's `rates` comment, and
+    // subscriptionErrors.test.ts for the full list of exceptions).
     () => cb([]),
   );
 }

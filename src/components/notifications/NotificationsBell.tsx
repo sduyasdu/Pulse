@@ -17,11 +17,13 @@ function when(ms: number): string {
  * for the current user. Clicking one opens its task. */
 export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }: { pulseId?: string; uid?: string; onOpenTask: (featureId: string) => void; dark?: boolean; size?: number }) {
   const [items, setItems] = useState<Notification[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!pulseId || !uid) return;
-    return subscribeMyNotifications(pulseId, uid, setItems);
+    setError(null);
+    return subscribeMyNotifications(pulseId, uid, setItems, setError);
   }, [pulseId, uid]);
 
   if (!pulseId || !uid) return null;
@@ -61,7 +63,9 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
                 </button>
               )}
             </div>
-            {items.length === 0 ? (
+            {error ? (
+              <div className="px-3 py-4 text-center text-xs text-red-600">Couldn't load notifications.</div>
+            ) : items.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs" style={{ color: "#94A3B8" }}>Nothing yet.</div>
             ) : (
               items.map((n) => (

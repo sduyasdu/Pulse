@@ -72,19 +72,19 @@ export function PeoplePage() {
   // initials — which is also the clearest signal that the link resolved.
   useEffect(() => {
     if (!workspaceId) return;
-    return subscribeWorkspaceMembers(workspaceId, setMembers);
+    return subscribeWorkspaceMembers(workspaceId, setMembers, setError);
   }, [workspaceId]);
 
   useEffect(() => {
     if (!workspaceId) return;
-    return subscribeWorkspace(workspaceId, setWorkspace);
+    return subscribeWorkspace(workspaceId, setWorkspace, setError);
   }, [workspaceId]);
 
   const roles = useMemo(() => workspace?.resourceRoles ?? [], [workspace]);
 
   useEffect(() => {
     if (!uid) return;
-    return subscribeMyPulses(uid, (rows) => setMyPulseIds(new Set(rows.map((r) => r.pulseId))));
+    return subscribeMyPulses(uid, (rows) => setMyPulseIds(new Set(rows.map((r) => r.pulseId))), setError);
   }, [uid]);
 
   // The usage index only knows about copies made since its trigger shipped, so

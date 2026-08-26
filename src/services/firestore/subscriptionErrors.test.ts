@@ -49,7 +49,12 @@ vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, googleProvider: {} }));
 const { subscribeFeatures } = await import("./features");
 const { subscribeEpics } = await import("./epics");
 const { subscribeResources } = await import("./resources");
-const { subscribePulse } = await import("./pulses");
+const { subscribePulse, subscribeMyPulses } = await import("./pulses");
+const { subscribeAllComments, subscribeCommentsFor } = await import("./comments");
+const { subscribeActivity, subscribeFeatureActivity } = await import("./activity");
+const { subscribeCosts } = await import("./costs");
+const { subscribeWorkspace, subscribeWorkspaceMembers } = await import("./workspaces");
+const { subscribeMyNotifications } = await import("./notifications");
 
 beforeEach(() => {
   captured.length = 0;
@@ -60,6 +65,15 @@ const CASES: [string, (onData: (v: unknown) => void, onErr: (m: string) => void)
   ["epics", (d, e) => subscribeEpics("p1", d as () => void, e)],
   ["resources", (d, e) => subscribeResources("p1", d as () => void, e)],
   ["pulse", (d, e) => subscribePulse("p1", d as () => void, e)],
+  ["myPulses", (d, e) => subscribeMyPulses("u1", d as () => void, e)],
+  ["allComments", (d, e) => subscribeAllComments("p1", d as () => void, e)],
+  ["commentsFor", (d, e) => subscribeCommentsFor("p1", "t1", d as () => void, e)],
+  ["activity", (d, e) => subscribeActivity("p1", d as () => void, undefined, e)],
+  ["featureActivity", (d, e) => subscribeFeatureActivity("p1", "f1", d as () => void, undefined, e)],
+  ["costs", (d, e) => subscribeCosts("p1", d as () => void, undefined, e)],
+  ["workspace", (d, e) => subscribeWorkspace("w1", d as () => void, e)],
+  ["workspaceMembers", (d, e) => subscribeWorkspaceMembers("w1", d as () => void, e)],
+  ["myNotifications", (d, e) => subscribeMyNotifications("p1", "u1", d as () => void, e)],
 ];
 
 describe.each(CASES)("subscribe%s", (name, subscribe) => {
@@ -85,5 +99,25 @@ describe.each(CASES)("subscribe%s", (name, subscribe) => {
   it(`registers an error handler at all (${name})`, () => {
     subscribe(vi.fn(), vi.fn());
     expect(captured[0].onError).toBeTypeOf("function");
+  });
+});
+
+// The two that keep their empty-on-failure, so nobody "fixes" them back.
+describe("the deliberate exceptions", () => {
+  it("documents why rates and billing are not in the list above", () => {
+    // rates: a non-admin's listener is MEANT to be rejected, and the empty
+    // result is how the feature works rather than a swallowed error — its own
+    // comment in pulseStore says so.
+    //
+    // billing: refusal falls back to the Free plan. Degrading to least
+    // privilege on an unreadable entitlement is a decision, not an accident.
+    //
+    // presence: ephemeral and decorative; an empty presence bar on a dropped
+    // listener is an acceptable degradation that self-heals on reconnect.
+    //
+    // This test exists so the reasoning is discoverable from the test file that
+    // would otherwise look like it had simply missed them.
+    expect(CASES.map((c) => c[0])).not.toContain("rates");
+    expect(CASES.map((c) => c[0])).not.toContain("billing");
   });
 });

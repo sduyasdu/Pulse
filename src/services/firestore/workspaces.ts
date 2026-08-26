@@ -39,11 +39,15 @@ export async function createPersonalWorkspace(uid: string, displayName: string |
  * throwing, exactly as `subscribeBilling` does: a non-member has nothing to
  * show, and a quota display is not worth an unhandled rejection.
  */
-export function subscribeWorkspace(workspaceId: string, cb: (ws: Workspace | null) => void): () => void {
+export function subscribeWorkspace(
+  workspaceId: string,
+  cb: (ws: Workspace | null) => void,
+  onError?: (message: string) => void,
+): () => void {
   return onSnapshot(
     doc(db, "workspaces", workspaceId),
     (snap) => cb(snap.exists() ? ({ id: snap.id, ...snap.data() } as Workspace) : null),
-    () => cb(null),
+    (err) => onError?.(err.message),
   );
 }
 
@@ -85,11 +89,12 @@ export async function backfillMyWorkspaceEmail(workspaceId: string, uid: string,
 export function subscribeWorkspaceMembers(
   workspaceId: string,
   cb: (rows: WorkspaceMember[]) => void,
+  onError?: (message: string) => void,
 ): () => void {
   return onSnapshot(
     collection(db, "workspaces", workspaceId, "workspaceMembers"),
     (snap) => cb(snap.docs.map((d) => ({ uid: d.id, ...d.data() }) as WorkspaceMember)),
-    () => cb([]),
+    (err) => onError?.(err.message),
   );
 }
 

@@ -152,9 +152,16 @@ export async function duplicatePulse(uid: string, workspaceId: string, sourcePul
   return pulseRef.id;
 }
 
-export function subscribeMyPulses(uid: string, cb: (entries: MyPulseIndexEntry[]) => void): () => void {
+export function subscribeMyPulses(
+  uid: string,
+  cb: (entries: MyPulseIndexEntry[]) => void,
+  onError?: (message: string) => void,
+): () => void {
   const q = query(collection(db, "users", uid, "myPulses"), orderBy("joinedAt", "desc"));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as MyPulseIndexEntry)));
+  // Had no error handler, so a refusal never called back at all and the
+  // dashboard sat on its spinner indefinitely — this list is the only route to
+  // every Pulse the user has.
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as MyPulseIndexEntry)), (err) => onError?.(err.message));
 }
 
 export async function getPulse(pulseId: string): Promise<Pulse | null> {

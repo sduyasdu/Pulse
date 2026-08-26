@@ -101,10 +101,12 @@ export function ActivityTab() {
 
   const [q, setQ] = useState("");
 
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!pulseId) return;
     setEntries(null);
-    return subscribeActivity(pulseId, setEntries, { beatUid });
+    setError(null);
+    return subscribeActivity(pulseId, setEntries, { beatUid }, setError);
   }, [pulseId, beatUid]);
 
   const filtered = useMemo(() => {
@@ -125,6 +127,12 @@ export function ActivityTab() {
     return out;
   }, [filtered]);
 
+  // An audit log answering "nothing has happened here" when it was actually
+  // refused is the worst version of this bug: it does not hide the record, it
+  // denies there is one.
+  if (error) {
+    return <div className="p-6 text-center text-xs text-red-600">{t("common.loadError")}</div>;
+  }
   if (entries === null) {
     return <div className="p-6 text-center text-xs" style={{ color: "#94A3B8" }}>{t("activity.loading")}</div>;
   }

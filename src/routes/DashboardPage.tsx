@@ -45,9 +45,14 @@ export function DashboardPage() {
   // actionable from here, and only one dialog is ever open at a time.
   const [billingOpen, setBillingOpen] = useState(false);
 
+  // This list is the only route to every Pulse the user has, and it had no
+  // error path at all: a refusal never called back, so `pulses` stayed null and
+  // the dashboard sat on its spinner for good.
+  const [pulsesError, setPulsesError] = useState<string | null>(null);
   useEffect(() => {
     if (!firebaseUser) return;
-    return subscribeMyPulses(firebaseUser.uid, setPulses);
+    setPulsesError(null);
+    return subscribeMyPulses(firebaseUser.uid, setPulses, setPulsesError);
   }, [firebaseUser]);
 
   // Self-heal stale dashboard entries against the authoritative source docs,
@@ -270,7 +275,18 @@ export function DashboardPage() {
 
         <PulseQuotaBanner quota={quota} workspaceId={userDoc?.personalWorkspaceId ?? null} onUpgrade={() => setBillingOpen(true)} />
 
-        {pulses === null ? (
+        {pulsesError ? (
+          <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>
+            <p className="mb-3 text-sm text-red-600">{t("common.loadError")}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg"
+              style={{ background: "#D85A28" }}
+            >
+              {t("common.retry")}
+            </button>
+          </div>
+        ) : pulses === null ? (
           <Spinner size={22} label={t("common.loading")} className="py-10" />
         ) : noResults ? (
           <div className="rounded-xl border border-dashed p-10 text-center" style={{ borderColor: "#E2DFD9" }}>

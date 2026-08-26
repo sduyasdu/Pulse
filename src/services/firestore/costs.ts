@@ -24,10 +24,15 @@ export async function fetchCosts(pulseId: string): Promise<CostEntry[]> {
  * `assignedUids`, and the rules likewise require the scoped `array-contains`
  * query (Costs-Spec §7, Permissions-Spec §4.3).
  */
-export function subscribeCosts(pulseId: string, cb: (costs: CostEntry[]) => void, beatUid?: string): () => void {
+export function subscribeCosts(
+  pulseId: string,
+  cb: (costs: CostEntry[]) => void,
+  beatUid?: string,
+  onError?: (message: string) => void,
+): () => void {
   const base = collection(db, "pulses", pulseId, "costs");
   const q = beatUid ? query(base, where("scopeUids", "array-contains", beatUid)) : base;
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as CostEntry)), () => cb([]));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as CostEntry)), (err) => onError?.(err.message));
 }
 
 export async function createCost(pulseId: string, cost: CostEntry): Promise<void> {

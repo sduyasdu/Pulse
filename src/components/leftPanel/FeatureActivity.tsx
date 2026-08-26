@@ -22,10 +22,12 @@ export function FeatureActivity({ featureId }: { featureId: string }) {
     return me && capsOf(me).readScope === "beat" ? uid : undefined;
   }, [members, uid]);
 
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!pulseId) return;
     setEntries(null);
-    return subscribeFeatureActivity(pulseId, featureId, setEntries, { beatUid });
+    setError(null);
+    return subscribeFeatureActivity(pulseId, featureId, setEntries, { beatUid }, setError);
   }, [pulseId, featureId, beatUid]);
 
   return (
@@ -33,7 +35,11 @@ export function FeatureActivity({ featureId }: { featureId: string }) {
       <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#94A3B8" }}>
         {t("activity.heading")}
       </div>
-      {entries === null ? (
+      {/* Before the empty state, not merged into it: "nothing changed here" is
+          an answer about the task, and a refused read is not. */}
+      {error ? (
+        <div className="px-1 py-2 text-[11px] text-red-600">{t("common.loadError")}</div>
+      ) : entries === null ? (
         <div className="px-1 py-2 text-[11px]" style={{ color: "#94A3B8" }}>{t("common.loading")}</div>
       ) : entries.length === 0 ? (
         <div className="px-1 py-2 text-[11px]" style={{ color: "#94A3B8" }}>{t("activity.noFeatureChanges")}</div>

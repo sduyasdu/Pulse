@@ -4,7 +4,12 @@ import type { Notification } from "@/types";
 
 /** Live subscription to the current user's notifications in a Pulse. Sorted
  * client-side (newest first) so no composite index is needed. */
-export function subscribeMyNotifications(pulseId: string, uid: string, cb: (n: Notification[]) => void): () => void {
+export function subscribeMyNotifications(
+  pulseId: string,
+  uid: string,
+  cb: (n: Notification[]) => void,
+  onError?: (message: string) => void,
+): () => void {
   const q = query(collection(db, "pulses", pulseId, "notifications"), where("targetUid", "==", uid));
   return onSnapshot(
     q,
@@ -13,7 +18,10 @@ export function subscribeMyNotifications(pulseId: string, uid: string, cb: (n: N
       list.sort((a, b) => b.createdAt - a.createdAt);
       cb(list);
     },
-    () => cb([]),
+    // An unread badge that silently reads zero is the quietest possible
+    // failure: nothing on screen changes at all, and the user simply never
+    // learns they were mentioned.
+    (err) => onError?.(err.message),
   );
 }
 

@@ -68,9 +68,29 @@ result was a working-looking feature listing zero of three live connections. No
 console error the customer would see, no failing test.
 
 **Give every subscription an error path that reaches the screen**, distinct from
-the empty state — `subscribeMcpConnections`
-(`src/services/firestore/users.ts:99`) now takes an `onError` and the dialog
-renders it. A read that fails is a fault; a read that returns nothing is a state.
+the empty state. A read that fails is a fault; a read that returns nothing is a
+state.
+
+Every live read in `src/services/firestore/` now takes an `onError` and every
+caller renders it — swept 2026-08, after the same bug reached the canvas: a
+refused `features` listener drew an empty Pulse, which reads as lost work. Its
+siblings (`epics`, `resources`, the pulse doc, `myPulses`) had no handler at
+all, so a refusal never called back and the page span forever instead. Same
+fault, opposite symptom.
+
+`subscriptionErrors.test.ts` holds it shut. It drives each subscription's error
+handler and asserts the **success path is not called** — that is the half that
+does the damage, and the half a tidy-up puts back.
+
+Three deliberate exceptions, documented at their call site and named in that
+test. Don't "fix" them:
+
+- `rates` — the rules refuse non-admins, so empty *is* the mechanism.
+- `billing` — refusal falls back to the Free plan; degrading to least privilege
+  on an unreadable entitlement is a decision.
+- `presence` — ephemeral and decorative, self-heals on reconnect, hides nothing.
+
+Adding a subscription? Add it to that test's `CASES`.
 
 ## Secret versions bind at deploy, and `secrets:set` destroys the old one
 

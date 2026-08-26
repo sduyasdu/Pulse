@@ -201,7 +201,16 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileCostScopes(get); }, beatUid, failContent);
       // Costs carry the same beat scoping as features (Costs-Spec §7), so they
       // ride the same resolved read scope rather than resolving it twice.
-      costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileCostScopes(get); }, beatUid);
+      //
+      // Guarded like `rates` above, and for the reason already written there: a
+      // hidden panel that still streams a collection bills reads for something
+      // nobody can see. It was streaming anyway, which also left its refusals
+      // with nowhere honest to go — routing them to `contentError` would have
+      // blocked the whole Pulse over a parked feature, and swallowing them is
+      // the bug being fixed. Not subscribing answers both.
+      if (COSTS_ENABLED) {
+        costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileCostScopes(get); }, beatUid, failContent);
+      }
     })();
     return () => { unsubs.forEach((u) => u()); featuresUnsub(); costsUnsub(); };
   },
