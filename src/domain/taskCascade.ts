@@ -57,9 +57,15 @@ export function cascadeStepPx(graph: GraphConfig): number {
   return Math.round(newTaskHeightPx(graph) * CASCADE_VISIBLE_FRACTION);
 }
 
-/** Days each successive task shifts right. Deliberately one: on this canvas x
- * is a date, not decoration, so the cascade should cost the least schedule
- * meaning it can while still reading as a cascade. */
+/** Days each successive task shifts right.
+ *
+ * One, and settled rather than provisional. On this canvas x is a date, not
+ * decoration, so a cascade of N tasks genuinely starts the Nth N-1 days from
+ * today — which was raised as the cost of stepping right at all, and accepted:
+ * one day is the least schedule meaning the cascade can cost while still
+ * reading as one, and dragging a task fixes it in a gesture.
+ *
+ * So a down-only cascade is a rejected alternative, not an unconsidered one. */
 export const CASCADE_STEP_DAYS = 1;
 
 export function cascadeOffsetFor(slot: number, graph: GraphConfig): { dx: number; dy: number } {
