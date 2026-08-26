@@ -3,7 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useTaskCascade } from "@/hooks/useTaskCascade";
-import { newTaskHeightPx } from "@/domain/taskCascade";
+import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -111,7 +111,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
   // Where the next new task goes, and when the cascade gives ground.
-  const { nextPlacement, claim } = useTaskCascade(features, graph);
+  const { nextPlacement, claim, claimedSlots } = useTaskCascade(features, graph);
   const resources = usePulseStore((s) => s.resources);
   const statuses = statusesOf(usePulseStore((s) => s.pulse));
   const patchFeature = usePulseStore((s) => s.patchFeature);
@@ -273,8 +273,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   }, [compactFilterActive, features, dragOverlay, matchOf, epics, graph, epicsShrunk]);
 
   const displayFeatures = useMemo(
-    () => (compacted ? compacted.feats : dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features),
-    [compacted, features, dragOverlay],
+    () => {
+      const base = compacted ? compacted.feats : dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features;
+      // Cascade tasks paint last, so a new one is never buried under a task
+      // that predates it — see orderForPainting.
+      return orderForPainting(base, claimedSlots);
+    },
+    [compacted, features, dragOverlay, claimedSlots],
   );
   const displayEpics = useMemo(
     () => (compacted ? compacted.eps : epicOverlay ? epics.map((e) => (e.id === epicOverlay.id ? { ...e, ...epicOverlay.patch } : e)) : epics),

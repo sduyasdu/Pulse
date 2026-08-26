@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphConfig } from "@/types";
 import {
   CASCADE_STEP_DAYS,
@@ -30,6 +30,11 @@ export function useTaskCascade(features: CascadeFeature[], graph: GraphConfig): 
   nextPlacement: (baseY: number) => { slot: number; dx: number; y: number };
   /** Record where a newly created task was actually put. */
   claim: (id: string, slot: number, geom: { x: number; y: number; duration: number; work: number }) => void;
+  /** Slot per task still standing in the cascade, for painting order. The
+   * canvas draws these last and in slot order, so a new task is never buried
+   * under an older one and each covers the previous rather than the reverse.
+   * Empty once every task has been placed. */
+  claimedSlots: ReadonlyMap<string, number>;
 } {
   const [claims, setClaims] = useState<CascadeClaim[]>([]);
   const [anchorY, setAnchorY] = useState<number | null>(null);
@@ -75,5 +80,9 @@ export function useTaskCascade(features: CascadeFeature[], graph: GraphConfig): 
     [graph],
   );
 
-  return { nextPlacement, claim };
+  // Memoised: this drives the canvas's render-order memo, so a fresh map each
+  // render would re-sort every feature on every keystroke.
+  const claimedSlots = useMemo(() => new Map(claims.map((c) => [c.id, c.slot])), [claims]);
+
+  return { nextPlacement, claim, claimedSlots };
 }

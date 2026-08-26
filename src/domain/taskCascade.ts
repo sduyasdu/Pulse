@@ -102,3 +102,28 @@ export function reconcileClaims(claims: CascadeClaim[], features: CascadeFeature
   }
   return out;
 }
+
+/**
+ * Reorder for painting: tasks still standing in the cascade last, in slot
+ * order, everything else untouched.
+ *
+ * Among boxes sharing a z-index, paint order is DOM order — and the store hands
+ * features over in Firestore's default order, which is document id ascending.
+ * So where a newly created task sat in the stack came down to how its random id
+ * happened to sort, and a fresh one could be buried under tasks that predate
+ * it. Arbitrary on its own; visible once the cascade started overlapping boxes
+ * on purpose.
+ *
+ * Slot order, not reverse: each new task should cover the one before it, which
+ * is the direction the overlap was sized for.
+ *
+ * Returns the input array untouched when there is no cascade in progress, so
+ * the canvas's memo doesn't invalidate on every unrelated edit.
+ */
+export function orderForPainting<T extends { id: string }>(features: T[], claimedSlots: ReadonlyMap<string, number>): T[] {
+  if (claimedSlots.size === 0) return features;
+  const stacked = features.filter((f) => claimedSlots.has(f.id));
+  if (stacked.length === 0) return features;
+  stacked.sort((a, b) => claimedSlots.get(a.id)! - claimedSlots.get(b.id)!);
+  return [...features.filter((f) => !claimedSlots.has(f.id)), ...stacked];
+}

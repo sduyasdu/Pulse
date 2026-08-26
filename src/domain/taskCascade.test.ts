@@ -7,6 +7,7 @@ import {
   cascadeStepPx,
   newTaskHeightPx,
   lowestFreeSlot,
+  orderForPainting,
   reconcileClaims,
   type CascadeClaim,
   type CascadeFeature,
@@ -139,5 +140,55 @@ describe("what releases a slot", () => {
 
   it("tolerates a feature with no duration or work rather than treating it as untouched", () => {
     expect(reconcileClaims([claim()], [{ id: "f1", x: 100, y: 200 }])).toEqual([]);
+  });
+});
+
+describe("paint order", () => {
+  const f = (id: string) => ({ id });
+  const slots = (pairs: [string, number][]) => new Map(pairs);
+
+  it("leaves the list alone when no cascade is in progress", () => {
+    const list = [f("a"), f("b")];
+    expect(orderForPainting(list, slots([]))).toBe(list);
+  });
+
+  // The reported bug: features arrive in document-id order, so a new task could
+  // sort before tasks that predate it and get painted underneath them.
+  it("moves cascade tasks to the end, however the store ordered them", () => {
+    const list = [f("new1"), f("old-a"), f("new2"), f("old-b")];
+    const out = orderForPainting(list, slots([["new1", 0], ["new2", 1]]));
+    expect(out.map((x) => x.id)).toEqual(["old-a", "old-b", "new1", "new2"]);
+  });
+
+  // Slot order, not arrival order and not reverse: each new task has to cover
+  // the one before it, which is the direction the 20% overlap was sized for.
+  it("orders the stack by slot so each covers the previous", () => {
+    const list = [f("s2"), f("s0"), f("s1")];
+    const out = orderForPainting(list, slots([["s0", 0], ["s1", 1], ["s2", 2]]));
+    expect(out.map((x) => x.id)).toEqual(["s0", "s1", "s2"]);
+  });
+
+  it("keeps the ordinary tasks in the order they arrived", () => {
+    const list = [f("a"), f("n"), f("b"), f("c")];
+    const out = orderForPainting(list, slots([["n", 0]]));
+    expect(out.map((x) => x.id)).toEqual(["a", "b", "c", "n"]);
+  });
+
+  it("ignores claims for tasks that aren't on screen — filtered out, or gone", () => {
+    const list = [f("a"), f("b")];
+    expect(orderForPainting(list, slots([["ghost", 0]]))).toBe(list);
+  });
+
+  it("does not mutate the array it was given", () => {
+    const list = [f("new1"), f("old")];
+    const copy = [...list];
+    orderForPainting(list, slots([["new1", 0]]));
+    expect(list).toEqual(copy);
+  });
+
+  it("puts a task that resumed a freed slot back in that slot's place", () => {
+    const list = [f("a"), f("resumed"), f("c")];
+    const out = orderForPainting(list, slots([["a", 0], ["resumed", 1], ["c", 2]]));
+    expect(out.map((x) => x.id)).toEqual(["a", "resumed", "c"]);
   });
 });
