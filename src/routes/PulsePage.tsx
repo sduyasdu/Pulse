@@ -7,6 +7,7 @@ import { ensureMyPulseEntry, getPulse, removeMyPulseEntry, setPulseArchived, upd
 import { logDirectActivity } from "@/domain/activityRecorder";
 import { backfillMyOwnerEmail, fetchMembership, syncMyMemberPhoto } from "@/services/firestore/memberships";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
+import { NetworkBanner } from "@/components/shared/NetworkBanner";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
@@ -434,12 +435,21 @@ export function PulsePage() {
   }
 
   // Phones get the dedicated touch UI; the canvas layout below is desktop/tablet.
+  // The banner is rendered in BOTH branches rather than above them: this one
+  // returns early, and a Pulse opened on a phone is the likeliest of all to be
+  // on a connection worth warning about.
   if (isMobile) {
-    return <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} onUnarchive={() => void handleUnarchive()} />;
+    return (
+      <>
+        <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} onUnarchive={() => void handleUnarchive()} />
+        <NetworkBanner uid={uid} />
+      </>
+    );
   }
 
   return (
     <div className="w-full flex flex-col" style={{ background: "#0A1428", height: viewportH ? `${viewportH}px` : "100dvh" }}>
+      <NetworkBanner uid={uid} />
       <Toolbar
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
