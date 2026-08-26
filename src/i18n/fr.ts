@@ -71,7 +71,7 @@ export const fr: Dict = {
   "common.loadError": "Chargement impossible. Vous avez peut-être perdu l'accès, ou la connexion a été coupée.",
   "net.offline": "Vous êtes hors ligne.",
   "net.unreachable": "Réseau détecté, mais Pulse n'atteint pas le serveur.",
-  "net.keepTabOpen": "Vous voyez les dernières données chargées. Gardez cet onglet ouvert — les modifications partiront au retour de la connexion, mais un rechargement les perd.",
+  "net.editsQueued": "Vous voyez les dernières données chargées. Les modifications sont enregistrées sur cet appareil et se synchronisent au retour de la connexion.",
   "notif.title": "Notifications",
   "notif.markAllRead": "Tout marquer comme lu",
   "notif.empty": "Rien pour l'instant.",

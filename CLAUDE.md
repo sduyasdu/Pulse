@@ -46,6 +46,35 @@ always-an-owner rule on `pulseMembers` (which needed a further carve-out for
 "the pulse doc is already gone"). See `Hide-and-Archive-Spec.md` §4.4 and §5.7.
 Owners can already delete the whole Pulse, so the exemption grants nothing new.
 
+## Sign-out terminates Firestore, so it must reload the page
+
+The client runs on `persistentLocalCache` with the multi-tab manager
+(`src/lib/firebase.ts`), which puts a copy of everything the signed-in user can
+read on disk — and unlike the session, it does not end on its own. `signOutUser`
+therefore clears it, and clearing has a fixed order:
+
+```
+await signOut(auth);
+await terminate(db);              // clearIndexedDbPersistence refuses while live
+await clearIndexedDbPersistence(db);
+window.location.reload();         // NOT optional
+```
+
+**The reload is load-bearing.** `terminate()` kills the instance and every
+listener on it, so `db` is dead for the rest of that page's life — sign in again
+without reloading and every read throws. Removing the reload looks like removing
+a jarring flash, passes `tsc`, `npm test` and the rules suite, and breaks the
+app on the second sign-in of a session.
+
+It reloads in a `finally` for the same reason: if clearing fails — another tab
+still holds the persistence lease, storage is locked — `db` is *already*
+terminated. A signed-out reload carrying a stale cache beats a live page whose
+every read throws.
+
+Known gap: with two tabs open, the other one holds the lease and the clear
+fails, so that device keeps the cache until the last tab goes. Sign-out is still
+real (Auth state is shared); only the local copy lingers.
+
 ## Only `npm run test:rules` validates security rules
 
 `tsc -b`, `npm test` and `npm run build` all pass while `firestore.rules` is

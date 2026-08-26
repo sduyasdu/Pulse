@@ -76,7 +76,7 @@ export const en = {
   "common.loadError": "Couldn't load this. You may have lost access, or the connection dropped.",
   "net.offline": "You're offline.",
   "net.unreachable": "Connected, but Pulse can't reach the server.",
-  "net.keepTabOpen": "You're seeing the last data loaded. Keep this tab open — edits are sent when the connection returns, but reloading loses them.",
+  "net.editsQueued": "You're seeing the last data loaded. Changes are saved on this device and sync when the connection returns.",
   "notif.title": "Notifications",
   "notif.markAllRead": "Mark all read",
   "notif.empty": "Nothing yet.",

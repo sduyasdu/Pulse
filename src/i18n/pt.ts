@@ -71,7 +71,7 @@ export const pt: Dict = {
   "common.loadError": "Não foi possível carregar. Você pode ter perdido o acesso ou a conexão caiu.",
   "net.offline": "Você está sem conexão.",
   "net.unreachable": "Há rede, mas o Pulse não consegue alcançar o servidor.",
-  "net.keepTabOpen": "Você está vendo os últimos dados carregados. Mantenha esta aba aberta — as edições são enviadas quando a conexão voltar, mas recarregar as perde.",
+  "net.editsQueued": "Você está vendo os últimos dados carregados. As alterações ficam salvas neste dispositivo e sincronizam quando a conexão voltar.",
   "notif.title": "Notificações",
   "notif.markAllRead": "Marcar tudo como lido",
   "notif.empty": "Nada ainda.",

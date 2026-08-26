@@ -71,7 +71,7 @@ export const de: Dict = {
   "common.loadError": "Konnte nicht geladen werden. Vielleicht hast du den Zugriff verloren, oder die Verbindung ist abgebrochen.",
   "net.offline": "Du bist offline.",
   "net.unreachable": "Netzwerk vorhanden, aber Pulse erreicht den Server nicht.",
-  "net.keepTabOpen": "Du siehst die zuletzt geladenen Daten. Lass diesen Tab offen — Änderungen gehen raus, sobald die Verbindung zurück ist, aber ein Neuladen verwirft sie.",
+  "net.editsQueued": "Du siehst die zuletzt geladenen Daten. Änderungen werden auf diesem Gerät gespeichert und synchronisiert, sobald die Verbindung zurück ist.",
   "notif.title": "Benachrichtigungen",
   "notif.markAllRead": "Alle als gelesen markieren",
   "notif.empty": "Noch nichts.",

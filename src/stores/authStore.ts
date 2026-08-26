@@ -9,7 +9,7 @@ import {
   updateProfile,
   type User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { clearIndexedDbPersistence, doc, getDoc, terminate } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import type { UserDoc } from "@/types";
 import { ensureUserDoc, resolvePendingInvites, updateUserProfile } from "@/services/firestore/users";
@@ -166,5 +166,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOutUser: async () => {
     await signOut(auth);
+
+    // The on-disk cache holds a copy of everything this account could read, and
+    // unlike the session it does not end on its own. On a shared machine that
+    // would leave one person's Pulses sitting in IndexedDB for the next one, so
+    // signing out takes the copy with it.
+    //
+    // `clearIndexedDbPersistence` refuses while the instance is live, hence the
+    // terminate first — which also kills every listener still attached, so the
+    // page must not carry on using `db` afterwards. The reload is what
+    // guarantees that, and it lands on the sign-in screen anyway.
+    //
+    // Reload in `finally`: if clearing fails (another tab holding the lease,
+    // storage locked), `db` is already terminated and the app cannot recover
+    // without it. Better a signed-out reload with a stale cache than a live
+    // page whose every read now throws.
+    try {
+      await terminate(db);
+      await clearIndexedDbPersistence(db);
+    } catch {
+      // Best effort — see above.
+    } finally {
+      if (typeof window !== "undefined") window.location.reload();
+    }
   },
 }));

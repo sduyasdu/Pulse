@@ -71,7 +71,7 @@ export const it: Dict = {
   "common.loadError": "Impossibile caricare. Potresti aver perso l'accesso, o è caduta la connessione.",
   "net.offline": "Sei offline.",
   "net.unreachable": "C'è rete, ma Pulse non raggiunge il server.",
-  "net.keepTabOpen": "Stai vedendo gli ultimi dati caricati. Tieni aperta questa scheda — le modifiche partono al ritorno della connessione, ma ricaricando si perdono.",
+  "net.editsQueued": "Stai vedendo gli ultimi dati caricati. Le modifiche restano salvate su questo dispositivo e si sincronizzano al ritorno della connessione.",
   "notif.title": "Notifiche",
   "notif.markAllRead": "Segna tutto come letto",
   "notif.empty": "Ancora niente.",

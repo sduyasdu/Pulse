@@ -9,13 +9,11 @@ import { useT } from "@/i18n";
  * to the viewport, and a banner that reflowed it would move every task box
  * sideways the moment a connection wobbled.
  *
- * The wording is limited by what is actually true here. Firestore is created
- * with `getFirestore(app)` and no `persistentLocalCache`, so the cache and the
- * queue of unsent writes live in memory only: edits made offline do go through
- * once the connection returns, but **only while this tab stays open** — a
- * reload discards them. So the message says "keep this tab open" rather than
- * the friendlier and false "we'll sync your changes later". Enabling IndexedDB
- * persistence is what would make the friendlier version true.
+ * The wording tracks what is actually true, which changed: Firestore now runs
+ * on `persistentLocalCache`, so the cache and the queue of unsent writes are on
+ * disk and an offline edit survives a reload. This message used to say "keep
+ * this tab open", which was accurate against the memory-only default and would
+ * have quietly become a lie the moment persistence was switched on.
  */
 export function NetworkBanner({ uid }: { uid?: string | null }) {
   const t = useT();
@@ -40,7 +38,7 @@ export function NetworkBanner({ uid }: { uid?: string | null }) {
       <Icon name="cloud_off" size={16} style={{ color: "#F0A875", flexShrink: 0 }} />
       <span className="text-xs">
         {status === "offline" ? t("net.offline") : t("net.unreachable")}
-        <span className="block opacity-80">{t("net.keepTabOpen")}</span>
+        <span className="block opacity-80">{t("net.editsQueued")}</span>
       </span>
     </div>
   );
