@@ -2,6 +2,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
+import { useTaskCascade } from "@/hooks/useTaskCascade";
+import { cascadeStepPx } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -108,6 +110,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const coarse = useCoarsePointer();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
+  // Where the next new task goes, and when the cascade gives ground.
+  const { nextPlacement, claim } = useTaskCascade(features, graph);
   const resources = usePulseStore((s) => s.resources);
   const statuses = statusesOf(usePulseStore((s) => s.pulse));
   const patchFeature = usePulseStore((s) => s.patchFeature);
@@ -731,10 +735,28 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const cont = containerRef.current;
       const scrollTop = cont ? cont.scrollTop : 0;
       const visH = cont ? cont.clientHeight : 400;
-      const y = Math.max(10, Math.round((scrollTop + visH / 2) / viewZoom) - 40);
-      // New tasks always start at today's date, regardless of where the
-      // canvas is currently scrolled horizontally.
-      return addFeature({ x: todayIndex(), y, duration: 8, work: 1, status: "planned", resources: [] });
+      const baseY = Math.max(10, Math.round((scrollTop + visH / 2) / viewZoom) - 40);
+      // New tasks always start at today's date, regardless of where the canvas
+      // is currently scrolled horizontally — offset by the cascade so a second
+      // add doesn't land on the first and hide it.
+      // `baseY` is a suggestion: the cascade keeps its own origin once a run is
+      // under way, so scrolling between adds cannot fold the stack back onto
+      // itself.
+      const { slot, dx, y } = nextPlacement(baseY);
+      const x = todayIndex() + dx;
+      const geom = { x, y, duration: 8, work: 1 };
+      const id = await addFeature({ ...geom, status: "planned", resources: [] });
+      if (id) claim(id, slot, geom);
+      // A deep enough slot lands below the fold, and a task you cannot see is
+      // the thing the cascade was added to prevent. Only scrolls when the box
+      // would not otherwise be fully on screen.
+      if (cont) {
+        const boxTop = y * viewZoom;
+        const boxBottom = boxTop + cascadeStepPx(graph) * viewZoom;
+        if (boxBottom > scrollTop + visH) cont.scrollTop = Math.max(0, boxBottom - visH + 24);
+        else if (boxTop < scrollTop) cont.scrollTop = Math.max(0, boxTop - 24);
+      }
+      return id;
     },
     addEpicAtCenter: async () => {
       const cont = containerRef.current;
