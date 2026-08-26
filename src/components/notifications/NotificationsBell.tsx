@@ -1,21 +1,26 @@
 import { useEffect, useState } from "react";
+import { useT, type TFn } from "@/i18n";
 import { Icon } from "@/components/shared/Icon";
 import type { Notification } from "@/types";
 import { subscribeMyNotifications, markNotificationRead, deleteNotification } from "@/services/firestore/notifications";
 
-function when(ms: number): string {
+/** Relative age, in the reader's language. Takes `t` rather than calling the
+ * hook: it is a plain function, and the date fallback already localizes itself
+ * off the browser — the three relative cases were the ones stuck in English. */
+function when(ms: number, t: TFn): string {
   const diff = Date.now() - ms;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("notif.justNow");
+  if (m < 60) return t("notif.minutesAgo", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("notif.hoursAgo", { n: h });
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** Bell with a live unread count and a dropdown of this Pulse's notifications
  * for the current user. Clicking one opens its task. */
 export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }: { pulseId?: string; uid?: string; onOpenTask: (featureId: string) => void; dark?: boolean; size?: number }) {
+  const t = useT();
   const [items, setItems] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -41,8 +46,8 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
         onClick={() => setOpen((o) => !o)}
         className="relative flex items-center justify-center rounded-lg"
         style={{ width: size, height: size, background: dark ? "#1B3A63" : "#F1EFE8", color: dark ? "#EE7240" : "#64748B", fontSize: 14 }}
-        title="Notifications"
-        aria-label="Notifications"
+        title={t("notif.title")}
+        aria-label={t("notif.title")}
       >
         <Icon name="notifications" size={Math.round(size * 0.58)} />
         {unread > 0 && (
@@ -56,17 +61,17 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
           <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={() => setOpen(false)} />
           <div className="absolute rounded-lg border" style={{ top: "100%", right: 0, marginTop: 6, zIndex: 61, width: 300, maxHeight: 380, overflowY: "auto", background: "#FFFFFF", borderColor: "#E2DFD9", boxShadow: "0 8px 24px rgba(15,23,42,0.16)" }}>
             <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: "#F1F5F9" }}>
-              <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>Notifications</span>
+              <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{t("notif.title")}</span>
               {unread > 0 && (
                 <button onClick={() => items.filter((n) => !n.read).forEach((n) => void markNotificationRead(pulseId, n.id))} className="mono" style={{ fontSize: 10, color: "#0F766E" }}>
-                  Mark all read
+                  {t("notif.markAllRead")}
                 </button>
               )}
             </div>
             {error ? (
-              <div className="px-3 py-4 text-center text-xs text-red-600">Couldn't load notifications.</div>
+              <div className="px-3 py-4 text-center text-xs text-red-600">{t("notif.loadError")}</div>
             ) : items.length === 0 ? (
-              <div className="px-3 py-6 text-center text-xs" style={{ color: "#94A3B8" }}>Nothing yet.</div>
+              <div className="px-3 py-6 text-center text-xs" style={{ color: "#94A3B8" }}>{t("notif.empty")}</div>
             ) : (
               items.map((n) => (
                 <div key={n.id} className="flex items-start gap-2 px-3 py-2 border-b" style={{ borderColor: "#F5F5F0", background: n.read ? "#FFFFFF" : "#FFF7F1" }}>
@@ -75,9 +80,9 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
                       <span className="font-semibold">{n.actorEmail}</span> commented on <span className="font-semibold">{n.featureTitle}</span>
                     </div>
                     <div className="text-xs truncate" style={{ color: "#64748B" }}>“{n.text}”</div>
-                    <div className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{when(n.createdAt)}</div>
+                    <div className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{when(n.createdAt, t)}</div>
                   </button>
-                  <button onClick={() => void deleteNotification(pulseId, n.id)} className="mono flex-shrink-0" style={{ fontSize: 10, color: "#CBD5E1" }} title="Dismiss"><Icon name="close" size={12} /></button>
+                  <button onClick={() => void deleteNotification(pulseId, n.id)} className="mono flex-shrink-0" style={{ fontSize: 10, color: "#CBD5E1" }} title={t("notif.dismiss")}><Icon name="close" size={12} /></button>
                 </div>
               ))
             )}

@@ -3,6 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useTaskCascade } from "@/hooks/useTaskCascade";
+import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
@@ -109,6 +110,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 ) {
   const coarse = useCoarsePointer();
   const epics = usePulseStore((s) => s.epics);
+  const t = useT();
   const features = usePulseStore((s) => s.features);
   // Where the next new task goes, and when the cascade gives ground.
   const { nextPlacement, claim, claimedSlots } = useTaskCascade(features, graph);
@@ -812,9 +814,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       >
         {epics.length === 0 && features.length === 0 && (
           <div className="absolute z-30 flex flex-col items-center gap-2 text-center" style={{ left: "50%", top: 140, transform: "translateX(-50%)", width: 320, pointerEvents: "none" }}>
-            <span className="font-display text-sm font-medium" style={{ color: "#334155" }}>This Pulse is empty</span>
+            <span className="font-display text-sm font-medium" style={{ color: "#334155" }}>{t("canvas.emptyTitle")}</span>
             <span className="text-xs" style={{ color: "#94A3B8" }}>
-              {canEdit ? "Add an epic to start a swimlane, or add a task to place your first box on the timeline." : "Nothing has been planned here yet."}
+              {canEdit ? t("canvas.emptyHintEdit") : t("canvas.emptyHintRead")}
             </span>
           </div>
         )}
@@ -862,7 +864,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                         onClick={async (e) => {
                           if (await confirmAt(e, { message: `Delete epic "${ep.name}"?`, detail: "Its features stay but become unassigned." })) void removeEpic(ep.id);
                         }}
-                        title="Delete epic"
+                        title={t("canvas.deleteEpic")}
                         style={{ fontSize: 11, color: hexA(ep.color, 0.7) }}
                       >
                         <Icon name="delete" size={13} />
@@ -871,11 +873,11 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   </div>
                   {canEdit && (
                     <>
-                      <div onPointerDown={(e) => startEpicResize("top", ep, e)} title="Resize top" style={{ position: "absolute", top: -4, left: 12, right: 12, height: 8, cursor: "ns-resize", pointerEvents: "auto" }} />
-                      <div onPointerDown={(e) => startEpicResize("bottom", ep, e)} title="Resize bottom" style={{ position: "absolute", bottom: -4, left: 12, right: 12, height: 8, cursor: "ns-resize", pointerEvents: "auto" }} />
-                      <div onPointerDown={(e) => startEpicResize("left", ep, e)} title="Resize left" style={{ position: "absolute", left: -4, top: 12, bottom: 12, width: 8, cursor: "ew-resize", pointerEvents: "auto" }} />
-                      <div onPointerDown={(e) => startEpicResize("right", ep, e)} title="Resize right" style={{ position: "absolute", right: -4, top: 12, bottom: 12, width: 8, cursor: "ew-resize", pointerEvents: "auto" }} />
-                      <div onPointerDown={(e) => startEpicResize("bottom right", ep, e)} title="Resize" style={{ position: "absolute", right: -5, bottom: -5, width: 12, height: 12, cursor: "nwse-resize", pointerEvents: "auto", background: hexA(ep.color, 0.5), borderRadius: 3 }} />
+                      <div onPointerDown={(e) => startEpicResize("top", ep, e)} title={t("canvas.resizeTop")} style={{ position: "absolute", top: -4, left: 12, right: 12, height: 8, cursor: "ns-resize", pointerEvents: "auto" }} />
+                      <div onPointerDown={(e) => startEpicResize("bottom", ep, e)} title={t("canvas.resizeBottom")} style={{ position: "absolute", bottom: -4, left: 12, right: 12, height: 8, cursor: "ns-resize", pointerEvents: "auto" }} />
+                      <div onPointerDown={(e) => startEpicResize("left", ep, e)} title={t("canvas.resizeLeft")} style={{ position: "absolute", left: -4, top: 12, bottom: 12, width: 8, cursor: "ew-resize", pointerEvents: "auto" }} />
+                      <div onPointerDown={(e) => startEpicResize("right", ep, e)} title={t("canvas.resizeRight")} style={{ position: "absolute", right: -4, top: 12, bottom: 12, width: 8, cursor: "ew-resize", pointerEvents: "auto" }} />
+                      <div onPointerDown={(e) => startEpicResize("bottom right", ep, e)} title={t("canvas.resize")} style={{ position: "absolute", right: -5, bottom: -5, width: 12, height: 12, cursor: "nwse-resize", pointerEvents: "auto", background: hexA(ep.color, 0.5), borderRadius: 3 }} />
                     </>
                   )}
                 </div>
@@ -906,7 +908,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   return (
                     <div
                       key={`ghost${b.id}`}
-                      title={`Planned ${fmtDate(pStart)} → ${fmtDate(pEnd)}`}
+                      title={t("canvas.plannedRange", { start: fmtDate(pStart), end: fmtDate(pEnd) })}
                       style={{ position: "absolute", left: ghostLeft, top: b.y, width: ghostW, height: h, borderRadius: 8, border: "1.5px dashed #AEB6C2", background: "rgba(148,163,184,0.10)", zIndex: 3, pointerEvents: "none" }}
                     >
                       <span className="mono" style={{ position: "absolute", top: 1, left: 4, fontSize: 8, color: "#8B94A3", letterSpacing: 0.3 }}>plan</span>
@@ -1019,8 +1021,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   )}
                   {showDelayChips && (
                     <div className="mono" style={{ position: "absolute", top: 2, right: 2, display: "flex", gap: 2, zIndex: 3, pointerEvents: "none" }}>
-                      <span title={`Started ${fmtD(dStart)} vs plan`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dStart), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>S{fmtD(dStart)}</span>
-                      <span title={`Ended ${fmtD(dEnd)} vs plan`} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dEnd), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>E{fmtD(dEnd)}</span>
+                      <span title={t("canvas.startedVsPlan", { delta: fmtD(dStart) })} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dStart), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>S{fmtD(dStart)}</span>
+                      <span title={t("canvas.endedVsPlan", { delta: fmtD(dEnd) })} style={{ fontSize: 8, fontWeight: 700, color: "#fff", background: deltaColor(dEnd), borderRadius: 4, padding: "0 3px", lineHeight: "13px" }}>E{fmtD(dEnd)}</span>
                     </div>
                   )}
                   {unassigned && <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.18) 0 6px, transparent 6px 12px)", pointerEvents: "none" }} />}
@@ -1028,7 +1030,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   <div className="flex items-center justify-between px-2" style={{ height: 28, borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
                     <div className="flex items-center gap-1 overflow-hidden">
                       {hasChildren && (
-                        <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => toggleCollapsed(box, e)} className="flex-shrink-0 flex items-center justify-center" title={expanded ? "Collapse subtasks" : "Expand subtasks"} style={{ width: 22, height: 22, borderRadius: 5, background: hexA(meta.border, 0.15), marginRight: 2 }}>
+                        <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => toggleCollapsed(box, e)} className="flex-shrink-0 flex items-center justify-center" title={expanded ? t("canvas.collapseSubtasks") : t("canvas.expandSubtasks")} style={{ width: 22, height: 22, borderRadius: 5, background: hexA(meta.border, 0.15), marginRight: 2 }}>
                           <Icon name={expanded ? "keyboard_arrow_down" : "chevron_right"} size={19} style={{ color: meta.border }} />
                         </button>
                       )}
@@ -1036,10 +1038,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       {box.labelColor && <span style={{ width: 10, height: 10, borderRadius: 2, background: box.labelColor, flexShrink: 0 }} />}
                       <span className="text-xs font-semibold truncate" title={box.title} style={{ color: "#1F2330" }}>{box.title}</span>
                     </div>
-                    {box.plannedX != null && !showDelayChips && <Icon name="keep" size={12} title="Baseline plan set" className="flex-shrink-0" />}
+                    {box.plannedX != null && !showDelayChips && <Icon name="keep" size={12} title={t("canvas.baselineSet")} className="flex-shrink-0" />}
                     {(box.attachments || []).length > 0 && <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#D85A28" }}><Icon name="attach_file" size={11} />{box.attachments!.length}</span>}
                     {box.ai && <Icon name="bolt" size={14} style={{ color: "#8B5CF6" }} className="flex-shrink-0" />}
-                    {box.status === "done" && <Icon name="lock" size={13} title="Done — locked. Change its status to edit." className="flex-shrink-0" />}
+                    {box.status === "done" && <Icon name="lock" size={13} title={t("canvas.doneLocked")} className="flex-shrink-0" />}
                     {/* Why this one is here when the filter says it shouldn't
                         be. Without it the exemption reads as the filter having
                         quietly failed — and the task is at full opacity
@@ -1048,7 +1050,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                         Sits with the other per-task state icons rather than
                         inventing a second place for them. */}
                     {exempt && filterActive && (
-                      <Icon name="filter_alt" size={12} title="Just added — shown even though the filter excludes it" className="flex-shrink-0" style={{ color: "#D85A28" }} />
+                      <Icon name="filter_alt" size={12} title={t("canvas.shownDespiteFilter")} className="flex-shrink-0" style={{ color: "#D85A28" }} />
                     )}
                   </div>
                   {epicsShrunk ? null : !expanded ? (
@@ -1070,7 +1072,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                             />
                           ))}
                         </div>
-                        <span className="mono flex-shrink-0" title={`${assigned}md assigned of ${est}md estimated`} style={{ fontSize: 9, fontWeight: 700, color: meta.text, opacity: 0.8 }}>{coverage}%</span>
+                        <span className="mono flex-shrink-0" title={t("canvas.coverage", { assigned, est })} style={{ fontSize: 9, fontWeight: 700, color: meta.text, opacity: 0.8 }}>{coverage}%</span>
                       </div>
                     </div>
                   ) : (
@@ -1097,7 +1099,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       <div onPointerDown={(e) => startDrag("resize-left", box, e)} style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
                       <div onPointerDown={(e) => startDrag("resize-right", box, e)} style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
                       {!expanded && (
-                        <div onPointerDown={(e) => startDrag("resize-effort", box, e)} title="Drag to change work (height)" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 12, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}>
+                        <div onPointerDown={(e) => startDrag("resize-effort", box, e)} title={t("canvas.dragWork")} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 12, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}>
                           <div style={{ width: 26, height: 3, borderRadius: 2, background: meta.border, opacity: 0.5 }} />
                         </div>
                       )}
@@ -1135,7 +1137,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
             </div>
             <div className="mono" style={{ fontSize: 10, color: "#F0A875", marginBottom: hRes.length ? 6 : 0 }}>{hEst}md est · {hAssigned}md assigned · {hCov}%</div>
             {hRes.length === 0 ? (
-              <div className="mono" style={{ fontSize: 10, color: "#9FB3C8" }}>No one assigned</div>
+              <div className="mono" style={{ fontSize: 10, color: "#9FB3C8" }}>{t("canvas.noOneAssigned")}</div>
             ) : (
               <div className="flex flex-col gap-1">
                 {hRes.map((r) => {
@@ -1145,7 +1147,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       <ResourceBadge resourceId={r} size={16} title={resourceById[r]?.name} style={lead ? LEAD_BADGE_STYLE : undefined} />
                       <span className="text-xs" style={{ color: "#E2E8F0" }}>{resourceById[r]?.name ?? r}</span>
                       <span className="mono flex-shrink-0" style={{ fontSize: 9, color: "#94A3B8", marginLeft: "auto" }}>{allocOf(hb.alloc, r)}%</span>
-                      {lead && <span className="mono flex-shrink-0" style={{ fontSize: 8, color: "#F5A524" }}>lead</span>}
+                      {lead && <span className="mono flex-shrink-0" style={{ fontSize: 8, color: "#F5A524" }}>{t("canvas.lead")}</span>}
                     </div>
                   );
                 })}
