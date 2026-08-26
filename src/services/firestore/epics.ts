@@ -7,8 +7,19 @@ export function newEpicId(pulseId: string): string {
   return doc(collection(db, "pulses", pulseId, "epics")).id;
 }
 
-export function subscribeEpics(pulseId: string, cb: (epics: Epic[]) => void): () => void {
-  return onSnapshot(collection(db, "pulses", pulseId, "epics"), (snap) => cb(snap.docs.map((d) => d.data() as Epic)));
+export function subscribeEpics(
+  pulseId: string,
+  cb: (epics: Epic[]) => void,
+  onError?: (message: string) => void,
+): () => void {
+  // Had no error handler at all, which is the same fault wearing different
+  // clothes: the listener dies, the callback never fires again, and the canvas
+  // keeps drawing whatever it last had while quietly stopping being live.
+  return onSnapshot(
+    collection(db, "pulses", pulseId, "epics"),
+    (snap) => cb(snap.docs.map((d) => d.data() as Epic)),
+    (err) => onError?.(err.message),
+  );
 }
 
 /** One-shot read — see fetchFeatures() for why the dashboard doesn't

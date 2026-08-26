@@ -450,6 +450,8 @@ export const en = {
 
   // ── pulse page shell + panel + tabs ─────────────────────────────────────────
   "pulse.loading": "Loading Pulse…",
+  "pulse.loadFailed": "Couldn't load this Pulse",
+  "pulse.loadFailedDetail": "Its contents were refused rather than empty — you may have lost access, or the connection dropped. Reloading usually settles it.",
   "pulse.untitledEpic": "Untitled epic",
   "pulse.comments": "Comments",
   "pulse.archivedBanner": "This Pulse is archived. Unarchive it to make changes.",

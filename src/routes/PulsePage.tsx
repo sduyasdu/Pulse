@@ -53,6 +53,7 @@ export function PulsePage() {
   const members = usePulseStore((s) => s.members);
   const loading = usePulseStore((s) => s.loading);
   const notFound = usePulseStore((s) => s.notFound);
+  const contentError = usePulseStore((s) => s.contentError);
   const roleOf = usePulseStore((s) => s.roleOf);
   const renamePulse = usePulseStore((s) => s.renamePulse);
   const setGraphConfig = usePulseStore((s) => s.setGraphConfig);
@@ -181,8 +182,9 @@ export function PulsePage() {
   // of that on their own: `notFound` and an empty roster can equally come from a
   // cache-served snapshot (offline, flaky reconnect, a listener torn down by an
   // error), and neither subscribePulse nor subscribePulseMembers inspects
-  // `metadata.fromCache` or takes an error callback. So confirm with direct
-  // reads first — both throw when the client is offline, and the caller's own
+  // `metadata.fromCache`. They do now report refusals — that is what
+  // `contentError` is — but a refusal is only one of the ways to arrive here,
+  // so this still confirms with direct reads first — both throw when the client is offline, and the caller's own
   // pulseMembers doc is always self-readable — and delete only on a definitive
   // "gone". A false positive here is unrecoverable (see ensureMyPulseEntry).
   //
@@ -397,6 +399,31 @@ export function PulsePage() {
   };
 
   if (!pulseId) return null;
+
+  // Before the spinner, because a refused listener stops `loading` without ever
+  // delivering a role — otherwise this is the branch that spins forever.
+  if (contentError) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg px-4">
+        <div className="w-full max-w-sm rounded-2xl border bg-yasdu-card p-7 text-center shadow-sm" style={{ borderColor: "#E2DFD9" }}>
+          <div className="font-display mb-2 text-base font-semibold text-yasdu-fg">{t("pulse.loadFailed")}</div>
+          <p className="mb-4 text-sm text-yasdu-muted">{t("pulse.loadFailedDetail")}</p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-yasdu-primary-fg"
+              style={{ background: "#D85A28" }}
+            >
+              {t("common.retry")}
+            </button>
+            <button onClick={() => navigate("/")} className="text-xs text-yasdu-muted hover:underline">
+              {t("join.goToDashboard")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || myRole === null) {
     return (

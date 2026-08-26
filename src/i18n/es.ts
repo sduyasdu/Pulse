@@ -444,6 +444,8 @@ export const es: Dict = {
 
   // pulse shell + panel + tabs
   "pulse.loading": "Cargando Pulse…",
+  "pulse.loadFailed": "No se pudo cargar este Pulse",
+  "pulse.loadFailedDetail": "Su contenido fue rechazado, no está vacío — puede que hayas perdido el acceso o que se haya cortado la conexión. Recargar suele resolverlo.",
   "pulse.untitledEpic": "Epic sin título",
   "pulse.comments": "Comentarios",
   "pulse.archivedBanner": "Este Pulse est\u00e1 archivado. Desarchivalo para hacer cambios.",

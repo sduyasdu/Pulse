@@ -243,8 +243,21 @@ export async function updateMyPulseName(uid: string, pulseId: string, name: stri
   await updateDoc(doc(db, "users", uid, "myPulses", pulseId), { name }).catch(() => {});
 }
 
-export function subscribePulse(pulseId: string, cb: (pulse: Pulse | null) => void): () => void {
-  return onSnapshot(doc(db, "pulses", pulseId), (snap) => cb(snap.exists() ? (snap.data() as Pulse) : null));
+export function subscribePulse(
+  pulseId: string,
+  cb: (pulse: Pulse | null) => void,
+  onError?: (message: string) => void,
+): () => void {
+  // Without an error path a refusal here never calls back at all, so `loading`
+  // stays true and the page spins forever — the same fault as a denied
+  // collection read, wearing a spinner instead of an empty canvas. Note the
+  // callback's `null` means "no such Pulse", which is a real answer; a refusal
+  // is not, and must not arrive down the same channel.
+  return onSnapshot(
+    doc(db, "pulses", pulseId),
+    (snap) => cb(snap.exists() ? (snap.data() as Pulse) : null),
+    (err) => onError?.(err.message),
+  );
 }
 
 export async function renamePulse(pulseId: string, name: string): Promise<void> {

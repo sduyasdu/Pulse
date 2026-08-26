@@ -14,9 +14,17 @@ export async function fetchResources(pulseId: string): Promise<Resource[]> {
   return snap.docs.map((d) => d.data() as Resource);
 }
 
-export function subscribeResources(pulseId: string, cb: (resources: Resource[]) => void): () => void {
-  return onSnapshot(collection(db, "pulses", pulseId, "resources"), (snap) =>
-    cb(snap.docs.map((d) => d.data() as Resource)),
+export function subscribeResources(
+  pulseId: string,
+  cb: (resources: Resource[]) => void,
+  onError?: (message: string) => void,
+): () => void {
+  // Same reasoning as subscribeFeatures: a Pulse whose people silently vanish
+  // is indistinguishable from one nobody has been added to yet.
+  return onSnapshot(
+    collection(db, "pulses", pulseId, "resources"),
+    (snap) => cb(snap.docs.map((d) => d.data() as Resource)),
+    (err) => onError?.(err.message),
   );
 }
 

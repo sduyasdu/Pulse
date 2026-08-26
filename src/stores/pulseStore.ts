@@ -42,6 +42,11 @@ interface PulseStoreState {
   members: PulseMember[];
   loading: boolean;
   notFound: boolean;
+  /** Set when a live content listener is REFUSED, as opposed to returning
+   * nothing. The two used to be the same value — a denied read called back with
+   * `[]`, so the canvas drew an empty Pulse and said nothing was wrong. Distinct
+   * from `notFound`, which is a real answer about a Pulse that isn't there. */
+  contentError: string | null;
 
   load: (pulseId: string) => () => void;
   roleOf: (uid: string) => PulseRole | null;
@@ -141,9 +146,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
   members: [],
   loading: true,
   notFound: false,
+  contentError: null,
 
   load: (pulseId) => {
-    set({ pulseId, loading: true, notFound: false, epics: [], features: [], resources: [], costs: [], rates: [], members: [] });
+    set({ pulseId, loading: true, notFound: false, contentError: null, epics: [], features: [], resources: [], costs: [], rates: [], members: [] });
     // `loading` must not go false until BOTH the pulse doc and the
     // pulseMembers roster have delivered their first snapshot — these are
     // two independent onSnapshot listeners with no ordering guarantee.
@@ -154,6 +160,11 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     // false "not a member" and delete a perfectly valid myPulses entry.
     let pulseArrived = false;
     let membersArrived = false;
+    // First refusal wins: one banner naming the fault beats three racing to
+    // overwrite each other, and they almost always share a cause.
+    const failContent = (message: string) => {
+      if (get().pulseId === pulseId && !get().contentError) set({ contentError: message, loading: false });
+    };
     const maybeFinishLoading = () => {
       if (pulseArrived && membersArrived) set({ loading: false });
     };
@@ -162,9 +173,9 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         pulseArrived = true;
         set({ pulse, notFound: pulse === null });
         maybeFinishLoading();
-      }),
-      subscribeEpics(pulseId, (epics) => set({ epics })),
-      subscribeResources(pulseId, (resources) => set({ resources })),
+      }, failContent),
+      subscribeEpics(pulseId, (epics) => set({ epics }), failContent),
+      subscribeResources(pulseId, (resources) => set({ resources }), failContent),
       // Parked with the rest of costing (CO21). A hidden panel that still streams
       // a collection bills reads for something nobody can see.
       ...(COSTS_ENABLED ? [subscribeRates(pulseId, (rates) => set({ rates }))] : []),
@@ -172,7 +183,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         membersArrived = true;
         set({ members });
         maybeFinishLoading();
-      }),
+      }, failContent),
     ];
     // Features are scoped for a My-Beat Viewer (Permissions-Spec §4.3): the rules
     // require the array-contains query, so resolve the caller's own read scope
@@ -187,7 +198,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         if (me && capsOf(me).readScope === "beat") beatUid = uid;
       }
       if (get().pulseId !== pulseId) return; // a newer load() superseded this one
-      featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileCostScopes(get); }, beatUid);
+      featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileCostScopes(get); }, beatUid, failContent);
       // Costs carry the same beat scoping as features (Costs-Spec §7), so they
       // ride the same resolved read scope rather than resolving it twice.
       costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileCostScopes(get); }, beatUid);

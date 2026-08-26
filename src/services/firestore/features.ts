@@ -12,10 +12,20 @@ export function newFeatureId(pulseId: string): string {
  * My-Beat Viewer — the rules require the scoped `array-contains` query, and an
  * unconstrained read would be rejected wholesale (Permissions-Spec §4.3).
  */
-export function subscribeFeatures(pulseId: string, cb: (features: Feature[]) => void, beatUid?: string): () => void {
+export function subscribeFeatures(
+  pulseId: string,
+  cb: (features: Feature[]) => void,
+  beatUid?: string,
+  onError?: (message: string) => void,
+): () => void {
   const base = collection(db, "pulses", pulseId, "features");
   const q = beatUid ? query(base, where("assignedUids", "array-contains", beatUid)) : base;
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as Feature)), () => cb([]));
+  // NOT `() => cb([])`. An empty array is what a Pulse with no tasks sends, so
+  // collapsing a failure into one renders a denied or torn-down listener as a
+  // Pulse whose work has vanished — no error, nothing to retry, and it looks
+  // like data loss rather than a fault. A read that fails is a fault; a read
+  // that returns nothing is a state.
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as Feature)), (err) => onError?.(err.message));
 }
 
 /** One-shot read — for the dashboard's card thumbnails, where a live
