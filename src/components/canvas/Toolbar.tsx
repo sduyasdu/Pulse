@@ -181,10 +181,26 @@ export function Toolbar({
           {t("toolbar.today")}
         </button>
         )}
+        {/* The browser's own picker has a "Today" button, and picking a date the
+            input already holds fires no change event — so pressing it while the
+            marker sat on today did nothing at all. No event exists for "picked
+            the same value", and blur is no help either: Chrome returns focus to
+            the input when its picker closes, so the blur may not arrive until
+            the reader clicks somewhere else entirely.
+            
+            So centre on the marker when the field is *opened*. If the marker is
+            already on today, that alone is the trip to today, and the picker's
+            Today button then has nothing left to do. If it is on some other
+            date, picking Today is a real change and onChange handles it. Both
+            routes work off events that always fire. */}
         <input
           type="date"
           value={toDateInputValue(referenceDay)}
-          onChange={(e) => { const d = dayIndexFromDateInputValue(e.target.value); if (Number.isFinite(d)) onReferenceDayChange(d); }}
+          onClick={() => onReferenceDayChange(referenceDay)}
+          onChange={(e) => {
+            const d = dayIndexFromDateInputValue(e.target.value);
+            if (Number.isFinite(d)) onReferenceDayChange(d);
+          }}
           title={t("toolbar.markerDate")}
           className="mono rounded px-2 py-0.5"
           style={{ colorScheme: "dark", fontSize: 10, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B", outline: "none" }}

@@ -425,7 +425,7 @@ export const pt: Dict = {
   "toolbar.nameTitle": "Dê um nome a este Pulse",
   "toolbar.invite": "Convidar",
   "toolbar.inviteTitle": "Convidar um colaborador para este Pulse",
-  "toolbar.markerDate": "Data de referência — escolha uma data para mover a linha do quadro até ela e centralizar",
+  "toolbar.markerDate": "Data do marcador — clique para centralizar na linha, ou escolha uma data para movê-la",
   "toolbar.today": "hoje",
   "toolbar.todayTitle": "Voltar para hoje",
   "toolbar.switchView": "Alterne entre o quadro de linha do tempo e o quadro Kanban",
