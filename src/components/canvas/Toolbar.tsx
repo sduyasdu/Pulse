@@ -174,11 +174,12 @@ export function Toolbar({
         {viewMode === "canvas" && (
         <button
           onClick={onGoToday}
-          className="mono rounded px-2 py-0.5 hover:brightness-125"
-          style={{ fontSize: 10, fontWeight: 600, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}
+          className="flex items-center rounded p-1.5 hover:brightness-125"
+          style={{ background: "#1B3A63", border: "1px solid #24406B" }}
           title={t("toolbar.todayTitle")}
+          aria-label={t("toolbar.todayTitle")}
         >
-          {t("toolbar.today")}
+          <Icon name="today" size={14} style={{ color: "#EE7240" }} />
         </button>
         )}
         {/* No onClick here, deliberately. Centring the canvas when this field is

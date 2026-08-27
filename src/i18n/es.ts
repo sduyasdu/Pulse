@@ -426,7 +426,6 @@ export const es: Dict = {
   "toolbar.invite": "Invitar",
   "toolbar.inviteTitle": "Invitar a un colaborador a este Pulse",
   "toolbar.markerDate": "Fecha del marcador — elegí una fecha para mover la línea del canvas y centrarla",
-  "toolbar.today": "hoy",
   "toolbar.todayTitle": "Volver a hoy",
   "toolbar.switchView": "Cambiá entre el lienzo de línea de tiempo y el tablero Kanban",
   "toolbar.viewCanvas": "lienzo",
