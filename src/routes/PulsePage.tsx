@@ -14,6 +14,7 @@ import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { useJustAddedTasks, filterSignatureOf } from "@/hooks/useJustAddedTasks";
+import { loadPulseView, savePulseView } from "@/domain/pulseView";
 import { roleMeta, capsOf } from "@/domain/permissions";
 import { effectiveEditScope, pulseLock } from "@/domain/pulseLock";
 import { useT } from "@/i18n";
@@ -306,10 +307,68 @@ export function PulsePage() {
   // change dayWidth by ~7x (day vs. month), which shifts where "today"
   // lands on screen by thousands of pixels without this, easily pushing
   // the marker (and everything else) outside the visible viewport.
+  //
+  // Unless a saved view says otherwise (below): coming back to where you left
+  // off is the whole point of remembering it, and centring on today would
+  // undo it a frame later.
+  const restored = useRef<{ pulseId: string; density: Density; scale: number } | null>(null);
+
+  // Restore first, so the flag is set before the centring effect below reads
+  // it — effects run in declaration order.
   useEffect(() => {
+    if (!pulseId) return;
+    const saved = loadPulseView(pulseId);
+    if (!saved) {
+      restored.current = null;
+      return;
+    }
+    // Recorded as a triple rather than a boolean, because setting `density`
+    // here re-fires the centring effect: it has to recognise "this is still the
+    // view I restored" and skip, while a density the *user* changes later no
+    // longer matches and re-centres as it always did.
+    restored.current = { pulseId, density: saved.density, scale };
+    setDensity(saved.density);
+    setViewZoom(saved.viewZoom);
+    setOffsetX(saved.offsetX);
+    const raf = requestAnimationFrame(() => canvasRef.current?.restoreScrollTop(saved.scrollTop));
+    return () => cancelAnimationFrame(raf);
+  }, [pulseId, scale]);
+
+  useEffect(() => {
+    const r = restored.current;
+    if (r && r.pulseId === pulseId && r.density === density && r.scale === scale) return;
     const raf = requestAnimationFrame(() => canvasRef.current?.centerOnToday());
     return () => cancelAnimationFrame(raf);
   }, [pulseId, density, scale]);
+
+  // Persist the viewport. Debounced because panning fires continuously, and
+  // repeated on unmount because the last 400ms of movement — which includes
+  // every "scroll somewhere, then leave" — would otherwise be the part that
+  // never got written.
+  //
+  // `scrollTop` is read from the canvas rather than tracked as state: it isn't
+  // one, and making it one would re-render the canvas on every wheel event.
+  // The cost is that a purely vertical scroll is only saved on the way out,
+  // which is exactly when it was asked to be.
+  const viewRef = useRef({ offsetX, viewZoom, density });
+  viewRef.current = { offsetX, viewZoom, density };
+
+  const writeView = useCallback(() => {
+    if (!pulseId) return;
+    savePulseView(pulseId, { ...viewRef.current, scrollTop: canvasRef.current?.getScrollTop() ?? 0 });
+  }, [pulseId]);
+
+  // Debounced while panning. The cleanup only cancels — writing here too would
+  // fire on every offsetX change and there would be no debounce left.
+  useEffect(() => {
+    const timer = setTimeout(writeView, 400);
+    return () => clearTimeout(timer);
+  }, [writeView, offsetX, viewZoom, density]);
+
+  // And once on the way out, keyed on pulseId alone so its cleanup runs only
+  // when the Pulse is actually being left. This is the write that catches the
+  // last 400ms of movement, and the only one that catches a vertical scroll.
+  useEffect(() => () => writeView(), [writeView]);
 
   useEffect(() => {
     if (!selectedId) setRightTab((t) => (t === "details" ? "team" : t));

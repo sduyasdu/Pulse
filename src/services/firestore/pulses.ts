@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { emailKey } from "./emailKey";
 import { db } from "@/lib/firebase";
+import { forgetPulseView } from "@/domain/pulseView";
 import type { Feature, MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { stripUndefined } from "./patch";
@@ -314,6 +315,11 @@ export async function deletePulse(pulseId: string, uid: string): Promise<void> {
   await deleteInChunks(membersSnap.docs.map((d) => d.ref));
 
   await deleteDoc(doc(db, "users", uid, "myPulses", pulseId)).catch(() => {});
+
+  // The remembered viewport is local, so nothing above touches it — and an
+  // entry for a Pulse that no longer exists would sit in storage holding one
+  // of the fifty slots against a Pulse the user can still return to.
+  forgetPulseView(pulseId);
 }
 
 async function deleteInChunks(refs: DocumentReference[]): Promise<void> {

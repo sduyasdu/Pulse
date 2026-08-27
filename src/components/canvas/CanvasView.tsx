@@ -45,7 +45,21 @@ const LEAD_BADGE_STYLE: React.CSSProperties = {
 // Screen-space (post-viewZoom) distance from the left edge where "today"
 // lands when opening a Pulse or jumping back to today — near the left
 // rather than dead-center, so there's room to see what's coming up.
+/** Fallback only — where today goes before the canvas has measured itself.
+ * The real placement is a third of the visible canvas (see `todayMargin`). */
 export const TODAY_LEFT_MARGIN_PX = 80;
+
+/** How far from the canvas's left edge today should sit: one third of the
+ * width actually available for the canvas.
+ *
+ * A fixed 80px put today almost against the left panel, which wastes the two
+ * thirds of the screen to its right and leaves no room to see what led up to
+ * now. `clientWidth` is measured on the scroller, which already excludes the
+ * 320px left panel — so this tracks the panel being collapsed, and every window
+ * size, without being told about either. */
+export function todayMarginFor(containerWidth: number): number {
+  return containerWidth > 0 ? Math.round(containerWidth / 3) : TODAY_LEFT_MARGIN_PX;
+}
 
 export interface CanvasViewHandle {
   fitRoadmap: () => void;
@@ -55,6 +69,10 @@ export interface CanvasViewHandle {
   centerOnDay: (day: number) => void;
   addTaskAtCenter: () => Promise<string>;
   addEpicAtCenter: () => Promise<string>;
+  /** Vertical scroll, for remembering where the reader was. Horizontal position
+   * is `offsetX`, which the page already owns. */
+  getScrollTop: () => number;
+  restoreScrollTop: (value: number) => void;
 }
 
 /** Does this box, or any of its subtasks, carry the filtered resource? */
@@ -203,8 +221,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // recreated (and window listeners re-attached) every time features/
   // epics/pan-zoom change, while still never seeing stale values, even
   // mid-drag after a periodic Firestore sync updates `features`.
-  const latestViewRef = useRef({ startDay, endDay, dayWidth, viewZoom, features, filterResource, epics, graph, epicsShrunk });
-  latestViewRef.current = { startDay, endDay, dayWidth, viewZoom, features, filterResource, epics, graph, epicsShrunk };
+  const latestViewRef = useRef({ startDay, endDay, dayWidth, viewZoom, features, filterResource, epics, graph, epicsShrunk, containerWidth: 0 });
+  latestViewRef.current = { startDay, endDay, dayWidth, viewZoom, features, filterResource, epics, graph, epicsShrunk, containerWidth: containerRef.current?.clientWidth ?? 0 };
 
   // When the feature search/status filter narrows the results, jump to the
   // first (earliest-starting) match if it isn't already on screen — a
@@ -225,7 +243,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       if (matching.length === 0) return;
       const first = matching.reduce((a, b) => (a.x < b.x ? a : b));
       if (first.x < sd || first.x > ed) {
-        setOffsetX(TODAY_LEFT_MARGIN_PX / vz - dw * first.x);
+        setOffsetX(todayMarginFor(latestViewRef.current.containerWidth) / vz - dw * first.x);
       }
     }, 400);
     return () => clearTimeout(handle);
@@ -686,6 +704,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   };
 
   // ---- imperative handle for the toolbar ----
+  const todayMargin = () => todayMarginFor(containerRef.current?.clientWidth ?? 0);
+
   useImperativeHandle(ref, () => ({
     fitRoadmap: () => {
       // Horizontal extent across BOTH tasks and epic bands (a manually-widened
@@ -698,7 +718,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const height = cont?.clientHeight ?? 400;
       if (starts.length === 0) {
         setViewZoom(1);
-        setOffsetX(TODAY_LEFT_MARGIN_PX - dayWidth * todayIndex());
+        setOffsetX(todayMargin() - dayWidth * todayIndex());
         return;
       }
       const minDay = Math.min(...starts);
@@ -730,13 +750,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     },
     resetView: () => {
       setViewZoom(1);
-      setOffsetX(TODAY_LEFT_MARGIN_PX / 1 - dayWidth * todayIndex());
+      setOffsetX(todayMargin() / 1 - dayWidth * todayIndex());
     },
     centerOnToday: () => {
-      setOffsetX(TODAY_LEFT_MARGIN_PX / viewZoom - dayWidth * todayIndex());
+      setOffsetX(todayMargin() / viewZoom - dayWidth * todayIndex());
     },
     centerOnDay: (day: number) => {
-      setOffsetX(TODAY_LEFT_MARGIN_PX / viewZoom - dayWidth * day);
+      setOffsetX(todayMargin() / viewZoom - dayWidth * day);
     },
     addTaskAtCenter: async () => {
       const cont = containerRef.current;
@@ -764,6 +784,11 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         else if (boxTop < scrollTop) cont.scrollTop = Math.max(0, boxTop - 24);
       }
       return id;
+    },
+    getScrollTop: () => containerRef.current?.scrollTop ?? 0,
+    restoreScrollTop: (value: number) => {
+      const cont = containerRef.current;
+      if (cont) cont.scrollTop = Math.max(0, value);
     },
     addEpicAtCenter: async () => {
       const cont = containerRef.current;
