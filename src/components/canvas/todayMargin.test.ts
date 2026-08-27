@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { TODAY_LEFT_MARGIN_PX, todayMarginFor } from "./CanvasView";
+import { TODAY_LEFT_FRACTION, TODAY_LEFT_MARGIN_PX, todayMarginFor } from "./CanvasView";
 
 describe("where today sits on the canvas", () => {
-  it("is a third of the width available to the canvas", () => {
-    expect(todayMarginFor(960)).toBe(320);
-    expect(todayMarginFor(1600)).toBe(533);
+  it("is a quarter of the width available to the canvas", () => {
+    expect(todayMarginFor(960)).toBe(240);
+    expect(todayMarginFor(1600)).toBe(400);
   });
 
   // The panel is 320px open and 30px collapsed, and the scroller's clientWidth
@@ -30,11 +30,14 @@ describe("where today sits on the canvas", () => {
     }
   });
 
-  // A third leaves two thirds of the canvas for what comes next, which is the
-  // direction a roadmap is read in, while still showing what led up to now.
-  it("leaves twice as much room ahead of today as behind it", () => {
+  // The point of the ratio: most of the canvas goes to what comes next, which
+  // is the direction a roadmap is read in, while still showing what led up to
+  // now. Asserted against the exported fraction rather than a hard 3, so
+  // changing the ratio changes one number and this keeps checking the property.
+  it("leaves most of the canvas ahead of today", () => {
     const w = 1200;
     const margin = todayMarginFor(w);
-    expect(w - margin).toBeCloseTo(2 * margin, 0);
+    expect(w - margin).toBeCloseTo(w * (1 - TODAY_LEFT_FRACTION), 0);
+    expect(w - margin).toBeGreaterThan(margin);
   });
 });

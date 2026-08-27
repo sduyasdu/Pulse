@@ -167,7 +167,11 @@ export function Toolbar({
         {/* Its own button, not a suggestion to re-pick today in the input
             beside it: a date input fires no change event when you choose the
             value it already holds, so that route silently did nothing in the
-            one case you'd reach for it — scrolled away, marker still on today. */}
+            one case you'd reach for it — scrolled away, marker still on today.
+            Canvas-only, because on the board the canvas is unmounted and there
+            is no viewport to move — a button that quietly does nothing is the
+            thing being fixed here. */}
+        {viewMode === "canvas" && (
         <button
           onClick={onGoToday}
           className="mono rounded px-2 py-0.5 hover:brightness-125"
@@ -176,6 +180,7 @@ export function Toolbar({
         >
           {t("toolbar.today")}
         </button>
+        )}
         <input
           type="date"
           value={toDateInputValue(referenceDay)}

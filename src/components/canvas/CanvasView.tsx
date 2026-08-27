@@ -49,16 +49,19 @@ const LEAD_BADGE_STYLE: React.CSSProperties = {
  * The real placement is a third of the visible canvas (see `todayMargin`). */
 export const TODAY_LEFT_MARGIN_PX = 80;
 
-/** How far from the canvas's left edge today should sit: one third of the
- * width actually available for the canvas.
+/** Share of the visible canvas that sits to the LEFT of today. A quarter, so
+ * three quarters of the width is left for what comes next — which is the
+ * direction a roadmap is read in — while still showing what led up to now. */
+export const TODAY_LEFT_FRACTION = 1 / 4;
+
+/** How far from the canvas's left edge today should sit.
  *
- * A fixed 80px put today almost against the left panel, which wastes the two
- * thirds of the screen to its right and leaves no room to see what led up to
- * now. `clientWidth` is measured on the scroller, which already excludes the
- * 320px left panel — so this tracks the panel being collapsed, and every window
- * size, without being told about either. */
+ * A fixed 80px put today almost against the left panel, wasting the screen to
+ * its right. `clientWidth` is measured on the scroller, which already excludes
+ * the 320px left panel — so this tracks the panel being collapsed, and every
+ * window size, without being told about either. */
 export function todayMarginFor(containerWidth: number): number {
-  return containerWidth > 0 ? Math.round(containerWidth / 3) : TODAY_LEFT_MARGIN_PX;
+  return containerWidth > 0 ? Math.round(containerWidth * TODAY_LEFT_FRACTION) : TODAY_LEFT_MARGIN_PX;
 }
 
 export interface CanvasViewHandle {
