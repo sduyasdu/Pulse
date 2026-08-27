@@ -181,22 +181,16 @@ export function Toolbar({
           {t("toolbar.today")}
         </button>
         )}
-        {/* The browser's own picker has a "Today" button, and picking a date the
-            input already holds fires no change event — so pressing it while the
-            marker sat on today did nothing at all. No event exists for "picked
-            the same value", and blur is no help either: Chrome returns focus to
-            the input when its picker closes, so the blur may not arrive until
-            the reader clicks somewhere else entirely.
-            
-            So centre on the marker when the field is *opened*. If the marker is
-            already on today, that alone is the trip to today, and the picker's
-            Today button then has nothing left to do. If it is on some other
-            date, picking Today is a real change and onChange handles it. Both
-            routes work off events that always fire. */}
+        {/* No onClick here, deliberately. Centring the canvas when this field is
+            merely opened means the view jumps before the reader has picked
+            anything, which is worse than the problem it was reaching for — the
+            native picker's own Today button doing nothing when the marker is
+            already on today. That is not interceptable: it writes a value the
+            input already holds, and no DOM event fires for an unchanged value.
+            The `today` button beside this field is the reliable route. */}
         <input
           type="date"
           value={toDateInputValue(referenceDay)}
-          onClick={() => onReferenceDayChange(referenceDay)}
           onChange={(e) => {
             const d = dayIndexFromDateInputValue(e.target.value);
             if (Number.isFinite(d)) onReferenceDayChange(d);
