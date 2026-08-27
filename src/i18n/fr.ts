@@ -426,6 +426,8 @@ export const fr: Dict = {
   "toolbar.invite": "Inviter",
   "toolbar.inviteTitle": "Inviter un collaborateur à ce Pulse",
   "toolbar.markerDate": "Date repère — choisissez une date pour y déplacer la ligne du canevas et la centrer",
+  "toolbar.today": "auj.",
+  "toolbar.todayTitle": "Revenir à aujourd'hui",
   "toolbar.switchView": "Basculer entre le canevas chronologique et le tableau Kanban",
   "toolbar.viewCanvas": "canevas",
   "toolbar.viewBoard": "tableau",

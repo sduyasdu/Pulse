@@ -432,6 +432,8 @@ export const en = {
   "toolbar.invite": "Invite",
   "toolbar.inviteTitle": "Invite a collaborator to this Pulse",
   "toolbar.markerDate": "Marker date — pick a date to move the canvas line there and center on it",
+  "toolbar.today": "today",
+  "toolbar.todayTitle": "Jump back to today",
   "toolbar.switchView": "Switch between the timeline canvas and the Kanban board",
   "toolbar.viewCanvas": "canvas",
   "toolbar.viewBoard": "board",

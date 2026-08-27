@@ -29,6 +29,7 @@ interface ToolbarProps {
   onResetView: () => void;
   onFitRoadmap: () => void;
   referenceDay: number;
+  onGoToday: () => void;
   onReferenceDayChange: (day: number) => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -85,6 +86,7 @@ export function Toolbar({
   onResetView,
   onFitRoadmap,
   referenceDay,
+  onGoToday,
   onReferenceDayChange,
   onUndo,
   onRedo,
@@ -162,6 +164,18 @@ export function Toolbar({
             <Icon name="add" size={12} /> {t("toolbar.invite")}
           </button>
         )}
+        {/* Its own button, not a suggestion to re-pick today in the input
+            beside it: a date input fires no change event when you choose the
+            value it already holds, so that route silently did nothing in the
+            one case you'd reach for it — scrolled away, marker still on today. */}
+        <button
+          onClick={onGoToday}
+          className="mono rounded px-2 py-0.5 hover:brightness-125"
+          style={{ fontSize: 10, fontWeight: 600, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B" }}
+          title={t("toolbar.todayTitle")}
+        >
+          {t("toolbar.today")}
+        </button>
         <input
           type="date"
           value={toDateInputValue(referenceDay)}

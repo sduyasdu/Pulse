@@ -21,7 +21,7 @@ import { useT } from "@/i18n";
 import type { Feature } from "@/types";
 import { ArchivedBanner } from "@/components/shared/ArchivedBanner";
 import { Toolbar } from "@/components/canvas/Toolbar";
-import { CanvasView, TODAY_LEFT_MARGIN_PX, type CanvasViewHandle } from "@/components/canvas/CanvasView";
+import { CanvasView, todayMarginFor, type CanvasViewHandle } from "@/components/canvas/CanvasView";
 import { KanbanView } from "@/components/kanban/KanbanView";
 import { PresenceBar } from "@/components/presence/PresenceBar";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -238,7 +238,13 @@ export function PulsePage() {
   // density/scale below) so there's no flash of the wrong era before the
   // canvas mounts and centerOnToday() refines it with the real container
   // width/viewZoom.
-  const [offsetX, setOffsetX] = useState(() => TODAY_LEFT_MARGIN_PX - BASE_DAY_WIDTH * DENSITY_DAY_PX.week * todayIndex());
+  // Estimated from the window minus the left panel, because the canvas hasn't
+  // measured itself yet. Close enough that the exact centring on mount is
+  // imperceptible; using the 80px fallback here would show a visible jump now
+  // that the real margin is a third of the width.
+  const [offsetX, setOffsetX] = useState(() =>
+    todayMarginFor(typeof window === "undefined" ? 0 : Math.max(0, window.innerWidth - 320)) -
+    BASE_DAY_WIDTH * DENSITY_DAY_PX.week * todayIndex());
   // Day-scale is fixed now that the toolbar's separate scale control is gone;
   // zoom is handled by viewZoom. Kept as a value so the canvas keeps working.
   const scale = 1;
@@ -279,7 +285,27 @@ export function PulsePage() {
   const [timelineBounds, setTimelineBounds] = useState({ startDay: 0, endDay: 0, dayWidth: BASE_DAY_WIDTH });
 
   const canvasRef = useRef<CanvasViewHandle>(null);
+  // The page renders a spinner until `loading` clears, so the canvas mounts
+  // several renders after the effects that want to drive it. A plain ref gives
+  // those effects `null` and they quietly do nothing — which is why the initial
+  // centring never ran. This flips when the canvas is really there, and the
+  // effects below depend on it.
+  const [canvasReady, setCanvasReady] = useState(false);
+  const attachCanvas = useCallback((node: CanvasViewHandle | null) => {
+    canvasRef.current = node;
+    setCanvasReady(!!node);
+  }, []);
   const onReferenceDayChange = useCallback((day: number) => {
+    setReferenceDay(day);
+    canvasRef.current?.centerOnDay(day);
+  }, []);
+  /** Jump back to today. Needs to be its own control: the marker-date input was
+   * the only way there, and an `<input type="date">` fires no change event when
+   * you pick the date it already holds — so "go to today" did nothing in the
+   * exact case you would want it, having scrolled away while the marker stayed
+   * on today. */
+  const goToToday = useCallback(() => {
+    const day = todayIndex();
     setReferenceDay(day);
     canvasRef.current?.centerOnDay(day);
   }, []);
@@ -315,8 +341,14 @@ export function PulsePage() {
 
   // Restore first, so the flag is set before the centring effect below reads
   // it — effects run in declaration order.
+  const restoredFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!pulseId) return;
+    if (!pulseId || !canvasReady) return;
+    // Once per Pulse. `canvasReady` also flips when switching to the board and
+    // back, and re-restoring then would throw away wherever the reader had
+    // panned to since.
+    if (restoredFor.current === pulseId) return;
+    restoredFor.current = pulseId;
     const saved = loadPulseView(pulseId);
     if (!saved) {
       restored.current = null;
@@ -332,14 +364,15 @@ export function PulsePage() {
     setOffsetX(saved.offsetX);
     const raf = requestAnimationFrame(() => canvasRef.current?.restoreScrollTop(saved.scrollTop));
     return () => cancelAnimationFrame(raf);
-  }, [pulseId, scale]);
+  }, [pulseId, canvasReady, scale]);
 
   useEffect(() => {
     const r = restored.current;
     if (r && r.pulseId === pulseId && r.density === density && r.scale === scale) return;
+    if (!canvasReady) return;
     const raf = requestAnimationFrame(() => canvasRef.current?.centerOnToday());
     return () => cancelAnimationFrame(raf);
-  }, [pulseId, density, scale]);
+  }, [pulseId, density, scale, canvasReady]);
 
   // Persist the viewport. Debounced because panning fires continuously, and
   // repeated on unmount because the last 400ms of movement — which includes
@@ -528,6 +561,7 @@ export function PulsePage() {
         onFitRoadmap={() => canvasRef.current?.fitRoadmap()}
         referenceDay={referenceDay}
         onReferenceDayChange={onReferenceDayChange}
+        onGoToday={goToToday}
         onUndo={() => void undo()}
         onRedo={() => void redo()}
         canUndo={canUndo}
@@ -628,7 +662,7 @@ export function PulsePage() {
             />
           ) : (
             <CanvasView
-              ref={canvasRef}
+              ref={attachCanvas}
               graph={graph}
               density={density}
               scale={scale}
