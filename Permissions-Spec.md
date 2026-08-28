@@ -314,6 +314,11 @@ Consequences to design around:
 - A My-Beat Viewer's client **must not** issue an unconstrained `features` list — it
   would be rejected entirely (not filtered). `pulseStore.subscribeFeatures` needs a
   role-aware variant that adds the `array-contains` filter for `readScope == 'beat'`.
+- Because the *query shape* depends on the caller's role, `features` and `costs`
+  cannot subscribe until that role is known — which puts role resolution directly in
+  front of the first paint. **Resolve it from the roster snapshot, and re-apply it on
+  every roster snapshot** (P13): a cached role can be stale, and a stale one produces
+  a refused query rather than a trimmed one.
 - **Composite index:** a lone `array-contains` on `assignedUids` needs **no composite
   index** (single-field). If the beat query is combined with an `orderBy` or another
   `where`, add a composite index to `firestore.indexes.json`. Recommendation: keep the
@@ -617,4 +622,31 @@ docs working. No destructive migration.
     The client maintains both denorms and the `linkedUid`-change fan-out in v1. Server
     hardening is tracked as **`Server-Functions-Spec.md` SF1** (not a loose open
     decision); it becomes authoritative when it ships.
+13. **P13 — Where the client reads its own `readScope` from. ✅ RESOLVED (the roster
+    snapshot, re-applied on every snapshot).** The scoped listeners (`features`,
+    `costs`) can only be created once the caller's read scope is known (§4.3), so
+    whatever resolves it sits in front of the Pulse's first paint. It is resolved from
+    the `pulseMembers` snapshot the store already subscribes to — a member may list
+    that collection and their own doc is always in the result — and re-applied on
+    every subsequent snapshot, tearing the two listeners down and reopening them
+    whenever the scope changes (`src/stores/pulseStore.ts:254`).
+
+    *Rejected: a one-shot `fetchMembership` getDoc*, which is what shipped first. It
+    is authoritative — a server read, never stale — but it spends a full round trip
+    in front of the two listeners carrying the Pulse's actual contents, and that delay
+    is what let the canvas paint its empty-Pulse placeholder over a Pulse full of
+    work. It also had no answer for a **live** demotion: the running listener was
+    refused with no path back short of a reload.
+
+    The price is that a first roster snapshot served from cache can carry a role the
+    server has since changed, so the unconstrained query is issued and refused. That
+    is recoverable and is recovered: the server's roster follows moments later, the
+    scope changes, and the resubscribe clears the refusal it caused rather than
+    leaving the Pulse behind an error screen. Only the *scoped* listeners' refusals
+    are cleared this way — an `epics` refusal is a real fault and stands
+    (`src/stores/pulseStore.ts:159`).
+
+    Related: `loading` does not clear until all five first-paint listeners have
+    delivered (`src/stores/pulseStore.ts:193`), for the same underlying reason — an
+    unfinished read must never render as a settled empty answer.
 ```

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, Resource, ResourceRate, StatusDef, Subtask } from "@/types";
+import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, ReadScope, Resource, ResourceRate, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { subscribeCosts, createCost, updateCost, deleteCost, newCostId } from "@/services/firestore/costs";
 import { subscribeRates, setResourceRate, deleteResourceRate } from "@/services/firestore/rates";
@@ -15,7 +15,7 @@ import {
   makeInitials,
 } from "@/services/firestore/resources";
 import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes, updatePulseStatuses } from "@/services/firestore/pulses";
-import { subscribePulseMembers, fetchMembership } from "@/services/firestore/memberships";
+import { subscribePulseMembers } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
 import { capsOf } from "@/domain/permissions";
@@ -150,10 +150,16 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
 
   load: (pulseId) => {
     set({ pulseId, loading: true, notFound: false, contentError: null, epics: [], features: [], resources: [], costs: [], rates: [], members: [] });
-    // First refusal wins: one banner naming the fault beats three racing to
+    // Which listener's refusal is the one currently on screen. Only matters
+    // because a *scoped* refusal is recoverable and the others are not — see
+    // `applyReadScope` below.
+    let errorSource: string | null = null;
+    // First refusal wins: one banner naming the fault beats several racing to
     // overwrite each other, and they almost always share a cause.
-    const failContent = (message: string) => {
-      if (get().pulseId === pulseId && !get().contentError) set({ contentError: message, loading: false });
+    const failFrom = (source: string) => (message: string) => {
+      if (get().pulseId !== pulseId || get().contentError) return;
+      errorSource = source;
+      set({ contentError: message, loading: false });
     };
     // `loading` means "there is nothing to paint yet", NOT "the pulse doc
     // arrived". Every listener the first paint reads reports in here, and the
@@ -171,10 +177,9 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     //    `epics.length === 0 && features.length === 0` — which is also exactly
     //    what those arrays hold before their listeners have said anything. When
     //    the gate was pulse+members only, opening a Pulse full of work flashed
-    //    the empty placeholder first. The window is not a frame or two: the
-    //    features listener is created only AFTER an awaited `fetchMembership`
-    //    round trip (the read scope decides the query shape), so it starts a
-    //    whole server request behind the ones subscribed synchronously below.
+    //    the empty placeholder first, because the features listener starts
+    //    behind the ones subscribed synchronously below — it cannot be created
+    //    until the caller's read scope is known.
     //
     // (2) is the swallowed-onError bug wearing different clothes: a read still
     // in flight rendered as a settled empty answer. Both invite someone to
@@ -182,67 +187,120 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     //
     // Nothing can leave this pending forever. Every listener delivers a first
     // snapshot — Firestore serves one from cache when it can't reach the
-    // server — and a refusal goes to `failContent`, which clears `loading`
-    // itself. The one path that never reports is a load superseded by a newer
-    // one, which has set `loading: true` again and owns its own gate.
+    // server — and a refusal clears `loading` itself. The one path that never
+    // reports is a load superseded by a newer one, which has set
+    // `loading: true` again and owns its own gate.
     const pending = new Set(["pulse", "members", "epics", "resources", "features"]);
     const arrived = (source: string) => {
       if (!pending.delete(source)) return; // later snapshots aren't news
       if (pending.size === 0 && get().pulseId === pulseId) set({ loading: false });
     };
+
+    const uid = useAuthStore.getState().firebaseUser?.uid;
+
+    /**
+     * Features and costs are read-scoped (Permissions-Spec §4.3): a My-Beat
+     * Viewer may only see features whose `assignedUids` contain them, and the
+     * rules enforce that on the *query*, so their listener must carry the
+     * `array-contains` constraint. An unconstrained one is refused wholesale.
+     *
+     * So these two cannot be subscribed until the caller's own role is known,
+     * and that role is already in the roster snapshot — a member may list
+     * `pulseMembers` (firestore.rules: `isPulseMember(pulseId)`), and their own
+     * doc is always in the result. This used to spend a separate
+     * `fetchMembership` getDoc on it instead, which put a full server round
+     * trip in front of the two listeners that carry the Pulse's actual
+     * contents, and therefore in front of the first paint.
+     *
+     * The cost of reading it from the roster is that the first roster snapshot
+     * may be served from cache, and a cached role can be stale — someone
+     * demoted to My-Beat Viewer since their last visit would issue the
+     * unconstrained query and be refused. That is why the scope is re-applied
+     * on every roster snapshot rather than resolved once: the server's roster
+     * arrives moments later, the scope changes, and these two resubscribe with
+     * the right query shape.
+     *
+     * A live demotion mid-session lands in exactly the same path, which the old
+     * one-shot resolution never handled at all — it broke the listener with no
+     * way back short of a reload.
+     */
+    let scopedUnsubs: (() => void)[] = [];
+    let scope: ReadScope | null = null; // null = not subscribed yet
+
+    const subscribeScoped = (next: ReadScope) => {
+      scope = next;
+      const beatUid = next === "beat" ? uid : undefined;
+      scopedUnsubs = [
+        subscribeFeatures(pulseId, (features) => {
+          set({ features });
+          reconcileCostScopes(get);
+          arrived("features");
+        }, beatUid, failFrom("features")),
+        // Costs carry the same beat scoping as features (Costs-Spec §7), so they
+        // ride the same resolved read scope rather than resolving it twice.
+        //
+        // Guarded like `rates` below, and for the reason written there: a hidden
+        // panel that still streams a collection bills reads for something nobody
+        // can see. It was streaming anyway, which also left its refusals with
+        // nowhere honest to go — routing them to `contentError` would have
+        // blocked the whole Pulse over a parked feature, and swallowing them is
+        // the bug being fixed. Not subscribing answers both.
+        ...(COSTS_ENABLED
+          ? [subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileCostScopes(get); }, beatUid, failFrom("costs"))]
+          : []),
+      ];
+    };
+
+    const applyReadScope = (members: PulseMember[]) => {
+      const me = uid ? members.find((m) => m.uid === uid) : undefined;
+      // Not in the roster reads as 'all' — the same fallback the getDoc path
+      // used when it came back null. It is very nearly unreachable (our own doc
+      // is always in a list we were allowed to run) and the query it produces
+      // will be refused for a non-member anyway, which is the honest answer.
+      // What matters is that it still resolves the gate: a spinner here would
+      // outlast PulsePage's self-heal, which only runs once `loading` clears.
+      const next: ReadScope = me ? capsOf(me).readScope : "all";
+      if (next === scope) return;
+      scopedUnsubs.forEach((u) => u());
+      scopedUnsubs = [];
+      // A refusal from these two was decided under a read scope we no longer
+      // believe, so it is not a fault any more — it is a question we asked
+      // wrongly. Clear it and let the correctly-shaped query answer. Refusals
+      // from the unscoped listeners are untouched: resubscribing changes
+      // nothing for them.
+      if ((errorSource === "features" || errorSource === "costs") && get().pulseId === pulseId) {
+        errorSource = null;
+        // If features was refused before ever delivering, the gate is still
+        // open and there is genuinely nothing to paint — go back to the
+        // spinner rather than flashing the empty-Pulse placeholder.
+        set(pending.has("features") ? { contentError: null, loading: true } : { contentError: null });
+      }
+      subscribeScoped(next);
+    };
+
     const unsubs = [
       subscribePulse(pulseId, (pulse) => {
         set({ pulse, notFound: pulse === null });
         arrived("pulse");
-      }, failContent),
+      }, failFrom("pulse")),
       subscribeEpics(pulseId, (epics) => {
         set({ epics });
         arrived("epics");
-      }, failContent),
+      }, failFrom("epics")),
       subscribeResources(pulseId, (resources) => {
         set({ resources });
         arrived("resources");
-      }, failContent),
+      }, failFrom("resources")),
       // Parked with the rest of costing (CO21). A hidden panel that still streams
       // a collection bills reads for something nobody can see.
       ...(COSTS_ENABLED ? [subscribeRates(pulseId, (rates) => set({ rates }))] : []),
       subscribePulseMembers(pulseId, (members) => {
         set({ members });
         arrived("members");
-      }, failContent),
+        applyReadScope(members);
+      }, failFrom("members")),
     ];
-    // Features are scoped for a My-Beat Viewer (Permissions-Spec §4.3): the rules
-    // require the array-contains query, so resolve the caller's own read scope
-    // (their membership doc is always self-readable) before subscribing.
-    let featuresUnsub = () => {};
-    let costsUnsub = () => {};
-    const uid = useAuthStore.getState().firebaseUser?.uid;
-    void (async () => {
-      let beatUid: string | undefined;
-      if (uid) {
-        const me = await fetchMembership(pulseId, uid).catch(() => null);
-        if (me && capsOf(me).readScope === "beat") beatUid = uid;
-      }
-      if (get().pulseId !== pulseId) return; // a newer load() superseded this one
-      featuresUnsub = subscribeFeatures(pulseId, (features) => {
-        set({ features });
-        reconcileCostScopes(get);
-        arrived("features");
-      }, beatUid, failContent);
-      // Costs carry the same beat scoping as features (Costs-Spec §7), so they
-      // ride the same resolved read scope rather than resolving it twice.
-      //
-      // Guarded like `rates` above, and for the reason already written there: a
-      // hidden panel that still streams a collection bills reads for something
-      // nobody can see. It was streaming anyway, which also left its refusals
-      // with nowhere honest to go — routing them to `contentError` would have
-      // blocked the whole Pulse over a parked feature, and swallowing them is
-      // the bug being fixed. Not subscribing answers both.
-      if (COSTS_ENABLED) {
-        costsUnsub = subscribeCosts(pulseId, (costs) => { set({ costs }); reconcileCostScopes(get); }, beatUid, failContent);
-      }
-    })();
-    return () => { unsubs.forEach((u) => u()); featuresUnsub(); costsUnsub(); };
+    return () => { unsubs.forEach((u) => u()); scopedUnsubs.forEach((u) => u()); };
   },
 
   roleOf: (uid) => get().members.find((m) => m.uid === uid)?.role ?? null,
