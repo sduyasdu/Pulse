@@ -522,6 +522,11 @@ export function PulsePage() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg">
         <Spinner size={24} label={t("pulse.loading")} />
+        {/* The spinner now holds until every first-paint listener has reported
+            (see pulseStore.load), which puts a bad connection squarely inside
+            it — this is the screen most likely to be sat on, so it is the one
+            that most needs to say why. */}
+        <NetworkBanner uid={uid} />
       </div>
     );
   }

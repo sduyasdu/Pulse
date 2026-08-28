@@ -150,39 +150,65 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
 
   load: (pulseId) => {
     set({ pulseId, loading: true, notFound: false, contentError: null, epics: [], features: [], resources: [], costs: [], rates: [], members: [] });
-    // `loading` must not go false until BOTH the pulse doc and the
-    // pulseMembers roster have delivered their first snapshot — these are
-    // two independent onSnapshot listeners with no ordering guarantee.
-    // roleOf(uid) depends on `members`, and PulsePage's self-heal check
-    // ("not a member -> stale, bounce to dashboard") fires the instant
-    // `loading` goes false; if the pulse doc snapshot arrived first while
-    // `members` was still its initial empty array, that check would see a
-    // false "not a member" and delete a perfectly valid myPulses entry.
-    let pulseArrived = false;
-    let membersArrived = false;
     // First refusal wins: one banner naming the fault beats three racing to
     // overwrite each other, and they almost always share a cause.
     const failContent = (message: string) => {
       if (get().pulseId === pulseId && !get().contentError) set({ contentError: message, loading: false });
     };
-    const maybeFinishLoading = () => {
-      if (pulseArrived && membersArrived) set({ loading: false });
+    // `loading` means "there is nothing to paint yet", NOT "the pulse doc
+    // arrived". Every listener the first paint reads reports in here, and the
+    // spinner holds until all of them have.
+    //
+    // Two independent reasons, and dropping either one has already cost us:
+    //
+    // 1. `roleOf(uid)` depends on `members`, and PulsePage's self-heal check
+    //    ("not a member -> stale entry, bounce to the dashboard") fires the
+    //    instant `loading` clears. With the pulse doc arriving first and
+    //    `members` still its initial `[]`, that check reads a false "not a
+    //    member" and deletes a perfectly good myPulses entry.
+    //
+    // 2. The canvas draws "This Pulse is empty / add a task" from
+    //    `epics.length === 0 && features.length === 0` — which is also exactly
+    //    what those arrays hold before their listeners have said anything. When
+    //    the gate was pulse+members only, opening a Pulse full of work flashed
+    //    the empty placeholder first. The window is not a frame or two: the
+    //    features listener is created only AFTER an awaited `fetchMembership`
+    //    round trip (the read scope decides the query shape), so it starts a
+    //    whole server request behind the ones subscribed synchronously below.
+    //
+    // (2) is the swallowed-onError bug wearing different clothes: a read still
+    // in flight rendered as a settled empty answer. Both invite someone to
+    // re-create work that was already on its way.
+    //
+    // Nothing can leave this pending forever. Every listener delivers a first
+    // snapshot — Firestore serves one from cache when it can't reach the
+    // server — and a refusal goes to `failContent`, which clears `loading`
+    // itself. The one path that never reports is a load superseded by a newer
+    // one, which has set `loading: true` again and owns its own gate.
+    const pending = new Set(["pulse", "members", "epics", "resources", "features"]);
+    const arrived = (source: string) => {
+      if (!pending.delete(source)) return; // later snapshots aren't news
+      if (pending.size === 0 && get().pulseId === pulseId) set({ loading: false });
     };
     const unsubs = [
       subscribePulse(pulseId, (pulse) => {
-        pulseArrived = true;
         set({ pulse, notFound: pulse === null });
-        maybeFinishLoading();
+        arrived("pulse");
       }, failContent),
-      subscribeEpics(pulseId, (epics) => set({ epics }), failContent),
-      subscribeResources(pulseId, (resources) => set({ resources }), failContent),
+      subscribeEpics(pulseId, (epics) => {
+        set({ epics });
+        arrived("epics");
+      }, failContent),
+      subscribeResources(pulseId, (resources) => {
+        set({ resources });
+        arrived("resources");
+      }, failContent),
       // Parked with the rest of costing (CO21). A hidden panel that still streams
       // a collection bills reads for something nobody can see.
       ...(COSTS_ENABLED ? [subscribeRates(pulseId, (rates) => set({ rates }))] : []),
       subscribePulseMembers(pulseId, (members) => {
-        membersArrived = true;
         set({ members });
-        maybeFinishLoading();
+        arrived("members");
       }, failContent),
     ];
     // Features are scoped for a My-Beat Viewer (Permissions-Spec §4.3): the rules
@@ -198,7 +224,11 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         if (me && capsOf(me).readScope === "beat") beatUid = uid;
       }
       if (get().pulseId !== pulseId) return; // a newer load() superseded this one
-      featuresUnsub = subscribeFeatures(pulseId, (features) => { set({ features }); reconcileCostScopes(get); }, beatUid, failContent);
+      featuresUnsub = subscribeFeatures(pulseId, (features) => {
+        set({ features });
+        reconcileCostScopes(get);
+        arrived("features");
+      }, beatUid, failContent);
       // Costs carry the same beat scoping as features (Costs-Spec §7), so they
       // ride the same resolved read scope rather than resolving it twice.
       //
