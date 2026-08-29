@@ -190,6 +190,55 @@ Has bitten three times (`help`, `link_off`, `expand_content`). Extract new glyph
 from `@material-symbols/svg-400` in `node_modules` rather than drawing them —
 `icons.ts` says at the top that it is generated from exactly that package.
 
+## A service worker does not uninstall when you delete the plugin
+
+`vite.config.ts` ships one (`vite-plugin-pwa`, `generateSW`) so the app boots
+offline: Firestore's `persistentLocalCache` already held the data, but nothing
+held the *app*, so a reload with no connection got the browser's own "This site
+can't be reached" and the cached data was never reached either.
+
+**Removing the plugin does not remove the worker.** Every browser that installed
+it keeps serving the last build it cached, forever, and those users never see
+another deploy. There is no way to reach them except through the worker they
+already have. The retreat is:
+
+```
+VitePWA({ selfDestroying: true, ... })   # build a worker whose only job is to
+npm run deploy                           # unregister itself and drop its caches
+```
+
+Leave that deployed until the installed base has picked it up, *then* delete the
+plugin. Reverting the commit is not a rollback here — it is how you strand
+everyone who already has it.
+
+### The navigation fallback will hijack sign-in if you let it
+
+The worker answers unrecognised same-origin navigations with `index.html`. This
+origin serves several things that are not the SPA, and `signInWithPopup`
+navigates the popup to `/__/auth/handler` — serve that `index.html` and Google
+sign-in stops working, with nothing in the console and the app looking fine.
+
+The denylist lives in `build/swRoutes.ts` next to `build/swRoutes.test.ts`,
+which pins both halves: `/__/*`, `/mcp`, `/oauth/{register,token}` and
+`/.well-known/*` must NOT get the shell, and `/oauth/authorize` **must** — it
+sits among those endpoints and is an SPA route, the same carve-out
+`firebase.json` documents at its own catch-all.
+
+Add a hosting rewrite to a function? Add it there too, or it starts answering
+with HTML.
+
+### Verifying it actually works needs a browser
+
+`npm run build` reports `precache N entries` whether or not any of it is
+reachable, and no unit test boots a service worker. What was actually run (and
+is worth re-running after touching any of this) is headless Chrome over CDP:
+serve `dist/`, load once to install the worker, `Network.emulateNetworkConditions
+{offline:true}`, reload, and assert `#root` has real content.
+
+Offline is also the clean way to test the denylist: with no network the worker
+is the *only* thing that can answer, so a path that boots is one it served and a
+path that fails is one it declined.
+
 ## Specs are the design record, and decisions are numbered
 
 Feature-per-spec markdown at the repo root (`Kanban-Spec.md`, `Costs-Spec.md`,
