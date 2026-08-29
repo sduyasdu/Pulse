@@ -69,6 +69,7 @@ export const it: Dict = {
   "common.done": "Fatto",
   "common.retry": "Riprova",
   "common.loadError": "Impossibile caricare. Potresti aver perso l'accesso, o è caduta la connessione.",
+  "net.connected": "Connesso a Pulse.",
   "net.offline": "Sei offline.",
   "net.unreachable": "C'è rete, ma Pulse non raggiunge il server.",
   "net.editsQueued": "Stai vedendo gli ultimi dati caricati. Le modifiche restano salvate su questo dispositivo e si sincronizzano al ritorno della connessione.",

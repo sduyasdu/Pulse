@@ -10,9 +10,12 @@ import { MultiSelectFilter, type Option } from "@/components/shared/MultiSelectF
 import { SharePulseButton } from "@/components/shared/SharePulseButton";
 import { Icon } from "@/components/shared/Icon";
 import { PulseLockup } from "@/components/shared/Logo";
+import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 
 interface ToolbarProps {
   pulseName: string;
+  /** Enables the connection indicator's Firestore reachability probe. */
+  uid?: string | null;
   onRenamePulse: (name: string) => void;
   onInvite: () => void;
   commentsOpen: boolean;
@@ -70,6 +73,7 @@ interface ToolbarProps {
 
 export function Toolbar({
   pulseName,
+  uid,
   onRenamePulse,
   onInvite,
   commentsOpen,
@@ -208,6 +212,9 @@ export function Toolbar({
           ))}
         </div>
         <div className="flex-1" />
+        {/* Status, not a control — so it sits with the right-hand cluster but
+            ahead of the buttons, and stays the same size in both states. */}
+        <ConnectionStatus uid={uid} />
         <button
           onClick={onToggleHelp}
           title={t("help.open")}

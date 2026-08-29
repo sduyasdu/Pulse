@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useBackClose } from "@/hooks/useBackClose";
 import { Icon } from "@/components/shared/Icon";
+import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 import { Link, useNavigate } from "react-router-dom";
 import { usePulseStore } from "@/stores/pulseStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -92,6 +93,7 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
           <div className="font-display text-white text-sm font-semibold truncate">{pulse?.name?.trim() || t("common.untitledPulse")}</div>
           <div className="mono" style={{ fontSize: 9, color: "#94A3B8", textTransform: "uppercase" }}>{myRole}</div>
         </div>
+        <ConnectionStatus uid={uid} size={16} />
         <PresenceBar pulseId={pulse?.id} uid={uid} email={email} dark />
         {pulse && (
           <button onClick={() => setShowComments(true)} className="flex items-center justify-center rounded" style={{ width: 32, height: 32, color: "#EE7240" }} title={t("pulse.comments")} aria-label={t("pulse.comments")}>

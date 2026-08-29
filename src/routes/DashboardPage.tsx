@@ -24,7 +24,7 @@ import { PulseCard } from "@/components/dashboard/PulseCard";
 import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto } from "@/services/firestore/workspaces";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 import { UnverifiedBanner } from "@/components/dashboard/UnverifiedBanner";
-import { NetworkBanner } from "@/components/shared/NetworkBanner";
+import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 
 export function DashboardPage() {
   const { firebaseUser, userDoc } = useAuthStore();
@@ -217,6 +217,9 @@ export function DashboardPage() {
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
         <PulseLockup variant="dark" size={16} />
         <div className="flex-1" />
+        {/* Status, not a control — same placement as the Pulse toolbar's, so
+            it is in the same place whichever screen you are on. */}
+        <ConnectionStatus uid={firebaseUser?.uid} size={16} />
         {/* Same help as inside a Pulse — arguably more useful here, where a
             newcomer hasn't opened one yet. Full-screen on mobile, a pinned
             drawer on desktop (the dashboard scrolls, so it can't be absolute). */}
@@ -269,9 +272,6 @@ export function DashboardPage() {
             {t("dashboard.newPulse")}
           </button>
         </div>
-
-        {/* Fixed-position, so it sits outside the flow wherever it is mounted. */}
-        <NetworkBanner uid={firebaseUser?.uid} />
 
         {/* Above the quota banner: an unconfirmed address blocks invitations
             entirely, which is a harder stop than being near a plan limit. */}

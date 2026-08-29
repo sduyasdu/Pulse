@@ -69,6 +69,7 @@ export const fr: Dict = {
   "common.done": "Terminé",
   "common.retry": "Réessayer",
   "common.loadError": "Chargement impossible. Vous avez peut-être perdu l'accès, ou la connexion a été coupée.",
+  "net.connected": "Connecté à Pulse.",
   "net.offline": "Vous êtes hors ligne.",
   "net.unreachable": "Réseau détecté, mais Pulse n'atteint pas le serveur.",
   "net.editsQueued": "Vous voyez les dernières données chargées. Les modifications sont enregistrées sur cet appareil et se synchronisent au retour de la connexion.",

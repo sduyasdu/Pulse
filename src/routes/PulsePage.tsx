@@ -7,7 +7,7 @@ import { ensureMyPulseEntry, getPulse, removeMyPulseEntry, setPulseArchived, upd
 import { logDirectActivity } from "@/domain/activityRecorder";
 import { backfillMyOwnerEmail, fetchMembership, syncMyMemberPhoto } from "@/services/firestore/memberships";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
-import { NetworkBanner } from "@/components/shared/NetworkBanner";
+import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
@@ -522,34 +522,31 @@ export function PulsePage() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-yasdu-bg">
         <Spinner size={24} label={t("pulse.loading")} />
-        {/* The spinner now holds until every first-paint listener has reported
-            (see pulseStore.load), which puts a bad connection squarely inside
-            it — this is the screen most likely to be sat on, so it is the one
-            that most needs to say why. */}
-        <NetworkBanner uid={uid} />
+        {/* The spinner holds until every first-paint listener has reported (see
+            pulseStore.load), which puts a bad connection squarely inside it —
+            and this branch has no toolbar to carry the indicator, so it gets
+            its own. */}
+        <ConnectionStatus uid={uid} />
       </div>
     );
   }
 
   // Phones get the dedicated touch UI; the canvas layout below is desktop/tablet.
-  // The banner is rendered in BOTH branches rather than above them: this one
-  // returns early, and a Pulse opened on a phone is the likeliest of all to be
-  // on a connection worth warning about.
+  // It carries the connection indicator in its own header, as the toolbar does
+  // below — a Pulse opened on a phone is the likeliest of all to be on a
+  // connection worth knowing about.
   if (isMobile) {
     return (
-      <>
-        <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} onUnarchive={() => void handleUnarchive()} />
-        <NetworkBanner uid={uid} />
-      </>
+      <MobilePulseView pulse={pulse} canEdit={canEdit} canEditFeature={canEditFeature} myRole={myRole} uid={uid!} onUnarchive={() => void handleUnarchive()} />
     );
   }
 
   return (
     <div className="w-full flex flex-col" style={{ background: "#0A1428", height: viewportH ? `${viewportH}px` : "100dvh" }}>
-      <NetworkBanner uid={uid} />
       <Toolbar
         pulseName={pulse?.name ?? ""}
         onRenamePulse={(name) => void renamePulse(name)}
+        uid={uid}
         onInvite={() => setShowInvite(true)}
         commentsOpen={commentsOpen}
         onToggleComments={() => { setCommentsOpen((v) => !v); if (!commentsOpen) setHelpOpen(false); }}

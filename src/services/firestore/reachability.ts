@@ -2,6 +2,25 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 /**
+ * How long the probe must stay cache-served before we call it unreachable.
+ *
+ * Not cosmetic damping. With `persistentLocalCache` the *first* snapshot of any
+ * document is served from disk, with `fromCache === true`, while the SDK is
+ * still opening its channel — so a bare read of that flag reports "unreachable"
+ * on every single page load, for as long as the connection takes to establish.
+ * That is what the status indicator showed on startup, every time, and a status
+ * that is wrong at exactly the moment everyone looks at it teaches people to
+ * ignore it.
+ *
+ * A device that is genuinely offline is not made slower by this: `navigator.
+ * onLine` reports that immediately and outranks the probe (see
+ * `networkStatusOf`). What this delay covers is the case only the probe can
+ * see — a network that exists but cannot reach Firestore — where a few seconds
+ * of "connected" before the truth lands costs nothing.
+ */
+export const REACHABILITY_SETTLE_MS = 4000;
+
+/**
  * Can we actually reach Firestore right now?
  *
  * `navigator.onLine` answers a different and weaker question — "is there a
@@ -20,15 +39,48 @@ import { db } from "@/lib/firebase";
  * owner (`firestore.rules`, `users/{uid}`), already tiny. After the first read
  * the metadata events are local, so this costs one read per session rather than
  * a poll.
+ *
+ * Reaching the server is reported the instant it happens; losing it is reported
+ * only after `REACHABILITY_SETTLE_MS` of continuous cache-served snapshots. The
+ * asymmetry is deliberate — see that constant.
  */
 export function subscribeServerReachable(uid: string, cb: (reachable: boolean) => void): () => void {
-  return onSnapshot(
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  /** What we last told the caller, so a run of identical snapshots is quiet. */
+  let reported: boolean | null = null;
+
+  const unsub = onSnapshot(
     doc(db, "users", uid),
     { includeMetadataChanges: true },
-    (snap) => cb(!snap.metadata.fromCache),
+    (snap) => {
+      if (!snap.metadata.fromCache) {
+        clearTimeout(timer);
+        timer = undefined;
+        if (reported !== true) {
+          reported = true;
+          cb(true);
+        }
+        return;
+      }
+      // Cache-served. That is either a connection we have lost or one we have
+      // not opened yet, and the two are indistinguishable from here — so wait
+      // and see rather than guessing.
+      if (reported === false || timer !== undefined) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        reported = false;
+        cb(false);
+      }, REACHABILITY_SETTLE_MS);
+    },
     // A refused probe says nothing about the network, so don't report it as
-    // unreachable — that would put an offline banner in front of someone whose
-    // connection is fine. The read-failure paths elsewhere cover real denials.
+    // unreachable — that would put an offline indicator in front of someone
+    // whose connection is fine. The read-failure paths elsewhere cover real
+    // denials.
     () => {},
   );
+
+  return () => {
+    clearTimeout(timer);
+    unsub();
+  };
 }
