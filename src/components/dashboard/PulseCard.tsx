@@ -37,7 +37,12 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
 
   return (
     <div
-      className="group relative flex flex-col justify-between rounded-xl border p-4 transition-shadow hover:shadow-md"
+      // `min-w-0`: a grid item's min-width defaults to `auto`, which resolves to
+      // its MIN-CONTENT width — the longest unbreakable word inside it. A Pulse
+      // name with no spaces therefore set a floor on its column, on the grid,
+      // and so on the whole page, which then scrolled sideways. Nothing stops
+      // anyone naming a Pulse that way.
+      className="group relative flex min-w-0 flex-col justify-between rounded-xl border p-4 transition-shadow hover:shadow-md"
       style={{ borderColor: "#E2DFD9", background: dimmed ? "#FAF9F5" : "#FFFFFF", minHeight: 108, opacity: dimmed ? 0.85 : 1 }}
     >
       {/* Actions menu — bottom-right, always visible, sits above the card's
@@ -69,7 +74,12 @@ export function PulseCard({ entry, onRenameClick, onInviteClick, onDuplicateClic
         ) : (
           <div style={{ height: 56, background: "#FDFCF8", border: "1px solid #EEF1F4", borderRadius: 6 }} />
         )}
-        <div className="font-display mt-2.5 text-sm font-medium text-yasdu-fg">{entry.name || t("common.untitledPulse")}</div>
+        {/* `truncate` both keeps the card one line tall and drops the name's
+            min-content contribution to zero, so it can no longer widen the
+            column. `title` so the full name is still reachable. */}
+        <div className="font-display mt-2.5 truncate text-sm font-medium text-yasdu-fg" title={entry.name || undefined}>
+          {entry.name || t("common.untitledPulse")}
+        </div>
         {/* The section already conveys ownership, so the "Owner" badge is
             redundant — only show Editor/Viewer (and the state tags). Archived
             reads louder than Hidden: it's a fact about the Pulse everyone can

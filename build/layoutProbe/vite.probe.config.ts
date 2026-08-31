@@ -9,8 +9,23 @@ import path from "node:path";
  * carry the PWA plugin, whose service worker would cache the probe's own
  * output.
  */
+const REPO = path.resolve(import.meta.dirname, "../..");
+
 export default defineConfig({
-  root: path.resolve(import.meta.dirname),
+  /**
+   * The REPO root, not this directory — load-bearing, and getting it wrong
+   * produced a probe that confidently measured nonsense.
+   *
+   * Tailwind v4 discovers the classes to generate by scanning from the project
+   * root. Rooted at `build/layoutProbe`, it scanned only this folder, so every
+   * utility used inside `src/components/**` was missing from the probe's CSS —
+   * including `flex-col`. The toolbar's two rows then laid out as a ROW instead
+   * of a column, and the probe reported ~1900px of "overflow" that was really
+   * row 1 and row 2 sitting side by side. It looked like a genuine finding: it
+   * scaled with the viewport, varied by language, and got worse with longer
+   * names.
+   */
+  root: REPO,
   base: "./",
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -18,12 +33,15 @@ export default defineConfig({
     // the general "@" prefix rule can resolve it to the real module.
     alias: [
       { find: /^@\/lib\/firebase$/, replacement: path.resolve(import.meta.dirname, "firebaseStub.ts") },
+      // Anchored at both ends: Vite replaces only the MATCHED substring, so an
+      // unanchored pattern turns "./usePulseSummary" into "./<absolute path>".
+      { find: /^.*\/usePulseSummary$/, replacement: path.resolve(import.meta.dirname, "summaryStub.ts") },
       { find: /^@\//, replacement: path.resolve(import.meta.dirname, "../../src") + "/" },
     ],
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, "../../.probe-dist"),
+    outDir: path.join(REPO, ".probe-dist"),
     emptyOutDir: true,
-    rollupOptions: { input: path.resolve(import.meta.dirname, "probe.html") },
+    rollupOptions: { input: path.join(import.meta.dirname, "probe.html") },
   },
 });

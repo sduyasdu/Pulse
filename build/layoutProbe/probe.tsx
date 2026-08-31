@@ -1,59 +1,58 @@
 /**
- * Layout probe — does a header actually FIT at a given viewport width?
+ * Layout probe — does the page fit the display it is rendered on?
  *
- * `tsc`, the unit tests and the build all pass while a toolbar overflows its
- * viewport: nothing in this project lays anything out. jsdom has no layout
- * engine, so `clientWidth` is 0 everywhere and a test asserting "it fits" would
- * pass against a toolbar three times too wide.
+ * `tsc`, the unit tests and the build all pass while a page runs wider than the
+ * screen: the unit tests run on jsdom, which has no layout engine, so every
+ * `clientWidth` is 0 and an assertion that something fits passes against
+ * anything at all.
  *
- * So this renders the REAL `Toolbar` — the same component the Pulse page
- * mounts, not a copy of its markup — into a series of fixed-width containers,
- * and measures `scrollWidth` against `clientWidth` for each row. Chrome runs it
- * headless and `measure.mjs` reads the report out of the DOM.
+ * So this renders REAL components — the ones the app mounts, not copies of
+ * their markup — and `measure.mjs` drives Chrome through a range of viewport
+ * widths, asking after each one: is the document wider than the window?
  *
- * Fixed-width containers rather than real viewport resizes, deliberately: the
- * toolbar's layout is inline styles and unprefixed Tailwind utilities with no
- * `@media` rules of its own, so a 900px-wide box lays out exactly as a 900px
- * viewport would. The one thing that IS viewport-driven — the 767px mobile
- * cutoff in `useIsMobile` — is a JS media query that swaps the whole page for
- * `MobilePulseView`, so widths below it never render this toolbar at all and
- * are not probed.
+ * Real viewport resizes, not fixed-width boxes. The first version of this probe
+ * used fixed-width containers, which is fine for the toolbar (inline styles, no
+ * media queries) but silently wrong for anything using Tailwind's `sm:`/`lg:`
+ * breakpoints — those match on the VIEWPORT, so a 1400px box inside an 800px
+ * window still lays out at the 800px breakpoint. The dashboard grid is exactly
+ * that case, and it is the one that overflows.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { Toolbar } from "@/components/canvas/Toolbar";
+import { PulseCard } from "@/components/dashboard/PulseCard";
+import { PulseLockup } from "@/components/shared/Logo";
+import { Icon } from "@/components/shared/Icon";
 import { useI18nStore } from "@/stores/i18nStore";
 import { ensureDict } from "@/i18n/dictionaries";
 import { SUPPORTED_LANGS, type Lang } from "@/i18n/langs";
+import type { MyPulseIndexEntry } from "@/types";
 import "@/index.css";
 
-/** The desktop range: the mobile cutoff is 767px, so 768 is the narrowest
- * viewport that ever renders this toolbar. The rest are common laptop and
- * monitor widths, plus a window docked to half of each. */
-const WIDTHS = [768, 900, 1024, 1152, 1280, 1440, 1512, 1680, 1920, 2560];
+const noop = () => {};
 
 /**
- * Pulse names to probe. The name input's width is computed from the character
- * count with no cap, and it sits in the row that cannot wrap — so the name is
- * an input to whether the toolbar fits, not decoration.
+ * Pulse names to probe.
+ *
+ * `unbroken` is the point of the exercise, not an exotic edge case: a grid item
+ * has `min-width: auto`, which resolves to its MIN-CONTENT width — the longest
+ * word that cannot be broken. A name with no spaces therefore sets a floor on
+ * its column, on the grid, and so on the page. People name Pulses like this
+ * routinely, and nothing in the product stops them.
  */
 const NAMES = [
   { label: "short", value: "Roadmap" },
   { label: "typical", value: "Q3 Platform Roadmap" },
   { label: "long", value: "Q3 Platform Roadmap — Payments, Billing and Identity" },
+  { label: "unbroken", value: "Q3-Platform-Roadmap-Payments-Billing-Identity-Migration" },
 ];
 
-const noop = () => {};
+const entryFor = (name: string, i: number): MyPulseIndexEntry =>
+  ({ pulseId: `p${i}`, name, workspaceId: "w1", role: "owner", joinedAt: null, createdAt: Date.UTC(2026, 6, 2) }) as unknown as MyPulseIndexEntry;
 
-const OPTIONS = [
-  { id: "e1", name: "Platform foundations", color: "#8B5CF6" },
-  { id: "e2", name: "Billing", color: "#3B82F6" },
-];
-
-/** An owner on the canvas — every control present, which is the case that has
- * to fit. */
-function probeToolbar(archived: boolean, pulseName: string) {
+/** The Pulse toolbar, as PulsePage mounts it for an owner on the canvas. */
+function ToolbarScene({ pulseName }: { pulseName: string }) {
   return (
     <Toolbar
       pulseName={pulseName}
@@ -90,8 +89,8 @@ function probeToolbar(archived: boolean, pulseName: string) {
       myPulse={false}
       onToggleMyPulse={noop}
       canMyPulse
-      epicOptions={OPTIONS}
-      statusOptions={OPTIONS}
+      epicOptions={[{ id: "e1", name: "Platform foundations", color: "#8B5CF6" }]}
+      statusOptions={[{ id: "s1", name: "Planned", color: "#8B5CF6" }]}
       showDelays={false}
       setShowDelays={noop}
       epicsShrunk={false}
@@ -103,122 +102,140 @@ function probeToolbar(archived: boolean, pulseName: string) {
       onSetGraphConfig={noop}
       canEdit
       roleLabel="Owner"
-      archived={archived}
       helpOpen={false}
       onToggleHelp={noop}
     />
   );
 }
 
-interface RowResult {
-  width: number;
-  lang: string;
-  name: string;
-  rows: { row: number; overflow: number }[];
+/** The dashboard, with the same header and grid classes DashboardPage uses. */
+function DashboardScene({ pulseName }: { pulseName: string }) {
+  return (
+    <div className="min-h-screen bg-yasdu-bg">
+      <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
+        <PulseLockup variant="dark" size={16} />
+        <div className="flex-1" />
+        <span data-right-edge className="flex items-center justify-center rounded" style={{ width: 30, height: 30, color: "#EE7240" }}>
+          <Icon name="help" size={18} />
+        </span>
+      </header>
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <PulseCard
+              key={i}
+              entry={entryFor(pulseName, i)}
+              onRenameClick={noop}
+              onInviteClick={noop}
+              onDuplicateClick={noop}
+              onHide={noop}
+              onUnhide={noop}
+              onArchive={noop}
+              onUnarchive={noop}
+              onDelete={noop}
+              onLeave={noop}
+            />
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene };
+export type SceneName = keyof typeof SCENES;
+
+interface Measurement {
+  /** What the page thinks the window is. The driver asserts this matches the
+   * width it asked for — a viewport override that silently fails would make
+   * every number below a measurement of the wrong thing. */
+  clientWidth: number;
+  documentOverflow: number;
+  offenders: { tag: string; cls: string; right: number; text: string; path: string }[];
 }
 
 /**
- * How far past its container the row's content actually reaches.
+ * How far the document runs past the window, and what is doing it.
  *
- * `scrollWidth - clientWidth` is NOT enough on its own. A flex row whose items
- * overflow does not always grow its own scrollable area the way a block does,
- * and reading only that reported "fits" for every width — including ones that
- * visibly did not. So this also walks the row's children and takes the furthest
- * right edge, which is what a reader actually sees running off the screen.
+ * The document-level number is the user's actual symptom — a horizontal
+ * scrollbar on the window. The offender list is what makes it fixable: the
+ * deepest elements whose right edge is past the window, which is the element
+ * that set the floor rather than every ancestor stretched by it.
  */
-function overflowOf(row: HTMLElement): number {
-  const box = row.getBoundingClientRect();
-  let furthest = box.right;
-  for (const child of Array.from(row.children)) {
-    furthest = Math.max(furthest, (child as HTMLElement).getBoundingClientRect().right);
+function measure(): Measurement {
+  const limit = document.documentElement.clientWidth;
+  const offenders: Measurement["offenders"] = [];
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
+    const right = el.getBoundingClientRect().right;
+    if (right <= limit + 1) continue;
+    // Only the deepest: an ancestor is wide because its child is.
+    if (Array.from(el.children).some((c) => (c as HTMLElement).getBoundingClientRect().right > limit + 1)) continue;
+    // An unnamed <div class=""> tells you nothing on its own, and the widest
+    // offenders are usually exactly that. The ancestor chain is what makes the
+    // element findable in the source.
+    const chain: string[] = [];
+    for (let p = el.parentElement, i = 0; p && i < 4; p = p.parentElement, i++) {
+      const c = (p.className + "").split(/\s+/).filter(Boolean).slice(0, 3).join(".");
+      chain.unshift(p.tagName.toLowerCase() + (c ? "." + c : ""));
+    }
+    offenders.push({
+      tag: el.tagName.toLowerCase(),
+      cls: (el.className + "").slice(0, 40) || (el.getAttribute("style") ?? "").slice(0, 40),
+      right: Math.round(right),
+      text: (el.textContent ?? "").trim().slice(0, 24),
+      path: chain.join(" > ").slice(0, 150),
+    });
   }
-  return Math.round(Math.max(row.scrollWidth - row.clientWidth, furthest - box.right));
+  return {
+    clientWidth: limit,
+    documentOverflow: Math.round(document.documentElement.scrollWidth - limit),
+    // Widest first, not first-in-document. Taking them in DOM order reported
+    // elements a few pixels over while the one setting the page's real width
+    // sat further down the list, unmentioned.
+    offenders: offenders.sort((a, b) => b.right - a.right).slice(0, 5),
+  };
+}
+
+declare global {
+  interface Window {
+    __probe?: {
+      ready: boolean;
+      show: (scene: SceneName, lang: Lang, name: string) => void;
+      measure: () => Measurement;
+    };
+  }
 }
 
 function Probe() {
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const [lang, setLang] = useState<Lang>("en");
+  const [scene, setScene] = useState<SceneName>("toolbar");
+  const [pulseName, setPulseName] = useState(NAMES[0].value);
   const [ready, setReady] = useState(false);
-  const [done, setDone] = useState(false);
-  const results = useRef<RowResult[]>([]);
-  const dictVersion = useI18nStore((s) => s.dictVersion);
+  useI18nStore((s) => s.dictVersion); // re-render when a dictionary lands
 
-  // Load every dictionary up front, then walk the languages one at a time. The
-  // non-English dictionaries are dynamically imported, so measuring before one
-  // has landed would measure English strings under a German label.
   useEffect(() => {
     void Promise.all(SUPPORTED_LANGS.map((l) => ensureDict(l))).then(() => setReady(true));
   }, []);
 
-  useLayoutEffect(() => {
-    const host = hostRef.current;
-    if (!host || !ready || done) return;
-    for (const box of Array.from(host.querySelectorAll<HTMLElement>("[data-probe-width]"))) {
-      const root = box.firstElementChild as HTMLElement | null;
-      if (!root) continue;
-      results.current.push({
-        width: Number(box.dataset.probeWidth),
-        lang,
-        name: box.dataset.probeName ?? "",
-        rows: Array.from(root.children).map((el, i) => ({ row: i + 1, overflow: overflowOf(el as HTMLElement) })),
-      });
-    }
-    // Self-check: a row that provably cannot fit, measured by the same code.
-    // Without it "fits" is unfalsifiable — the first version of this probe
-    // reported "fits" for every width and language, and it was measuring
-    // nothing at all. Overflow inside the toolbar is only believable as an
-    // absence once this is present.
-    const control = host.parentElement?.querySelector<HTMLElement>("[data-probe-control] > *");
-    if (control && !results.current.some((r) => r.name === "CONTROL")) {
-      results.current.push({ width: 768, lang: "--", name: "CONTROL", rows: [{ row: 1, overflow: overflowOf(control) }] });
-    }
+  useEffect(() => {
+    window.__probe = {
+      ready,
+      show: (s, lang, name) => {
+        useI18nStore.getState().setLang(lang);
+        setScene(s);
+        setPulseName(name);
+      },
+      measure,
+    };
+  }, [ready]);
 
-    const next = SUPPORTED_LANGS[SUPPORTED_LANGS.indexOf(lang) + 1];
-    if (next) {
-      useI18nStore.getState().setLang(next);
-      setLang(next);
-      return;
-    }
-    const el = document.getElementById("report");
-    if (el) el.textContent = JSON.stringify(results.current);
-    setDone(true);
-  }, [ready, lang, done, dictVersion]);
-
-  return (
-    <>
-      <pre id="report" data-done={done ? "1" : "0"} />
-      {/* The self-check's subject: one flex row, 768px wide, holding an item
-          that refuses to shrink and is far too wide for it. Outside `hostRef`
-          so it is never mistaken for a toolbar measurement. */}
-      <div data-probe-control style={{ width: 768, overflow: "visible" }}>
-        <div style={{ display: "flex" }}>
-          <div style={{ width: 2000, flexShrink: 0, height: 1 }} />
-        </div>
-      </div>
-      <div ref={hostRef}>
-        {NAMES.map((n) =>
-          WIDTHS.map((w) => (
-            <div
-              key={`${n.label}-${w}`}
-              data-probe-width={w}
-              data-probe-name={n.label}
-              // `overflow: visible` on purpose: clipping would hide the very
-              // thing being measured.
-              style={{ width: w, overflow: "visible", marginBottom: 8 }}
-            >
-              {probeToolbar(false, n.value)}
-            </div>
-          )),
-        )}
-      </div>
-    </>
-  );
+  const Scene = SCENES[scene];
+  return <Scene pulseName={pulseName} />;
 }
 
-// No StrictMode: its deliberate double-invocation would run the measuring
-// layout effect twice per language and double every row in the report.
 createRoot(document.getElementById("root")!).render(
   <MemoryRouter>
     <Probe />
   </MemoryRouter>,
 );
+
+export { NAMES };

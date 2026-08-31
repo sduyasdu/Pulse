@@ -135,20 +135,36 @@ export function Toolbar({
 
   return (
     <div className="flex flex-col flex-shrink-0 border-b" style={{ background: "#123359", borderColor: "#24406B" }}>
-      <div className="flex items-center gap-3 px-4" style={{ height: 34, borderBottom: "1px solid #24406B" }}>
+      {/* Wraps, like the row below it. It used to be a fixed-height no-wrap
+          row, which meant its contents simply ran off the right of the screen
+          once they no longer fitted — taking the view switch, help and effort
+          scale with them, with no scrollbar to reach them by. Measured at
+          64px over at 768px in English and 431px over in German with a long
+          Pulse name (`npm run test:layout`).
+          `minHeight` rather than `height`: a fixed height on a wrapping row
+          clips the second line instead of growing. */}
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4"
+        style={{ minHeight: 34, paddingTop: 4, paddingBottom: 4, borderBottom: "1px solid #24406B" }}
+      >
         <Link to="/" className="flex items-center gap-2" title={t("toolbar.backToDashboard")}>
           <PulseLockup variant="dark" size={15} />
         </Link>
-        <div className="flex items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
+        <div className="flex min-w-0 items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
           <span className="font-display" style={{ color: "#EE7240", fontSize: 14, fontWeight: 500 }}>›</span>
+          {/* The width tracks the name so the field looks like a heading rather
+              than an input, but it is CAPPED: uncapped, a long name pushed the
+              rest of the row off the screen, and there is no length limit on a
+              Pulse name. `minWidth` stays small enough that the field can give
+              ground before the row has to wrap. */}
           <input
             value={name}
             disabled={!canEdit}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder={t("toolbar.namePlaceholder")}
-            title={t("toolbar.nameTitle")}
+            title={name || t("toolbar.nameTitle")}
             className="font-display bg-transparent"
-            style={{ color: "#F7F6F2", fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em", outline: "none", border: "none", width: Math.max(140, (name.length || 14) * 8.5), minWidth: 140 }}
+            style={{ color: "#F7F6F2", fontSize: 14, fontWeight: 500, letterSpacing: "-0.01em", outline: "none", border: "none", width: Math.max(140, (name.length || 14) * 8.5), minWidth: 0, maxWidth: 260 }}
           />
         </div>
         <span className="mono px-2 py-0.5 rounded" style={{ fontSize: 9, background: "#1B3A63", color: "#94A3B8", textTransform: "uppercase" }}>{roleLabel}</span>
