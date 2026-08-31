@@ -7,6 +7,7 @@ import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
+import { FILTER_LEFT_MARGIN_PX, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
@@ -32,6 +33,11 @@ function EpicNameInput({ name, color, disabled, onCommit }: { name: string; colo
 }
 
 const clamp = clampEffort;
+
+/** How long the filter-driven view jump waits before moving. Long enough that
+ * typing a search term doesn't yank the view on every keystroke, and that
+ * backspacing a box empty settles into one move rather than a series. */
+const FILTER_JUMP_MS = 400;
 
 // The team leader's badge is squared off with an amber border (spec §3's
 // "★ … rendered with a square badge"). Overrides ResourceBadge's circle for
@@ -227,15 +233,45 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   const latestViewRef = useRef({ startDay, endDay, dayWidth, viewZoom, features, filterResource, epics, graph, epicsShrunk, containerWidth: 0 });
   latestViewRef.current = { startDay, endDay, dayWidth, viewZoom, features, filterResource, epics, graph, epicsShrunk, containerWidth: containerRef.current?.clientWidth ?? 0 };
 
-  // When the feature search/status filter narrows the results, jump to the
-  // first (earliest-starting) match if it isn't already on screen — a
-  // dimmed-but-hidden-off-canvas match is as good as invisible. Debounced
-  // so typing a search term doesn't yank the view on every keystroke.
+  /** Was the toolbar filter active on the previous run? Distinguishes "the
+   * filter was just cleared" from "there has never been one", which matters on
+   * mount — see below. */
+  const filterWasActive = useRef(false);
+
+  // When the toolbar filter narrows the results, move to the part of the
+  // filtered span worth looking at, if it isn't already on screen — a
+  // dimmed-but-hidden-off-canvas match is as good as invisible. Debounced so
+  // typing a search term doesn't yank the view on every keystroke.
+  //
+  // `filterFocus.ts` holds the rule and why: today when today falls inside the
+  // span, the span's start against the left edge when it doesn't. It used to be
+  // "the earliest match", full stop, which sent a long-running epic to work
+  // finished months ago rather than to the part of it in flight.
   useEffect(() => {
     const q = featureQuery.trim().toLowerCase();
-    if (!q && featureStatusFilter.size === 0 && epicFilter.size === 0) return;
+    const active = !!q || featureStatusFilter.size > 0 || epicFilter.size > 0;
+    const wasActive = filterWasActive.current;
+    filterWasActive.current = active;
+
+    // Clearing the filter comes back to today — the counterpart of the jump
+    // that applying it caused, so turning a filter off returns you where you
+    // were rather than leaving you wherever the epic happened to reach.
+    //
+    // Conditioned on the *transition*, not merely on "no filter is active":
+    // this effect also runs on mount, and jumping there would overwrite the
+    // per-Pulse saved view PulsePage has just restored (`pulseView.ts`) — you
+    // would return to a Pulse and be pulled off the fortnight you left it on.
+    if (!active) {
+      if (!wasActive) return;
+      const handle = setTimeout(() => {
+        const { dayWidth: dw, viewZoom: vz, containerWidth: cw } = latestViewRef.current;
+        setOffsetX(todayMarginFor(cw) / vz - dw * todayIndex());
+      }, FILTER_JUMP_MS);
+      return () => clearTimeout(handle);
+    }
+
     const handle = setTimeout(() => {
-      const { startDay: sd, endDay: ed, dayWidth: dw, viewZoom: vz, features: fs, filterResource: fr } = latestViewRef.current;
+      const { startDay: sd, endDay: ed, dayWidth: dw, viewZoom: vz, features: fs, filterResource: fr, containerWidth: cw } = latestViewRef.current;
       const matching = fs.filter((box) => {
         const matchesRes = matchesResourceFilter(box, fr);
         const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
@@ -243,12 +279,19 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
         return matchesRes && matchesQuery && matchesStatus && matchesEpic;
       });
-      if (matching.length === 0) return;
-      const first = matching.reduce((a, b) => (a.x < b.x ? a : b));
-      if (first.x < sd || first.x > ed) {
-        setOffsetX(todayMarginFor(latestViewRef.current.containerWidth) / vz - dw * first.x);
-      }
-    }, 400);
+      // Read through the ref rather than `latestViewRef`, which is assigned
+      // during render ABOVE where the bands are computed and so cannot carry
+      // them.
+      const bands = epicFilter.size > 0 ? epicBandsRef.current.filter((b) => epicFilter.has(b.id)) : [];
+      const focus = focusForSpan(spanOfFilter(matching, bands), todayIndex());
+      if (!focus) return; // nothing matched — moving would only lose your place
+      // Still only a rescue: if the day we would move to is already in view
+      // there is nothing to fix, and yanking a view that is already showing the
+      // right thing is its own bug.
+      if (focus.day >= sd && focus.day <= ed) return;
+      const margin = focus.align === "today" ? todayMarginFor(cw) : FILTER_LEFT_MARGIN_PX;
+      setOffsetX(margin / vz - dw * focus.day);
+    }, FILTER_JUMP_MS);
     return () => clearTimeout(handle);
   }, [featureQuery, featureStatusFilter, epicFilter, setOffsetX]);
 
