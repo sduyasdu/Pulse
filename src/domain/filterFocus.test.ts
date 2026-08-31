@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILTER_LEFT_MARGIN_PX, focusForSpan, spanOfFilter } from "./filterFocus";
+import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "./filterFocus";
 
 const task = (x: number, duration: number) => ({ x, duration });
 
@@ -97,6 +97,72 @@ describe("the two together", () => {
   it("follows the band when hand-widening brings today into range", () => {
     const focus = focusForSpan(spanOfFilter([task(200, 30)], [{ minX: 200, maxX: 1200 }]), TODAY);
     expect(focus).toEqual({ day: TODAY, align: "today" });
+  });
+});
+
+/**
+ * The reported bug: compaction repacks the matches from the top of the canvas
+ * but leaves the scroller where it was, so a reader who had scrolled even a
+ * little saw the first row cut in half.
+ */
+describe("aligning the scroller with a compacted layout", () => {
+  it("pins to the top when compaction engages", () => {
+    expect(alignForCompaction(true, null, 120)).toEqual({ scrollTop: 0, remembered: 120 });
+  });
+
+  it("pins to the top even from an already-aligned view", () => {
+    expect(alignForCompaction(true, null, 0)).toEqual({ scrollTop: 0, remembered: 0 });
+  });
+
+  // The half-cut row itself: any offset at all leaves the packed top above the
+  // fold, because compaction always starts from the same place.
+  it.each([1, 40, 120, 700])("pins to the top from scrollTop %i", (from) => {
+    expect(alignForCompaction(true, null, from).scrollTop).toBe(0);
+  });
+
+  it("puts the reader back when the filter lifts", () => {
+    expect(alignForCompaction(false, 120, 0)).toEqual({ scrollTop: 120, remembered: null });
+  });
+
+  // The trap this state machine exists for. While compaction stays on, changing
+  // the filter re-runs it — and `current` is then the 0 we set ourselves, so a
+  // plain capture would overwrite the real position with zero and "restore" the
+  // reader to the top of an unfiltered canvas.
+  it("keeps the original position across a filter change", () => {
+    const first = alignForCompaction(true, null, 340);
+    expect(first.remembered).toBe(340);
+    const second = alignForCompaction(true, first.remembered, 0);
+    expect(second).toEqual({ scrollTop: 0, remembered: 340 });
+    expect(alignForCompaction(false, second.remembered, 0).scrollTop).toBe(340);
+  });
+
+  it("survives several filter changes before lifting", () => {
+    let remembered: number | null = null;
+    let current = 275;
+    for (let i = 0; i < 5; i++) {
+      const step = alignForCompaction(true, remembered, current);
+      remembered = step.remembered;
+      current = step.scrollTop ?? current;
+    }
+    expect(alignForCompaction(false, remembered, current)).toEqual({ scrollTop: 275, remembered: null });
+  });
+
+  // Opening a Pulse runs this with compaction off and nothing remembered. It
+  // must not move anything: PulsePage has just restored the saved scroll
+  // position for this Pulse, and a 0 here would throw it away.
+  it("leaves an untouched view alone", () => {
+    expect(alignForCompaction(false, null, 480)).toEqual({ scrollTop: null, remembered: null });
+  });
+
+  it("stays quiet on every run while no filter has been applied", () => {
+    expect(alignForCompaction(false, null, 0).scrollTop).toBeNull();
+    expect(alignForCompaction(false, null, 900).scrollTop).toBeNull();
+  });
+
+  it("forgets the remembered position once it has been used", () => {
+    const lifted = alignForCompaction(false, 200, 0);
+    expect(lifted.remembered).toBeNull();
+    expect(alignForCompaction(false, lifted.remembered, 0).scrollTop).toBeNull();
   });
 });
 

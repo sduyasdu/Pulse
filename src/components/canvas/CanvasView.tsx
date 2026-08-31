@@ -7,7 +7,7 @@ import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
-import { FILTER_LEFT_MARGIN_PX, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
+import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
@@ -337,6 +337,39 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     const { epics: cEpics, featureYById } = compactLayout(epicsWithFeats, visible, graph, { shrunk: epicsShrunk });
     return { feats: visible.map((f) => ({ ...f, y: featureYById[f.id] ?? f.y })), eps: cEpics };
   }, [compactFilterActive, features, dragOverlay, matchOf, epics, graph, epicsShrunk]);
+
+  /**
+   * Compaction repacks from the top of the canvas but leaves the scroller
+   * alone, so the reader's old vertical position survives into a layout that no
+   * longer has anything at it — cutting the first row in half, or hiding it.
+   * Pin the viewport to the top of what was just packed, and put them back when
+   * the filter lifts. `alignForCompaction` holds the rule and why.
+   *
+   * Keyed on the filter's VALUE, not on `compacted`, which is a fresh object on
+   * every Firestore sync and every drag frame — depending on it would re-pin the
+   * scroller mid-drag and while someone was reading. Changing the filter while
+   * compacted does re-pin, deliberately: it is a new result set, and staying
+   * scrolled down into the old one's empty space is the same bug.
+   */
+  const filterSignature = useMemo(
+    () =>
+      [
+        qLower,
+        [...featureStatusFilter].sort().join("|"),
+        [...epicFilter].sort().join("|"),
+        filterResource ?? "",
+        (myResourceIds ?? []).join("|"),
+      ].join("~"),
+    [qLower, featureStatusFilter, epicFilter, filterResource, myResourceIds],
+  );
+  const scrollBeforeCompaction = useRef<number | null>(null);
+  useEffect(() => {
+    const cont = containerRef.current;
+    if (!cont) return;
+    const { scrollTop, remembered } = alignForCompaction(compactFilterActive, scrollBeforeCompaction.current, cont.scrollTop);
+    scrollBeforeCompaction.current = remembered;
+    if (scrollTop !== null) cont.scrollTop = scrollTop;
+  }, [compactFilterActive, filterSignature]);
 
   const displayFeatures = useMemo(
     () => {

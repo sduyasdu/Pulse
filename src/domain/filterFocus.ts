@@ -78,3 +78,38 @@ export function focusForSpan(span: DaySpan | null, today: number): FilterFocus |
   if (today >= span.start && today <= span.end) return { day: today, align: "today" };
   return { day: span.start, align: "left" };
 }
+
+export interface ScrollAlignment {
+  /** Where to put the scroller, or null to leave it where it is. */
+  scrollTop: number | null;
+  /** What to remember for when the filter lifts; null = remember nothing. */
+  remembered: number | null;
+}
+
+/**
+ * The vertical counterpart of the rule above, for "hide + compact" filtering.
+ *
+ * Compaction repacks every match from the top of the canvas
+ * (`compactLayout`'s `TOP`), but it does not touch the scroller — so whatever
+ * vertical position the reader was at survives into a layout that no longer has
+ * anything there. A small scroll offset cuts the first row in half; a larger one
+ * hides it, or lands past the results entirely and shows blank canvas. The
+ * content is a fixed 1300px minimum tall, so the browser's own clamping does not
+ * rescue it.
+ *
+ * So compaction pins the viewport to the top of what it just packed, and the
+ * position from before is restored when the filter lifts — the vertical
+ * equivalent of coming back to today. Restoring is why this is a state machine
+ * rather than a `scrollTop = 0`: the value has to be captured on the way in, and
+ * exactly once, or a second filter change overwrites it with the zero we set
+ * ourselves.
+ */
+export function alignForCompaction(compacting: boolean, remembered: number | null, current: number): ScrollAlignment {
+  // `remembered ?? current` and not a plain assignment: while compaction stays
+  // on, the filter changing re-runs this, and `current` is then our own 0.
+  if (compacting) return { scrollTop: 0, remembered: remembered ?? current };
+  // Nothing remembered means compaction was never on — do not move a reader who
+  // has simply opened a Pulse, which would overwrite the restored saved view.
+  if (remembered === null) return { scrollTop: null, remembered: null };
+  return { scrollTop: remembered, remembered: null };
+}
