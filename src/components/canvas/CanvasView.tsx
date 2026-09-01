@@ -7,6 +7,7 @@ import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
+import { resolveOverlaps } from "@/domain/overlap";
 import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
@@ -14,7 +15,7 @@ import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA,
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
-import { recordSingle, patchOp } from "@/stores/undoStore";
+import { recordMany, patchOp } from "@/stores/undoStore";
 import { confirmAt } from "@/stores/confirmStore";
 import { useI18nStore } from "@/stores/i18nStore";
 
@@ -371,6 +372,22 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     if (scrollTop !== null) cont.scrollTop = scrollTop;
   }, [compactFilterActive, filterSignature]);
 
+  /**
+   * What `handleDragUp` needs to know at the moment a drag ends, read through a
+   * ref for the reason `latestViewRef` above spells out: anything in that
+   * callback's dependency array re-creates it, and `startDrag` registered the
+   * PREVIOUS instance as the pointerup listener — so a mid-drag change would
+   * leave `removeEventListener` unable to find its own handler, and the drag
+   * would never let go.
+   *
+   * `graph` is the live one: it comes from a Firestore snapshot, so its object
+   * identity changes whenever the pulse doc re-emits, which can happen while a
+   * drag is in flight. Not `latestViewRef`, which is assigned above where
+   * `compactFilterActive` is defined and cannot carry it.
+   */
+  const dragCtxRef = useRef({ compactFilterActive, canEdit, graph });
+  dragCtxRef.current = { compactFilterActive, canEdit, graph };
+
   const displayFeatures = useMemo(
     () => {
       const base = compacted ? compacted.feats : dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features;
@@ -639,11 +656,54 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     const finalPatch = latestPatchRef.current;
     if (d && finalPatch) {
       void patchFeature(d.id, finalPatch, { record: false });
-      // Coalesce the drag into a single undo entry: before = pre-drag state,
-      // after = the final committed patch (see Undo-Spec.md §5).
+
+      /**
+       * Make room for where the task ended up.
+       *
+       * Until now nothing did: stretch a task over its neighbour, or drop it on
+       * one, and the two simply sat on top of each other. The rearrangement
+       * people had seen was `compactLayout`, which only runs in "hide +
+       * compact" filter mode — so the canvas reacted to a drag under a filter
+       * and ignored the identical drag without one.
+       *
+       * On release rather than during the drag, deliberately. Mid-gesture the
+       * target keeps changing, so neighbours would shuffle on every frame and
+       * commit a stream of writes for positions nobody chose. Settling once, on
+       * the position actually picked, is both calmer to watch and one write per
+       * displaced task. The `.canvas-settle` transition animates the result.
+       *
+       * Skipped in compact mode, which already owns the vertical layout and
+       * would fight this; and skipped for anyone without full edit rights,
+       * whose writes to a neighbour the rules would refuse anyway (a Task Lead
+       * may edit the tasks they lead, not rearrange rows around them).
+       */
+      const store = usePulseStore.getState();
+      const pid = store.pulseId;
+      const ctx = dragCtxRef.current;
+      const displaced =
+        ctx.compactFilterActive || !ctx.canEdit
+          ? []
+          : resolveOverlaps(
+              store.features.map((f) => (f.id === d.id ? { ...f, ...finalPatch } : f)),
+              d.id,
+              (f) => boxHeight(f, ctx.graph),
+            );
+      for (const m of displaced) void patchFeature(m.id, { y: m.y }, { record: false });
+
+      // One undo entry for the whole gesture: the drag AND everything it
+      // pushed aside (Undo-Spec §5). Recorded separately, an undo would put the
+      // task back and leave the neighbours displaced — a state the user never
+      // saw and could not have produced.
       const label = d.kind === "move" ? "Move task" : d.kind === "resize-effort" ? "Change work" : "Resize task";
-      const pid = usePulseStore.getState().pulseId;
-      if (pid) recordSingle(label, pid, patchOp("feature", d.id, d.orig as unknown as Record<string, unknown>, finalPatch));
+      if (pid) {
+        const before = new Map(store.features.map((f) => [f.id, f]));
+        recordMany(label, pid, [
+          patchOp("feature", d.id, d.orig as unknown as Record<string, unknown>, finalPatch),
+          ...displaced.map((m) =>
+            patchOp("feature", m.id, (before.get(m.id) ?? {}) as unknown as Record<string, unknown>, { y: m.y }),
+          ),
+        ]);
+      }
     }
     dragRef.current = null;
     latestPatchRef.current = null;
