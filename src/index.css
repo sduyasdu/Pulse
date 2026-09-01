@@ -256,3 +256,44 @@ button:disabled {
   color: #94a3b8;
   pointer-events: none;
 }
+
+/* Repacking the canvas — a task is dragged or resized, and the tasks around it
+   move aside, or it drops into a lane where it fits. That rearrangement used to
+   be instantaneous: the boxes were simply somewhere else on the next frame, so
+   there was nothing to read and no way to tell "three tasks shifted down" from
+   "the view jumped".
+
+   Only `top` and `height` are transitioned, and that restraint is the whole
+   design:
+
+     - `left` changes on EVERY box on EVERY frame while panning, because it is
+       derived from `offsetX`. Transitioning it would make the canvas swim
+       behind the cursor whenever it was dragged.
+     - Repacking never moves a task horizontally in the first place —
+       `compactLayout` changes `y` only, dates are untouched — so `top` is
+       exactly the axis the rearrangement happens on.
+
+   Applied to epic bands as well as tasks, or the bands would snap to their new
+   size while the boxes inside them were still gliding.
+
+   While a drag is in progress each frame retargets the transition from wherever
+   the box currently is, so the surrounding boxes trail the dragged one and
+   settle after it stops. That trailing IS the effect — it is what makes the
+   rearrangement legible.
+
+   Never applied to the box being dragged: that one must track the pointer
+   exactly, and a transition there would feel like lag. See `dragId` in
+   CanvasView. */
+.canvas-settle {
+  transition:
+    top 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Motion here is decorative — it explains a rearrangement that is equally
+   correct without it — so it is the first thing to go. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-settle {
+    transition: none;
+  }
+}

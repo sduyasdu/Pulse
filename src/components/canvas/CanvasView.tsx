@@ -952,7 +952,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const bandLeft = hasFeats ? xForDay(ep.minX ?? 0) - 8 : 8;
               const bandWidth = hasFeats ? ((ep.maxX ?? 0) - (ep.minX ?? 0)) * dayWidth + 16 : 220;
               return (
-                <div key={ep.id} style={{ position: "absolute", left: bandLeft, top: ep.y0, width: bandWidth, height: ep.y1 - ep.y0, background: hexA(ep.color, 0.05), border: `1px dashed ${hexA(ep.color, 0.5)}`, borderRadius: 10, pointerEvents: "none", zIndex: 1 }}>
+                // Settles with the tasks inside it: a band that snapped to its
+                // new height while its boxes were still gliding would read as
+                // the band and its contents coming apart.
+                //
+                // Excluded while THIS band is the one being resized by its own
+                // handle, for the same reason the dragged task is: the edge has
+                // to stay under the pointer.
+                <div key={ep.id} className={epicOverlay?.id === ep.id ? undefined : "canvas-settle"} style={{ position: "absolute", left: bandLeft, top: ep.y0, width: bandWidth, height: ep.y1 - ep.y0, background: hexA(ep.color, 0.05), border: `1px dashed ${hexA(ep.color, 0.5)}`, borderRadius: 10, pointerEvents: "none", zIndex: 1 }}>
                   <div style={{ position: "absolute", top: 6, left: 8, display: "flex", alignItems: "center", gap: 6, pointerEvents: "auto" }}>
                     <span style={{ width: 9, height: 9, borderRadius: 3, background: ep.color, flexShrink: 0 }} />
                     <EpicNameInput
@@ -1075,6 +1082,11 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               return (
                 <div
                   key={box.id}
+                  // Glide to a new lane when a neighbour's move or resize
+                  // repacks the layout — but never while THIS box is the one
+                  // being dragged, where a transition reads as lag rather than
+                  // as motion. See `.canvas-settle` in index.css.
+                  className={dragId === box.id ? undefined : "canvas-settle"}
                   onPointerDown={(e) => startBoxInteraction(box, e)}
                   onContextMenu={(e) => e.preventDefault()}
                   onPointerEnter={(e) => { if (!coarse && showHover && !dragId && !isPanning) setHoverCard({ x: e.clientX, y: e.clientY, box }); }}

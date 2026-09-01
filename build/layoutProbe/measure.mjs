@@ -148,6 +148,31 @@ if (flexDirection !== "column") {
 console.log(`\nSelf-check: Tailwind utilities present (.flex-col → ${flexDirection}).`);
 
 /**
+ * Self-check 1b: the app's own CSS, not just Tailwind's.
+ *
+ * `.canvas-settle` is what makes a repacked canvas glide instead of jump. It is
+ * hand-written CSS in index.css, so it fails differently from a Tailwind
+ * utility — and it fails SILENTLY, because a missing transition looks exactly
+ * like the instant rearrangement it replaced. Nothing else in the suite would
+ * notice.
+ */
+const settle = await evaluate(`(() => {
+  const d = document.createElement('div');
+  d.className = 'canvas-settle';
+  document.body.appendChild(d);
+  const s = getComputedStyle(d);
+  const v = s.transitionProperty + ' / ' + s.transitionDuration;
+  d.remove();
+  return v;
+})()`);
+if (!/top/.test(settle) || /^none/.test(settle) || /0s/.test(settle.split("/")[1] ?? "")) {
+  console.error(`self-check FAILED: .canvas-settle resolves to "${settle}", expected a transition on top.`);
+  console.error("The canvas repack animation is not in the stylesheet.");
+  process.exit(2);
+}
+console.log(`Self-check: app CSS present (.canvas-settle → ${settle}).`);
+
+/**
  * Self-check 2. The first version of this probe reported "fits" for everything
  * while measuring nothing at all, and a green run that cannot go red is not
  * evidence. So plant an element that provably cannot fit, confirm the
