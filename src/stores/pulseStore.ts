@@ -347,7 +347,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     // epic; the first task assigned to it widens the band from there as usual.
     const epic: Epic = {
       id,
-      name: "New epic",
+      name: DEFAULT_EPIC_NAME,
       color: EPIC_PALETTE[epics.length % EPIC_PALETTE.length],
       y0,
       y1: y0 + 130,
@@ -735,5 +735,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (cost) recordSingle("Delete cost", pulseId, deleteOp("cost", costId, asDoc(cost)));
   },
 }));
+
+/** The name a new epic is created with. Exported because the canvas treats it
+ * as "not named yet" — it is a placeholder the product wrote, not a name the
+ * user chose, so an epic still carrying it is unfinished. */
+export const DEFAULT_EPIC_NAME = "New epic";
 
 export const graphConfigOf = (pulse: Pulse | null) => pulse?.graphConfig ?? DEFAULT_GRAPH_CONFIG;

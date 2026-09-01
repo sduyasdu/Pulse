@@ -1,12 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, GraphConfig } from "@/types";
-import { usePulseStore } from "@/stores/pulseStore";
+import { usePulseStore, DEFAULT_EPIC_NAME } from "@/stores/pulseStore";
 import { useTaskCascade } from "@/hooks/useTaskCascade";
 import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
-import { epicAtBox, epicBandsFor, compactLayout, newEpicSpan } from "@/domain/layout";
+import { epicAtBox, epicBandsFor, compactLayout, newEpicSpan, isProvisionalEpic } from "@/domain/layout";
 import { resolveOverlaps } from "@/domain/overlap";
 import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -1037,6 +1037,9 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const bandWidth = hasSpan ? ((ep.maxX as number) - (ep.minX as number)) * dayWidth + 16 : 220;
               // Shown despite the filter, exactly as a just-added task is.
               const epicExempt = !!alwaysShowEpicIds?.has(ep.id);
+              // Created but not yet usable — see isProvisionalEpic. Drives both
+              // how strongly the band is drawn and whether it sits in front.
+              const provisional = isProvisionalEpic(ep, DEFAULT_EPIC_NAME);
               return (
                 // Settles with the tasks inside it: a band that snapped to its
                 // new height while its boxes were still gliding would read as
@@ -1062,17 +1065,37 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     top: ep.y0,
                     width: bandWidth,
                     height: ep.y1 - ep.y0,
-                    background: hexA(ep.color, 0.05),
-                    border: `1px dashed ${hexA(ep.color, 0.5)}`,
+                    // An unfinished epic is drawn solid and a shade stronger
+                    // rather than as a faint dashed hint, because until it is
+                    // named and holds work it is the thing on the canvas most
+                    // needing attention.
+                    background: hexA(ep.color, provisional ? 0.1 : 0.05),
+                    border: provisional ? `2px solid ${hexA(ep.color, 0.85)}` : `1px dashed ${hexA(ep.color, 0.5)}`,
                     borderRadius: 10,
+                    // The band never takes pointer events — only its header
+                    // does (below). That is what lets it sit in FRONT of the
+                    // task boxes without swallowing clicks meant for them.
                     pointerEvents: "none",
-                    // Above the ordinary bands while it is being announced, so
-                    // an overlapping neighbour cannot swallow the glow.
-                    zIndex: epicExempt ? 2 : 1,
+                    // In front of ordinary and selected task boxes (10 and 20)
+                    // so the header stays reachable: the band establishes its
+                    // own stacking context, so a header buried at z1 cannot be
+                    // lifted out on its own, and a box overlapping the band's
+                    // top-left corner covered the name field and the delete
+                    // button entirely.
+                    //
+                    // Below the dragged box (30) on purpose. "In front of
+                    // everything" would mean a task being dragged disappears
+                    // under a band as it passes, and drag feedback has to stay
+                    // on top to be read.
+                    zIndex: provisional ? 25 : epicExempt ? 2 : 1,
                     ...({
                       "--epic-glow": hexA(ep.color, 0.35),
                       "--epic-strong": hexA(ep.color, 0.95),
-                      "--epic-normal": hexA(ep.color, 0.5),
+                      // The just-added animation fades TO this, so it has to be
+                      // the resting colour for the state the epic is actually
+                      // in — otherwise the glow settles onto a faint border and
+                      // undoes the emphasis a moment after granting it.
+                      "--epic-normal": hexA(ep.color, provisional ? 0.85 : 0.5),
                     } as React.CSSProperties),
                   }}
                 >

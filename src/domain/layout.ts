@@ -230,3 +230,26 @@ export function newEpicSpan(referenceDay: number, dayWidth: number): { minX: num
   const minX = referenceDay - inset;
   return { minX, maxX: minX + NEW_EPIC_SPAN_DAYS };
 }
+
+/**
+ * Is this epic still unfinished — created but not yet set up?
+ *
+ * An epic is only doing its job once it is named AND holds work. Until both are
+ * true the canvas keeps it prominent and in front, because an empty band is a
+ * faint dashed outline that other epics' task boxes can sit on top of, covering
+ * the very header you need in order to name or delete it.
+ *
+ * The default name counts as no name. It is a placeholder the product wrote,
+ * not something the user chose, so an epic still carrying it has not been named
+ * — and treating it as named would end the prominence at the exact moment the
+ * epic is least finished.
+ *
+ * Deliberately a property of the epic rather than of "was added recently": the
+ * problem is not that the epic is new, it is that it is unusable. A reload
+ * would clear a session-scoped flag and put a still-empty, still-unnamed epic
+ * back behind everything else.
+ */
+export function isProvisionalEpic(epic: { name?: string | null; count: number }, defaultName: string): boolean {
+  const named = (epic.name ?? "").trim() !== "" && (epic.name ?? "").trim() !== defaultName;
+  return !named || epic.count === 0;
+}
