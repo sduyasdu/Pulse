@@ -38,7 +38,7 @@ import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { ActivityTab } from "@/components/leftPanel/ActivityTab";
 
-type RightTab = "details" | "team" | "epics" | "capacity" | "activity";
+type RightTab = "epics" | "details" | "team" | "capacity" | "activity";
 
 export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
@@ -258,6 +258,9 @@ export function PulsePage() {
   const [density, setDensity] = useState<Density>("week");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<RightTab>("team");
+  // Which epic the Epics tab highlights. Set when one is created, so the
+  // tab opens on it rather than leaving the reader to find it in the list.
+  const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [filterResource, setFilterResource] = useState<string | null>(null);
   const [featureQuery, setFeatureQuery] = useState("");
@@ -484,7 +487,13 @@ export function PulsePage() {
         Math.max(10, ...epics.map((e) => e.y1 + 24)),
         newEpicSpan(referenceDay, BASE_DAY_WIDTH * DENSITY_DAY_PX[density]),
       ));
-    if (id) markEpicAdded(id);
+    if (!id) return;
+    markEpicAdded(id);
+    // Open the tab on the new epic. Creating one is a two-step act — make it,
+    // then say what it is — and the second step lives here, in a list, not on
+    // the band, which may be behind a task box or off-screen entirely.
+    setSelectedEpicId(id);
+    setRightTab("epics");
   };
 
   // Unarchive from the banner. Owner-only (the button only renders for owners,
@@ -632,7 +641,7 @@ export function PulsePage() {
               <button onClick={toggleSidebar} title={t("panel.collapsePanel")} className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              {(["details", "team", "epics", "capacity", "activity"] as RightTab[]).map((tab) => (
+              {(["epics", "details", "team", "capacity", "activity"] as RightTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setRightTab(tab)}
@@ -653,6 +662,8 @@ export function PulsePage() {
                   epicFilter={epicFilter}
                   setEpicFilter={setEpicFilter}
                   onAddEpic={() => void handleAddEpic()}
+                  selectedEpicId={selectedEpicId}
+                  onSelectEpic={setSelectedEpicId}
                 />
               ) : rightTab === "capacity" ? (
                 <CapacityTab canEdit={canEdit} />

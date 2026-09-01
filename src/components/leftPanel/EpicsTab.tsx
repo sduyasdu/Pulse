@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { usePulseStore, graphConfigOf, EPIC_PALETTE, DEFAULT_EPIC_NAME } from "@/stores/pulseStore";
 import { epicBandsFor, isNewEpic } from "@/domain/layout";
@@ -13,15 +13,46 @@ interface EpicsTabProps {
   epicFilter: Set<string>;
   setEpicFilter: (v: Set<string>) => void;
   onAddEpic: () => void;
+  /** The epic to highlight — set when one is created, so the tab opens on it. */
+  selectedEpicId: string | null;
+  onSelectEpic: (id: string | null) => void;
 }
 
 /** Debounced so typing doesn't write a Firestore doc per keystroke — the same
  * treatment the name field on the canvas band gets. */
-function EpicName({ name, disabled, onCommit }: { name: string; disabled: boolean; onCommit: (v: string) => void }) {
+function EpicName({
+  name,
+  disabled,
+  autoFocus,
+  onCommit,
+}: {
+  name: string;
+  disabled: boolean;
+  /** Focus and select on mount. Only ever true for an epic that was just
+   * created, which is also the only time its row is newly mounted — so this
+   * cannot steal focus from someone typing in another field. */
+  autoFocus?: boolean;
+  onCommit: (v: string) => void;
+}) {
   const t = useT();
   const [local, onChange] = useDebouncedText(name, onCommit);
+  const ref = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!autoFocus || disabled) return;
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    // Select rather than just focus: the field holds the placeholder name the
+    // product chose, so the first keystroke should replace it, not append to it.
+    el.select();
+    // Mount-only by intent — `autoFocus` is constant for a given row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <input
+      ref={ref}
       value={local}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
@@ -45,7 +76,7 @@ function EpicName({ name, disabled, onCommit }: { name: string; disabled: boolea
  * controls over one piece of state, deliberately — a second, tab-local epic
  * filter would silently disagree with the toolbar and with the canvas.
  */
-export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic }: EpicsTabProps) {
+export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic, selectedEpicId, onSelectEpic }: EpicsTabProps) {
   const t = useT();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
@@ -66,7 +97,24 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic }: Epic
   );
 
   const q = query.trim().toLowerCase();
-  const shown = useMemo(() => (q ? bands.filter((b) => (b.name || "").toLowerCase().includes(q)) : bands), [bands, q]);
+  // The highlighted epic is always listed, even when the search excludes it.
+  // Adding one while a search is active would otherwise open the tab on an epic
+  // that is not in the list — the same "created it, and it is nowhere" the
+  // canvas exemption exists to prevent, since a new epic is called "New epic"
+  // and matches almost nothing anyone would have typed.
+  const shown = useMemo(
+    () => (q ? bands.filter((b) => b.id === selectedEpicId || (b.name || "").toLowerCase().includes(q)) : bands),
+    [bands, q, selectedEpicId],
+  );
+
+  // Bring the highlighted epic into view. A Pulse can have more epics than the
+  // panel shows, and opening the tab on one that is scrolled out of sight is
+  // the same as not opening it on anything.
+  const selectedRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (!selectedEpicId) return;
+    selectedRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selectedEpicId]);
 
   const toggleFilter = (id: string) => {
     const next = new Set(epicFilter);
@@ -124,13 +172,20 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic }: Epic
           {shown.map((ep) => {
             const filtered = epicFilter.has(ep.id);
             const isNew = isNewEpic(ep, DEFAULT_EPIC_NAME);
+            const selected = selectedEpicId === ep.id;
             return (
               <li
                 key={ep.id}
+                ref={selected ? selectedRef : undefined}
+                onPointerDown={() => onSelectEpic(ep.id)}
                 className="hoverable rounded-lg border p-2"
                 style={{
+                  // Selection and filtering are different facts, so they read
+                  // differently: selection is the orange ring the canvas uses
+                  // for a selected task, filtering tints the row.
                   borderColor: filtered ? "#EE7240" : "#E2DFD9",
                   background: filtered ? "#FFF8F3" : "#FFFFFF",
+                  boxShadow: selected ? "0 0 0 2px #EE7240" : undefined,
                 }}
               >
                 <div className="flex items-center gap-2">
@@ -144,7 +199,15 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic }: Epic
                     className="no-press flex-shrink-0 rounded"
                     style={{ width: 14, height: 14, background: ep.color, border: "1px solid rgba(15,23,42,0.15)", cursor: canEdit ? "pointer" : "default" }}
                   />
-                  <EpicName name={ep.name} disabled={!canEdit} onCommit={(name) => void patchEpic(ep.id, { name })} />
+                  <EpicName
+                    name={ep.name}
+                    disabled={!canEdit}
+                    // Only for one just created: `isNew` is false the moment it
+                    // is named, recoloured or given a task, so an epic being
+                    // re-selected later never grabs the caret.
+                    autoFocus={selected && isNew}
+                    onCommit={(name) => void patchEpic(ep.id, { name })}
+                  />
                   {isNew && (
                     <Icon name="info" size={12} title={t("epics.new")} style={{ color: "#D85A28", flexShrink: 0 }} />
                   )}
