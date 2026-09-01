@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { usePulseStore, graphConfigOf, EPIC_PALETTE, DEFAULT_EPIC_NAME } from "@/stores/pulseStore";
-import { epicBandsFor, isNewEpic } from "@/domain/layout";
+import { epicBandsFor, isNewEpic, sortEpicsForList } from "@/domain/layout";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { confirmAt } from "@/stores/confirmStore";
 import { useT } from "@/i18n";
@@ -90,9 +90,11 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic, select
   const [paletteFor, setPaletteFor] = useState<string | null>(null);
 
   // The task count comes from the same band computation the canvas uses, so the
-  // number here and the one on the band cannot disagree.
+  // number here and the one on the band cannot disagree. Ordered by `y0` — the
+  // canvas's own vertical order — with untouched epics staged at the top; see
+  // `sortEpicsForList`.
   const bands = useMemo(
-    () => epicBandsFor(epics, features, graph),
+    () => sortEpicsForList(epicBandsFor(epics, features, graph), DEFAULT_EPIC_NAME),
     [epics, features, graph],
   );
 

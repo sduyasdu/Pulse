@@ -264,3 +264,36 @@ export function isNewEpic(
   const recoloured = epic.initialColor != null && epic.color != null && epic.color !== epic.initialColor;
   return !named && !recoloured && epic.count === 0;
 }
+
+/**
+ * The order epics are listed in the Epics tab.
+ *
+ * **By `y0`**, which is the order the canvas draws them in — `compactLayout`
+ * sorts by the same field before packing, so the list reads top-to-bottom the
+ * way the swimlanes do. Neither was true before: `subscribeEpics` issues no
+ * `orderBy`, so Firestore returned documents in ID order, and the IDs are
+ * random auto-IDs. The list order was therefore arbitrary and unrelated to
+ * anything on screen.
+ *
+ * **Untouched epics first.** A new epic is created at the vertical middle of
+ * wherever the reader was looking, so by `y0` alone it lands somewhere random
+ * in the list — the one epic that certainly needs attention, filed among the
+ * ones that do not. They keep their relative `y0` order among themselves, so
+ * adding two in a row lists them in the order they were made.
+ *
+ * That group empties itself: an epic leaves it the moment it is named,
+ * recoloured or given a task, which is the same rule that ends its emphasis on
+ * the canvas (see `isNewEpic`). So this is a staging area, not a permanent
+ * reordering.
+ */
+export function sortEpicsForList<T extends { name?: string | null; color?: string | null; initialColor?: string | null; count: number; y0: number }>(
+  bands: readonly T[],
+  defaultName: string,
+): T[] {
+  return [...bands].sort((a, b) => {
+    const an = isNewEpic(a, defaultName);
+    const bn = isNewEpic(b, defaultName);
+    if (an !== bn) return an ? -1 : 1;
+    return a.y0 - b.y0;
+  });
+}
