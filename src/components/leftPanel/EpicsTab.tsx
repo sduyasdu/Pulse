@@ -3,6 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import { usePulseStore, graphConfigOf, EPIC_PALETTE, DEFAULT_EPIC_NAME } from "@/stores/pulseStore";
 import { epicBandsFor, isNewEpic, sortEpicsForList } from "@/domain/layout";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
+import { useReorderAnimation } from "@/hooks/useReorderAnimation";
 import { confirmAt } from "@/stores/confirmStore";
 import { useT } from "@/i18n";
 
@@ -118,6 +119,11 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic, select
     selectedRef.current?.scrollIntoView({ block: "nearest" });
   }, [selectedEpicId]);
 
+  // Follow a row to its new place when the order changes — an epic leaves the
+  // staging area the instant it is named, and the eye needs to be able to
+  // follow it there from the field it was just typed into.
+  const registerRow = useReorderAnimation(shown.map((b) => b.id).join("|"));
+
   const toggleFilter = (id: string) => {
     const next = new Set(epicFilter);
     if (next.has(id)) next.delete(id);
@@ -178,7 +184,10 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic, select
             return (
               <li
                 key={ep.id}
-                ref={selected ? selectedRef : undefined}
+                ref={(el) => {
+                  registerRow(ep.id, el);
+                  if (selected) selectedRef.current = el;
+                }}
                 onPointerDown={() => onSelectEpic(ep.id)}
                 className="hoverable rounded-lg border p-2"
                 style={{
