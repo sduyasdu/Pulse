@@ -297,3 +297,39 @@ button:disabled {
     transition: none;
   }
 }
+
+/* A just-added epic announces itself, then stops.
+   
+   An empty epic is a faint dashed outline with no tasks to give it presence,
+   so on a busy canvas adding one could read as nothing having happened. This
+   glows in the epic's own colour and settles to the ordinary band over a couple
+   of seconds.
+
+   An ANIMATION, not a style bound to "was just added". The exemption that keeps
+   a new epic visible under a filter lasts until the filters change, which can
+   be never — a highlight bound to it would simply stay on. An animation ends on
+   its own, and `forwards` leaves the band in its normal resting state.
+
+   The colours come in as custom properties because they are per-epic and only
+   the component knows them. */
+@keyframes epic-just-added {
+  from {
+    box-shadow: 0 0 0 5px var(--epic-glow);
+    border-color: var(--epic-strong);
+  }
+  to {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    border-color: var(--epic-normal);
+  }
+}
+.epic-just-added {
+  animation: epic-just-added 2400ms ease-out 1 forwards;
+}
+
+/* Decorative: it draws the eye to something that is correctly placed either
+   way, so it goes first. The epic is still visible, just not announced. */
+@media (prefers-reduced-motion: reduce) {
+  .epic-just-added {
+    animation: none;
+  }
+}

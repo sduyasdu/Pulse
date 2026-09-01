@@ -56,7 +56,7 @@ interface PulseStoreState {
   setResourceTypes: (types: string[]) => Promise<void>;
   setStatuses: (statuses: StatusDef[]) => Promise<void>;
 
-  addEpic: (y0: number) => Promise<string>;
+  addEpic: (y0: number, span?: { minX: number; maxX: number }) => Promise<string>;
   patchEpic: (epicId: string, patch: Partial<Epic>, opts?: MutateOpts) => Promise<void>;
   removeEpic: (epicId: string) => Promise<void>;
 
@@ -334,12 +334,25 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (pulse) recordSingle("Edit statuses", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { statuses }));
   },
 
-  addEpic: async (y0) => {
+  addEpic: async (y0, span) => {
     const { pulseId, epics } = get();
     if (!pulseId) throw new Error("no pulse loaded");
     const id = newEpicId(pulseId);
     const EPIC_PALETTE = ["#8B5CF6", "#3B82F6", "#14B8A6", "#22C55E", "#F59E0B", "#F43F5E", "#0EA5E9"];
-    const epic: Epic = { id, name: "New epic", color: EPIC_PALETTE[epics.length % EPIC_PALETTE.length], y0, y1: y0 + 130 };
+    // `span` gives the band a real place on the timeline. Without one an epic
+    // with no features has no horizontal extent at all, and the canvas used to
+    // park it at a fixed 8px from the left of the viewport — nowhere near the
+    // dates being looked at, and unrelated to where the next task would land.
+    // Stored as the manual bounds the model already has for a hand-widened
+    // epic; the first task assigned to it widens the band from there as usual.
+    const epic: Epic = {
+      id,
+      name: "New epic",
+      color: EPIC_PALETTE[epics.length % EPIC_PALETTE.length],
+      y0,
+      y1: y0 + 130,
+      ...(span ? { manualMinX: span.minX, manualMaxX: span.maxX } : {}),
+    };
     await createEpic(pulseId, epic);
     recordSingle("Add epic", pulseId, createOp("epic", id, asDoc(epic)));
     return id;

@@ -13,7 +13,7 @@ import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
-import { useJustAddedTasks, filterSignatureOf } from "@/hooks/useJustAddedTasks";
+import { useJustAdded, filterSignatureOf } from "@/hooks/useJustAdded";
 import { loadPulseView, savePulseView } from "@/domain/pulseView";
 import { roleMeta, capsOf } from "@/domain/permissions";
 import { effectiveEditScope, pulseLock } from "@/domain/pulseLock";
@@ -266,9 +266,12 @@ export function PulsePage() {
 
   // A task you just created stays visible even when the filters exclude it —
   // see the hook for why, and for when the exemption ends.
-  const { justAddedIds, markAdded } = useJustAddedTasks(
-    filterSignatureOf({ query: featureQuery, statuses: featureStatusFilter, epics: epicFilter, resource: filterResource, mineOnly: myTasksOnly }),
-  );
+  const filterSignature = filterSignatureOf({ query: featureQuery, statuses: featureStatusFilter, epics: epicFilter, resource: filterResource, mineOnly: myTasksOnly });
+  const { justAddedIds, markAdded } = useJustAdded(filterSignature);
+  // Epics get their own exemption on the same terms. A new epic is empty, so
+  // under "hide + compact" it has no visible features and is dropped from the
+  // layout — adding one while filtered looked like the button doing nothing.
+  const { justAddedIds: justAddedEpicIds, markAdded: markEpicAdded } = useJustAdded(filterSignature);
   const [epicsShrunk, setEpicsShrunk] = useState(false);
   const [showDelays, setShowDelays] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -465,7 +468,8 @@ export function PulsePage() {
     }
   };
   const handleAddEpic = async () => {
-    await canvasRef.current?.addEpicAtCenter();
+    const id = await canvasRef.current?.addEpicAtCenter();
+    if (id) markEpicAdded(id);
   };
 
   // Unarchive from the banner. Owner-only (the button only renders for owners,
@@ -683,6 +687,7 @@ export function PulsePage() {
               compactFilter={compactFilter}
               myResourceIds={myResourceFilter}
               alwaysShowIds={justAddedIds}
+              alwaysShowEpicIds={justAddedEpicIds}
               referenceDay={referenceDay}
               canEdit={canEdit}
               canEditFeature={canEditFeature}

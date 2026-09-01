@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { filterSignatureOf, useJustAddedTasks } from "./useJustAddedTasks";
+import { filterSignatureOf, useJustAdded } from "./useJustAdded";
 
 const sig = (over: Partial<Parameters<typeof filterSignatureOf>[0]> = {}) =>
   filterSignatureOf({ query: "", statuses: new Set(), epics: new Set(), resource: null, mineOnly: false, ...over });
@@ -9,12 +9,12 @@ const ids = (s: ReadonlySet<string>) => [...s].sort();
 
 describe("keeping just-added tasks visible", () => {
   it("starts with nothing exempt", () => {
-    const { result } = renderHook(() => useJustAddedTasks(sig()));
+    const { result } = renderHook(() => useJustAdded(sig()));
     expect(result.current.justAddedIds.size).toBe(0);
   });
 
   it("exempts a task that was just created", () => {
-    const { result } = renderHook(() => useJustAddedTasks(sig({ query: "auth" })));
+    const { result } = renderHook(() => useJustAdded(sig({ query: "auth" })));
     act(() => result.current.markAdded("f1"));
     expect(ids(result.current.justAddedIds)).toEqual(["f1"]);
   });
@@ -23,7 +23,7 @@ describe("keeping just-added tasks visible", () => {
   // exemption onto it and the first vanished again — so a run of new tasks was
   // cascaded into place and then shown one at a time.
   it("keeps every task added since the filter last changed", () => {
-    const { result } = renderHook(() => useJustAddedTasks(sig({ query: "auth" })));
+    const { result } = renderHook(() => useJustAdded(sig({ query: "auth" })));
     act(() => result.current.markAdded("f1"));
     act(() => result.current.markAdded("f2"));
     act(() => result.current.markAdded("f3"));
@@ -31,7 +31,7 @@ describe("keeping just-added tasks visible", () => {
   });
 
   it("ignores a repeated id rather than growing the set", () => {
-    const { result } = renderHook(() => useJustAddedTasks(sig()));
+    const { result } = renderHook(() => useJustAdded(sig()));
     act(() => result.current.markAdded("f1"));
     const before = result.current.justAddedIds;
     act(() => result.current.markAdded("f1"));
@@ -42,7 +42,7 @@ describe("keeping just-added tasks visible", () => {
   // the filters ALONE. Include the set itself and it clears on the very render
   // that granted it — the feature stops working and nothing else notices.
   it("keeps the exemptions across re-renders while the filter is unchanged", () => {
-    const { result, rerender } = renderHook(({ s }) => useJustAddedTasks(s), {
+    const { result, rerender } = renderHook(({ s }) => useJustAdded(s), {
       initialProps: { s: sig({ query: "auth" }) },
     });
     act(() => result.current.markAdded("f1"));
@@ -53,7 +53,7 @@ describe("keeping just-added tasks visible", () => {
   });
 
   it("ends every exemption when the filter changes", () => {
-    const { result, rerender } = renderHook(({ s }) => useJustAddedTasks(s), {
+    const { result, rerender } = renderHook(({ s }) => useJustAdded(s), {
       initialProps: { s: sig({ query: "auth" }) },
     });
     act(() => result.current.markAdded("f1"));
@@ -63,7 +63,7 @@ describe("keeping just-added tasks visible", () => {
   });
 
   it("starts a fresh run after a filter change", () => {
-    const { result, rerender } = renderHook(({ s }) => useJustAddedTasks(s), {
+    const { result, rerender } = renderHook(({ s }) => useJustAdded(s), {
       initialProps: { s: sig() },
     });
     act(() => result.current.markAdded("f1"));
@@ -76,7 +76,7 @@ describe("keeping just-added tasks visible", () => {
   // time. With a set that would mean adding three and keeping whichever you
   // clicked last, so nothing about selection touches this any more.
   it("survives clicking around between adds", () => {
-    const { result } = renderHook(() => useJustAddedTasks(sig({ query: "auth" })));
+    const { result } = renderHook(() => useJustAdded(sig({ query: "auth" })));
     act(() => result.current.markAdded("f1"));
     act(() => result.current.markAdded("f2"));
     expect(result.current.justAddedIds.has("f1")).toBe(true);
@@ -86,7 +86,7 @@ describe("keeping just-added tasks visible", () => {
   // The set feeds the canvas's match memo, which drives the compacted layout.
   // A new identity on every render would recompute that on every keystroke.
   it("keeps the set referentially stable when nothing changed", () => {
-    const { result, rerender } = renderHook(({ s }) => useJustAddedTasks(s), {
+    const { result, rerender } = renderHook(({ s }) => useJustAdded(s), {
       initialProps: { s: sig() },
     });
     act(() => result.current.markAdded("f1"));
@@ -97,7 +97,7 @@ describe("keeping just-added tasks visible", () => {
   });
 
   it("reuses one empty set, so clearing twice doesn't invalidate anything", () => {
-    const { result, rerender } = renderHook(({ s }) => useJustAddedTasks(s), {
+    const { result, rerender } = renderHook(({ s }) => useJustAdded(s), {
       initialProps: { s: sig() },
     });
     const empty = result.current.justAddedIds;

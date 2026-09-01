@@ -5,7 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 const NONE: ReadonlySet<string> = new Set();
 
 /**
- * Keeps the tasks you just created visible while a filter is running.
+ * Keeps the things you just created visible while a filter is running.
+ *
+ * Used twice, once for tasks and once for epics — the ids are opaque to it, and
+ * a new epic disappears under a filter for the same reason a new task does: it
+ * is empty, so it matches nothing.
  *
  * A new task matches almost no filter by construction — no resources, no epic,
  * status `planned`, titled "New task" — so adding one with a filter active
@@ -26,7 +30,7 @@ const NONE: ReadonlySet<string> = new Set();
  * exempt at a time; with a set that would mean adding three tasks and keeping
  * only whichever you clicked last.
  */
-export function useJustAddedTasks(filterSignature: string): {
+export function useJustAdded(filterSignature: string): {
   /** Ids exempt from the filters. Referentially stable between changes, because
    * it feeds the canvas's match memo. */
   justAddedIds: ReadonlySet<string>;

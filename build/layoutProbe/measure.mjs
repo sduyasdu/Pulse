@@ -248,6 +248,24 @@ if (/top/.test(settleReduced)) {
 await send("Emulation.setEmulatedMedia", { features: [] });
 console.log(`Self-check: app CSS present (.canvas-settle → ${settle}; reduced → ${settleReduced}).`);
 
+// The just-added epic highlight, same reasoning: hand-written CSS whose absence
+// looks exactly like "the epic was added quietly", which is the thing it exists
+// to prevent.
+const epicAnim = await evaluate(`(() => {
+  const d = document.createElement('div');
+  d.className = 'epic-just-added';
+  document.body.appendChild(d);
+  const s = getComputedStyle(d);
+  const v = s.animationName + ' / ' + s.animationDuration;
+  d.remove();
+  return v;
+})()`);
+if (!/epic-just-added/.test(epicAnim)) {
+  console.error(`self-check FAILED: .epic-just-added resolves to "${epicAnim}", expected the highlight keyframes.`);
+  process.exit(2);
+}
+console.log(`Self-check: app CSS present (.epic-just-added → ${epicAnim}).`);
+
 /**
  * Self-check 2. The first version of this probe reported "fits" for everything
  * while measuring nothing at all, and a green run that cannot go red is not

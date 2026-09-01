@@ -198,3 +198,35 @@ export function compactLayout(
 
   return { epics: newEpics, featureYById };
 }
+
+/** How far left of the marker line a newly added epic starts, in screen pixels
+ * at the current day width. Enough that the line sits inside the band rather
+ * than on its edge, so the epic reads as covering the dates on screen. */
+export const NEW_EPIC_LEFT_INSET_PX = 64;
+/** Default width of a new epic, in days. Wide enough to hold its name and the
+ * controls in its header, so it never opens as a sliver that has to be resized
+ * before it can be used. */
+export const NEW_EPIC_SPAN_DAYS = 30;
+
+/**
+ * Where a newly added epic sits on the timeline.
+ *
+ * An epic with no features has no horizontal extent of its own, and the canvas
+ * used to fall back to a fixed 8px from the left edge of the viewport — an
+ * arbitrary spot unrelated to the dates on screen, or to where a task added
+ * next would land (the marker line). So a new epic is given real bounds,
+ * anchored to that same line and starting a little before it.
+ *
+ * Expressed in days, because that is what the model stores, but the inset is
+ * specified in PIXELS and converted: at a month-per-column zoom a fixed number
+ * of days would be an invisible sliver, and at day zoom it would run off the
+ * screen. Constant on screen is what "a little to the left" means to a reader.
+ */
+export function newEpicSpan(referenceDay: number, dayWidth: number): { minX: number; maxX: number } {
+  // A pathological dayWidth would otherwise produce a NaN or a span so wide it
+  // breaks the band's own geometry.
+  const safeWidth = Number.isFinite(dayWidth) && dayWidth > 0 ? dayWidth : 1;
+  const inset = Math.round(NEW_EPIC_LEFT_INSET_PX / safeWidth);
+  const minX = referenceDay - inset;
+  return { minX, maxX: minX + NEW_EPIC_SPAN_DAYS };
+}

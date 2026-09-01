@@ -6,7 +6,7 @@ import { useTaskCascade } from "@/hooks/useTaskCascade";
 import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
-import { epicAtBox, epicBandsFor, compactLayout } from "@/domain/layout";
+import { epicAtBox, epicBandsFor, compactLayout, newEpicSpan } from "@/domain/layout";
 import { resolveOverlaps } from "@/domain/overlap";
 import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -39,6 +39,7 @@ const clamp = clampEffort;
  * typing a search term doesn't yank the view on every keystroke, and that
  * backspacing a box empty settles into one move rather than a series. */
 const FILTER_JUMP_MS = 400;
+
 
 // The team leader's badge is squared off with an amber border (spec §3's
 // "★ … rendered with a square badge"). Overrides ResourceBadge's circle for
@@ -120,6 +121,10 @@ interface CanvasViewProps {
    * construction, so without this it is added, selected and invisible. Owned by
    * PulsePage, which decides when the exemption ends. */
   alwaysShowIds?: ReadonlySet<string>;
+  /** Epics exempt from the filters, for the same reason and on the same terms:
+   * a newly added epic has no tasks, so under "hide + compact" it is dropped
+   * from the layout entirely and adding one appears to do nothing. */
+  alwaysShowEpicIds?: ReadonlySet<string>;
   /** Day-index the vertical marker line sits on (a selectable reference date;
    * defaults to today). */
   referenceDay: number;
@@ -133,7 +138,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, alwaysShowIds, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, alwaysShowIds, alwaysShowEpicIds, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -334,10 +339,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     if (!compactFilterActive) return null;
     const base = dragOverlay ? features.map((f) => (f.id === dragOverlay.id ? { ...f, ...dragOverlay.patch } : f)) : features;
     const visible = base.filter(matchOf);
-    const epicsWithFeats = epics.filter((e) => visible.some((f) => f.epicId === e.id));
+    // Exempt epics survive with no visible features. Otherwise adding an epic
+    // under a filter drops it here and the button appears to do nothing — the
+    // epic exists, is selected, and is nowhere on screen.
+    const epicsWithFeats = epics.filter((e) => alwaysShowEpicIds?.has(e.id) || visible.some((f) => f.epicId === e.id));
     const { epics: cEpics, featureYById } = compactLayout(epicsWithFeats, visible, graph, { shrunk: epicsShrunk });
     return { feats: visible.map((f) => ({ ...f, y: featureYById[f.id] ?? f.y })), eps: cEpics };
-  }, [compactFilterActive, features, dragOverlay, matchOf, epics, graph, epicsShrunk]);
+  }, [compactFilterActive, features, dragOverlay, matchOf, epics, graph, epicsShrunk, alwaysShowEpicIds]);
 
   /**
    * Compaction repacks from the top of the canvas but leaves the scroller
@@ -934,7 +942,17 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const scrollTop = cont ? cont.scrollTop : 0;
       const visH = cont ? cont.clientHeight : 400;
       const y0 = Math.max(10, Math.round((scrollTop + visH / 2) / viewZoom) - 60);
-      return addEpic(y0);
+      // Place the band on the timeline the reader is actually looking at.
+      //
+      // A new epic has no features, so it has no horizontal extent of its own,
+      // and the render fell back to a fixed 8px from the left edge of the
+      // viewport — an arbitrary spot with no relationship to the dates on
+      // screen or to where a task added next would land (today's line, a
+      // quarter in). It read as the epic having been dropped somewhere random.
+      //
+      // Anchored to the marker line and started a little before it, so the line
+      // falls inside the band rather than on its edge. See `newEpicSpan`.
+      return addEpic(y0, newEpicSpan(referenceDay, dayWidth));
     },
   }));
 
@@ -1008,9 +1026,17 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
 
             {/* Epic bands */}
             {epicBands.map((ep) => {
-              const hasFeats = ep.count > 0;
-              const bandLeft = hasFeats ? xForDay(ep.minX ?? 0) - 8 : 8;
-              const bandWidth = hasFeats ? ((ep.maxX ?? 0) - (ep.minX ?? 0)) * dayWidth + 16 : 220;
+              // A span, not a feature count. An epic with no features can still
+              // have a place on the timeline — `manualMinX`/`manualMaxX`, which
+              // is what a hand-resized band carries and what a newly added one
+              // is now given. Keying this on `count` meant such an epic was
+              // drawn at a fixed 8px from the left edge instead, ignoring the
+              // bounds it actually had.
+              const hasSpan = ep.minX != null && ep.maxX != null;
+              const bandLeft = hasSpan ? xForDay(ep.minX as number) - 8 : 8;
+              const bandWidth = hasSpan ? ((ep.maxX as number) - (ep.minX as number)) * dayWidth + 16 : 220;
+              // Shown despite the filter, exactly as a just-added task is.
+              const epicExempt = !!alwaysShowEpicIds?.has(ep.id);
               return (
                 // Settles with the tasks inside it: a band that snapped to its
                 // new height while its boxes were still gliding would read as
@@ -1019,7 +1045,37 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                 // Excluded while THIS band is the one being resized by its own
                 // handle, for the same reason the dragged task is: the edge has
                 // to stay under the pointer.
-                <div key={ep.id} className={epicOverlay?.id === ep.id ? undefined : "canvas-settle"} style={{ position: "absolute", left: bandLeft, top: ep.y0, width: bandWidth, height: ep.y1 - ep.y0, background: hexA(ep.color, 0.05), border: `1px dashed ${hexA(ep.color, 0.5)}`, borderRadius: 10, pointerEvents: "none", zIndex: 1 }}>
+                // `epic-just-added` glows in the epic's own colour and fades
+                // to the ordinary band. It is an animation rather than a style
+                // keyed on the exemption, because the exemption lasts until the
+                // filters change — which can be never, leaving the highlight
+                // permanently on. See index.css.
+                <div
+                  key={ep.id}
+                  className={[
+                    epicOverlay?.id === ep.id ? "" : "canvas-settle",
+                    epicExempt ? "epic-just-added" : "",
+                  ].filter(Boolean).join(" ") || undefined}
+                  style={{
+                    position: "absolute",
+                    left: bandLeft,
+                    top: ep.y0,
+                    width: bandWidth,
+                    height: ep.y1 - ep.y0,
+                    background: hexA(ep.color, 0.05),
+                    border: `1px dashed ${hexA(ep.color, 0.5)}`,
+                    borderRadius: 10,
+                    pointerEvents: "none",
+                    // Above the ordinary bands while it is being announced, so
+                    // an overlapping neighbour cannot swallow the glow.
+                    zIndex: epicExempt ? 2 : 1,
+                    ...({
+                      "--epic-glow": hexA(ep.color, 0.35),
+                      "--epic-strong": hexA(ep.color, 0.95),
+                      "--epic-normal": hexA(ep.color, 0.5),
+                    } as React.CSSProperties),
+                  }}
+                >
                   <div style={{ position: "absolute", top: 6, left: 8, display: "flex", alignItems: "center", gap: 6, pointerEvents: "auto" }}>
                     <span style={{ width: 9, height: 9, borderRadius: 3, background: ep.color, flexShrink: 0 }} />
                     <EpicNameInput
@@ -1029,6 +1085,12 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       onCommit={(name) => void patchEpic(ep.id, { name })}
                     />
                     <span className="mono" style={{ fontSize: 9, color: "#64748B" }}>{ep.count} feat{ep.count === 1 ? "" : "s"}</span>
+                    {/* Same badge, same reason, as the one on an exempt task:
+                        without it the epic being visible under a filter that
+                        excludes it reads as the filter having quietly failed. */}
+                    {epicExempt && filterActive && (
+                      <Icon name="filter_alt" size={12} title={t("canvas.shownDespiteFilter")} style={{ color: "#D85A28" }} />
+                    )}
                     {canEdit && (
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
