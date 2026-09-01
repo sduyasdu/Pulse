@@ -338,7 +338,6 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, epics } = get();
     if (!pulseId) throw new Error("no pulse loaded");
     const id = newEpicId(pulseId);
-    const EPIC_PALETTE = ["#8B5CF6", "#3B82F6", "#14B8A6", "#22C55E", "#F59E0B", "#F43F5E", "#0EA5E9"];
     // `span` gives the band a real place on the timeline. Without one an epic
     // with no features has no horizontal extent at all, and the canvas used to
     // park it at a fixed 8px from the left of the viewport — nowhere near the
@@ -735,6 +734,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (cost) recordSingle("Delete cost", pulseId, deleteOp("cost", costId, asDoc(cost)));
   },
 }));
+
+/** The colours a new epic cycles through, and the palette the Epics tab offers
+ * when recolouring one. Exported so the two cannot drift into different sets. */
+export const EPIC_PALETTE = ["#8B5CF6", "#3B82F6", "#14B8A6", "#22C55E", "#F59E0B", "#F43F5E", "#0EA5E9"];
 
 /** The name a new epic is created with. Exported because the canvas treats it
  * as "not named yet" — it is a placeholder the product wrote, not a name the

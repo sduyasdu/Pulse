@@ -10,7 +10,7 @@ import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog"
 import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
-import { compactLayout } from "@/domain/layout";
+import { compactLayout, newEpicSpan } from "@/domain/layout";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { useJustAdded, filterSignatureOf } from "@/hooks/useJustAdded";
@@ -33,11 +33,12 @@ import { CostPanel } from "@/components/costPanel/CostPanel";
 import { COSTS_ENABLED } from "@/domain/flags";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
+import { EpicsTab } from "@/components/leftPanel/EpicsTab";
 import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { ActivityTab } from "@/components/leftPanel/ActivityTab";
 
-type RightTab = "details" | "team" | "capacity" | "activity";
+type RightTab = "details" | "team" | "epics" | "capacity" | "activity";
 
 export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
@@ -59,6 +60,7 @@ export function PulsePage() {
   const roleOf = usePulseStore((s) => s.roleOf);
   const renamePulse = usePulseStore((s) => s.renamePulse);
   const setGraphConfig = usePulseStore((s) => s.setGraphConfig);
+  const addEpic = usePulseStore((s) => s.addEpic);
   const patchEpic = usePulseStore((s) => s.patchEpic);
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
@@ -468,7 +470,20 @@ export function PulsePage() {
     }
   };
   const handleAddEpic = async () => {
-    const id = await canvasRef.current?.addEpicAtCenter();
+    // The canvas places the epic where the reader is looking, so prefer it. But
+    // the Epics tab is reachable from the BOARD too, where the canvas is
+    // unmounted and `canvasRef.current` is null — without this fallback the
+    // button would quietly do nothing there, which is the same failure the
+    // toolbar's today button already shipped once.
+    const id =
+      (await canvasRef.current?.addEpicAtCenter()) ??
+      (await addEpic(
+        // Below the existing bands rather than on top of them: there is no
+        // viewport to centre on, and stacking a new epic over an old one is
+        // indistinguishable from nothing having happened.
+        Math.max(10, ...epics.map((e) => e.y1 + 24)),
+        newEpicSpan(referenceDay, BASE_DAY_WIDTH * DENSITY_DAY_PX[density]),
+      ));
     if (id) markEpicAdded(id);
   };
 
@@ -617,11 +632,12 @@ export function PulsePage() {
               <button onClick={toggleSidebar} title={t("panel.collapsePanel")} className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              {(["details", "team", "capacity", "activity"] as RightTab[]).map((tab) => (
+              {(["details", "team", "epics", "capacity", "activity"] as RightTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setRightTab(tab)}
-                  className="flex-1 text-xs font-semibold py-2.5 capitalize"
+                  className="min-w-0 flex-1 truncate px-1 text-xs font-semibold py-2.5 capitalize"
+                  title={t(`tab.${tab}`)}
                   style={{ color: rightTab === tab ? "#123359" : "#64748B", borderBottom: rightTab === tab ? "2px solid #EE7240" : "2px solid transparent" }}
                 >
                   {t(`tab.${tab}`)}
@@ -631,6 +647,13 @@ export function PulsePage() {
             <div className="flex-1 overflow-y-auto">
               {rightTab === "team" ? (
                 <TeamTab canEdit={canEdit} filterResource={filterResource} setFilterResource={setFilterResource} />
+              ) : rightTab === "epics" ? (
+                <EpicsTab
+                  canEdit={canEdit}
+                  epicFilter={epicFilter}
+                  setEpicFilter={setEpicFilter}
+                  onAddEpic={() => void handleAddEpic()}
+                />
               ) : rightTab === "capacity" ? (
                 <CapacityTab canEdit={canEdit} />
               ) : rightTab === "activity" ? (
