@@ -506,7 +506,7 @@ export const de: Dict = {
   "epics.clearFilter": "{n} Epic(s) sichtbar — alle zeigen",
   "epics.tasksOne": "{n} Aufgabe",
   "epics.tasksOther": "{n} Aufgaben",
-  "epics.unfinished": "Noch nicht eingerichtet — braucht einen Namen und mindestens eine Aufgabe.",
+  "epics.new": "Neues Epic — benenne es, ändere die Farbe oder füge eine Aufgabe hinzu.",
   "epics.deleteConfirm": "Epic \"{name}\" löschen?",
   "epics.deleteDetail": "Die Aufgaben bleiben, sind aber nicht mehr zugeordnet.",
   "tab.details": "Details",

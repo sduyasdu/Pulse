@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { usePulseStore, graphConfigOf, EPIC_PALETTE, DEFAULT_EPIC_NAME } from "@/stores/pulseStore";
-import { epicBandsFor, isProvisionalEpic } from "@/domain/layout";
+import { epicBandsFor, isNewEpic } from "@/domain/layout";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { confirmAt } from "@/stores/confirmStore";
 import { useT } from "@/i18n";
@@ -123,7 +123,7 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic }: Epic
         <ul className="flex flex-col gap-1.5">
           {shown.map((ep) => {
             const filtered = epicFilter.has(ep.id);
-            const provisional = isProvisionalEpic(ep, DEFAULT_EPIC_NAME);
+            const isNew = isNewEpic(ep, DEFAULT_EPIC_NAME);
             return (
               <li
                 key={ep.id}
@@ -145,8 +145,8 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic }: Epic
                     style={{ width: 14, height: 14, background: ep.color, border: "1px solid rgba(15,23,42,0.15)", cursor: canEdit ? "pointer" : "default" }}
                   />
                   <EpicName name={ep.name} disabled={!canEdit} onCommit={(name) => void patchEpic(ep.id, { name })} />
-                  {provisional && (
-                    <Icon name="info" size={12} title={t("epics.unfinished")} style={{ color: "#D85A28", flexShrink: 0 }} />
+                  {isNew && (
+                    <Icon name="info" size={12} title={t("epics.new")} style={{ color: "#D85A28", flexShrink: 0 }} />
                   )}
                   <span className="mono flex-shrink-0 text-xs" style={{ color: "#64748B" }}>
                     {t(ep.count === 1 ? "epics.tasksOne" : "epics.tasksOther", { n: ep.count })}

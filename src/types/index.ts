@@ -523,6 +523,12 @@ export interface Epic {
   manualY1?: number | null;
   manualMinX?: number | null;
   manualMaxX?: number | null;
+  /** The colour this epic was CREATED with, written once and never updated.
+   * It is how the canvas can tell an auto-assigned colour from one the user
+   * picked, which is one of the three signs that an epic is no longer new
+   * (see `isNewEpic`). Absent on epics created before that existed, which
+   * therefore read as never recoloured. */
+  initialColor?: string | null;
 }
 
 export interface Subtask {

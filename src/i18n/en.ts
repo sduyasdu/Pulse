@@ -512,7 +512,7 @@ export const en = {
   "epics.clearFilter": "Showing {n} epic(s) — show all",
   "epics.tasksOne": "{n} task",
   "epics.tasksOther": "{n} tasks",
-  "epics.unfinished": "Not set up yet — needs a name and at least one task.",
+  "epics.new": "New epic — name it, recolour it, or add a task.",
   "epics.deleteConfirm": "Delete epic \"{name}\"?",
   "epics.deleteDetail": "Its tasks stay but become unassigned.",
   "tab.details": "details",

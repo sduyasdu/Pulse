@@ -338,6 +338,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, epics } = get();
     if (!pulseId) throw new Error("no pulse loaded");
     const id = newEpicId(pulseId);
+    const color = EPIC_PALETTE[epics.length % EPIC_PALETTE.length];
     // `span` gives the band a real place on the timeline. Without one an epic
     // with no features has no horizontal extent at all, and the canvas used to
     // park it at a fixed 8px from the left of the viewport — nowhere near the
@@ -347,7 +348,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const epic: Epic = {
       id,
       name: DEFAULT_EPIC_NAME,
-      color: EPIC_PALETTE[epics.length % EPIC_PALETTE.length],
+      color,
+      // Written once, never updated — the baseline `isNewEpic` compares against
+      // to tell an auto-assigned colour from a chosen one.
+      initialColor: color,
       y0,
       y1: y0 + 130,
       ...(span ? { manualMinX: span.minX, manualMaxX: span.maxX } : {}),
@@ -737,7 +741,24 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
 
 /** The colours a new epic cycles through, and the palette the Epics tab offers
  * when recolouring one. Exported so the two cannot drift into different sets. */
-export const EPIC_PALETTE = ["#8B5CF6", "#3B82F6", "#14B8A6", "#22C55E", "#F59E0B", "#F43F5E", "#0EA5E9"];
+export const EPIC_PALETTE = [
+  "#8B5CF6", // violet
+  "#6366F1", // indigo
+  "#3B82F6", // blue
+  "#0EA5E9", // sky
+  "#06B6D4", // cyan
+  "#14B8A6", // teal
+  "#10B981", // emerald
+  "#22C55E", // green
+  "#84CC16", // lime
+  "#F59E0B", // amber
+  "#F97316", // orange
+  "#EF4444", // red
+  "#F43F5E", // rose
+  "#EC4899", // pink
+  "#D946EF", // fuchsia
+  "#64748B", // slate
+];
 
 /** The name a new epic is created with. Exported because the canvas treats it
  * as "not named yet" — it is a placeholder the product wrote, not a name the

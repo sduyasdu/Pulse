@@ -506,7 +506,7 @@ export const pt: Dict = {
   "epics.clearFilter": "Mostrando {n} epic(s) — mostrar todos",
   "epics.tasksOne": "{n} tarefa",
   "epics.tasksOther": "{n} tarefas",
-  "epics.unfinished": "Ainda não configurado — precisa de um nome e ao menos uma tarefa.",
+  "epics.new": "Epic novo — dê um nome, mude a cor ou adicione uma tarefa.",
   "epics.deleteConfirm": "Excluir o epic \"{name}\"?",
   "epics.deleteDetail": "As tarefas permanecem, mas ficam sem atribuição.",
   "tab.details": "detalhes",

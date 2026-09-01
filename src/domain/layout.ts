@@ -232,24 +232,35 @@ export function newEpicSpan(referenceDay: number, dayWidth: number): { minX: num
 }
 
 /**
- * Is this epic still unfinished — created but not yet set up?
+ * Is this epic still brand new — created, and not yet engaged with?
  *
- * An epic is only doing its job once it is named AND holds work. Until both are
- * true the canvas keeps it prominent and in front, because an empty band is a
- * faint dashed outline that other epics' task boxes can sit on top of, covering
- * the very header you need in order to name or delete it.
+ * A new epic is drawn solid and sits in front of the task boxes, because an
+ * empty band is a faint dashed outline whose header other epics' boxes can
+ * cover — hiding the very field you need in order to name it.
  *
- * The default name counts as no name. It is a placeholder the product wrote,
- * not something the user chose, so an epic still carrying it has not been named
- * — and treating it as named would end the prominence at the exact moment the
- * epic is least finished.
+ * **Any ONE sign of engagement ends that.** Naming it, recolouring it, or
+ * putting a task in it all mean the same thing: someone has taken charge of
+ * this epic, and it can take its place in the ordinary visual hierarchy. An
+ * earlier version required a name AND a task, which left a named, deliberately
+ * empty epic — a perfectly normal way to plan ahead — permanently shouting.
  *
- * Deliberately a property of the epic rather than of "was added recently": the
- * problem is not that the epic is new, it is that it is unusable. A reload
- * would clear a session-scoped flag and put a still-empty, still-unnamed epic
- * back behind everything else.
+ * The default name counts as no name: it is a placeholder the product wrote,
+ * not one anyone chose. The colour is compared against `initialColor`, written
+ * once at creation, because an auto-assigned colour and a chosen one are
+ * otherwise indistinguishable. Epics created before that field existed have no
+ * baseline and so read as never recoloured, which leaves them exactly where
+ * they were.
+ *
+ * Deliberately a property of the epic, not of "was added recently": a
+ * session-scoped flag clears on reload, and would drop a still-untouched epic
+ * back behind everything — which is where it cannot be fixed.
  */
-export function isProvisionalEpic(epic: { name?: string | null; count: number }, defaultName: string): boolean {
-  const named = (epic.name ?? "").trim() !== "" && (epic.name ?? "").trim() !== defaultName;
-  return !named || epic.count === 0;
+export function isNewEpic(
+  epic: { name?: string | null; color?: string | null; initialColor?: string | null; count: number },
+  defaultName: string,
+): boolean {
+  const name = (epic.name ?? "").trim();
+  const named = name !== "" && name !== defaultName;
+  const recoloured = epic.initialColor != null && epic.color != null && epic.color !== epic.initialColor;
+  return !named && !recoloured && epic.count === 0;
 }
