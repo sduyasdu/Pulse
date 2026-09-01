@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import type { Invite, MyPulseIndexEntry, PendingInviteEntry, Pulse, PulseMember, PulseRole } from "@/types";
 import { emailKey } from "./emailKey";
+import { fetchMembership } from "./memberships";
 
 /** Lists this Pulse's outstanding (not-yet-accepted) invites. Owner/editor
  * only — enforced by firestore.rules (invites `allow list: canEditPulse`). */
@@ -113,6 +114,20 @@ export type InviteAcceptance =
   | { ok: false; reason: "unverified" | "notFound" | "failed" };
 
 /**
+ * Are we already in? Then there is nothing to accept.
+ *
+ * A user may always read their OWN pulseMembers doc (firestore.rules:
+ * `memberUid == request.auth.uid`), so this answers even for someone who is
+ * otherwise a stranger to the Pulse. A denial or a network failure is treated
+ * as "not a member", which is the safe reading: the caller then tries the real
+ * acceptance and finds out properly.
+ */
+async function alreadyJoined(pulseId: string, uid: string): Promise<InviteAcceptance | null> {
+  const me = await fetchMembership(pulseId, uid).catch(() => null);
+  return me ? { ok: true, role: me.role } : null;
+}
+
+/**
  * Accept the invitation addressed to this user's own address, if there is one.
  *
  * Deliberately takes no email argument. The address is read off the signed-in
@@ -124,8 +139,34 @@ export type InviteAcceptance =
  * from this side — the rule refuses to `get` a doc whose `email` isn't yours,
  * and a missing doc fails identically. Both are `notFound`, which is accurate:
  * there is no invitation here for you.
+ *
+ * Idempotent: accepting when you are already a member succeeds. See below.
  */
 export async function acceptInviteFor(pulseId: string, user: User): Promise<InviteAcceptance> {
+  /**
+   * Membership first, before anything else is asked.
+   *
+   * There are TWO paths that accept an emailed invite, and they race. The
+   * sign-in bootstrap sweeps every pending invitation for the address
+   * (`resolvePendingInvites`), and this page accepts the one it was opened for.
+   * Opening an invite link normally runs both: the sweep wins during sign-in,
+   * grants membership, writes the dashboard entry and DELETES the invite doc —
+   * and then this function looked for that doc, did not find it, and reported
+   * "there is no invitation here for you".
+   *
+   * So the invitee was told they could not join a Pulse they had just joined,
+   * and then found it sitting on their dashboard. Both halves were true; only
+   * the question was wrong.
+   *
+   * Being a member is the outcome the whole flow exists to produce, so it is
+   * checked first and answers every other case too: a link opened twice, two
+   * tabs racing, or someone who joined earlier by copy-link and is unverified
+   * — who would otherwise be asked to confirm an address in order to obtain
+   * access they already have.
+   */
+  const joined = await alreadyJoined(pulseId, user.uid);
+  if (joined) return joined;
+
   if (!(await refreshVerification(user))) return { ok: false, reason: "unverified" };
   const key = emailKey(user.email ?? "");
   if (!key) return { ok: false, reason: "unverified" };
@@ -133,16 +174,21 @@ export async function acceptInviteFor(pulseId: string, user: User): Promise<Invi
   let role: PulseRole;
   try {
     const snap = await getDoc(doc(db, "pulses", pulseId, "invites", key));
-    if (!snap.exists()) return { ok: false, reason: "notFound" };
+    // Re-checked rather than reported: the sweep may have completed in the time
+    // the verification refresh above took, which is a token round trip.
+    if (!snap.exists()) return (await alreadyJoined(pulseId, user.uid)) ?? { ok: false, reason: "notFound" };
     role = (snap.data() as Invite).role;
   } catch {
-    return { ok: false, reason: "notFound" };
+    return (await alreadyJoined(pulseId, user.uid)) ?? { ok: false, reason: "notFound" };
   }
 
   try {
     await acceptInvite(pulseId, user.uid, key, role);
     return { ok: true, role };
   } catch {
-    return { ok: false, reason: "failed" };
+    // `acceptInvite` is four writes, not one. If it granted membership and then
+    // failed on the dashboard entry or the cleanup, the user IS in — reporting
+    // failure would be the same lie in a different place.
+    return (await alreadyJoined(pulseId, user.uid)) ?? { ok: false, reason: "failed" };
   }
 }
