@@ -7,6 +7,7 @@ import { useT } from "@/i18n";
 import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
 import { epicAtBox, epicBandsFor, compactLayout, newEpicSpan, isNewEpic } from "@/domain/layout";
+import { resizeHandleSizes } from "@/domain/resizeHandles";
 import { resolveOverlaps } from "@/domain/overlap";
 import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
@@ -1358,17 +1359,55 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                       })}
                     </div>
                   )}
-                  {canEditFeature(box) && box.status !== "done" && (
+                  {canEditFeature(box) && box.status !== "done" && (() => {
+                    // Sized in SCREEN pixels and converted, so the target does
+                    // not shrink as you zoom out — see resizeHandleSizes.
+                    const { edge, effort } = resizeHandleSizes({ width, height, viewZoom, coarse });
+                    return (
                     <>
-                      <div onPointerDown={(e) => startDrag("resize-left", box, e)} style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
-                      <div onPointerDown={(e) => startDrag("resize-right", box, e)} style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 7, cursor: "col-resize" }} />
+                      {/* Straddle the border: half outside the box, half in, so
+                          the edge itself is the middle of the target rather
+                          than one end of it. */}
+                      <div
+                        onPointerDown={(e) => startDrag("resize-left", box, e)}
+                        title={t("canvas.resizeLeft")}
+                        style={{ position: "absolute", left: -edge / 2, top: 0, bottom: 0, width: edge, cursor: "col-resize" }}
+                      />
+                      <div
+                        onPointerDown={(e) => startDrag("resize-right", box, e)}
+                        title={t("canvas.resizeRight")}
+                        style={{ position: "absolute", right: -edge / 2, top: 0, bottom: 0, width: edge, cursor: "col-resize" }}
+                      />
+                      {/* Inset by the side handles' width. Full-width, this
+                          covered both bottom corners and — being last in the
+                          DOM — won them, so reaching for the side of a box near
+                          its bottom got a vertical resize. That is what made
+                          resizing in both directions feel like a fight. */}
                       {!expanded && (
-                        <div onPointerDown={(e) => startDrag("resize-effort", box, e)} title={t("canvas.dragWork")} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 12, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}>
+                        <div
+                          onPointerDown={(e) => startDrag("resize-effort", box, e)}
+                          title={t("canvas.dragWork")}
+                          style={{ position: "absolute", left: edge / 2, right: edge / 2, bottom: 0, height: effort, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}
+                        >
                           <div style={{ width: 26, height: 3, borderRadius: 2, background: meta.border, opacity: 0.5 }} />
                         </div>
                       )}
+                      {/* Side grips, shown only on the selected box. The bottom
+                          edge has always advertised itself with a bar; the
+                          sides had nothing, so the only way to discover them
+                          was to sweep the cursor along the border and watch for
+                          it to change. Selection-scoped rather than hover-
+                          revealed: hover does not exist on touch, and a grip on
+                          every box at once is noise. */}
+                      {selected && (
+                        <>
+                          <div style={{ position: "absolute", left: 2, top: "50%", width: 3, height: Math.min(18, height / 3), borderRadius: 2, background: meta.border, opacity: 0.5, transform: "translateY(-50%)", pointerEvents: "none" }} />
+                          <div style={{ position: "absolute", right: 2, top: "50%", width: 3, height: Math.min(18, height / 3), borderRadius: 2, background: meta.border, opacity: 0.5, transform: "translateY(-50%)", pointerEvents: "none" }} />
+                        </>
+                      )}
                     </>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}
