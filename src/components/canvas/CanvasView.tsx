@@ -1392,21 +1392,23 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   {canEditFeature(box) && box.status !== "done" && (() => {
                     // Sized in SCREEN pixels and converted, so the target does
                     // not shrink as you zoom out — see resizeHandleSizes.
-                    const { edge, effort } = resizeHandleSizes({ width, height, viewZoom, coarse });
+                    const { edge, outside, effort } = resizeHandleSizes({ width, height, viewZoom, coarse });
                     return (
                     <>
-                      {/* Straddle the border: half outside the box, half in, so
-                          the edge itself is the middle of the target rather
-                          than one end of it. */}
+                      {/* A small lip outside the border, the rest inside. Half
+                          outside — which this used to be — put most of the
+                          target on the canvas or on the neighbouring box, which
+                          shares its z-index and can take the event, leaving
+                          barely any of it on the box being aimed at. */}
                       <div
                         onPointerDown={(e) => startDrag("resize-left", box, e)}
                         title={t("canvas.resizeLeft")}
-                        style={{ position: "absolute", left: -edge / 2, top: 0, bottom: 0, width: edge, cursor: "col-resize" }}
+                        style={{ position: "absolute", left: -outside, top: 0, bottom: 0, width: edge, cursor: "col-resize" }}
                       />
                       <div
                         onPointerDown={(e) => startDrag("resize-right", box, e)}
                         title={t("canvas.resizeRight")}
-                        style={{ position: "absolute", right: -edge / 2, top: 0, bottom: 0, width: edge, cursor: "col-resize" }}
+                        style={{ position: "absolute", right: -outside, top: 0, bottom: 0, width: edge, cursor: "col-resize" }}
                       />
                       {/* Inset by the side handles' width. Full-width, this
                           covered both bottom corners and — being last in the
@@ -1417,7 +1419,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                         <div
                           onPointerDown={(e) => startDrag("resize-effort", box, e)}
                           title={t("canvas.dragWork")}
-                          style={{ position: "absolute", left: edge / 2, right: edge / 2, bottom: 0, height: effort, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}
+                          style={{ position: "absolute", left: edge - outside, right: edge - outside, bottom: 0, height: effort, cursor: "ns-resize", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 1 }}
                         >
                           <div style={{ width: 26, height: 3, borderRadius: 2, background: meta.border, opacity: 0.5 }} />
                         </div>
