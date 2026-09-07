@@ -333,3 +333,29 @@ button:disabled {
     animation: none;
   }
 }
+
+/* The box currently being dragged, while its row is pinned (`lockY`).
+
+   Two things have to be true at once, which is why this is not just
+   `.canvas-settle`:
+
+   - `top` must already be transitioning BEFORE the drag ends. A transition
+     introduced in the same style change as the value it would animate does not
+     run, so switching from "no transition" to `.canvas-settle` on release
+     produced a jump — the settle was written and never seen.
+   - `height` must NOT transition. A resize-effort drag changes the height on
+     every frame, and animating it would leave the box lagging behind the
+     pointer that is dragging it.
+
+   Only applied where the row is pinned. Outside compact mode a move drag sets
+   `top` from the pointer, and transitioning it there would make the box swim
+   after the cursor. */
+.canvas-settle--top {
+  transition: top 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-settle--top {
+    transition: none;
+  }
+}

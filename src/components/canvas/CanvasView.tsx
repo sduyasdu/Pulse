@@ -207,7 +207,18 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // "Drag overlay" — optimistic local render state during an active
   // box/epic drag, committed to Firestore on pointerup (+ a periodic
   // safety-net write for long drags) instead of on every pointermove.
-  const [dragOverlay, setDragOverlay] = useState<{ id: string; patch: Partial<Feature> } | null>(null);
+  /**
+   * The in-flight drag, applied over the stored features so the canvas follows
+   * the pointer before anything is written.
+   *
+   * `lockY` pins the dragged box's ROW while the gesture lasts. In compact mode
+   * the vertical layout is packed from the dates, so resizing a task changes
+   * which lane it fits in — and the box would jump to another row mid-drag,
+   * out from under the very handle being held. The pointer then sat on empty
+   * canvas while the box resized somewhere else. Held still until release, when
+   * it settles into its real row where the movement can actually be seen.
+   */
+  const [dragOverlay, setDragOverlay] = useState<{ id: string; patch: Partial<Feature>; lockY?: number } | null>(null);
   const [epicOverlay, setEpicOverlay] = useState<{ id: string; patch: Partial<Epic> } | null>(null);
 
   useEffect(() => {
@@ -345,7 +356,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     // epic exists, is selected, and is nowhere on screen.
     const epicsWithFeats = epics.filter((e) => alwaysShowEpicIds?.has(e.id) || visible.some((f) => f.epicId === e.id));
     const { epics: cEpics, featureYById } = compactLayout(epicsWithFeats, visible, graph, { shrunk: epicsShrunk });
-    return { feats: visible.map((f) => ({ ...f, y: featureYById[f.id] ?? f.y })), eps: cEpics };
+    return {
+      feats: visible.map((f) => ({
+        // The dragged box keeps the row it was grabbed in — see `lockY`.
+        ...f,
+        y: f.id === dragOverlay?.id && dragOverlay.lockY != null ? dragOverlay.lockY : (featureYById[f.id] ?? f.y),
+      })),
+      eps: cEpics,
+    };
   }, [compactFilterActive, features, dragOverlay, matchOf, epics, graph, epicsShrunk, alwaysShowEpicIds]);
 
   /**
@@ -647,7 +665,11 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       }
 
       latestPatchRef.current = patch;
-      setDragOverlay({ id: d.id, patch });
+      // `d.orig` is the box as it was RENDERED when grabbed, so in compact mode
+      // its `y` is the packed row, which is what has to be held. Only pinned
+      // there: outside compact mode `y` is stored, a move drag sets it from the
+      // pointer, and pinning would stop the box following the cursor.
+      setDragOverlay({ id: d.id, patch, lockY: d.xOnly || d.kind !== "move" ? d.orig.y : undefined });
 
       const now = performance.now();
       if (now - d.lastWrite > 500) {
@@ -1232,10 +1254,18 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                 <div
                   key={box.id}
                   // Glide to a new lane when a neighbour's move or resize
-                  // repacks the layout — but never while THIS box is the one
-                  // being dragged, where a transition reads as lag rather than
-                  // as motion. See `.canvas-settle` in index.css.
-                  className={dragId === box.id ? undefined : "canvas-settle"}
+                  // repacks the layout. The box being dragged is the exception,
+                  // where a transition reads as lag rather than as motion — but
+                  // when its row is pinned it keeps a TOP-only transition, so
+                  // the settle on release actually animates instead of jumping.
+                  // See `.canvas-settle` and `.canvas-settle--top` in index.css.
+                  className={
+                    dragId !== box.id
+                      ? "canvas-settle"
+                      : dragOverlay?.lockY != null
+                        ? "canvas-settle--top"
+                        : undefined
+                  }
                   onPointerDown={(e) => startBoxInteraction(box, e)}
                   onContextMenu={(e) => e.preventDefault()}
                   onPointerEnter={(e) => { if (!coarse && showHover && !dragId && !isPanning) setHoverCard({ x: e.clientX, y: e.clientY, box }); }}

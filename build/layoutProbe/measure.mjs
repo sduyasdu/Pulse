@@ -248,6 +248,25 @@ if (/top/.test(settleReduced)) {
 await send("Emulation.setEmulatedMedia", { features: [] });
 console.log(`Self-check: app CSS present (.canvas-settle → ${settle}; reduced → ${settleReduced}).`);
 
+// The pinned-row settle. Its absence is invisible in a way the others' is not:
+// the drag still works, the row still ends up right, and only the animation
+// between the two is missing — which is exactly the jump it was added to fix.
+const settleTop = await evaluate(`(() => {
+  const d = document.createElement('div');
+  d.className = 'canvas-settle--top';
+  document.body.appendChild(d);
+  const s = getComputedStyle(d);
+  const v = s.transitionProperty + ' / ' + s.transitionDuration;
+  d.remove();
+  return v;
+})()`);
+if (!/top/.test(settleTop) || /height/.test(settleTop)) {
+  console.error(`self-check FAILED: .canvas-settle--top resolves to "${settleTop}", expected top and NOT height.`);
+  console.error("Transitioning height there would lag the box behind the pointer during a resize.");
+  process.exit(2);
+}
+console.log(`Self-check: app CSS present (.canvas-settle--top → ${settleTop}).`);
+
 // The just-added epic highlight, same reasoning: hand-written CSS whose absence
 // looks exactly like "the epic was added quietly", which is the thing it exists
 // to prevent.
