@@ -213,6 +213,7 @@ export const it: Dict = {
   "mobile.noTasksInStatus": "Nessuna attività in «{status}».",
 
   // auth
+  "auth.copyright": "© {year} Yasdu Innovación y Servicios SA de CV",
   "auth.heroTitle": "Pianificazione visiva dei progetti",
   "auth.heroLead": "La tua roadmap è una tela 2D: il tempo scorre da sinistra a destra e ogni riquadro è un'attività. L'altezza del riquadro è l'impegno giornaliero, quindi la dimensione significa lavoro, non solo durata.",
   "auth.pointCanvasTitle": "La tela",
@@ -225,7 +226,6 @@ export const it: Dict = {
   "auth.startFree": "Il piano Starter gratuito è quello di ogni nuovo account.",
   "auth.noCard": "Nessuna carta di credito.",
   "auth.noInstall": "Nessuna installazione — funziona nel browser.",
-  "auth.by": "di Yasdu",
   "auth.signIn": "Accedi",
   "auth.createAccountTitle": "Crea il tuo account",
   "auth.tagline": "Pianificazione dei progetti visiva, incentrata sui grafici.",

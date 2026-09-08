@@ -96,10 +96,13 @@ for (const [scene, lang, width, height] of SHOTS) {
   await new Promise((r) => setTimeout(r, 1400));
   // Proof it actually rendered, not just that the screenshot succeeded.
   const chars = await evaluate("document.body.innerText.replace(/\\\\s+/g,' ').trim().length");
-  const { data } = await send("Page.captureScreenshot", { format: "png" });
+  // How far the page runs past the fold. A marketing page may scroll, but a
+  // footer clipped by a few pixels reads as a mistake rather than as more page.
+  const over = await evaluate(`document.documentElement.scrollHeight - window.innerHeight`);
+  const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true });
   const file = path.join(OUT, `${scene}-${lang}-${width}.png`);
   await writeFile(file, Buffer.from(data, "base64"));
-  console.log(`${path.basename(file)}  ${chars} chars of text`);
+  console.log(`${path.basename(file)}  ${chars} chars  ${over > 0 ? `+${over}px below the fold` : "fits the fold"}`);
 }
 ws.close(); chrome.kill(); server.close();
 process.exit(0);

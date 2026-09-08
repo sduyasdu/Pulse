@@ -217,6 +217,7 @@ export const en = {
   "mobile.noTasksInStatus": "No tasks in “{status}”.",
 
   // ── auth / login ────────────────────────────────────────────────────────────
+  "auth.copyright": "© {year} Yasdu Innovación y Servicios SA de CV",
   "auth.heroTitle": "Visual project planning",
   "auth.heroLead": "Your roadmap is a 2D canvas: time runs left to right and every box is a task. A box's height is the daily effort, so size means work — not just duration.",
   "auth.pointCanvasTitle": "The canvas",
@@ -229,7 +230,6 @@ export const en = {
   "auth.startFree": "The free Starter plan is what every new account gets.",
   "auth.noCard": "No credit card.",
   "auth.noInstall": "No install — it runs in your browser.",
-  "auth.by": "by Yasdu",
   "auth.signIn": "Sign in",
   "auth.createAccountTitle": "Create your account",
   "auth.tagline": "Visual, graph-first project planning.",

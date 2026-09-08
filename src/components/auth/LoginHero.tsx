@@ -31,14 +31,8 @@ export function LoginHero({ className }: { className?: string }) {
       {/* Hidden on small screens: the card above already carries the lockup and
           the tagline, and repeating them would push the pitch further from the
           form someone came here to use. */}
-      <div className="mb-5 hidden items-center gap-3 lg:flex">
+      <div className="mb-5 hidden lg:block">
         <PulseLockup variant="light" size={26} />
-        <span
-          className="mono rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wide"
-          style={{ background: "#F7E8DA", color: "#C2410C" }}
-        >
-          {t("auth.by")}
-        </span>
       </div>
 
       <h2
