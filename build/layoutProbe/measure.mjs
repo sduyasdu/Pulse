@@ -21,8 +21,19 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 
 /** The desktop range. Below 768 the app swaps to its mobile views, so those
- * widths never render these scenes. */
+ * widths never render the in-Pulse scenes. */
 const WIDTHS = [768, 900, 1024, 1152, 1280, 1440, 1512, 1680, 1920, 2560];
+
+/**
+ * Per-scene widths, because the mobile cutoff is not universal. The sign-in
+ * page has no mobile variant — it is the same component at every size, and it
+ * is the page most likely to be opened on a phone from a shared invite link. So
+ * it is probed down to 360px, where the others would be measuring a layout the
+ * app never shows.
+ */
+const NARROW = [360, 390, 414, 600];
+const SCENE_WIDTHS = { login: [...NARROW, ...WIDTHS] };
+const widthsFor = (scene) => SCENE_WIDTHS[scene] ?? WIDTHS;
 const LANGS = ["en", "de"]; // English, plus the longest labels
 const NAMES = ["short", "typical", "long", "unbroken"];
 const NAME_VALUES = {
@@ -31,7 +42,7 @@ const NAME_VALUES = {
   long: "Q3 Platform Roadmap — Payments, Billing and Identity",
   unbroken: "Q3-Platform-Roadmap-Payments-Billing-Identity-Migration",
 };
-const SCENES = ["dashboard", "toolbar"];
+const SCENES = ["login", "dashboard", "toolbar"];
 
 execFileSync("npx", ["vite", "build", "-c", path.join(import.meta.dirname, "vite.probe.config.ts")], { stdio: "inherit", cwd: ROOT });
 
@@ -267,6 +278,31 @@ if (!/top/.test(settleTop) || /height/.test(settleTop)) {
 }
 console.log(`Self-check: app CSS present (.canvas-settle--top → ${settleTop}).`);
 
+// The sign-in illustration's reveal. Hand-written CSS, so it fails the way
+// `.canvas-settle` does: silently, and only in the animation. Losing the whole
+// rule leaves the boxes visible but static — the picture still reads, which is
+// exactly why nothing else would ever report it missing.
+//
+// The fill-mode is asserted too, and it is the part that can fail LOUDLY: the
+// boxes are staggered up to ~700ms, and without `both` each one sits at full
+// opacity until its turn, so they all appear at once and then flicker as the
+// animations start. A reveal that runs backwards is worse than none.
+const loginBoxIn = await evaluate(`(() => {
+  const d = document.createElement('div');
+  d.className = 'login-box-in';
+  document.body.appendChild(d);
+  const s = getComputedStyle(d);
+  const v = s.animationName + ' / ' + s.animationDuration + ' / ' + s.animationFillMode;
+  d.remove();
+  return v;
+})()`);
+if (!/login-box-in/.test(loginBoxIn) || !/both/.test(loginBoxIn)) {
+  console.error(`self-check FAILED: .login-box-in resolves to "${loginBoxIn}", expected the reveal keyframes.`);
+  console.error("The sign-in illustration's staggered reveal is not in the stylesheet.");
+  process.exit(2);
+}
+console.log(`Self-check: app CSS present (.login-box-in → ${loginBoxIn}).`);
+
 // The just-added epic highlight, same reasoning: hand-written CSS whose absence
 // looks exactly like "the epic was added quietly", which is the thing it exists
 // to prevent.
@@ -336,14 +372,15 @@ chrome.kill();
 server.close();
 
 console.log("\nIs the document wider than the window?");
-console.log("(· = fits; a number is pixels of page beyond the right edge)\n");
-console.log("  scene      lang  name      " + WIDTHS.map((w) => String(w).padStart(6)).join(""));
-console.log("  ---------  ----  --------  " + WIDTHS.map(() => "------").join(""));
+console.log("(· = fits; a number is pixels of page beyond the right edge)");
 let failures = 0;
 for (const scene of SCENES) {
+  const ws = widthsFor(scene);
+  console.log("\n  scene      lang  name      " + ws.map((w) => String(w).padStart(6)).join(""));
+  console.log("  ---------  ----  --------  " + ws.map(() => "------").join(""));
   for (const lang of LANGS) {
     for (const name of NAMES) {
-      const cells = WIDTHS.map((w) => {
+      const cells = ws.map((w) => {
         const r = rows.find((x) => x.scene === scene && x.lang === lang && x.name === name && x.width === w);
         if (r && r.documentOverflow > 0) failures++;
         return (r && r.documentOverflow > 0 ? String(r.documentOverflow) : "·").padStart(6);

@@ -213,6 +213,18 @@ export const de: Dict = {
   "mobile.noTasksInStatus": "Keine Aufgaben in „{status}“.",
 
   // auth
+  "auth.heroTitle": "Visuelle Projektplanung",
+  "auth.heroLead": "Deine Roadmap ist eine 2D-Fläche: Die Zeit läuft von links nach rechts und jedes Kästchen ist eine Aufgabe. Die Höhe eines Kästchens ist der tägliche Aufwand — Größe bedeutet also Arbeit, nicht nur Dauer.",
+  "auth.pointCanvasTitle": "Die Fläche",
+  "auth.pointCanvasBody": "Ziehe ein Kästchen, um es zu verschieben, die Ränder, um es neu zu planen.",
+  "auth.pointHeightTitle": "Höhe ist Aufwand",
+  "auth.pointHeightBody": "Ein hohes Kästchen ist schwerere Arbeit als ein flaches gleicher Dauer.",
+  "auth.pointPeopleTitle": "Personen und Kapazität",
+  "auth.pointPeopleBody": "Weise Personen einen Prozentsatz zu und sieh, ob das Team die Schätzung deckt.",
+  "auth.punchline": "Ein Gantt-Diagramm sagt dir wann. Pulse sagt dir auch wie viel.",
+  "auth.startFree": "Der kostenlose Starter-Plan gilt für jedes neue Konto.",
+  "auth.noCard": "Keine Kreditkarte.",
+  "auth.noInstall": "Keine Installation — es läuft im Browser.",
   "auth.by": "von Yasdu",
   "auth.signIn": "Anmelden",
   "auth.createAccountTitle": "Konto erstellen",

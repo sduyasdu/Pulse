@@ -217,6 +217,18 @@ export const en = {
   "mobile.noTasksInStatus": "No tasks in “{status}”.",
 
   // ── auth / login ────────────────────────────────────────────────────────────
+  "auth.heroTitle": "Visual project planning",
+  "auth.heroLead": "Your roadmap is a 2D canvas: time runs left to right and every box is a task. A box's height is the daily effort, so size means work — not just duration.",
+  "auth.pointCanvasTitle": "The canvas",
+  "auth.pointCanvasBody": "Drag a box to move it, drag its edges to reschedule it.",
+  "auth.pointHeightTitle": "Height is effort",
+  "auth.pointHeightBody": "A tall box is heavier work than a short one of the same length.",
+  "auth.pointPeopleTitle": "People and capacity",
+  "auth.pointPeopleBody": "Assign people a percentage and see whether the team covers the estimate.",
+  "auth.punchline": "A Gantt chart tells you when. Pulse also tells you how much.",
+  "auth.startFree": "The free Starter plan is what every new account gets.",
+  "auth.noCard": "No credit card.",
+  "auth.noInstall": "No install — it runs in your browser.",
   "auth.by": "by Yasdu",
   "auth.signIn": "Sign in",
   "auth.createAccountTitle": "Create your account",

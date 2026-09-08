@@ -213,6 +213,18 @@ export const fr: Dict = {
   "mobile.noTasksInStatus": "Aucune tâche dans « {status} ».",
 
   // auth
+  "auth.heroTitle": "Planification de projet visuelle",
+  "auth.heroLead": "Votre roadmap est un canevas 2D : le temps va de gauche à droite et chaque boîte est une tâche. La hauteur d'une boîte est l'effort quotidien, donc la taille signifie le travail, pas seulement la durée.",
+  "auth.pointCanvasTitle": "Le canevas",
+  "auth.pointCanvasBody": "Faites glisser une boîte pour la déplacer, ses bords pour la replanifier.",
+  "auth.pointHeightTitle": "La hauteur, c'est l'effort",
+  "auth.pointHeightBody": "Une boîte haute est un travail plus lourd qu'une boîte basse de même durée.",
+  "auth.pointPeopleTitle": "Personnes et capacité",
+  "auth.pointPeopleBody": "Affectez les personnes avec un pourcentage et voyez si l'équipe couvre l'estimation.",
+  "auth.punchline": "Un diagramme de Gantt vous dit quand. Pulse vous dit aussi combien.",
+  "auth.startFree": "Le plan Starter gratuit est celui de tout nouveau compte.",
+  "auth.noCard": "Sans carte bancaire.",
+  "auth.noInstall": "Sans installation — tout se passe dans le navigateur.",
   "auth.by": "par Yasdu",
   "auth.signIn": "Se connecter",
   "auth.createAccountTitle": "Créez votre compte",

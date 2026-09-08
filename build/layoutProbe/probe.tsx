@@ -22,6 +22,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { PulseCard } from "@/components/dashboard/PulseCard";
+import { LoginPage } from "@/routes/LoginPage";
 import { PulseLockup } from "@/components/shared/Logo";
 import { Icon } from "@/components/shared/Icon";
 import { useI18nStore } from "@/stores/i18nStore";
@@ -142,7 +143,17 @@ function DashboardScene({ pulseName }: { pulseName: string }) {
   );
 }
 
-const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene };
+/**
+ * The sign-in page, as the router mounts it. The one page a prospective
+ * customer sees before deciding, so a horizontal scrollbar on it is worse than
+ * one anywhere else — and it is now a two-column layout with an illustration,
+ * which is exactly the shape that overflows.
+ */
+function LoginScene() {
+  return <LoginPage />;
+}
+
+const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {
