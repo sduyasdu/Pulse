@@ -23,6 +23,10 @@ const SHOTS = [
   ["login", "en", 768, 1000],
   ["login", "en", 390, 1200],
   ["login", "es", 1440, 900],
+  ["login", "de", 1440, 900],
+  ["login", "fr", 1440, 900],
+  ["login", "pt", 1440, 900],
+  ["login", "it", 1440, 900],
 ];
 
 execFileSync("npx", ["vite", "build", "-c", path.join(import.meta.dirname, "vite.probe.config.ts")], { stdio: "inherit", cwd: ROOT });
@@ -99,10 +103,25 @@ for (const [scene, lang, width, height] of SHOTS) {
   // How far the page runs past the fold. A marketing page may scroll, but a
   // footer clipped by a few pixels reads as a mistake rather than as more page.
   const over = await evaluate(`document.documentElement.scrollHeight - window.innerHeight`);
+  // Lines, measured. A character count predicts wrapping badly — glyph widths
+  // differ per language and the headline is set at 2.6rem, where a couple of
+  // characters change the answer.
+  const lines = await evaluate(`(() => {
+    const linesOf = (el) => {
+      if (!el) return 0;
+      const cs = getComputedStyle(el);
+      const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+      return Math.round(el.getBoundingClientRect().height / lh);
+    };
+    const h = document.querySelector("h2");
+    // The punchline is the only element with a left border in the hero.
+    const p = [...document.querySelectorAll("p")].find((e) => getComputedStyle(e).borderLeftWidth !== "0px");
+    return linesOf(h) + "/" + linesOf(p);
+  })()`);
   const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true });
   const file = path.join(OUT, `${scene}-${lang}-${width}.png`);
   await writeFile(file, Buffer.from(data, "base64"));
-  console.log(`${path.basename(file)}  ${chars} chars  ${over > 0 ? `+${over}px below the fold` : "fits the fold"}`);
+  console.log(`${path.basename(file)}  ${chars} chars  ${over > 0 ? `+${over}px below fold` : "fits fold"}  headline/punchline lines: ${lines}`);
 }
 ws.close(); chrome.kill(); server.close();
 process.exit(0);

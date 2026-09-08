@@ -214,7 +214,7 @@ export const de: Dict = {
 
   // auth
   "auth.copyright": "© {year} Yasdu Innovación y Servicios SA de CV",
-  "auth.heroTitle": "Visuelle Projektplanung",
+  "auth.heroTitle": "Plane alles, visuell",
   "auth.heroLead": "Deine Roadmap ist eine 2D-Fläche: Die Zeit läuft von links nach rechts und jedes Kästchen ist eine Aufgabe. Die Höhe eines Kästchens ist der tägliche Aufwand — Größe bedeutet also Arbeit, nicht nur Dauer.",
   "auth.pointCanvasTitle": "Die Fläche",
   "auth.pointCanvasBody": "Ziehe ein Kästchen, um es zu verschieben, die Ränder, um es neu zu planen.",
@@ -222,7 +222,7 @@ export const de: Dict = {
   "auth.pointHeightBody": "Ein hohes Kästchen ist schwerere Arbeit als ein flaches gleicher Dauer.",
   "auth.pointPeopleTitle": "Personen und Kapazität",
   "auth.pointPeopleBody": "Weise Personen einen Prozentsatz zu und sieh, ob das Team die Schätzung deckt.",
-  "auth.punchline": "Ein Gantt-Diagramm sagt dir wann. Pulse sagt dir auch wie viel.",
+  "auth.punchline": "Jedes Projekt, eine visuelle Fläche. Verwirkliche sie.",
   "auth.startFree": "Der kostenlose Starter-Plan gilt für jedes neue Konto.",
   "auth.noCard": "Keine Kreditkarte.",
   "auth.noInstall": "Keine Installation — es läuft im Browser.",

@@ -214,7 +214,7 @@ export const fr: Dict = {
 
   // auth
   "auth.copyright": "© {year} Yasdu Innovación y Servicios SA de CV",
-  "auth.heroTitle": "Planification de projet visuelle",
+  "auth.heroTitle": "Planifiez tout, visuellement",
   "auth.heroLead": "Votre roadmap est un canevas 2D : le temps va de gauche à droite et chaque boîte est une tâche. La hauteur d'une boîte est l'effort quotidien, donc la taille signifie le travail, pas seulement la durée.",
   "auth.pointCanvasTitle": "Le canevas",
   "auth.pointCanvasBody": "Faites glisser une boîte pour la déplacer, ses bords pour la replanifier.",
@@ -222,7 +222,7 @@ export const fr: Dict = {
   "auth.pointHeightBody": "Une boîte haute est un travail plus lourd qu'une boîte basse de même durée.",
   "auth.pointPeopleTitle": "Personnes et capacité",
   "auth.pointPeopleBody": "Affectez les personnes avec un pourcentage et voyez si l'équipe couvre l'estimation.",
-  "auth.punchline": "Un diagramme de Gantt vous dit quand. Pulse vous dit aussi combien.",
+  "auth.punchline": "N'importe quel projet, un seul canevas visuel. Concrétisez-les.",
   "auth.startFree": "Le plan Starter gratuit est celui de tout nouveau compte.",
   "auth.noCard": "Sans carte bancaire.",
   "auth.noInstall": "Sans installation — tout se passe dans le navigateur.",

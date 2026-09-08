@@ -214,7 +214,7 @@ export const pt: Dict = {
 
   // auth
   "auth.copyright": "© {year} Yasdu Innovación y Servicios SA de CV",
-  "auth.heroTitle": "Planejamento de projetos visual",
+  "auth.heroTitle": "Planeje tudo, visualmente",
   "auth.heroLead": "Seu roadmap é um quadro 2D: o tempo corre da esquerda para a direita e cada caixa é uma tarefa. A altura da caixa é o esforço diário, então o tamanho significa trabalho, não apenas duração.",
   "auth.pointCanvasTitle": "O quadro",
   "auth.pointCanvasBody": "Arraste uma caixa para movê-la, arraste as bordas para reprogramá-la.",
@@ -222,7 +222,7 @@ export const pt: Dict = {
   "auth.pointHeightBody": "Uma caixa alta é trabalho mais pesado que uma baixa da mesma duração.",
   "auth.pointPeopleTitle": "Pessoas e capacidade",
   "auth.pointPeopleBody": "Atribua pessoas com um percentual de dedicação e veja se a equipe cobre o estimado.",
-  "auth.punchline": "Um gráfico de Gantt diz quando. O Pulse também diz quanto.",
+  "auth.punchline": "Qualquer projeto, um único quadro visual. Torne-os reais.",
   "auth.startFree": "O plano Starter gratuito é o de toda conta nova.",
   "auth.noCard": "Sem cartão de crédito.",
   "auth.noInstall": "Sem instalação — funciona no navegador.",

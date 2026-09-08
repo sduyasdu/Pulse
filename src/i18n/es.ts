@@ -214,7 +214,7 @@ export const es: Dict = {
 
   // auth
   "auth.copyright": "© {year} Yasdu Innovación y Servicios SA de CV",
-  "auth.heroTitle": "Planificación de proyectos visual",
+  "auth.heroTitle": "Planifique todo, visualmente",
   "auth.heroLead": "Su roadmap es un lienzo 2D: el tiempo corre de izquierda a derecha y cada caja es una tarea. La altura de la caja es el esfuerzo diario, así que el tamaño significa trabajo, no solo duración.",
   "auth.pointCanvasTitle": "El lienzo",
   "auth.pointCanvasBody": "Arrastre una caja para moverla, arrastre los bordes para reprogramarla.",
@@ -222,7 +222,7 @@ export const es: Dict = {
   "auth.pointHeightBody": "Una caja alta es trabajo más pesado que una baja de la misma duración.",
   "auth.pointPeopleTitle": "Personas y capacidad",
   "auth.pointPeopleBody": "Asigne personas con un porcentaje de dedicación y vea si el equipo alcanza para lo estimado.",
-  "auth.punchline": "Un diagrama de Gantt le dice cuándo. Pulse además le dice cuánto.",
+  "auth.punchline": "Cualquier proyecto, un solo lienzo visual. Hágalos realidad.",
   "auth.startFree": "El plan Starter gratuito es el de toda cuenta nueva.",
   "auth.noCard": "Sin tarjeta de crédito.",
   "auth.noInstall": "Sin instalación: funciona en el navegador.",
