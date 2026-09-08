@@ -222,7 +222,7 @@ export const it: Dict = {
   "auth.pointHeightBody": "Un riquadro alto è lavoro più pesante di uno basso della stessa durata.",
   "auth.pointPeopleTitle": "Persone e capacità",
   "auth.pointPeopleBody": "Assegna le persone con una percentuale e verifica se il team copre la stima.",
-  "auth.punchline": "Qualsiasi progetto, un'unica tela visiva. Rendili reali.",
+  "auth.punchline": "Rendi reale qualsiasi progetto con un'unica tela visiva",
   "auth.startFree": "Il piano Starter gratuito è quello di ogni nuovo account.",
   "auth.noCard": "Nessuna carta di credito.",
   "auth.noInstall": "Nessuna installazione — funziona nel browser.",

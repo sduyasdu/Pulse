@@ -222,7 +222,7 @@ export const pt: Dict = {
   "auth.pointHeightBody": "Uma caixa alta é trabalho mais pesado que uma baixa da mesma duração.",
   "auth.pointPeopleTitle": "Pessoas e capacidade",
   "auth.pointPeopleBody": "Atribua pessoas com um percentual de dedicação e veja se a equipe cobre o estimado.",
-  "auth.punchline": "Qualquer projeto, um único quadro visual. Torne-os reais.",
+  "auth.punchline": "Torne real qualquer projeto com um único quadro visual",
   "auth.startFree": "O plano Starter gratuito é o de toda conta nova.",
   "auth.noCard": "Sem cartão de crédito.",
   "auth.noInstall": "Sem instalação — funciona no navegador.",

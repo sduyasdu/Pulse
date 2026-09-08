@@ -226,7 +226,7 @@ export const en = {
   "auth.pointHeightBody": "A tall box is heavier work than a short one of the same length.",
   "auth.pointPeopleTitle": "People and capacity",
   "auth.pointPeopleBody": "Assign people a percentage and see whether the team covers the estimate.",
-  "auth.punchline": "Any project, one visual canvas. Make them real.",
+  "auth.punchline": "Make any project real with one visual canvas",
   "auth.startFree": "The free Starter plan is what every new account gets.",
   "auth.noCard": "No credit card.",
   "auth.noInstall": "No install — it runs in your browser.",

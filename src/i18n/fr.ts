@@ -222,7 +222,7 @@ export const fr: Dict = {
   "auth.pointHeightBody": "Une boîte haute est un travail plus lourd qu'une boîte basse de même durée.",
   "auth.pointPeopleTitle": "Personnes et capacité",
   "auth.pointPeopleBody": "Affectez les personnes avec un pourcentage et voyez si l'équipe couvre l'estimation.",
-  "auth.punchline": "N'importe quel projet, un seul canevas visuel. Concrétisez-les.",
+  "auth.punchline": "Concrétisez n'importe quel projet avec un seul canevas visuel",
   "auth.startFree": "Le plan Starter gratuit est celui de tout nouveau compte.",
   "auth.noCard": "Sans carte bancaire.",
   "auth.noInstall": "Sans installation — tout se passe dans le navigateur.",

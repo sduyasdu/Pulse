@@ -222,7 +222,7 @@ export const de: Dict = {
   "auth.pointHeightBody": "Ein hohes Kästchen ist schwerere Arbeit als ein flaches gleicher Dauer.",
   "auth.pointPeopleTitle": "Personen und Kapazität",
   "auth.pointPeopleBody": "Weise Personen einen Prozentsatz zu und sieh, ob das Team die Schätzung deckt.",
-  "auth.punchline": "Jedes Projekt, eine visuelle Fläche. Verwirkliche sie.",
+  "auth.punchline": "Verwirkliche jedes Projekt mit einer visuellen Fläche",
   "auth.startFree": "Der kostenlose Starter-Plan gilt für jedes neue Konto.",
   "auth.noCard": "Keine Kreditkarte.",
   "auth.noInstall": "Keine Installation — es läuft im Browser.",
