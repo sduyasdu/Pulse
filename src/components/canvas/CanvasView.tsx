@@ -4,9 +4,9 @@ import type { Epic, Feature, GraphConfig } from "@/types";
 import { usePulseStore, DEFAULT_EPIC_NAME } from "@/stores/pulseStore";
 import { useTaskCascade } from "@/hooks/useTaskCascade";
 import { useT } from "@/i18n";
-import { newTaskHeightPx, orderForPainting } from "@/domain/taskCascade";
+import { orderForPainting } from "@/domain/taskCascade";
 import { boxHeight, staffingColor, workOf, estimateEffort, assignedEffort, allocOf, clamp as clampEffort } from "@/domain/graphEffort";
-import { epicAtBox, epicBandsFor, compactLayout, newEpicSpan, isNewEpic } from "@/domain/layout";
+import { epicAtBox, epicBandsFor, compactLayout, newEpicSpan, isNewEpic, revealScrollDelta } from "@/domain/layout";
 import { resizeHandleSizes } from "@/domain/resizeHandles";
 import { resolveOverlaps } from "@/domain/overlap";
 import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
@@ -35,6 +35,18 @@ function EpicNameInput({ name, color, disabled, onCommit }: { name: string; colo
 }
 
 const clamp = clampEffort;
+
+/**
+ * How the reveal below finds a task box in the DOM. One constant for the
+ * attribute and the selector that looks for it, because those two are exactly
+ * the pair that drifts: rename the attribute and the reveal silently stops
+ * finding anything, with nothing to fail.
+ */
+const FEATURE_ATTR = "data-feature-id";
+/** Give up looking after this many frames (~half a second). The box has to
+ * survive a store update, a render, `markAdded`, and another render before it
+ * exists at all. */
+const REVEAL_MAX_FRAMES = 30;
 
 /** How long the filter-driven view jump waits before moving. Long enough that
  * typing a search term doesn't yank the view on every keystroke, and that
@@ -873,6 +885,43 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     window.addEventListener("pointerup", onEpicResizeUp);
   };
 
+  /**
+   * Scroll a task into view once it has actually been RENDERED.
+   *
+   * The old reveal did the arithmetic itself — `y * viewZoom` against the
+   * scroller — and that is only where the box is when nothing has moved it.
+   * Under "hide + compact" the vertical layout is repacked, and a new task
+   * belongs to no epic, so `compactLayout` puts it after every epic band, at
+   * the very bottom. The reveal therefore scrolled to an empty patch of canvas
+   * near where the reader already was, while the task sat far below the fold —
+   * which is exactly "I added a task and cannot see it".
+   *
+   * Measuring the real node instead of re-deriving the layout is also the
+   * difference between one source of truth and two: the packing rules live in
+   * `compactLayout`, and a second copy here would drift from them.
+   *
+   * It has to wait. The box does not exist on the next frame: the store update
+   * has to land, then `markAdded` grants the filter exemption that lets it
+   * render at all. So this polls a handful of frames and gives up quietly —
+   * failing to scroll is a much smaller problem than the scroll it replaced.
+   */
+  const revealFeature = useCallback((id: string) => {
+    let frames = 0;
+    const tick = () => {
+      const cont = containerRef.current;
+      const node = cont?.querySelector<HTMLElement>(`[${FEATURE_ATTR}="${CSS.escape(id)}"]`);
+      if (!node) {
+        if (frames++ < REVEAL_MAX_FRAMES) requestAnimationFrame(tick);
+        return;
+      }
+      // Only a rescue: `revealScrollDelta` returns 0 for a box already fully on
+      // screen, so this leaves an unmoved reader alone.
+      const delta = revealScrollDelta(node.getBoundingClientRect(), cont!.getBoundingClientRect());
+      if (delta !== 0) cont!.scrollTop += delta;
+    };
+    requestAnimationFrame(tick);
+  }, []);
+
   // ---- imperative handle for the toolbar ----
   const todayMargin = () => todayMarginFor(containerRef.current?.clientWidth ?? 0);
 
@@ -943,15 +992,11 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const x = todayIndex() + dx;
       const geom = { x, y, duration: 8, work: 1 };
       const id = await addFeature({ ...geom, status: "planned", resources: [] });
-      if (id) claim(id, slot, geom);
-      // A deep enough slot lands below the fold, and a task you cannot see is
-      // the thing the cascade was added to prevent. Only scrolls when the box
-      // would not otherwise be fully on screen.
-      if (cont) {
-        const boxTop = y * viewZoom;
-        const boxBottom = boxTop + newTaskHeightPx(graph) * viewZoom;
-        if (boxBottom > scrollTop + visH) cont.scrollTop = Math.max(0, boxBottom - visH + 24);
-        else if (boxTop < scrollTop) cont.scrollTop = Math.max(0, boxTop - 24);
+      if (id) {
+        claim(id, slot, geom);
+        // Not awaited: the caller has a `markAdded` and a selection to do, and
+        // the box cannot exist until those have rendered.
+        revealFeature(id);
       }
       return id;
     },
@@ -1253,6 +1298,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               return (
                 <div
                   key={box.id}
+                  {...{ [FEATURE_ATTR]: box.id }}
                   // Glide to a new lane when a neighbour's move or resize
                   // repacks the layout. The box being dragged is the exception,
                   // where a transition reads as lag rather than as motion — but

@@ -297,3 +297,30 @@ export function sortEpicsForList<T extends { name?: string | null; color?: strin
     return a.y0 - b.y0;
   });
 }
+
+/** Breathing room left between a revealed task and the edge it was scrolled
+ * past, so it does not sit flush against the border and read as clipped. */
+export const REVEAL_MARGIN_PX = 24;
+
+/**
+ * How far to scroll to bring a task fully into view — 0 when it already is.
+ *
+ * Split out from the DOM work because this is the half with a right answer and
+ * the half a sign error hides in: scrolling the wrong way puts the task further
+ * off screen, which looks exactly like the bug it is fixing.
+ *
+ * Both edges are in the same coordinate space (viewport pixels, from
+ * `getBoundingClientRect`), so the caller adds the result to `scrollTop`.
+ * Bottom is checked first: a box taller than the viewport cannot satisfy both,
+ * and aligning its TOP is the useful choice — that is where its title is.
+ */
+export function revealScrollDelta(
+  box: { top: number; bottom: number },
+  view: { top: number; bottom: number },
+  margin = REVEAL_MARGIN_PX,
+): number {
+  const tooTall = box.bottom - box.top > view.bottom - view.top;
+  if (box.top < view.top || tooTall) return box.top - view.top - margin;
+  if (box.bottom > view.bottom) return box.bottom - view.bottom + margin;
+  return 0;
+}
