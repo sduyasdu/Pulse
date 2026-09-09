@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import type { Feature, Resource, StatusDef, Subtask } from "@/types";
@@ -876,25 +876,43 @@ function ResponsibleSelect({ resources, value, disabled, onChange }: { resources
  * alternative to dragging someone from the Team tab onto the box. Lists only
  * the not-yet-assigned resources and stays open after a pick so several can be
  * added in a row. */
-function AssignResourcePicker({ resources, assignedIds, onAssign }: { resources: Resource[]; assignedIds: string[]; onAssign: (id: string) => void }) {
+export function AssignResourcePicker({ resources, assignedIds, onAssign }: { resources: Resource[]; assignedIds: string[]; onAssign: (id: string) => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const panelId = useId();
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
   const available = resources.filter((r) => !assignedIds.includes(r.id));
   const filtered = available.filter((r) => !query || r.name.toLowerCase().includes(query) || (r.type || "").toLowerCase().includes(query));
   return (
     <div>
+      {/* Filled while the picker below is open, the same `PLAN_ON` treatment
+          every other toggle in this panel uses for "on".
+
+          The chevron alone was carrying the whole open/closed distinction, and
+          it could not: this button already looks emphatic when CLOSED — orange
+          border, accent fill — so opening it changed a 15px arrow and nothing
+          else. Unlike the status and responsible dropdowns beside it, this
+          panel deliberately stays open after a pick so several people can be
+          added in a row, which makes "open" a mode you sit in rather than a
+          menu that flashes past. A mode has to look like one.
+
+          `aria-expanded`/`aria-controls` rather than `aria-pressed`: this
+          discloses a region, it does not toggle a setting — and a screen reader
+          had no way to tell either, since the chevron is decorative. */}
       <button
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={panelId}
         className={PANEL_ACTION}
+        style={open ? PLAN_ON : undefined}
       >
         <Icon name="person_add" size={17} />
         <span className="font-semibold">{t("details.assignResource")}</span>
         <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={15} style={{ marginLeft: "auto" }} />
       </button>
       {open && (
-        <div className="mt-1 rounded border" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+        <div id={panelId} className="mt-1 rounded border" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
           {available.length > 3 && (
             <input
               autoFocus
