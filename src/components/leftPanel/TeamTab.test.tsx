@@ -173,6 +173,39 @@ describe("the name is edited where it is read", () => {
     expect(setFilter).not.toHaveBeenCalled();
   });
 
+  // Opening a row declares it the one being edited; the name should not be the
+  // only thing in it still pretending to be read-only text.
+  it("looks like text until its row is opened", () => {
+    setup();
+    const field = screen.getByDisplayValue("Ada") as HTMLInputElement;
+    expect(field.style.background).toBe("transparent");
+    expect(field.style.border).toContain("transparent");
+  });
+
+  it("shows the field chrome once its row is opened", () => {
+    setup();
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    const field = screen.getByDisplayValue("Ada") as HTMLInputElement;
+    expect(field.style.background).not.toBe("transparent");
+    expect(field.style.border).not.toContain("transparent");
+  });
+
+  it("leaves the other rows' names as text", () => {
+    setup();
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    const other = screen.getByDisplayValue("Grace") as HTMLInputElement;
+    expect(other.style.background).toBe("transparent");
+  });
+
+  // A viewer opening a row still cannot type, so it must not look as if they
+  // could.
+  it("stays plain text for a viewer even with the row open", () => {
+    setup(false);
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    const field = screen.getByDisplayValue("Ada") as HTMLInputElement;
+    expect(field.style.background).toBe("transparent");
+  });
+
   it("is plain text for a viewer, with no edit affordance", () => {
     setup(false);
     const field = screen.getByDisplayValue("Ada") as HTMLInputElement;

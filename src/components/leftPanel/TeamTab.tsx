@@ -60,9 +60,26 @@ const TYPES_PANEL_ID = "team-resource-types";
  * field is still reachable by tapping it) and on focus, which is the state that
  * actually matters for knowing you are editing.
  */
-function ResourceNameInput({ name, disabled, onCommit, renameTitle }: { name: string; disabled: boolean; onCommit: (name: string) => void; renameTitle: string }) {
+function ResourceNameInput({
+  name,
+  disabled,
+  showField,
+  onCommit,
+  renameTitle,
+}: {
+  name: string;
+  disabled: boolean;
+  /** Draw the field chrome without waiting for hover or focus. True while the
+   * row's settings are open: that row has declared itself the one being
+   * edited, so its name should not be the only thing still pretending to be
+   * read-only text. */
+  showField?: boolean;
+  onCommit: (name: string) => void;
+  renameTitle: string;
+}) {
   const [local, onChange] = useDebouncedText(name, onCommit);
   const [focused, setFocused] = useState(false);
+  const asField = !disabled && (focused || showField);
   return (
     <input
       value={local}
@@ -78,8 +95,12 @@ function ResourceNameInput({ name, disabled, onCommit, renameTitle }: { name: st
       className={"min-w-0 flex-1 truncate rounded px-1 py-0.5 text-xs font-medium" + (disabled ? "" : " hover:bg-[#F1F5F9]")}
       style={{
         color: "#1F2330",
-        background: focused ? "#FFFFFF" : "transparent",
-        border: "1px solid " + (focused ? "#E2DFD9" : "transparent"),
+        background: asField ? "#FFFFFF" : "transparent",
+        // Orange while the row is open but the caret is elsewhere, matching the
+        // border the row itself is wearing; the ordinary field grey once it has
+        // focus, so "you are typing here" still reads differently from "this is
+        // the row you opened".
+        border: "1px solid " + (asField ? (focused ? "#E2DFD9" : "#F0A875") : "transparent"),
         outline: "none",
         cursor: disabled ? "default" : "text",
       }}
@@ -386,6 +407,7 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                   <ResourceNameInput
                     name={r.name}
                     disabled={!canEdit}
+                    showField={open}
                     onCommit={(name) => void patchResource(r.id, { name })}
                     renameTitle={t("capacity.clickToRename")}
                   />
