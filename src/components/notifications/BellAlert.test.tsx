@@ -12,8 +12,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * one.
  */
 
+/** Seeded per test so the hover cases can render real notification rows; the
+ * alert cases leave it empty, which is what they had before. */
+const seeded: { current: unknown[] } = { current: [] };
 vi.mock("@/services/firestore/notifications", () => ({
-  subscribeMyNotifications: () => () => {},
+  subscribeMyNotifications: (_p: string, _u: string, cb: (n: unknown[]) => void) => {
+    cb(seeded.current);
+    return () => {};
+  },
   markNotificationRead: vi.fn(),
   deleteNotification: vi.fn(),
 }));
@@ -31,6 +37,7 @@ function setup(alert: { text: string; dismissKey?: string } | null) {
 
 /** jsdom in this project runs without localStorage, so stand one up. */
 beforeEach(() => {
+  seeded.current = [];
   const map = new Map<string, string>();
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => map.get(k) ?? null,
@@ -106,5 +113,65 @@ describe("dismissing it", () => {
     const bell = setup({ text: ALERT.text });
     fireEvent.click(bell);
     expect(screen.queryByText("Don't show again")).toBeNull();
+  });
+});
+
+/**
+ * Every button in the dropdown must cancel the global `button:hover
+ * { transform: scale(1.12) }`.
+ *
+ * That rule is ungated and does not reflow, so a scaled row in a 300px panel
+ * paints its text past the panel edge and gets clipped — "the words are
+ * expanded beyond the box". jsdom has no layout and never resolves `:hover`, so
+ * this asserts the class contract rather than the pixels; the pixel proof is
+ * the forced-`:hover` self-check in `build/layoutProbe/measure.mjs`.
+ */
+describe("nothing in the bell relies on the global scale", () => {
+  /** The classes that cancel it, per src/index.css. */
+  const CANCELS = ["no-press", "hoverable--row"];
+
+  function openWithItems() {
+    seeded.current = [
+      {
+        id: "n1",
+        targetUid: "u1",
+        actorUid: "u2",
+        type: "comment",
+        actorEmail: "alexandra.fernandez@example.com",
+        featureId: "f1",
+        featureTitle: "Migrate the billing pipeline to the new rates model",
+        text: "Can we confirm the cutover date?",
+        createdAt: Date.now(),
+        read: false,
+      },
+    ];
+    fireEvent.click(setup(ALERT));
+  }
+
+  it("cancels it on every button, the notification row included", () => {
+    openWithItems();
+    const offenders = screen
+      .getAllByRole("button")
+      .filter((b) => !CANCELS.some((c) => b.classList.contains(c)))
+      .map((b) => (b.textContent || b.getAttribute("aria-label") || "?").slice(0, 40));
+    expect(offenders).toEqual([]);
+  });
+
+  it("still gives each one a hover of its own", () => {
+    openWithItems();
+    // .no-press only removes the scale. A button carrying it must also say what
+    // its hover *is*, or it has none — the default this repo tells us to replace.
+    const DEFINED = /hoverable|hover:/;
+    const bare = screen
+      .getAllByRole("button")
+      .filter((b) => !DEFINED.test(b.className))
+      .map((b) => (b.textContent || b.getAttribute("aria-label") || "?").slice(0, 40));
+    expect(bare).toEqual([]);
+  });
+
+  it("tints the row rather than scaling it", () => {
+    openWithItems();
+    const row = screen.getByText(/Migrate the billing pipeline/).closest("button");
+    expect(row?.classList.contains("hoverable--row")).toBe(true);
   });
 });

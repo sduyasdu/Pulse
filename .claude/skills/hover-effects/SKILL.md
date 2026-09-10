@@ -143,6 +143,21 @@ Defined variants:
   ```tsx
   <span className="hoverable--enlarge …">…</span>
   ```
+- **`.hoverable--row`** — a translucent wash (`rgba(15,23,42,.05)`) for a
+  full-width row in a list or dropdown panel, and it **cancels the global scale
+  itself** (no `.no-press` needed alongside). Reach for it whenever a text row
+  lives inside a fixed-width container: `transform` does not reflow, so a scaled
+  row paints its text past the panel edge and the browser clips it — which is
+  what the notifications dropdown did until 2026-09. The wash is translucent
+  rather than a fixed colour so one variant reads correctly over both a plain
+  row and a highlighted (unread) one.
+  ```tsx
+  <button className="hoverable--row -mx-1 rounded px-1 text-left">…</button>
+  ```
+  Held shut by a forced-`:hover` self-check in `build/layoutProbe/measure.mjs`
+  (jsdom never resolves `:hover`, and nothing about the layout changes when it
+  breaks, so only a real browser can see it) and by the class-contract tests in
+  `src/components/notifications/BellAlert.test.tsx`.
 - The global `button:hover` scale is a *baseline affordance*, not a substitute
   for choosing a hover — it's the "standard/default" this skill tells you to
   replace with an explicit one.

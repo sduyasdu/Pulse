@@ -83,7 +83,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26, a
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative flex items-center justify-center rounded-lg"
+        className="hoverable no-press relative flex items-center justify-center rounded-lg"
         // An active alert recolours the bell itself rather than adding to the
         // unread badge: the badge counts messages addressed to you, and folding
         // a derived warning into that number would make it mean two things.
@@ -112,7 +112,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26, a
             <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: "#F1F5F9" }}>
               <span className="mono text-xs font-semibold" style={{ color: "#334155" }}>{t("notif.title")}</span>
               {unread > 0 && (
-                <button onClick={() => items.filter((n) => !n.read).forEach((n) => void markNotificationRead(pulseId, n.id))} className="mono" style={{ fontSize: 10, color: "#0F766E" }}>
+                <button onClick={() => items.filter((n) => !n.read).forEach((n) => void markNotificationRead(pulseId, n.id))} className="no-press mono hover:underline" style={{ fontSize: 10, color: "#0F766E" }}>
                   {t("notif.markAllRead")}
                 </button>
               )}
@@ -126,7 +126,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26, a
                       now", the link is "never". Collapsing them into one button
                       forces a permanent answer to a temporary annoyance. */}
                   {liveAlert.dismissKey && (
-                    <button onClick={dismissAlertForever} className="mt-1 underline" style={{ color: "#9A3412", opacity: 0.85 }}>
+                    <button onClick={dismissAlertForever} className="no-press mt-1 underline opacity-[0.85] hover:opacity-100" style={{ color: "#9A3412" }}>
                       {t("plan.dontShowAgain")}
                     </button>
                   )}
@@ -135,7 +135,7 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26, a
                   onClick={() => setAlertHidden(true)}
                   title={t("plan.dismissForNow")}
                   aria-label={t("plan.dismissForNow")}
-                  className="no-press flex-shrink-0"
+                  className="no-press flex-shrink-0 opacity-[0.8] hover:opacity-100"
                   style={{ color: "#9A3412" }}
                 >
                   <Icon name="close" size={13} />
@@ -149,14 +149,14 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26, a
             ) : (
               items.map((n) => (
                 <div key={n.id} className="flex items-start gap-2 px-3 py-2 border-b" style={{ borderColor: "#F5F5F0", background: n.read ? "#FFFFFF" : "#FFF7F1" }}>
-                  <button onClick={() => openItem(n)} className="flex-1 text-left min-w-0">
+                  <button onClick={() => openItem(n)} className="hoverable--row -mx-1 min-w-0 flex-1 rounded px-1 text-left">
                     <div className="text-xs" style={{ color: "#334155" }}>
                       <span className="font-semibold">{n.actorEmail}</span> commented on <span className="font-semibold">{n.featureTitle}</span>
                     </div>
                     <div className="text-xs truncate" style={{ color: "#64748B" }}>“{n.text}”</div>
                     <div className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{when(n.createdAt, t)}</div>
                   </button>
-                  <button onClick={() => void deleteNotification(pulseId, n.id)} className="mono flex-shrink-0" style={{ fontSize: 10, color: "#CBD5E1" }} title={t("notif.dismiss")}><Icon name="close" size={12} /></button>
+                  <button onClick={() => void deleteNotification(pulseId, n.id)} className="no-press mono flex-shrink-0 text-[#CBD5E1] hover:text-[#64748B]" style={{ fontSize: 10 }} title={t("notif.dismiss")}><Icon name="close" size={12} /></button>
                 </div>
               ))
             )}

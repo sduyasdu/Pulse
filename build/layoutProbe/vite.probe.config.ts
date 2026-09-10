@@ -33,6 +33,7 @@ export default defineConfig({
     // the general "@" prefix rule can resolve it to the real module.
     alias: [
       { find: /^@\/lib\/firebase$/, replacement: path.resolve(import.meta.dirname, "firebaseStub.ts") },
+      { find: /^@\/services\/firestore\/notifications$/, replacement: path.resolve(import.meta.dirname, "notificationsStub.ts") },
       // Anchored at both ends: Vite replaces only the MATCHED substring, so an
       // unanchored pattern turns "./usePulseSummary" into "./<absolute path>".
       { find: /^.*\/usePulseSummary$/, replacement: path.resolve(import.meta.dirname, "summaryStub.ts") },

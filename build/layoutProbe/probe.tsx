@@ -24,6 +24,7 @@ import { Toolbar } from "@/components/canvas/Toolbar";
 import { PulseCard } from "@/components/dashboard/PulseCard";
 import { LoginPage } from "@/routes/LoginPage";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { usePulseStore } from "@/stores/pulseStore";
 import { todayIndex } from "@/domain/dateUtils";
 import type { Feature, Resource } from "@/types";
@@ -193,6 +194,31 @@ function TeamScene() {
 }
 
 /**
+ * The notifications bell, open, with an alert and a message.
+ *
+ * The dropdown is 300px wide and its rows are text buttons, which the app's
+ * global `button:hover { transform: scale(1.12) }` grows without reflowing —
+ * so words spill past the panel. `shots.mjs` forces `:hover` on one to catch it,
+ * because no static render and no jsdom test can.
+ */
+function BellScene() {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", padding: 24, background: "#123359", height: "100vh" }}>
+      <div data-bell>
+        <NotificationsBell
+          pulseId="p1"
+          uid="u1"
+          onOpenTask={noop}
+          dark
+          size={32}
+          alert={{ text: "3 people are assigned past their own limit.", dismissKey: "probe.alert" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
  * The sign-in page, as the router mounts it. The one page a prospective
  * customer sees before deciding, so a horizontal scrollbar on it is worse than
  * one anywhere else — and it is now a two-column layout with an illustration,
@@ -202,7 +228,7 @@ function LoginScene() {
   return <LoginPage />;
 }
 
-const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene };
+const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {

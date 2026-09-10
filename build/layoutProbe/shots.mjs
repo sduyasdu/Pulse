@@ -19,6 +19,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 
 /** scene, lang, width, height. */
 const SHOTS = [
+  ["bell", "en", 700, 620],
   ["team", "en", 1000, 1000],
   ["login", "en", 1440, 900],
   ["login", "en", 768, 1000],
@@ -89,6 +90,9 @@ const send = (method, params) => new Promise((resolve, reject) => {
 });
 const evaluate = async (e) => (await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true })).result.value;
 
+await send("DOM.enable", {});
+await send("CSS.enable", {});
+
 for (let i = 0; i < 80; i++) {
   if (await evaluate("!!window.__probe && window.__probe.ready")) break;
   await new Promise((r) => setTimeout(r, 250));
@@ -99,6 +103,21 @@ for (const [scene, lang, width, height] of SHOTS) {
   await evaluate(`window.__probe.show(${JSON.stringify(scene)}, ${JSON.stringify(lang)}, "Q3 Platform Roadmap")`);
   // The Team panel's interesting state is a row with its settings open, which
   // no static render reaches. Click the first one.
+  if (scene === "bell") {
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    await evaluate(`document.querySelector('[data-bell] button')?.click()`);
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    // Force :hover rather than moving a mouse — a dispatched pointer event does
+    // not set the pseudo-class, so the hover styling would simply not be in the
+    // screenshot and the run would look clean.
+    const { root } = await send("DOM.getDocument", { depth: -1 });
+    const { nodeIds } = await send("DOM.querySelectorAll", { nodeId: root.nodeId, selector: "[data-bell] button" });
+    // The message row: the widest text button in the panel.
+    for (const nodeId of nodeIds.slice(-2)) {
+      await send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] }).catch(() => {});
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
   if (scene === "team") {
     await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
     await evaluate(`(() => {

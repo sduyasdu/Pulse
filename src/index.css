@@ -151,6 +151,31 @@ button:disabled {
   }
 }
 
+/* Variant: row tint — for a full-width row in a list or dropdown panel, where
+   the global button scale is actively wrong: transform does not reflow, so a
+   scaled row's text simply spills past the panel edge and gets clipped. Tints
+   with a translucent wash instead of a fixed colour, so one variant reads the
+   same over a white row and a highlighted one. Self-contained: it cancels the
+   scale itself (the same override .no-press uses), so it needs no companion
+   class. Touch-safe and motion-safe. */
+.hoverable--row {
+  transition: background-color 0.14s ease;
+}
+.hoverable--row:not(:disabled):hover,
+.hoverable--row:not(:disabled):active {
+  transform: none;
+}
+@media (hover: hover) {
+  .hoverable--row:hover {
+    background-color: rgba(15, 23, 42, 0.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hoverable--row {
+    transition: none;
+  }
+}
+
 /* Variant: enlarge on hover — grows the element 50% (used for the small
    resource avatar badges so the picture/initials are readable on hover).
    Positioned so it lifts above its neighbours while enlarged. Touch-safe and

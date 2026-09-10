@@ -322,6 +322,56 @@ if (!/epic-just-added/.test(epicAnim)) {
 console.log(`Self-check: app CSS present (.epic-just-added → ${epicAnim}).`);
 
 /**
+ * The notification row's hover. This one cannot be checked by reading a
+ * stylesheet or by rendering a page: the bug only exists while the pointer is
+ * down on the element, and `transform` does not reflow, so nothing about the
+ * layout changes — the text just paints outside the panel and is clipped.
+ *
+ * So force `:hover` through the protocol and read the resolved transform. The
+ * plain button beside it is the control: it must come back scaled, or the
+ * forcing did nothing and a pass here means nothing.
+ */
+await send("DOM.enable", {});
+await send("CSS.enable", {});
+await evaluate(`(() => {
+  const mk = (cls, id) => { const b = document.createElement('button');
+    b.className = cls; b.id = id; b.textContent = 'x'; document.body.appendChild(b); };
+  mk('hoverable--row', '__rowhover');
+  mk('', '__plainhover');
+})()`);
+const { root } = await send("DOM.getDocument", { depth: -1 });
+const forced = {};
+for (const id of ["__rowhover", "__plainhover"]) {
+  const { nodeId } = await send("DOM.querySelector", { nodeId: root.nodeId, selector: "#" + id });
+  await send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
+}
+// `button` transitions transform over 0.12s, so a read taken straight after
+// forcing returns the identity matrix — which looks exactly like "not scaled"
+// and made the control pass while proving nothing. Wait the transition out.
+await new Promise((r) => setTimeout(r, 300));
+for (const id of ["__rowhover", "__plainhover"]) {
+  forced[id] = await evaluate(`getComputedStyle(document.getElementById('${id}')).transform`);
+}
+const rowTint = await evaluate(`getComputedStyle(document.getElementById('__rowhover')).backgroundColor`);
+await evaluate(`['__rowhover','__plainhover'].forEach(i => document.getElementById(i).remove())`);
+const scaleOf = (v) => Number((/^matrix\(([-\d.]+)/.exec(v) || [])[1] ?? (v === "none" ? 1 : NaN));
+if (!(scaleOf(forced.__plainhover) > 1.05)) {
+  console.error(`self-check FAILED: a plain button under forced :hover has transform "${forced.__plainhover}".`);
+  console.error("The global button scale is not applying, so this check cannot detect its return.");
+  process.exit(2);
+}
+if (scaleOf(forced.__rowhover) !== 1) {
+  console.error(`self-check FAILED: .hoverable--row under :hover has transform "${forced.__rowhover}", expected none.`);
+  console.error("A scaled dropdown row paints its text outside the panel — the bug this variant exists to prevent.");
+  process.exit(2);
+}
+if (/rgba\(0, 0, 0, 0\)|transparent/.test(rowTint)) {
+  console.error(`self-check FAILED: .hoverable--row under :hover has background "${rowTint}" — no tint, so it has no hover at all.`);
+  process.exit(2);
+}
+console.log(`Self-check: .hoverable--row cancels the scale (plain button → ${forced.__plainhover}) and tints to ${rowTint}.`);
+
+/**
  * Self-check 2. The first version of this probe reported "fits" for everything
  * while measuring nothing at all, and a green run that cannot go red is not
  * evidence. So plant an element that provably cannot fit, confirm the
