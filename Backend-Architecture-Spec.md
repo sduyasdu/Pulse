@@ -183,8 +183,8 @@ identified here.
 
 **Deliberately excluded (with justification):**
 
-- **Dashboard / capacity aggregation function.** The Capacity tab (`CapacityTab.tsx`,
-  `domain/assignments.ts`) and dashboard summaries (`usePulseSummary.ts`) compute over a single
+- **Dashboard / capacity aggregation function.** The Team tab's load bars (`TeamTab.tsx`,
+  `domain/assignments.ts` — formerly also the Capacity tab, merged in Product-Spec PR1) and dashboard summaries (`usePulseSummary.ts`) compute over a single
   Pulse's already-subscribed, bounded data (features/resources) on the client. Moving them
   server-side adds cost and a read-path function for no security or correctness gain. **Excluded**;
   revisit only if a cross-Pulse/workspace rollup (Changelog CL10) is ever built.

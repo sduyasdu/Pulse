@@ -17,12 +17,16 @@
  * window still lays out at the 800px breakpoint. The dashboard grid is exactly
  * that case, and it is the one that overflows.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { PulseCard } from "@/components/dashboard/PulseCard";
 import { LoginPage } from "@/routes/LoginPage";
+import { TeamTab } from "@/components/leftPanel/TeamTab";
+import { usePulseStore } from "@/stores/pulseStore";
+import { todayIndex } from "@/domain/dateUtils";
+import type { Feature, Resource } from "@/types";
 import { PulseLockup } from "@/components/shared/Logo";
 import { Icon } from "@/components/shared/Icon";
 import { useI18nStore } from "@/stores/i18nStore";
@@ -144,6 +148,51 @@ function DashboardScene({ pulseName }: { pulseName: string }) {
 }
 
 /**
+ * The Team tab, in the 320px column the Pulse page gives it.
+ *
+ * A fixed-width box is faithful here in a way it is not for the dashboard: this
+ * panel is 320px at every viewport, and the tab is inline styles and
+ * unprefixed utilities with no `@media` rules of its own. The document-level
+ * overflow check cannot see inside a 320px panel on a 1440px page, so what this
+ * scene is really for is the screenshot.
+ */
+function TeamScene() {
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    seeded.current = true;
+    const person = (id: string, name: string, over: Partial<Resource> = {}): Resource =>
+      ({ id, name, initials: name.slice(0, 2).toUpperCase(), capacity: 100, ...over }) as Resource;
+    const task = (id: string, rid: string, x: number, duration: number, pct: number): Feature =>
+      ({ id, title: id, x, duration, y: 0, work: 1, status: "planned", resources: [rid], alloc: { [rid]: pct } }) as unknown as Feature;
+    // The app's own day index, not a hand-rolled one — a different epoch put
+    // every seeded task outside the load windows and drew three 0% bars, which
+    // looks exactly like the bars being broken.
+    const today = todayIndex();
+    usePulseStore.setState({
+      pulse: { id: "p1", name: "Q3", workspaceId: "w1", resourceTypes: ["Backend", "Design"] } as never,
+      resources: [
+        person("r1", "Ada Lovelace", { type: "Backend", role: "Engineer", linkedUid: "u9", linkedEmail: "ada@example.com" }),
+        person("r2", "Grace Hopper", { type: "Design", capacity: 50, linkedEmail: "grace@example.com" }),
+        person("r3", "Alan Turing"),
+      ],
+      features: [
+        task("t1", "r1", today, 30, 160),
+        task("t2", "r2", today, 20, 40),
+      ],
+      members: [{ uid: "u9", email: "ada@example.com", role: "editor", joinedAt: 0 } as never],
+      rates: [],
+    });
+  }
+  return (
+    <div style={{ display: "flex", height: "100vh", background: "#F4F2EC" }}>
+      <div style={{ width: 320, flexShrink: 0, background: "#FFFFFF", borderRight: "1px solid #E2DFD9", overflowY: "auto" }}>
+        <TeamTab canEdit filterResource={null} setFilterResource={noop} />
+      </div>
+    </div>
+  );
+}
+
+/**
  * The sign-in page, as the router mounts it. The one page a prospective
  * customer sees before deciding, so a horizontal scrollbar on it is worse than
  * one anywhere else — and it is now a two-column layout with an illustration,
@@ -153,7 +202,7 @@ function LoginScene() {
   return <LoginPage />;
 }
 
-const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene };
+const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {

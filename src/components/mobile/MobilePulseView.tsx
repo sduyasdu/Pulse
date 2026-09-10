@@ -11,7 +11,6 @@ import { todayIndex } from "@/domain/dateUtils";
 import type { Feature, Pulse, PulseRole } from "@/types";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
-import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { ActivityTab } from "@/components/leftPanel/ActivityTab";
 import { CollaboratorsDialog } from "@/components/dashboard/CollaboratorsDialog";
 import { AllCommentsPanel } from "@/components/comments/AllCommentsPanel";
@@ -33,14 +32,13 @@ interface MobilePulseViewProps {
   onUnarchive: () => void;
 }
 
-type Tab = "tasks" | "team" | "capacity" | "activity";
+type Tab = "tasks" | "team" | "activity";
 
 export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, onUnarchive }: MobilePulseViewProps) {
   const t = useT();
   const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: "tasks", label: t("mobile.tasks"), icon: "checklist" },
     { id: "team", label: t("mobile.team"), icon: "group" },
-    { id: "capacity", label: t("mobile.capacity"), icon: "bar_chart" },
     { id: "activity", label: t("mobile.activity"), icon: "timeline" },
   ];
   const features = usePulseStore((s) => s.features);
@@ -151,7 +149,6 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
             <MobileBoard features={features} epics={epics} resources={resources} canEdit={canEdit} onSelect={setSelectedId} myResourceIds={myFilter} />
           ))}
         {tab === "team" && <TeamTab canEdit={canEdit} filterResource={null} setFilterResource={() => {}} />}
-        {tab === "capacity" && <CapacityTab canEdit={canEdit} />}
         {tab === "activity" && <ActivityTab />}
       </div>
 

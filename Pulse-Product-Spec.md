@@ -74,8 +74,7 @@ This is Pulse's key differentiator vs. a plain Gantt chart: box **height** is a 
 
 ## 6. Resource & assignment views
 
-- **Team tab** (left panel): searchable roster, drag-a-chip-onto-a-box to assign (defaults to 100% allocation), click a person to filter the whole canvas + assignment panel down to just their work, per-person utilization bar (peak daily load ÷ capacity limit).
-- **Capacity tab**: per-resource capacity slider/input (occupation limit %), resource-type management (add/rename/delete categories), peak/limit/used stats per person.
+- **Team tab** (left panel): searchable roster, drag-a-chip-onto-a-box to assign (defaults to 100% allocation), click a person to filter the whole canvas + assignment panel down to just their work, per-person load bars over three forward 4-week windows, and — per row, on demand — that person's name, type, occupation limit and hourly rate. Resource-type management (add/rename/delete categories) sits behind its own control in the tab header. **Superseded the separate Capacity tab (PR1).**
 - **Details tab**: full editor for the selected box — title, epic, team leader, subtasks (inline add/edit/delete/reassign/attach), resource list with per-person % allocation slider, the effort panel from §4, status, label color, AI flag, attachments, delete.
 - **Cost view** *(planned — see `Costs-Spec.md` §6)*: an alternate view in the same bottom panel, switched by a segmented control. Rows nest cost type › model › person; columns are day/week/month periods sharing the canvas ruler; a task's money is prorated across its span so spend appears where the work is. A total column sits on the left (all-time, so panning never changes it) and a sticky total row at the bottom.
 - **Assignment-by-resource panel** (bottom, full width, resizable via drag handle, time-aligned with the main canvas ruler): one row per person showing their assignment bars (stacked into lanes when overlapping) plus a per-period (day/week/month) allocation-% strip color-coded green/amber/red. Filters: by resource, by status, under-allocated (<70%) / over-allocated (>100%) toggle, hide-idle toggle, and a compact mode that collapses each row to just a % bar.
@@ -123,3 +122,58 @@ The real app is multi-tenant and multi-user, modeled on the same shape Trello us
 4. Everything in §3–§6 reproduced faithfully — this is the differentiated UX, don't simplify it away.
 5. Real file storage for attachments (object storage + signed URLs) instead of inline data URLs.
 6. Autosave / optimistic updates so nothing is lost on refresh; ideally realtime sync if multiple collaborators edit the same Pulse at once.
+
+
+## 11. Decisions
+
+1. **PR1 — Capacity merged into Team.** *(2026-09-10.)* The two tabs are one.
+
+   The split as written in §6 was: Team owns *who is here and assigning them*,
+   Capacity owns *how loaded they are and configuring them*. In the code it had
+   already collapsed. Both tabs declared the same three 4-week load windows and
+   rendered the same bars from the same computation, character for character,
+   differing only in a bar 4px tall versus 5px. Both filtered the same list on
+   the same four axes, with a comment in `CapacityTab` acknowledging it
+   duplicated Team's. Team's row already printed `type · limit N%`, so the
+   remaining distinction was **seeing a value** versus **editing the same
+   value** — which is the shape that makes people bounce between tabs to do one
+   job.
+
+   Capacity's own stated content had gone too. §6 gave it "peak/limit/used stats
+   per person"; that line was deleted in an earlier pass because the load bars
+   and the capacity slider already showed it. What was left was Team's row with
+   the read-only fields made editable.
+
+   *Rejected: keeping both and extracting a shared load-bar component.* It
+   removes the duplication — which was worth doing either way — but leaves the
+   see-versus-edit split, which was the actual complaint, and leaves five tabs
+   in a 320px panel whose labels had to be truncated to fit.
+
+   *The cost, and what it bought.* Merging naively would double the row height:
+   a 320px row already carries a badge, a name, three actions, a link select and
+   three bars. So the per-person editors are disclosed one row at a time
+   (`TeamTab.tsx`, the `editing` state) rather than always shown, and resource
+   types — which are Pulse configuration, not a fact about any person — moved
+   behind an icon button in the header.
+
+2. **PR2 — The over-allocation count is raised on the bell, not printed in a
+   tab.** *(2026-09-10.)* "N people are assigned past their own limit" used to
+   sit in the Capacity tab's overview box, collapsed by default: the one number
+   worth interrupting someone about was visible only if they opened a tab and
+   expanded a box. It is now an alert on the notifications bell, which recolours
+   while it stands (`NotificationsBell.tsx`, `BellAlert`).
+
+   It is **not** a `Notification` document. Those are addressed to one person and
+   stored; this is derived from the plan and changes with every drag, so writing
+   it would mean a document per recalculation, addressed to everyone.
+
+   Dismissal follows the dashboard's quota notice (PL-era `PulseQuotaBanner`):
+   × hides it for the session, "don't show again" persists. The two stay
+   separate answers because collapsing them forces a permanent decision about a
+   temporary annoyance.
+
+   *Deviation from that precedent, deliberately:* the quota notice keys its
+   persisted dismissal on the **limit**, so an upgrade is a new fact and the
+   notice returns. This one keys on the **Pulse**. A plan limit changes when you
+   upgrade; this number moves with every drag, so keying on it would resurface
+   the warning mid-edit — the opposite of dismissing it.

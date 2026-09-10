@@ -11,6 +11,7 @@ import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout, newEpicSpan } from "@/domain/layout";
+import { overLimitCount } from "@/domain/assignments";
 import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { useJustAdded, filterSignatureOf } from "@/hooks/useJustAdded";
@@ -34,11 +35,10 @@ import { COSTS_ENABLED } from "@/domain/flags";
 import { HelpDrawer } from "@/components/help/HelpDrawer";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { EpicsTab } from "@/components/leftPanel/EpicsTab";
-import { CapacityTab } from "@/components/leftPanel/CapacityTab";
 import { DetailsTab } from "@/components/leftPanel/DetailsTab";
 import { ActivityTab } from "@/components/leftPanel/ActivityTab";
 
-type RightTab = "epics" | "details" | "team" | "capacity" | "activity";
+type RightTab = "epics" | "details" | "team" | "activity";
 
 export function PulsePage() {
   const { pulseId } = useParams<{ pulseId: string }>();
@@ -132,6 +132,32 @@ export function PulsePage() {
   const editScope = effectiveEditScope(myMember ? capsOf(myMember).editScope : "none", lock);
   const canEdit = editScope === "all";
   const archived = lock === "archived";
+  /**
+   * "N people are over their own limit", raised on the bell rather than printed
+   * in the Team tab.
+   *
+   * It used to sit in the Capacity tab's overview, which meant the one number
+   * worth interrupting someone about was only visible if they happened to open
+   * a tab and expand a collapsed box. The bell is where this Pulse's standing
+   * facts already live.
+   *
+   * Keyed on the PULSE, not on the count — deliberately unlike the dashboard's
+   * quota notice, which keys on the limit. A plan limit changes when you
+   * upgrade; this number moves with every drag, so keying on it would resurface
+   * the warning mid-edit, which is the opposite of dismissing it.
+   */
+  const overLimit = useMemo(() => overLimitCount(features, resources), [features, resources]);
+  const overLimitAlert = useMemo(
+    () =>
+      overLimit > 0
+        ? {
+            text: overLimit === 1 ? t("team.overLimitAlertOne") : t("team.overLimitAlert", { n: overLimit }),
+            dismissKey: `pulse.overLimitNotice.${pulseId ?? "none"}`,
+          }
+        : null,
+    [overLimit, pulseId, t],
+  );
+
   const canEditFeature = useCallback(
     (f: Feature | null | undefined) => !!f && (editScope === "all" || (editScope === "lead" && !!uid && (f.leadUid ?? null) === uid)),
     [editScope, uid],
@@ -579,7 +605,7 @@ export function PulsePage() {
         commentsOpen={commentsOpen}
         onToggleComments={() => { setCommentsOpen((v) => !v); if (!commentsOpen) setHelpOpen(false); }}
         presence={<PresenceBar pulseId={pulseId} uid={uid} email={firebaseUser?.email ?? ""} dark size={28} />}
-        notifications={<NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark size={32} />}
+        notifications={<NotificationsBell pulseId={pulseId} uid={uid} onOpenTask={handleSelect} dark size={32} alert={overLimitAlert} />}
         viewMode={viewMode}
         setViewMode={setViewMode}
         viewZoom={viewZoom}
@@ -641,7 +667,7 @@ export function PulsePage() {
               <button onClick={toggleSidebar} title={t("panel.collapsePanel")} className="no-press" style={{ color: "#64748B", padding: "0 8px", flexShrink: 0, display: "flex", alignItems: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              {(["epics", "details", "team", "capacity", "activity"] as RightTab[]).map((tab) => (
+              {(["epics", "details", "team", "activity"] as RightTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setRightTab(tab)}
@@ -665,8 +691,6 @@ export function PulsePage() {
                   selectedEpicId={selectedEpicId}
                   onSelectEpic={setSelectedEpicId}
                 />
-              ) : rightTab === "capacity" ? (
-                <CapacityTab canEdit={canEdit} />
               ) : rightTab === "activity" ? (
                 <ActivityTab />
               ) : !selectedFeature ? (

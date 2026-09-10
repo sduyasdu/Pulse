@@ -62,3 +62,50 @@ export function allocInRange(features: Feature[], resourceId: string, dStart: nu
   }
   return Math.round(sum / days);
 }
+
+/**
+ * The three forward windows the per-person load bars cover, in day indices.
+ *
+ * Four weeks each, starting today: near enough to act on, far enough to see a
+ * crunch coming. They were declared inline in both the Team and Capacity tabs,
+ * character for character, which is how the two came to show the same thing
+ * while claiming to answer different questions.
+ */
+export function loadWindows(today: number): { label: string; lo: number; hi: number }[] {
+  return [
+    { label: "1–4w", lo: today, hi: today + 28 },
+    { label: "5–8w", lo: today + 28, hi: today + 56 },
+    { label: "9–12w", lo: today + 56, hi: today + 84 },
+  ];
+}
+
+/** A person's average load over a window, as a percentage of their own limit.
+ * Capped at 999 so a wild over-assignment cannot stretch the layout. */
+export function loadPctInWindow(
+  features: Feature[],
+  resource: Pick<Resource, "id" | "capacity">,
+  lo: number,
+  hi: number,
+): number {
+  return clamp(Math.round((allocInRange(features, resource.id, lo, hi) / (resource.capacity || 100)) * 100), 0, 999);
+}
+
+/**
+ * How a load reads at a glance: red over the limit, green in a healthy band,
+ * amber when someone is barely booked.
+ *
+ * Amber for UNDER-use is deliberate and easy to misread as a warning about
+ * being busy — it is the opposite. Under 50% of your own limit is capacity
+ * nobody has planned for, which is a planning problem too.
+ */
+export function loadColor(pct: number): string {
+  if (pct > 100) return "#E5484D";
+  if (pct >= 50) return "#12A594";
+  return "#F5A524";
+}
+
+/** How many people are assigned past their own limit — the number the bell
+ * raises. Derived, never stored: it changes with every drag. */
+export function overLimitCount(features: Feature[], resources: Resource[]): number {
+  return resources.filter((r) => utilizationPct(features, r) > 100).length;
+}

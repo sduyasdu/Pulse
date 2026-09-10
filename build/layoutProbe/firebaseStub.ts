@@ -14,3 +14,6 @@ export const db = {};
 export const auth = { currentUser: null, onAuthStateChanged: () => () => {} };
 export const googleProvider = {};
 export const analytics = null;
+/** The roster dialog reaches this through `roster.ts` for its callables. The
+ * probe never invokes one — it renders a panel and measures it. */
+export const functions = {};

@@ -884,7 +884,7 @@ leaves one panel behind:
 | --- | --- |
 | The cost view in the bottom panel, and the switch that reaches it | `src/routes/PulsePage.tsx` (`CostPanel`, and the assignments/costs toggle) |
 | Cost entries on a task | `src/components/leftPanel/FeatureCosts.tsx`, mounted from `DetailsTab` |
-| The hourly-rate editor | `src/components/leftPanel/CapacityTab.tsx` (the `seesPeopleCost` block) |
+| The hourly-rate editor | `src/components/leftPanel/TeamTab.tsx` (the `seesPeopleCost` block, inside a row's expanded settings — moved there by Product-Spec PR1) |
 | `get_costs` | `functions/src/mcpServer.ts` — see §21.4 |
 
 Also stopped: the `rates` subscription in `pulseStore`. A hidden panel that still

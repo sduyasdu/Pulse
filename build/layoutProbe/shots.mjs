@@ -19,6 +19,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 
 /** scene, lang, width, height. */
 const SHOTS = [
+  ["team", "en", 1000, 1000],
   ["login", "en", 1440, 900],
   ["login", "en", 768, 1000],
   ["login", "en", 390, 1200],

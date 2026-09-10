@@ -17,13 +17,46 @@ function when(ms: number, t: TFn): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/**
+ * A standing warning about the Pulse itself, pinned above the notifications.
+ *
+ * Not a `Notification`: those are Firestore documents addressed to one person,
+ * and this is derived from the plan and changes with every drag. Writing it
+ * would mean a document per recalculation, addressed to everyone.
+ */
+export interface BellAlert {
+  text: string;
+  /** Persisted across reloads under this key. Absent = session-only. */
+  dismissKey?: string;
+}
+
+/** localStorage throws in some privacy modes — a lost dismissal is harmless.
+ * Same shape the dashboard's quota banner uses. */
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore — the notice simply reappears next render */
+  }
+}
+
 /** Bell with a live unread count and a dropdown of this Pulse's notifications
  * for the current user. Clicking one opens its task. */
-export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }: { pulseId?: string; uid?: string; onOpenTask: (featureId: string) => void; dark?: boolean; size?: number }) {
+export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26, alert }: { pulseId?: string; uid?: string; onOpenTask: (featureId: string) => void; dark?: boolean; size?: number; alert?: BellAlert | null }) {
   const t = useT();
   const [items, setItems] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  /** Hidden for this session only — the × . Separate from the persisted key so
+   * "not now" and "never" stay different answers. */
+  const [alertHidden, setAlertHidden] = useState(false);
 
   useEffect(() => {
     if (!pulseId || !uid) return;
@@ -33,6 +66,12 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
 
   if (!pulseId || !uid) return null;
   const unread = items.filter((n) => !n.read).length;
+  const liveAlert = alert && !alertHidden && !(alert.dismissKey && safeGet(alert.dismissKey) === "1") ? alert : null;
+
+  const dismissAlertForever = () => {
+    if (alert?.dismissKey) safeSet(alert.dismissKey, "1");
+    setAlertHidden(true); // don't wait for the next render to read it back
+  };
 
   const openItem = (n: Notification) => {
     setOpen(false);
@@ -45,9 +84,19 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
       <button
         onClick={() => setOpen((o) => !o)}
         className="relative flex items-center justify-center rounded-lg"
-        style={{ width: size, height: size, background: dark ? "#1B3A63" : "#F1EFE8", color: dark ? "#EE7240" : "#64748B", fontSize: 14 }}
-        title={t("notif.title")}
-        aria-label={t("notif.title")}
+        // An active alert recolours the bell itself rather than adding to the
+        // unread badge: the badge counts messages addressed to you, and folding
+        // a derived warning into that number would make it mean two things.
+        style={{
+          width: size,
+          height: size,
+          background: liveAlert ? (dark ? "#4A2410" : "#FFF7F1") : dark ? "#1B3A63" : "#F1EFE8",
+          color: liveAlert ? (dark ? "#F5A524" : "#9A3412") : dark ? "#EE7240" : "#64748B",
+          border: liveAlert ? "1px solid " + (dark ? "#F5A524" : "#FBD3BE") : undefined,
+          fontSize: 14,
+        }}
+        title={liveAlert ? liveAlert.text : t("notif.title")}
+        aria-label={liveAlert ? liveAlert.text : t("notif.title")}
       >
         <Icon name="notifications" size={Math.round(size * 0.58)} />
         {unread > 0 && (
@@ -68,6 +117,31 @@ export function NotificationsBell({ pulseId, uid, onOpenTask, dark, size = 26 }:
                 </button>
               )}
             </div>
+            {liveAlert && (
+              <div role="status" className="flex items-start gap-2 px-3 py-2.5 border-b text-xs" style={{ borderColor: "#F1F5F9", background: "#FFF7F1", color: "#9A3412" }}>
+                <Icon name="info" size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <div className="min-w-0 flex-1">
+                  <div>{liveAlert.text}</div>
+                  {/* Two ways out, like the dashboard's quota notice: × is "not
+                      now", the link is "never". Collapsing them into one button
+                      forces a permanent answer to a temporary annoyance. */}
+                  {liveAlert.dismissKey && (
+                    <button onClick={dismissAlertForever} className="mt-1 underline" style={{ color: "#9A3412", opacity: 0.85 }}>
+                      {t("plan.dontShowAgain")}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setAlertHidden(true)}
+                  title={t("plan.dismissForNow")}
+                  aria-label={t("plan.dismissForNow")}
+                  className="no-press flex-shrink-0"
+                  style={{ color: "#9A3412" }}
+                >
+                  <Icon name="close" size={13} />
+                </button>
+              </div>
+            )}
             {error ? (
               <div className="px-3 py-4 text-center text-xs text-red-600">{t("notif.loadError")}</div>
             ) : items.length === 0 ? (
