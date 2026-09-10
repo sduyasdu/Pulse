@@ -185,7 +185,7 @@ function TeamScene() {
   }
   return (
     <div style={{ display: "flex", height: "100vh", background: "#F4F2EC" }}>
-      <div style={{ width: 320, flexShrink: 0, background: "#FFFFFF", borderRight: "1px solid #E2DFD9", overflowY: "auto" }}>
+      <div style={{ width: 320, flexShrink: 0, background: "#FFFFFF", borderRight: "1px solid #E2DFD9", overflowY: "auto" }} data-team-panel>
         <TeamTab canEdit filterResource={null} setFilterResource={noop} />
       </div>
     </div>

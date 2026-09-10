@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Feature, Resource } from "@/types";
 
 /**
@@ -41,6 +41,10 @@ vi.mock("@/stores/confirmStore", () => ({ confirmAt: () => Promise.resolve(false
 vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, googleProvider: {}, functions: {} }));
 
 const { TeamTab } = await import("./TeamTab");
+
+// The store mock is shared, so its call log carries between tests — and a
+// "was not called yet" assertion would then be answered by an earlier test.
+beforeEach(() => vi.clearAllMocks());
 
 const setup = (canEdit = true) =>
   render(<TeamTab canEdit={canEdit} filterResource={null} setFilterResource={() => {}} />);
@@ -130,6 +134,88 @@ describe("resource types are Pulse configuration, not a person's", () => {
     expect(b).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(b);
     expect(b).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
+describe("the name is edited where it is read", () => {
+  // It used to be a second field inside the expanded settings: the name
+  // appeared twice in one row, and renaming meant opening a panel to change
+  // something already on screen.
+  it("is editable from the card, without opening anything", () => {
+    vi.useFakeTimers();
+    try {
+      setup();
+      const field = screen.getByDisplayValue("Ada");
+      fireEvent.change(field, { target: { value: "Ada L" } });
+      // Debounced by 500ms — a rename is a document write, not a keystroke.
+      // Asserting straight after the change would pass against a field that
+      // commits nothing at all.
+      expect(state.patchResource).not.toHaveBeenCalled();
+      act(() => void vi.advanceTimersByTime(600));
+      expect(state.patchResource).toHaveBeenCalledWith("r1", { name: "Ada L" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not appear a second time in the settings", () => {
+    setup();
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    expect(screen.getAllByDisplayValue("Ada")).toHaveLength(1);
+  });
+
+  // The row is both a filter toggle and a drag source. Neither should fire
+  // because someone put a caret in a name.
+  it("does not toggle the row filter when clicked", () => {
+    const setFilter = vi.fn();
+    render(<TeamTab canEdit filterResource={null} setFilterResource={setFilter} />);
+    fireEvent.click(screen.getByDisplayValue("Ada"));
+    expect(setFilter).not.toHaveBeenCalled();
+  });
+
+  it("is plain text for a viewer, with no edit affordance", () => {
+    setup(false);
+    const field = screen.getByDisplayValue("Ada") as HTMLInputElement;
+    expect(field.disabled).toBe(true);
+    expect(field.className).not.toContain("hover:");
+  });
+});
+
+describe("an open row is visibly the one being worked on", () => {
+  // jsdom reports computed colours as rgb(), not as the hex the source writes.
+  const ORANGE = "rgb(238, 114, 64)"; // #EE7240
+  const RESTING = "rgb(226, 223, 217)"; // #E2DFD9
+  const borderOf = (name: string) => {
+    const field = screen.getByDisplayValue(name);
+    // input → name/badge wrapper → header row → the card
+    return (field.closest("[draggable]") as HTMLElement).style.border;
+  };
+
+  it("is a plain border at rest", () => {
+    setup();
+    expect(borderOf("Ada")).toContain(RESTING);
+  });
+
+  it("turns orange, and heavier, while its settings are open", () => {
+    setup();
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    expect(borderOf("Ada")).toContain(ORANGE);
+    expect(borderOf("Ada")).toContain("2px");
+  });
+
+  // Filtering is also orange, so weight is what separates them — and both can
+  // be true at once.
+  it("outweighs the filtering highlight", () => {
+    render(<TeamTab canEdit filterResource="r1" setFilterResource={() => {}} />);
+    expect(borderOf("Ada")).toBe(`1px solid ${ORANGE}`);
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    expect(borderOf("Ada")).toBe(`2px solid ${ORANGE}`);
+  });
+
+  it("leaves the other rows alone", () => {
+    setup();
+    fireEvent.click(screen.getAllByLabelText("Type, limit and rate")[0]);
+    expect(borderOf("Grace")).toContain(RESTING);
   });
 });
 

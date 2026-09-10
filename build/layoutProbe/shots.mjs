@@ -97,6 +97,18 @@ for (let i = 0; i < 80; i++) {
 for (const [scene, lang, width, height] of SHOTS) {
   await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 2, mobile: false });
   await evaluate(`window.__probe.show(${JSON.stringify(scene)}, ${JSON.stringify(lang)}, "Q3 Platform Roadmap")`);
+  // The Team panel's interesting state is a row with its settings open, which
+  // no static render reaches. Click the first one.
+  if (scene === "team") {
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    await evaluate(`(() => {
+      // By its own label, not "the first collapsed thing" — that picked the
+      // resource-types button, which is a different disclosure entirely.
+      const b = document.querySelector('[data-team-panel] [aria-label="Type, limit and rate"]');
+      if (b) b.click();
+      return !!b;
+    })()`);
+  }
   // Let the staggered reveal finish, or the illustration is caught mid-fade.
   await new Promise((r) => setTimeout(r, 1400));
   // Proof it actually rendered, not just that the screenshot succeeded.

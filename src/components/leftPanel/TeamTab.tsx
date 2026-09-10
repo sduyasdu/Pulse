@@ -46,20 +46,42 @@ const TYPES_PANEL_ID = "team-resource-types";
 /** Name field for a person, debounced — a rename is a document write, not
  * something to fire per keystroke. Moved here with the rest of the Capacity
  * tab's per-person editors. */
+/**
+ * The person's name, edited where it is read.
+ *
+ * It used to be a second field inside the expanded settings, which meant the
+ * name appeared twice in one row — once as the heading you scan for and once as
+ * a form field two clicks away — and renaming meant opening a panel to change
+ * something already on screen. Editing it in place removes both.
+ *
+ * At rest it is styled as text, not as a field: this is a roster you scan down,
+ * and twenty input boxes would read as a form. The affordance arrives on hover
+ * (decorative, Tailwind-gated, so it is simply absent on touch — where the
+ * field is still reachable by tapping it) and on focus, which is the state that
+ * actually matters for knowing you are editing.
+ */
 function ResourceNameInput({ name, disabled, onCommit, renameTitle }: { name: string; disabled: boolean; onCommit: (name: string) => void; renameTitle: string }) {
   const [local, onChange] = useDebouncedText(name, onCommit);
+  const [focused, setFocused] = useState(false);
   return (
     <input
       value={local}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      // The row is a filter toggle and a drag source; neither should fire
+      // because someone put a caret in a name.
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
       title={disabled ? undefined : renameTitle}
-      className="w-full rounded px-1.5 py-0.5 text-xs font-medium"
+      className={"min-w-0 flex-1 truncate rounded px-1 py-0.5 text-xs font-medium" + (disabled ? "" : " hover:bg-[#F1F5F9]")}
       style={{
         color: "#1F2330",
-        background: disabled ? "transparent" : "#F8FAFC",
-        border: "1px solid " + (disabled ? "transparent" : "#E2DFD9"),
+        background: focused ? "#FFFFFF" : "transparent",
+        border: "1px solid " + (focused ? "#E2DFD9" : "transparent"),
         outline: "none",
+        cursor: disabled ? "default" : "text",
       }}
     />
   );
@@ -324,11 +346,30 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
           <div
             key={r.id}
             draggable
-            onDragStart={(e) => e.dataTransfer.setData("text/plain", r.id)}
+            onDragStart={(e) => {
+              // A `draggable` ancestor swallows text selection inside its
+              // fields: press and sweep across the name and the browser starts
+              // dragging the row instead of selecting the word. Decline the
+              // drag when it begins in an input or a select — the rest of the
+              // row is still a drag handle.
+              const from = e.target as HTMLElement;
+              if (from.closest("input, select, textarea")) {
+                e.preventDefault();
+                return;
+              }
+              e.dataTransfer.setData("text/plain", r.id);
+            }}
             onClick={() => setFilterResource(active ? null : r.id)}
             className="rounded px-2.5 py-2 cursor-pointer"
             title={t("team.dragToAssign")}
-            style={{ background: active ? "#FFF7F1" : "#FFFFFF", border: active ? "1px solid #EE7240" : "1px solid #E2DFD9" }}
+            // Orange means "this row is singled out"; the weight says how
+            // strongly. Open settings is the loudest, because it is the state
+            // you are working in and the one that made the row grow — and the
+            // two can be true at once, so they cannot be the same treatment.
+            style={{
+              background: open || active ? "#FFF7F1" : "#FFFFFF",
+              border: open ? "2px solid #EE7240" : active ? "1px solid #EE7240" : "1px solid #E2DFD9",
+            }}
           >
             <div className="flex items-center gap-2">
               <ResourceBadge
@@ -342,7 +383,12 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
               />
               <div className="overflow-hidden flex-1">
                 <div className="flex items-center gap-1">
-                  <div className="text-xs font-medium truncate" style={{ color: "#1F2330" }}>{r.name}</div>
+                  <ResourceNameInput
+                    name={r.name}
+                    disabled={!canEdit}
+                    onCommit={(name) => void patchResource(r.id, { name })}
+                    renameTitle={t("capacity.clickToRename")}
+                  />
                   <ResourceOriginBadge masterId={r.masterId} />
                 </div>
                 <div className="mono truncate" style={{ fontSize: 10, color: "#64748B" }}>{r.type || "—"} · {t("team.limit", { n: r.capacity })}</div>
@@ -448,12 +494,6 @@ export function TeamTab({ canEdit, filterResource, setFilterResource }: TeamTabP
                 onPointerDown={(e) => e.stopPropagation()}
                 style={{ background: "#FDFCF8", border: "1px solid #EEF1F4" }}
               >
-                <ResourceNameInput
-                  name={r.name}
-                  disabled={!canEdit}
-                  onCommit={(name) => void patchResource(r.id, { name })}
-                  renameTitle={t("capacity.clickToRename")}
-                />
                 {/* The ORG role, inherited and read-only (RM24) — who this
                     person is, as distinct from how this Pulse files them. */}
                 {r.role && (
