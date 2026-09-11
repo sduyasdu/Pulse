@@ -90,3 +90,27 @@ describe("only the canvas toolbar is singular", () => {
     expect(explicitPlural).toEqual([]);
   });
 });
+
+/**
+ * The dns-prefetch hint must name the same host as `VITE_FIREBASE_AUTH_DOMAIN`.
+ *
+ * index.html says so in a comment, and the comment is right: prefetching the
+ * wrong host warms a connection nothing uses and leaves the real one cold on
+ * the critical sign-in path. Nothing else notices — the app works either way,
+ * slightly slower, which is why it drifted the moment the auth domain moved.
+ *
+ * `.env.local` is gitignored and machine-local, so this can only run where the
+ * build actually happens. That is also the only place it matters.
+ */
+describe("the auth-origin prefetch tracks the auth domain", () => {
+  const env = existsSync(".env.local") ? readFileSync(".env.local", "utf8") : null;
+  const configured = env ? /^VITE_FIREBASE_AUTH_DOMAIN="?([^"\n]+)"?/m.exec(env)?.[1] : undefined;
+
+  it.skipIf(!configured)("prefetches exactly that host", () => {
+    const prefetched = [...html.matchAll(/<link rel="dns-prefetch" href="https:\/\/([^"]+)"/g)].map((m) => m[1]);
+    expect(prefetched).toContain(configured);
+    // The old auth origin must not linger: it is a warmed connection to a host
+    // sign-in no longer touches.
+    expect(prefetched.filter((h) => h.endsWith(".yasdu.com"))).toEqual([configured]);
+  });
+});
