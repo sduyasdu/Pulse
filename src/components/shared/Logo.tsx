@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-/** Brand variants from the Pulse brand kit (`public/brand/`):
+/** Brand variants from the Beats brand kit (`public/brand/`):
  *  - light: orange disc, navy bezel — light surfaces
  *  - dark:  orange disc, paper bezel — navy/dark surfaces
  *  - black / white: single colour, for when colour isn't available */
@@ -37,12 +37,12 @@ interface MarkProps {
   decorative?: boolean;
 }
 
-/** The Pulse mark: a disc inside a bezel, cut through by the pulse trace.
+/** The Beats mark: a disc inside a bezel, cut through by the beat trace.
  * Inlined rather than an <img> so it scales and stays crisp at header sizes;
  * the trace is a mask, so the cut always shows the surface behind it. */
-export function PulseMark({ variant = "light", size = 24, className, style, decorative }: MarkProps) {
+export function BeatsMark({ variant = "light", size = 24, className, style, decorative }: MarkProps) {
   // Two marks on one page (e.g. header + dialog) would otherwise share a mask id.
-  const maskId = `pulse-mark-${useId()}`;
+  const maskId = `beats-mark-${useId()}`;
   return (
     <svg
       viewBox="0 0 48 48"
@@ -51,7 +51,7 @@ export function PulseMark({ variant = "light", size = 24, className, style, deco
       className={className}
       style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
       role={decorative ? undefined : "img"}
-      aria-label={decorative ? undefined : "Pulse"}
+      aria-label={decorative ? undefined : "Beats"}
       aria-hidden={decorative ? true : undefined}
     >
       <defs>
@@ -75,26 +75,41 @@ export function PulseMark({ variant = "light", size = 24, className, style, deco
   );
 }
 
+/**
+ * The product is "Beats"; one roadmap inside it is "a Beat". They are different
+ * words, so the lockup has to be told which it is standing for.
+ *
+ * Plural is the default because it is the product's name and covers every
+ * surface that spans more than one roadmap — the dashboard, sign-in, the
+ * account dialogs, the OAuth consent screen. Only the canvas toolbar, which is
+ * by definition inside a single Beat, asks for the singular.
+ */
+export type BrandWord = "Beats" | "Beat";
+
 interface LockupProps {
   variant?: BrandVariant;
   /** Wordmark font size in px; the mark scales with it (brand ratio 48:38). */
   size?: number;
+  /** Defaults to the product name. Pass "Beat" only inside one Beat. */
+  word?: BrandWord;
   className?: string;
   style?: React.CSSProperties;
 }
 
 /** Mark + name, the header default. The name is live text in Space Grotesk
  * (already loaded app-wide) rather than the baked SVG lockup, so it renders at
- * the same weight and hinting as the rest of the UI at small sizes. */
-export function PulseLockup({ variant = "light", size = 16, className, style }: LockupProps) {
+ * the same weight and hinting as the rest of the UI at small sizes. The kit's
+ * `beats-lockup-*.svg` / `beat-lockup-*.svg` are the same drawing at the same
+ * metrics, for use outside the app. */
+export function BeatsLockup({ variant = "light", size = 16, word = "Beats", className, style }: LockupProps) {
   return (
     <span className={className} style={{ display: "inline-flex", alignItems: "center", gap: size * 0.34, ...style }}>
-      <PulseMark variant={variant} size={Math.round(size * 1.26)} decorative />
+      <BeatsMark variant={variant} size={Math.round(size * 1.26)} decorative />
       <span
         className="font-display"
         style={{ color: INK[variant], fontSize: size, fontWeight: 700, letterSpacing: "-0.035em", lineHeight: 1 }}
       >
-        Pulse
+        {word}
       </span>
     </span>
   );

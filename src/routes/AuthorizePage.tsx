@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { Icon } from "@/components/shared/Icon";
 import { InlineSpinner } from "@/components/shared/Spinner";
 import { useAuthStore } from "@/stores/authStore";
@@ -84,7 +84,7 @@ export function AuthorizePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-yasdu-bg px-4 py-8">
       <div className="w-full max-w-md rounded-2xl bg-yasdu-card p-6 shadow-lg">
-        <PulseLockup variant="light" size={20} />
+        <BeatsLockup variant="light" size={20} />
 
         {!usable ? (
           <>

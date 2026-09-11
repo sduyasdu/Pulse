@@ -13,9 +13,9 @@
          to the parent domain's icon. -->
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/brand/pulse-favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/brand/pulse-favicon-16.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/brand/pulse-apple-touch-180.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/beats-favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/brand/beats-favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/beats-apple-touch-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#123359" />
     <meta name="color-scheme" content="light" />
@@ -28,7 +28,26 @@
          in step: prefetching the wrong host warms a connection nothing uses,
          and leaves the real one cold on the critical sign-in path. -->
     <link rel="dns-prefetch" href="https://pulse.yasdu.com" />
-    <title>Pulse — Visual Project Planning</title>
+    <title>Beats — Visual Project Planning</title>
+    <!-- Link previews (Slack, WhatsApp, LinkedIn, iMessage). og:image must be
+         an absolute URL — scrapers do not resolve relative paths — so these
+         hard-code the origin and only resolve once beats.yasdu.com serves.
+         Deploying them before that leaves every preview with a broken image.
+         og:image:alt is the text a screen reader gets in the unfurled card. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Beats" />
+    <meta property="og:title" content="Beats — Visual Project Planning" />
+    <meta property="og:description" content="Make any project real with one visual canvas." />
+    <meta property="og:url" content="https://beats.yasdu.com/" />
+    <meta property="og:image" content="https://beats.yasdu.com/brand/beats-og-light.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Beats — the mark beside the wordmark." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Beats — Visual Project Planning" />
+    <meta name="twitter:description" content="Make any project real with one visual canvas." />
+    <meta name="twitter:image" content="https://beats.yasdu.com/brand/beats-og-light.png" />
     <style>
       /* Instant splash shown before the JS bundle boots (replaced by React on
          mount). Inline + no assets so it paints on the very first frame — most

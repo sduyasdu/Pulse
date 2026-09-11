@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { createPulse, subscribeMyPulses, removeMyPulseEntry, updateMyPulseRole, updateMyPulseName, setMyPulseHidden, updateMyPulseArchivedAt, updateMyPulseCreatedAt, setPulseArchived, deletePulse, duplicatePulse, renamePulse, getPulse, type DuplicateMode } from "@/services/firestore/pulses";
@@ -215,7 +215,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
-        <PulseLockup variant="dark" size={16} />
+        <BeatsLockup variant="dark" size={16} />
         <div className="flex-1" />
         {/* Status, not a control — same placement as the Pulse toolbar's, so
             it is in the same place whichever screen you are on. */}

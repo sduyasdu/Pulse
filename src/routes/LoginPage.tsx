@@ -6,7 +6,7 @@ import type { TranslationKey } from "@/i18n";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { EmailPasswordForm } from "@/components/auth/EmailPasswordForm";
 import { LoginHero } from "@/components/auth/LoginHero";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { Icon } from "@/components/shared/Icon";
 
 const YASDU_URL = "https://www.yasdu.com";
@@ -40,7 +40,7 @@ export function LoginPage() {
         <div className="order-1 w-full max-w-sm flex-shrink-0 lg:order-2">
           <div className="rounded-2xl border bg-yasdu-card p-7 shadow-sm" style={{ borderColor: "#E2DFD9" }}>
             <div className="mb-6">
-              <PulseLockup variant="light" size={20} />
+              <BeatsLockup variant="light" size={20} />
             </div>
 
             <h1 className="font-display mb-1 text-lg font-medium text-yasdu-fg">

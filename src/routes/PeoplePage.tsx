@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "@/components/shared/Icon";
 import { Spinner } from "@/components/shared/Spinner";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { confirmAt } from "@/stores/confirmStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
@@ -188,7 +188,7 @@ export function PeoplePage() {
           <Icon name="chevron_left" size={20} />
           {t("people.backToDashboard")}
         </Link>
-        <span className="ml-auto"><PulseLockup variant="light" size={18} /></span>
+        <span className="ml-auto"><BeatsLockup variant="light" size={18} /></span>
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">

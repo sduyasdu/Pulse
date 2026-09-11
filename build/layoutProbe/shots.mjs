@@ -19,6 +19,11 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 
 /** scene, lang, width, height. */
 const SHOTS = [
+  // The wordmark split: the toolbar sits inside one Beat and must read
+  // "Beat"; the dashboard spans all of them and must read "Beats". Nothing
+  // else in the suite renders both words, and the difference is one letter.
+  ["toolbar", "en", 1280, 200],
+  ["dashboard", "en", 1280, 400],
   ["bell", "en", 700, 620],
   ["team", "en", 1000, 1000],
   ["login", "en", 1440, 900],

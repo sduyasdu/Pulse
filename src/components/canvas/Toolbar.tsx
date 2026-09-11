@@ -9,7 +9,7 @@ import { useT } from "@/i18n";
 import { MultiSelectFilter, type Option } from "@/components/shared/MultiSelectFilter";
 import { SharePulseButton } from "@/components/shared/SharePulseButton";
 import { Icon } from "@/components/shared/Icon";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
 
 interface ToolbarProps {
@@ -148,7 +148,7 @@ export function Toolbar({
         style={{ minHeight: 34, paddingTop: 4, paddingBottom: 4, borderBottom: "1px solid #24406B" }}
       >
         <Link to="/" className="flex items-center gap-2" title={t("toolbar.backToDashboard")}>
-          <PulseLockup variant="dark" size={15} />
+          <BeatsLockup variant="dark" size={15} word="Beat" />
         </Link>
         <div className="flex min-w-0 items-center gap-1" style={{ borderLeft: "1px solid #24406B", paddingLeft: 12 }}>
           <span className="font-display" style={{ color: "#EE7240", fontSize: 14, fontWeight: 500 }}>›</span>

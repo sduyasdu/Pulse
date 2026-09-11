@@ -1,4 +1,4 @@
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { CanvasPreview } from "@/components/auth/CanvasPreview";
 import { useT } from "@/i18n";
 import type { TranslationKey } from "@/i18n";
@@ -32,7 +32,7 @@ export function LoginHero({ className }: { className?: string }) {
           the tagline, and repeating them would push the pitch further from the
           form someone came here to use. */}
       <div className="mb-5 hidden lg:block">
-        <PulseLockup variant="light" size={26} />
+        <BeatsLockup variant="light" size={26} />
       </div>
 
       <h2

@@ -28,7 +28,7 @@ import { NotificationsBell } from "@/components/notifications/NotificationsBell"
 import { usePulseStore } from "@/stores/pulseStore";
 import { todayIndex } from "@/domain/dateUtils";
 import type { Feature, Resource } from "@/types";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { Icon } from "@/components/shared/Icon";
 import { useI18nStore } from "@/stores/i18nStore";
 import { ensureDict } from "@/i18n/dictionaries";
@@ -119,7 +119,7 @@ function DashboardScene({ pulseName }: { pulseName: string }) {
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
-        <PulseLockup variant="dark" size={16} />
+        <BeatsLockup variant="dark" size={16} />
         <div className="flex-1" />
         <span data-right-edge className="flex items-center justify-center rounded" style={{ width: 30, height: 30, color: "#EE7240" }}>
           <Icon name="help" size={18} />

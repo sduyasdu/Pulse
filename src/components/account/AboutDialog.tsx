@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { PulseLockup } from "@/components/shared/Logo";
+import { BeatsLockup } from "@/components/shared/Logo";
 import { useT } from "@/i18n";
 
 /** The copyright holder, and the domicile that goes with it. Not translated and
@@ -44,7 +44,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         <h2 id="about-title" className="sr-only">{t("about.title")}</h2>
 
         <div className="flex flex-col items-center gap-2 text-center">
-          <PulseLockup variant="light" size={22} />
+          <BeatsLockup variant="light" size={22} />
           <p className="text-xs" style={{ color: "#64748B" }}>{t("auth.tagline")}</p>
           {/* Selectable on purpose — people paste this into bug reports. */}
           <p className="mono text-[11px]" style={{ color: "#94A3B8" }}>
