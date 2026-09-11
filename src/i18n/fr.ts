@@ -452,9 +452,9 @@ export const fr: Dict = {
   "toolbar.effortScaleNoteOther": "Chaque {px}px de hauteur de boîte = {n} unités de travail. La hauteur est discrète (paliers entiers).",
   "toolbar.addEpic": "Ajouter un epic",
   "toolbar.addTask": "+ Ajouter une tâche",
-  "toolbar.myTodo": "My todo",
-  "toolbar.myTodoOn": "My todo — n'afficher que les tâches où je suis impliqué (via mon compte lié)",
-  "toolbar.myTodoOff": "Liez votre compte à une ressource dans l'onglet Équipe pour utiliser My todo",
+  "toolbar.myTodo": "My to do",
+  "toolbar.myTodoOn": "My to do — n'afficher que les tâches où je suis impliqué (via mon compte lié)",
+  "toolbar.myTodoOff": "Liez votre compte à une ressource dans l'onglet Équipe pour utiliser My to do",
   "toolbar.zoomTitle": "Zoomer/dézoomer toute l'image du canevas (la largeur du jour ne change pas)",
   "toolbar.fit": "ajuster",
   "toolbar.fitTitle": "Ajuster toute la feuille de route à l'écran",
@@ -684,7 +684,7 @@ export const fr: Dict = {
   "mobile.list": "liste",
   "mobile.board": "tableau",
   "mobile.myTodoOn": "N'afficher que les tâches où je suis impliqué",
-  "mobile.myTodoOff": "Liez votre compte à une ressource (onglet Équipe) pour utiliser My todo",
+  "mobile.myTodoOff": "Liez votre compte à une ressource (onglet Équipe) pour utiliser My to do",
   "mobile.back": "Retour",
 
   // activity

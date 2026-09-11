@@ -458,9 +458,9 @@ export const en = {
   "toolbar.effortScaleNoteOther": "Each {px}px of box height = {n} work units. Height is discrete (whole steps).",
   "toolbar.addEpic": "Add epic",
   "toolbar.addTask": "+ Add task",
-  "toolbar.myTodo": "My todo",
-  "toolbar.myTodoOn": "My todo — show only tasks I'm involved in (via my linked account)",
-  "toolbar.myTodoOff": "Link your account to a resource in the Team tab to use My todo",
+  "toolbar.myTodo": "My to do",
+  "toolbar.myTodoOn": "My to do — show only tasks I'm involved in (via my linked account)",
+  "toolbar.myTodoOff": "Link your account to a resource in the Team tab to use My to do",
   "toolbar.zoomTitle": "Zoom the whole canvas image in/out (day width unchanged)",
   "toolbar.fit": "fit",
   "toolbar.fitTitle": "Fit the whole roadmap on screen",
@@ -690,7 +690,7 @@ export const en = {
   "mobile.list": "list",
   "mobile.board": "board",
   "mobile.myTodoOn": "Show only tasks I'm involved in",
-  "mobile.myTodoOff": "Link your account to a resource (Team tab) to use My todo",
+  "mobile.myTodoOff": "Link your account to a resource (Team tab) to use My to do",
   "mobile.back": "Back",
 
   // ── activity feed ───────────────────────────────────────────────────────────

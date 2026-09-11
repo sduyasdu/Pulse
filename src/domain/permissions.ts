@@ -58,7 +58,7 @@ export const ROLE_META: Record<PresetRole, RoleMeta> = {
   owner: { label: "Owner", hint: "Full control — manage members & delete", badgeBg: "#FEF0E7", badgeFg: "#C2410C" },
   editor: { label: "Editor", hint: "Edits everything", badgeBg: "#EAF1FB", badgeFg: "#1D4ED8" },
   fullViewer: { label: "Full Viewer", hint: "Reads & comments on the whole Beat", badgeBg: "#F1F5F9", badgeFg: "#475569" },
-  myBeatViewer: { label: "My-Todo Viewer", hint: "Sees only tasks their linked resource is on", badgeBg: "#E7F6F1", badgeFg: "#0F766E" },
+  myBeatViewer: { label: "My-To-Do Viewer", hint: "Sees only tasks their linked resource is on", badgeBg: "#E7F6F1", badgeFg: "#0F766E" },
   taskLead: { label: "Task Lead", hint: "Edits only the tasks they lead; reads the rest", badgeBg: "#F1ECFE", badgeFg: "#7C3AED" },
   custom: { label: "Custom", hint: "Custom capabilities", badgeBg: "#F1F5F9", badgeFg: "#64748B" },
 };
@@ -76,6 +76,6 @@ export function roleMeta(role: PulseRole): RoleMeta {
 export const ASSIGNABLE_ROLES: { value: PulseRole; label: string; hint: string }[] = [
   { value: "editor", label: "Editor", hint: "Edits everything" },
   { value: "taskLead", label: "Task Lead", hint: "Edits only tasks they lead; needs a linked resource" },
-  { value: "myBeatViewer", label: "My-Todo Viewer", hint: "Sees only tasks their linked resource is on" },
+  { value: "myBeatViewer", label: "My-To-Do Viewer", hint: "Sees only tasks their linked resource is on" },
   { value: "viewer", label: "Full Viewer", hint: "Reads & comments" },
 ];

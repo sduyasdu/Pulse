@@ -452,9 +452,9 @@ export const de: Dict = {
   "toolbar.effortScaleNoteOther": "Je {px}px Boxhöhe = {n} Arbeitseinheiten. Die Höhe ist diskret (ganze Schritte).",
   "toolbar.addEpic": "Epic hinzufügen",
   "toolbar.addTask": "+ Aufgabe hinzufügen",
-  "toolbar.myTodo": "My todo",
-  "toolbar.myTodoOn": "My todo — nur Aufgaben zeigen, an denen ich beteiligt bin (über mein verknüpftes Konto)",
-  "toolbar.myTodoOff": "Verknüpfe dein Konto im Tab Team mit einer Ressource, um My todo zu nutzen",
+  "toolbar.myTodo": "My to do",
+  "toolbar.myTodoOn": "My to do — nur Aufgaben zeigen, an denen ich beteiligt bin (über mein verknüpftes Konto)",
+  "toolbar.myTodoOff": "Verknüpfe dein Konto im Tab Team mit einer Ressource, um My to do zu nutzen",
   "toolbar.zoomTitle": "Das gesamte Canvas-Bild vergrößern/verkleinern (Tagesbreite bleibt gleich)",
   "toolbar.fit": "einpassen",
   "toolbar.fitTitle": "Die gesamte Roadmap auf den Bildschirm einpassen",
@@ -684,7 +684,7 @@ export const de: Dict = {
   "mobile.list": "Liste",
   "mobile.board": "Board",
   "mobile.myTodoOn": "Nur Aufgaben zeigen, an denen ich beteiligt bin",
-  "mobile.myTodoOff": "Verknüpfe dein Konto mit einer Ressource (Tab Team), um My todo zu nutzen",
+  "mobile.myTodoOff": "Verknüpfe dein Konto mit einer Ressource (Tab Team), um My to do zu nutzen",
   "mobile.back": "Zurück",
 
   // activity

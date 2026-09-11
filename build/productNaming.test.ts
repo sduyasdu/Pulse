@@ -65,10 +65,10 @@ describe.each(LOCALES)("%s", (locale) => {
     expect(value).not.toMatch(/\bBeat\b(?!s)/);
   });
 
-  it("still says 'My todo', which is not the entity", () => {
+  it("still says 'My to do', which is not the entity", () => {
     // "My Beat" collided with the new entity name: it means "my tasks", not
     // "the Beat that is mine".
-    expect(dict.get("toolbar.myTodo")).toBe("My todo");
+    expect(dict.get("toolbar.myTodo")).toBe("My to do");
     expect([...dict].filter(([, v]) => /\bMy Beat\b/.test(v))).toEqual([]);
   });
 });

@@ -127,7 +127,7 @@ export const help: HelpDoc = {
         { term: "Confirm your email", text: "Invitations only reach you once you've confirmed your address. The dashboard says when that's pending, and can send the mail again." },
         { term: "Owner / Editor", text: "Owner manages people and settings; Editor changes everything else." },
         { term: "Full Viewer", text: "Reads the whole Beat and can comment, but can't change anything." },
-        { term: "My-Todo Viewer", text: "Sees only the tasks their own resource is assigned to." },
+        { term: "My-To-Do Viewer", text: "Sees only the tasks their own resource is assigned to." },
         { term: "Task Lead", text: "Edits just the tasks they lead, reads the rest." },
         { term: "Comments", text: "On any task, with @ to mention a person or link a task." },
         { term: "Activity", text: "A durable log of who changed what, and when." },

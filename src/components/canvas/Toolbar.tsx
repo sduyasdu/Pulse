@@ -303,7 +303,7 @@ export function Toolbar({
           </div>
         )}
 
-        {/* My todo — only tasks involving my linked account. */}
+        {/* My to do — only tasks involving my linked account. */}
         <button
           onClick={onToggleMyPulse}
           disabled={!canMyPulse}
