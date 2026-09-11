@@ -168,8 +168,16 @@ service cannot start without.
 ## `npm run test:functions` tests the **compiled** output
 
 The suites in `functions/test/*.mjs` import `functions/lib/*.js`, not `src/`. Run
-`npx tsc -p functions` first, or you are testing the previous build — and it will
+`npm --prefix functions run build` first, or you are testing the previous build — and it will
 pass. This produced a confident all-green against code that did not exist yet.
+
+**Build it with the functions' own compiler, not the root one.** The root has
+TypeScript 6 and `functions/` has 5.7 — so `npx tsc -p functions` from the repo
+root uses TS6 and fails on TS5107 (`moduleResolution: node` is deprecated),
+while the deploy's predeploy (`npm --prefix functions run build`) uses 5.7 and
+compiles clean. The error therefore looks like a broken build that is not
+broken, and "fixing" it with `ignoreDeprecations: "6.0"` is rejected by 5.7 as
+TS5103 — which breaks the deploy for real. Build the way the deploy builds.
 
 **And a passing suite is not evidence it ran.** `mcp.integration.mjs` had a
 `process.exit()` at line 72 of ~190, so two thirds of its assertions had never
