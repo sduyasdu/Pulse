@@ -309,7 +309,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, pulse } = get();
     if (!pulseId) return;
     await renamePulseDoc(pulseId, name);
-    if (pulse) recordSingle("Rename Pulse", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { name }));
+    if (pulse) recordSingle("Rename Beat", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { name }));
   },
 
   setGraphConfig: async (stepPx, workPerStep) => {

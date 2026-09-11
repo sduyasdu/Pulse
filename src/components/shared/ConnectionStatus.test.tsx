@@ -48,7 +48,7 @@ describe("the connection indicator", () => {
   // message for anyone not looking at it.
   it("says it is connected", () => {
     render(<ConnectionStatus uid="u1" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Connected to Pulse.");
+    expect(screen.getByRole("status")).toHaveTextContent("Connected to Beats.");
   });
 
   // Offline and unreachable are different facts and must not be flattened into

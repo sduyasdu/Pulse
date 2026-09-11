@@ -62,7 +62,7 @@ export const help: HelpDoc = {
       id: "people",
       title: "Pessoas e carga",
       body:
-        "A aba Equipe lista todos no Pulse. Arraste uma pessoa até uma tarefa para atribuí-la e depois " +
+        "A aba Equipe lista todos no Beat. Arraste uma pessoa até uma tarefa para atribuí-la e depois " +
         "defina que parte do tempo dela isso consome.",
       keywords: ["atribuir", "recurso", "equipe", "quem", "alocacao", "utilizacao", "sobrecarga", "ocupado"],
       bullets: [
@@ -75,19 +75,19 @@ export const help: HelpDoc = {
     },
     {
       id: "roster",
-      title: "Pessoas entre Pulses",
+      title: "Pessoas entre Beats",
       body:
         "Pessoas — no painel — é a lista de quem trabalha na sua organização, separada de qualquer "
-        + "Pulse. Adicione alguém uma vez ali e leve essa pessoa para quantos Pulses precisar.",
+        + "Beat. Adicione alguém uma vez ali e leve essa pessoa para quantos Beats precisar.",
       keywords: ["elenco", "mestre", "organizacao", "diretorio", "equipe", "funcao", "reutilizar", "compartilhado", "todos"],
       bullets: [
-        { term: "Adicionar a um Pulse", text: "Na aba Equipe de um Pulse, use “de Pessoas”. Escolha pessoas ou uma equipe inteira." },
-        { term: "É uma cópia", text: "Capacidade e tipo são daquele Pulse. Nome e função seguem a organização e atualizam em todo lugar." },
+        { term: "Adicionar a um Beat", text: "Na aba Equipe de um Beat, use “de Pessoas”. Escolha pessoas ou uma equipe inteira." },
+        { term: "É uma cópia", text: "Capacidade e tipo são daquele Beat. Nome e função seguem a organização e atualizam em todo lugar." },
         { term: "Equipes", text: "Agrupe pessoas na tela Pessoas. Arraste alguém para um cartão de equipe, ou use os botões no cartão dela." },
-        { term: "Função vs tipo", text: "A função é da organização e é a mesma em todo lugar. O tipo é o jeito de agrupar de cada Pulse." },
+        { term: "Função vs tipo", text: "A função é da organização e é a mesma em todo lugar. O tipo é o jeito de agrupar de cada Beat." },
         { term: "Vinculada / Aguardando", text: "Vinculada: aquele e-mail é de um membro. Aguardando: ainda não entrou — vincula sozinha quando entrar." },
-        { term: "Vincular não dá acesso", text: "Diz apenas quem é a pessoa, não o que ela pode abrir. Ela ainda precisa ser convidada para cada Pulse — e o formulário de convite sugere quem ainda não foi." },
-        { term: "Onde participa", text: "No cartão da pessoa. Lista todos os Pulses em que ela está, inclusive os que você não pode abrir." },
+        { term: "Vincular não dá acesso", text: "Diz apenas quem é a pessoa, não o que ela pode abrir. Ela ainda precisa ser convidada para cada Beat — e o formulário de convite sugere quem ainda não foi." },
+        { term: "Onde participa", text: "No cartão da pessoa. Lista todos os Beats em que ela está, inclusive os que você não pode abrir." },
       ],
     },
     {
@@ -101,7 +101,7 @@ export const help: HelpDoc = {
         { term: "Custos de IA", text: "Adicione na tarefa, na aba Detalhes: tokens e o que foi gasto." },
         { term: "Custo unitário", text: "Calculado a partir do que você lançou, não de uma tabela de preços — é a sua taxa real." },
         { term: "Custos de pessoas", text: "Horas × custo por hora, com as horas vindo da atribuição e da duração da tarefa." },
-        { term: "Taxas por hora", text: "Definidas na aba Capacidade. Visíveis apenas para administradores do Pulse, como os custos derivados delas." },
+        { term: "Taxas por hora", text: "Definidas na aba Capacidade. Visíveis apenas para administradores do Beat, como os custos derivados delas." },
         { term: "A visão de Custos", text: "Agrupe por modelo, pessoa ou tarefa; alterne entre $ e quantidade; os totais são de todo o período." },
         { term: "Uma ressalva", text: "Os números de IA são o que foi gasto; os de pessoas são o que o plano implica. É estimativa, não contabilidade." },
       ],
@@ -129,13 +129,13 @@ export const help: HelpDoc = {
         { term: "Link de convite", text: "Quem abrir entra com o papel que você escolheu, então compartilhe onde isso for o que você quer. Dá para revogar quando quiser." },
         { term: "Confirme seu e-mail", text: "Os convites só chegam até você depois de confirmar seu endereço. O painel avisa quando falta e pode reenviar o e-mail." },
         { term: "Proprietário / Editor", text: "O proprietário gerencia pessoas e configurações; o editor muda todo o resto." },
-        { term: "Leitor completo", text: "Lê o Pulse inteiro e pode comentar, mas não pode mudar nada." },
+        { term: "Leitor completo", text: "Lê o Beat inteiro e pode comentar, mas não pode mudar nada." },
         { term: "Leitor do próprio beat", text: "Vê apenas as tarefas às quais o próprio recurso está atribuído." },
         { term: "Líder de Tarefa", text: "Edita só as tarefas que lidera e lê o restante." },
         { term: "Comentários", text: "Em qualquer tarefa, com @ para mencionar uma pessoa ou vincular uma tarefa." },
         { term: "Atividade", text: "Um registro durável de quem mudou o quê, e quando." },
-        { term: "Ocultar", text: "Tira um Pulse do seu próprio painel. Ninguém mais percebe e nada mais muda." },
-        { term: "Arquivar", text: "Só o proprietário. Deixa um Pulse concluído somente leitura para todos até que um proprietário desarquive. Nada é excluído e não libera vaga no plano." },
+        { term: "Ocultar", text: "Tira um Beat do seu próprio painel. Ninguém mais percebe e nada mais muda." },
+        { term: "Arquivar", text: "Só o proprietário. Deixa um Beat concluído somente leitura para todos até que um proprietário desarquive. Nada é excluído e não libera vaga no plano." },
       ],
     },
     {
@@ -147,7 +147,7 @@ export const help: HelpDoc = {
       keywords: ["kanban", "status", "coluna", "buscar", "filtro", "desfazer", "refazer", "erro", "ctrl z"],
       bullets: [
         { term: "Visão de quadro", text: "Colunas kanban por status. Arraste uma tarefa entre elas para mudar o status." },
-        { term: "Status", text: "Editáveis por Pulse. Concluído é sempre o último e trava a tarefa." },
+        { term: "Status", text: "Editáveis por Beat. Concluído é sempre o último e trava a tarefa." },
         { term: "Filtros", text: "Por texto, status ou epic. Tarefas que não batem ficam esmaecidas em vez de sumir." },
         { term: "Meu beat", text: "Reduz tudo às tarefas em que você está." },
         { term: "Desfazer / refazer", text: "⌘Z e ⇧⌘Z (Ctrl no Windows). Cobre edições, movimentos e exclusões." },

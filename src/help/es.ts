@@ -63,7 +63,7 @@ export const help: HelpDoc = {
       id: "people",
       title: "Personas y carga",
       body:
-        "La pestaña Equipo lista a todos los del Pulse. Arrastrá una persona sobre una tarea para " +
+        "La pestaña Equipo lista a todos los del Beat. Arrastrá una persona sobre una tarea para " +
         "asignarla y después definí qué parte de su tiempo lleva.",
       keywords: ["asignar", "recurso", "equipo", "quien", "dedicacion", "utilizacion", "sobrecarga", "ocupado"],
       bullets: [
@@ -76,19 +76,19 @@ export const help: HelpDoc = {
     },
     {
       id: "roster",
-      title: "Personas entre Pulses",
+      title: "Personas entre Beats",
       body:
         "Personas — desde el tablero — es la lista de gente de tu organización, separada de cualquier "
-        + "Pulse. Agregá a alguien una vez ahí y sumalo a todos los Pulses que necesites.",
+        + "Beat. Agregá a alguien una vez ahí y sumalo a todos los Beats que necesites.",
       keywords: ["plantel", "maestro", "organizacion", "directorio", "equipo", "rol", "reutilizar", "compartido", "todos"],
       bullets: [
-        { term: "Sumar a un Pulse", text: "En la pestaña Equipo de un Pulse, usá “de Personas”. Elegí personas sueltas o un equipo entero." },
-        { term: "Es una copia", text: "La capacidad y el tipo son de ese Pulse. El nombre y el rol siguen a la organización y se actualizan en todos lados." },
+        { term: "Sumar a un Beat", text: "En la pestaña Equipo de un Beat, usá “de Personas”. Elegí personas sueltas o un equipo entero." },
+        { term: "Es una copia", text: "La capacidad y el tipo son de ese Beat. El nombre y el rol siguen a la organización y se actualizan en todos lados." },
         { term: "Equipos", text: "Agrupá gente en la pantalla Personas. Arrastrá a alguien sobre un equipo, o usá los botones de su tarjeta." },
-        { term: "Rol vs tipo", text: "El rol es de la organización y es el mismo en todos lados. El tipo es la forma de agrupar propia de cada Pulse." },
+        { term: "Rol vs tipo", text: "El rol es de la organización y es el mismo en todos lados. El tipo es la forma de agrupar propia de cada Beat." },
         { term: "Vinculada / En espera", text: "Vinculada: ese email es de un miembro. En espera: todavía no se unió — se vincula solo cuando lo haga." },
-        { term: "Vincular no da acceso", text: "Solo dice quién es, no qué puede abrir. Igual hay que invitarla a cada Pulse — y el formulario de invitación propone a quienes todavía no lo están." },
-        { term: "Dónde participa", text: "En la tarjeta de cada persona. Lista todos los Pulses en los que está, incluso los que vos no podés abrir." },
+        { term: "Vincular no da acceso", text: "Solo dice quién es, no qué puede abrir. Igual hay que invitarla a cada Beat — y el formulario de invitación propone a quienes todavía no lo están." },
+        { term: "Dónde participa", text: "En la tarjeta de cada persona. Lista todos los Beats en los que está, incluso los que vos no podés abrir." },
       ],
     },
     {
@@ -102,7 +102,7 @@ export const help: HelpDoc = {
         { term: "Costos de IA", text: "Se agregan en la tarea, en la pestaña Detalles: tokens y lo que se gastó." },
         { term: "Costo unitario", text: "Sale de lo que cargaste, no de una lista de precios, así que es tu tarifa real." },
         { term: "Costos de personas", text: "Horas × costo por hora, donde las horas salen de la asignación y del largo de la tarea." },
-        { term: "Tarifas por hora", text: "Se definen en Capacidad. Sólo las ven los administradores del Pulse, igual que los costos derivados." },
+        { term: "Tarifas por hora", text: "Se definen en Capacidad. Sólo las ven los administradores del Beat, igual que los costos derivados." },
         { term: "La vista de Costos", text: "Agrupá por modelo, persona o tarea; cambiá entre $ y cantidad; los totales son históricos." },
         { term: "Una advertencia", text: "Las cifras de IA son lo gastado; las de personas son lo que implica el plan. Es una estimación, no contabilidad." },
       ],
@@ -130,13 +130,13 @@ export const help: HelpDoc = {
         { term: "Enlace de invitación", text: "Quien lo abra entra con el rol que elegiste, así que compartilo donde eso sea lo que querés. Podés revocarlo cuando quieras." },
         { term: "Confirmá tu correo", text: "Las invitaciones te llegan sólo cuando confirmaste tu dirección. El panel te avisa si falta y puede reenviarte el correo." },
         { term: "Propietario / Editor", text: "El propietario gestiona personas y configuración; el editor cambia todo lo demás." },
-        { term: "Lector completo", text: "Lee todo el Pulse y puede comentar, pero no puede cambiar nada." },
+        { term: "Lector completo", text: "Lee todo el Beat y puede comentar, pero no puede cambiar nada." },
         { term: "Lector de su beat", text: "Ve sólo las tareas a las que está asignado su propio recurso." },
         { term: "Líder de Tarea", text: "Edita sólo las tareas que lidera y lee el resto." },
         { term: "Comentarios", text: "En cualquier tarea, con @ para mencionar a una persona o enlazar una tarea." },
         { term: "Actividad", text: "Un registro durable de quién cambió qué y cuándo." },
-        { term: "Ocultar", text: "Saca un Pulse de tu propio panel. Nadie más lo nota y no cambia nada más." },
-        { term: "Archivar", text: "Sólo el propietario. Deja un Pulse terminado en sólo lectura para todos hasta que un propietario lo desarchive. No se borra nada y no libera un lugar del plan." },
+        { term: "Ocultar", text: "Saca un Beat de tu propio panel. Nadie más lo nota y no cambia nada más." },
+        { term: "Archivar", text: "Sólo el propietario. Deja un Beat terminado en sólo lectura para todos hasta que un propietario lo desarchive. No se borra nada y no libera un lugar del plan." },
       ],
     },
     {
@@ -148,7 +148,7 @@ export const help: HelpDoc = {
       keywords: ["kanban", "estado", "columna", "buscar", "filtro", "deshacer", "rehacer", "error", "ctrl z"],
       bullets: [
         { term: "Vista de tablero", text: "Columnas kanban por estado. Arrastrá una tarea entre ellas para cambiarle el estado." },
-        { term: "Estados", text: "Editables por Pulse. Listo va siempre último y bloquea la tarea." },
+        { term: "Estados", text: "Editables por Beat. Listo va siempre último y bloquea la tarea." },
         { term: "Filtros", text: "Por texto, estado o epic. Las tareas que no coinciden se atenúan en vez de desaparecer." },
         { term: "Mi beat", text: "Reduce todo a las tareas en las que estás." },
         { term: "Deshacer / rehacer", text: "⌘Z y ⇧⌘Z (Ctrl en Windows). Cubre ediciones, movimientos y borrados." },

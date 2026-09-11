@@ -303,15 +303,15 @@ export function Toolbar({
           </div>
         )}
 
-        {/* My Beat — only tasks involving my linked account. */}
+        {/* My todo — only tasks involving my linked account. */}
         <button
           onClick={onToggleMyPulse}
           disabled={!canMyPulse}
-          title={canMyPulse ? t("toolbar.myBeatOn") : t("toolbar.myBeatOff")}
+          title={canMyPulse ? t("toolbar.myTodoOn") : t("toolbar.myTodoOff")}
           className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
           style={{ background: myPulse ? "#EE7240" : "#1B3A63", color: myPulse ? "#0A1428" : "#EE7240", border: "1px solid " + (myPulse ? "#EE7240" : "#24406B"), opacity: canMyPulse ? 1 : 0.45, cursor: canMyPulse ? "pointer" : "not-allowed" }}
         >
-          <Icon name="person" size={13} /> {t("toolbar.myBeat")}
+          <Icon name="person" size={13} /> {t("toolbar.myTodo")}
         </button>
         {viewMode === "canvas" && (
           <>

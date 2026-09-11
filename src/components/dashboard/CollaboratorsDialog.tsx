@@ -90,7 +90,7 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
 
   const handleLeave = async (e: { clientX: number; clientY: number }) => {
     if (!(await confirmAt(e, { message: t("collab.leaveMsg", { name: pulseName }), detail: t("dashboard.leaveDetail"), confirmLabel: t("dashboard.leaveConfirm") }))) return;
-    logDirectActivity(pulseId, { entityKind: "member", entityId: currentUid, entityName: members.find((m) => m.uid === currentUid)?.email ?? "You", verb: "leave", summary: `left the Pulse` });
+    logDirectActivity(pulseId, { entityKind: "member", entityId: currentUid, entityName: members.find((m) => m.uid === currentUid)?.email ?? "You", verb: "leave", summary: `left the Beat` });
     await leavePulse(pulseId, currentUid).catch(() => {});
     (onLeave ?? onClose)();
   };
@@ -108,7 +108,7 @@ export function CollaboratorsDialog({ pulseId, pulseName, members, currentUid, m
     await updateMyPulseArchivedAt(currentUid, pulseId, Date.now());
     logDirectActivity(pulseId, {
       entityKind: "pulse", entityId: pulseId, entityName: pulseName, verb: "archive",
-      summary: "archived the Pulse",
+      summary: "archived the Beat",
     });
     onClose();
   };

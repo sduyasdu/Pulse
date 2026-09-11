@@ -92,7 +92,7 @@ export async function acceptInvite(pulseId: string, uid: string, email: string, 
   const p = pulseSnap.exists() ? (pulseSnap.data() as Pulse) : null;
   const entry: MyPulseIndexEntry = {
     pulseId,
-    name: p?.name ?? "Untitled Pulse",
+    name: p?.name ?? "Untitled Beat",
     workspaceId: p?.workspaceId ?? "",
     role,
     joinedAt: Date.now(),

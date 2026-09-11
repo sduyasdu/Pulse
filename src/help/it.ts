@@ -62,7 +62,7 @@ export const help: HelpDoc = {
       id: "people",
       title: "Persone e carico",
       body:
-        "La scheda Team elenca tutti sul Pulse. Trascina una persona su un'attività per assegnarla, poi " +
+        "La scheda Team elenca tutti sul Beat. Trascina una persona su un'attività per assegnarla, poi " +
         "imposta quanta parte del suo tempo richiede.",
       keywords: ["assegnare", "risorsa", "team", "chi", "allocazione", "utilizzo", "sovraccarico", "occupato"],
       bullets: [
@@ -75,19 +75,19 @@ export const help: HelpDoc = {
     },
     {
       id: "roster",
-      title: "Le persone tra i Pulse",
+      title: "Le persone tra i Beat",
       body:
         "Persone — dalla bacheca — è l'elenco delle persone della tua organizzazione, separato da "
-        + "qualsiasi Pulse. Aggiungi qualcuno una volta lì, poi portalo in quanti Pulse ti servono.",
+        + "qualsiasi Beat. Aggiungi qualcuno una volta lì, poi portalo in quanti Beat ti servono.",
       keywords: ["organico", "master", "organizzazione", "elenco", "team", "ruolo", "riusare", "condiviso", "tutti"],
       bullets: [
-        { term: "Aggiungere a un Pulse", text: "Nella scheda Team di un Pulse, usa “da Persone”. Singole persone o un intero team." },
-        { term: "È una copia", text: "Capacità e tipo appartengono a quel Pulse. Nome e ruolo seguono l'organizzazione e si aggiornano ovunque." },
+        { term: "Aggiungere a un Beat", text: "Nella scheda Team di un Beat, usa “da Persone”. Singole persone o un intero team." },
+        { term: "È una copia", text: "Capacità e tipo appartengono a quel Beat. Nome e ruolo seguono l'organizzazione e si aggiornano ovunque." },
         { term: "Team", text: "Raggruppa le persone nella schermata Persone. Trascina qualcuno su un team, o usa i pulsanti sulla sua scheda." },
-        { term: "Ruolo e tipo", text: "Il ruolo è dell'organizzazione ed è lo stesso ovunque. Il tipo è il modo di raggruppare di ogni Pulse." },
+        { term: "Ruolo e tipo", text: "Il ruolo è dell'organizzazione ed è lo stesso ovunque. Il tipo è il modo di raggruppare di ogni Beat." },
         { term: "Collegata / In attesa", text: "Collegata: quell'e-mail è di un membro. In attesa: non è ancora entrata — si collegherà da sola." },
-        { term: "Collegare non dà accesso", text: "Dice di chi si tratta, non che cosa può aprire. Va comunque invitata a ogni Pulse — e il modulo di invito propone chi non lo è ancora." },
-        { term: "Dove è coinvolta", text: "Sulla sua scheda. Elenca tutti i Pulse in cui è, compresi quelli che tu non puoi aprire." },
+        { term: "Collegare non dà accesso", text: "Dice di chi si tratta, non che cosa può aprire. Va comunque invitata a ogni Beat — e il modulo di invito propone chi non lo è ancora." },
+        { term: "Dove è coinvolta", text: "Sulla sua scheda. Elenca tutti i Beat in cui è, compresi quelli che tu non puoi aprire." },
       ],
     },
     {
@@ -101,7 +101,7 @@ export const help: HelpDoc = {
         { term: "Costi di IA", text: "Si aggiungono sull'attività, nella scheda Dettagli: token e quanto è stato speso." },
         { term: "Costo unitario", text: "Ricavato da ciò che hai inserito, non da un listino: è quindi la tua tariffa reale." },
         { term: "Costi delle persone", text: "Ore × costo orario, dove le ore vengono dall'assegnazione e dalla durata dell'attività." },
-        { term: "Tariffe orarie", text: "Si impostano nella scheda Capacità. Visibili solo agli amministratori del Pulse, come i costi che ne derivano." },
+        { term: "Tariffe orarie", text: "Si impostano nella scheda Capacità. Visibili solo agli amministratori del Beat, come i costi che ne derivano." },
         { term: "La vista Costi", text: "Raggruppa per modello, persona o attività; passa tra $ e quantità; i totali sono complessivi." },
         { term: "Un'avvertenza", text: "I numeri dell'IA sono quanto è stato speso; quelli delle persone sono quanto implica il piano. È una stima, non contabilità." },
       ],
@@ -129,13 +129,13 @@ export const help: HelpDoc = {
         { term: "Link di invito", text: "Chiunque lo apra entra con il ruolo che hai scelto, quindi condividilo dove è proprio questo che vuoi. Puoi revocarlo quando vuoi." },
         { term: "Conferma la tua e-mail", text: "Gli inviti ti arrivano solo dopo che hai confermato il tuo indirizzo. La bacheca te lo segnala e può inviare di nuovo l'e-mail." },
         { term: "Proprietario / Editor", text: "Il proprietario gestisce persone e impostazioni; l'editor cambia tutto il resto." },
-        { term: "Lettore completo", text: "Legge tutto il Pulse e può commentare, ma non può modificare nulla." },
+        { term: "Lettore completo", text: "Legge tutto il Beat e può commentare, ma non può modificare nulla." },
         { term: "Lettore del proprio ambito", text: "Vede solo le attività a cui è assegnata la sua risorsa." },
         { term: "Responsabile di attività", text: "Modifica solo le attività che guida e legge il resto." },
         { term: "Commenti", text: "Su qualunque attività, con @ per menzionare una persona o collegare un'attività." },
         { term: "Attività (log)", text: "Un registro duraturo di chi ha cambiato cosa, e quando." },
-        { term: "Nascondi", text: "Toglie un Pulse dalla tua bacheca. Nessun altro se ne accorge e non cambia nient'altro." },
-        { term: "Archivia", text: "Solo il proprietario. Rende un Pulse concluso di sola lettura per tutti finché un proprietario non lo ripristina. Non viene eliminato nulla e non libera un posto del piano." },
+        { term: "Nascondi", text: "Toglie un Beat dalla tua bacheca. Nessun altro se ne accorge e non cambia nient'altro." },
+        { term: "Archivia", text: "Solo il proprietario. Rende un Beat concluso di sola lettura per tutti finché un proprietario non lo ripristina. Non viene eliminato nulla e non libera un posto del piano." },
       ],
     },
     {
@@ -147,7 +147,7 @@ export const help: HelpDoc = {
       keywords: ["kanban", "stato", "colonna", "cerca", "filtro", "annulla", "ripristina", "errore", "ctrl z"],
       bullets: [
         { term: "Vista bacheca", text: "Colonne kanban per stato. Trascina un'attività tra le colonne per cambiarne lo stato." },
-        { term: "Stati", text: "Modificabili per ogni Pulse. Fatto è sempre l'ultimo e blocca l'attività." },
+        { term: "Stati", text: "Modificabili per ogni Beat. Fatto è sempre l'ultimo e blocca l'attività." },
         { term: "Filtri", text: "Per testo, stato o epic. Le attività che non corrispondono si attenuano invece di sparire." },
         { term: "Il mio ambito", text: "Restringe tutto alle attività su cui sei." },
         { term: "Annulla / ripristina", text: "⌘Z e ⇧⌘Z (Ctrl su Windows). Copre modifiche, spostamenti ed eliminazioni." },

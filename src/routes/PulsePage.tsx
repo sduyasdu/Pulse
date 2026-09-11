@@ -259,7 +259,7 @@ export function PulsePage() {
   }, [loading, uid, pulseId, notFound, myRole, myMember, pulse, navigate]);
 
   useEffect(() => {
-    document.title = pulse?.name?.trim() ? `${pulse.name.trim()} — Pulse` : "Pulse — Visual Project Planning";
+    document.title = pulse?.name?.trim() ? `${pulse.name.trim()} — Beats` : "Beats — Visual Project Planning";
   }, [pulse?.name]);
 
   // Rough initial positioning of today near the left edge (at the default
@@ -531,7 +531,7 @@ export function PulsePage() {
     await updateMyPulseArchivedAt(uid, pulseId, null);
     logDirectActivity(pulseId, {
       entityKind: "pulse", entityId: pulseId, entityName: pulse?.name ?? "", verb: "unarchive",
-      summary: "unarchived the Pulse",
+      summary: "unarchived the Beat",
     });
   };
 

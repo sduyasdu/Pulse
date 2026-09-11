@@ -62,7 +62,7 @@ export const help: HelpDoc = {
       id: "people",
       title: "Personnes et charge",
       body:
-        "L'onglet Équipe liste tout le monde sur le Pulse. Faites glisser une personne sur une tâche pour " +
+        "L'onglet Équipe liste tout le monde sur le Beat. Faites glisser une personne sur une tâche pour " +
         "l'affecter, puis indiquez quelle part de son temps cela prend.",
       keywords: ["affecter", "ressource", "equipe", "qui", "allocation", "utilisation", "surcharge", "occupe"],
       bullets: [
@@ -75,19 +75,19 @@ export const help: HelpDoc = {
     },
     {
       id: "roster",
-      title: "Les personnes entre Pulses",
+      title: "Les personnes entre Beats",
       body:
         "Personnes — depuis le tableau de bord — est la liste des gens de votre organisation, distincte "
-        + "de tout Pulse. Ajoutez quelqu'un une fois, puis amenez-le dans autant de Pulses qu'il faut.",
+        + "de tout Beat. Ajoutez quelqu'un une fois, puis amenez-le dans autant de Beats qu'il faut.",
       keywords: ["effectif", "maitre", "organisation", "annuaire", "equipe", "role", "reutiliser", "partage", "tout le monde"],
       bullets: [
-        { term: "Ajouter à un Pulse", text: "Dans l'onglet Équipe d'un Pulse, utilisez « depuis Personnes ». Des personnes, ou une équipe entière." },
-        { term: "C'est une copie", text: "La capacité et le type appartiennent à ce Pulse. Le nom et le rôle suivent l'organisation et se mettent à jour partout." },
+        { term: "Ajouter à un Beat", text: "Dans l'onglet Équipe d'un Beat, utilisez « depuis Personnes ». Des personnes, ou une équipe entière." },
+        { term: "C'est une copie", text: "La capacité et le type appartiennent à ce Beat. Le nom et le rôle suivent l'organisation et se mettent à jour partout." },
         { term: "Équipes", text: "Regroupez les gens sur l'écran Personnes. Glissez quelqu'un sur une carte d'équipe, ou utilisez les boutons de sa fiche." },
-        { term: "Rôle et type", text: "Le rôle est celui de l'organisation, identique partout. Le type est la façon de regrouper propre à chaque Pulse." },
+        { term: "Rôle et type", text: "Le rôle est celui de l'organisation, identique partout. Le type est la façon de regrouper propre à chaque Beat." },
         { term: "Liée / En attente", text: "Liée : cet e-mail est celui d'un membre. En attente : la personne n'a pas encore rejoint — la liaison se fera seule." },
-        { term: "Lier ne donne pas accès", text: "Cela dit de qui il s'agit, pas ce qu'elle peut ouvrir. Il faut toujours l'inviter à chaque Pulse — et le formulaire d'invitation propose celles qui ne le sont pas encore." },
-        { term: "Où elle intervient", text: "Sur sa fiche. Liste tous les Pulses où elle est, y compris ceux que vous ne pouvez pas ouvrir." },
+        { term: "Lier ne donne pas accès", text: "Cela dit de qui il s'agit, pas ce qu'elle peut ouvrir. Il faut toujours l'inviter à chaque Beat — et le formulaire d'invitation propose celles qui ne le sont pas encore." },
+        { term: "Où elle intervient", text: "Sur sa fiche. Liste tous les Beats où elle est, y compris ceux que vous ne pouvez pas ouvrir." },
       ],
     },
     {
@@ -101,7 +101,7 @@ export const help: HelpDoc = {
         { term: "Coûts d'IA", text: "À saisir sur une tâche dans l'onglet Détails : tokens et montant dépensé." },
         { term: "Coût unitaire", text: "Calculé à partir de ce que vous avez saisi, pas d'un tarif catalogue — c'est donc votre coût réel." },
         { term: "Coûts des personnes", text: "Heures × coût horaire, les heures venant de l'affectation et de la durée de la tâche." },
-        { term: "Taux horaires", text: "Définis dans l'onglet Capacité. Visibles uniquement par les administrateurs du Pulse, comme les coûts qui en découlent." },
+        { term: "Taux horaires", text: "Définis dans l'onglet Capacité. Visibles uniquement par les administrateurs du Beat, comme les coûts qui en découlent." },
         { term: "La vue Coûts", text: "Regroupez par modèle, personne ou tâche ; basculez entre $ et quantité ; les totaux couvrent tout l'historique." },
         { term: "Une réserve", text: "Les chiffres d'IA sont ce qui a été dépensé ; ceux des personnes sont ce qu'implique le plan. C'est une estimation, pas de la comptabilité." },
       ],
@@ -129,13 +129,13 @@ export const help: HelpDoc = {
         { term: "Lien d'invitation", text: "Quiconque l'ouvre rejoint au rôle choisi ; partagez-le là où c'est bien ce que vous voulez. Révocable à tout moment." },
         { term: "Confirmez votre e-mail", text: "Les invitations ne vous parviennent qu'une fois votre adresse confirmée. Le tableau de bord le signale et peut renvoyer l'e-mail." },
         { term: "Propriétaire / Éditeur", text: "Le propriétaire gère les personnes et les réglages ; l'éditeur modifie tout le reste." },
-        { term: "Lecteur complet", text: "Lit tout le Pulse et peut commenter, mais ne peut rien modifier." },
+        { term: "Lecteur complet", text: "Lit tout le Beat et peut commenter, mais ne peut rien modifier." },
         { term: "Lecteur de son périmètre", text: "Ne voit que les tâches auxquelles sa propre ressource est affectée." },
         { term: "Référent de tâche", text: "Modifie uniquement les tâches qu'il pilote et lit le reste." },
         { term: "Commentaires", text: "Sur n'importe quelle tâche, avec @ pour mentionner une personne ou lier une tâche." },
         { term: "Activité", text: "Un journal durable de qui a changé quoi, et quand." },
-        { term: "Masquer", text: "Retire un Pulse de votre propre tableau de bord. Personne d'autre ne le remarque et rien d'autre ne change." },
-        { term: "Archiver", text: "Propriétaire uniquement. Passe un Pulse terminé en lecture seule pour tout le monde jusqu'à désarchivage par un propriétaire. Rien n'est supprimé et cela ne libère pas de place dans l'offre." },
+        { term: "Masquer", text: "Retire un Beat de votre propre tableau de bord. Personne d'autre ne le remarque et rien d'autre ne change." },
+        { term: "Archiver", text: "Propriétaire uniquement. Passe un Beat terminé en lecture seule pour tout le monde jusqu'à désarchivage par un propriétaire. Rien n'est supprimé et cela ne libère pas de place dans l'offre." },
       ],
     },
     {
@@ -147,7 +147,7 @@ export const help: HelpDoc = {
       keywords: ["kanban", "statut", "colonne", "recherche", "filtre", "annuler", "retablir", "erreur", "ctrl z"],
       bullets: [
         { term: "Vue tableau", text: "Colonnes kanban par statut. Faites glisser une tâche de l'une à l'autre pour changer son statut." },
-        { term: "Statuts", text: "Modifiables par Pulse. Terminé est toujours en dernier et verrouille la tâche." },
+        { term: "Statuts", text: "Modifiables par Beat. Terminé est toujours en dernier et verrouille la tâche." },
         { term: "Filtres", text: "Par texte, statut ou epic. Les tâches non concernées s'atténuent au lieu de disparaître." },
         { term: "Mon périmètre", text: "Réduit l'affichage aux tâches sur lesquelles vous êtes." },
         { term: "Annuler / rétablir", text: "⌘Z et ⇧⌘Z (Ctrl sous Windows). Couvre les modifications, déplacements et suppressions." },

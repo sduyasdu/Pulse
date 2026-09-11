@@ -169,7 +169,7 @@ export function DashboardPage() {
     await updateMyPulseArchivedAt(uid, entry.pulseId, Date.now());
     logDirectActivity(entry.pulseId, {
       entityKind: "pulse", entityId: entry.pulseId, entityName: entry.name || "", verb: "archive",
-      summary: "archived the Pulse",
+      summary: "archived the Beat",
     });
   };
 
@@ -179,7 +179,7 @@ export function DashboardPage() {
     await updateMyPulseArchivedAt(uid, entry.pulseId, null);
     logDirectActivity(entry.pulseId, {
       entityKind: "pulse", entityId: entry.pulseId, entityName: entry.name || "", verb: "unarchive",
-      summary: "unarchived the Pulse",
+      summary: "unarchived the Beat",
     });
   };
 

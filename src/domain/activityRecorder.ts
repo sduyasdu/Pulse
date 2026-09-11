@@ -47,7 +47,7 @@ function entityNameOf(kind: DocKind, id: string, op: DocOp): string {
     case "resource":
       return named(resources.find((r) => r.id === id)?.name ?? doc.name, "a resource");
     case "pulse":
-      return named(pulse?.name ?? doc.name, "the Pulse");
+      return named(pulse?.name ?? doc.name, "the Beat");
     case "cost": {
       // "claude-opus-5 · $412" — the model and the money, both as they were at
       // write time, so the line still reads after either is edited.

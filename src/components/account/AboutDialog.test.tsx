@@ -8,7 +8,7 @@ import { AboutDialog } from "./AboutDialog";
 describe("AboutDialog", () => {
   it("names itself for assistive tech", () => {
     render(<AboutDialog onClose={() => {}} />);
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("About Pulse");
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("About Beats");
   });
 
   it("shows the Yasdu attribution and the legal entity", () => {
@@ -16,7 +16,7 @@ describe("AboutDialog", () => {
     // The asset lives in public/brand/ — a rename here is a broken image in
     // production and nothing else would catch it.
     expect(screen.getByAltText("Yasdu")).toHaveAttribute("src", "/brand/yasdu-lockup-light.png");
-    expect(screen.getByText(/Pulse is a Yasdu product/)).toBeTruthy();
+    expect(screen.getByText(/Beats is a Yasdu product/)).toBeTruthy();
     expect(screen.getByText(/Yasdu Innovación y Servicios SA de CV · México/)).toBeTruthy();
   });
 

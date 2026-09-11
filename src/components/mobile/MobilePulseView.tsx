@@ -133,9 +133,9 @@ export function MobilePulseView({ pulse, canEdit, canEditFeature, myRole, uid, o
             disabled={myResourceIds.length === 0}
             className="text-xs font-semibold rounded-full px-3 py-1 flex items-center gap-1 ml-auto"
             style={{ background: myTasksOnly ? "#EE7240" : "#F4F2EC", color: myTasksOnly ? "#FFFFFF" : "#64748B", opacity: myResourceIds.length === 0 ? 0.45 : 1 }}
-            title={myResourceIds.length > 0 ? t("mobile.myBeatOn") : t("mobile.myBeatOff")}
+            title={myResourceIds.length > 0 ? t("mobile.myTodoOn") : t("mobile.myTodoOff")}
           >
-            <Icon name="person" size={13} /> {t("toolbar.myBeat")}
+            <Icon name="person" size={13} /> {t("toolbar.myTodo")}
           </button>
         </div>
       )}

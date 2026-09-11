@@ -64,7 +64,7 @@ export const help: HelpDoc = {
       id: "people",
       title: "Personen und Auslastung",
       body:
-        "Der Reiter Team listet alle im Pulse. Zieh eine Person auf eine Aufgabe, um sie zuzuweisen, und " +
+        "Der Reiter Team listet alle im Beat. Zieh eine Person auf eine Aufgabe, um sie zuzuweisen, und " +
         "leg dann fest, welchen Anteil ihrer Zeit das kostet.",
       keywords: ["zuweisen", "ressource", "team", "wer", "zuteilung", "auslastung", "uberlastung", "beschaftigt"],
       bullets: [
@@ -77,19 +77,19 @@ export const help: HelpDoc = {
     },
     {
       id: "roster",
-      title: "Personen über Pulses hinweg",
+      title: "Personen über Beats hinweg",
       body:
         "Personen — von der Übersicht aus — ist die Liste aller Menschen deiner Organisation, getrennt "
-        + "von einzelnen Pulses. Füge jemanden einmal dort hinzu und hole ihn in beliebig viele Pulses.",
+        + "von einzelnen Beats. Füge jemanden einmal dort hinzu und hole ihn in beliebig viele Beats.",
       keywords: ["pool", "master", "organisation", "verzeichnis", "team", "rolle", "wiederverwenden", "geteilt", "alle"],
       bullets: [
-        { term: "Zu einem Pulse hinzufügen", text: "Im Team-Tab eines Pulse „aus Personen“ nutzen. Einzelne Personen oder ein ganzes Team." },
-        { term: "Es ist eine Kopie", text: "Kapazität und Typ gehören diesem Pulse. Name und Rolle folgen der Organisation und ändern sich überall." },
+        { term: "Zu einem Beat hinzufügen", text: "Im Team-Tab eines Beat „aus Personen“ nutzen. Einzelne Personen oder ein ganzes Team." },
+        { term: "Es ist eine Kopie", text: "Kapazität und Typ gehören diesem Beat. Name und Rolle folgen der Organisation und ändern sich überall." },
         { term: "Teams", text: "Gruppiere Personen auf dem Personen-Bildschirm. Ziehe jemanden auf eine Teamkarte oder nutze die Schaltflächen auf der Karte." },
-        { term: "Rolle und Typ", text: "Die Rolle gehört der Organisation und ist überall gleich. Der Typ ist die Gruppierung des jeweiligen Pulse." },
+        { term: "Rolle und Typ", text: "Die Rolle gehört der Organisation und ist überall gleich. Der Typ ist die Gruppierung des jeweiligen Beat." },
         { term: "Verknüpft / Wartet", text: "Verknüpft: Diese E-Mail gehört einem Mitglied. Wartet: Die Person ist noch nicht beigetreten — sie verknüpft sich dann selbst." },
-        { term: "Verknüpfen ist kein Zugriff", text: "Es sagt, wer jemand ist, nicht was er öffnen darf. Zu jedem Pulse muss die Person weiterhin eingeladen werden — und das Einladungsformular schlägt genau die vor, die es noch nicht sind." },
-        { term: "Wo sie mitarbeitet", text: "Auf ihrer Karte. Listet alle Pulses auf, in denen sie ist — auch die, die du nicht öffnen kannst." },
+        { term: "Verknüpfen ist kein Zugriff", text: "Es sagt, wer jemand ist, nicht was er öffnen darf. Zu jedem Beat muss die Person weiterhin eingeladen werden — und das Einladungsformular schlägt genau die vor, die es noch nicht sind." },
+        { term: "Wo sie mitarbeitet", text: "Auf ihrer Karte. Listet alle Beats auf, in denen sie ist — auch die, die du nicht öffnen kannst." },
       ],
     },
     {
@@ -103,7 +103,7 @@ export const help: HelpDoc = {
         { term: "KI-Kosten", text: "An der Aufgabe im Reiter Details eintragen: Tokens und was ausgegeben wurde." },
         { term: "Stückkosten", text: "Errechnet aus dem, was du eingetragen hast, nicht aus einer Preisliste — also dein echter Satz." },
         { term: "Personalkosten", text: "Stunden × Stundenkosten, wobei die Stunden aus Zuweisung und Aufgabendauer kommen." },
-        { term: "Stundensätze", text: "Im Reiter Kapazität. Nur für Pulse-Administratoren sichtbar, ebenso die daraus abgeleiteten Kosten." },
+        { term: "Stundensätze", text: "Im Reiter Kapazität. Nur für Beat-Administratoren sichtbar, ebenso die daraus abgeleiteten Kosten." },
         { term: "Die Kostenansicht", text: "Nach Modell, Person oder Aufgabe gruppieren; zwischen $ und Menge wechseln; Summen sind über den gesamten Zeitraum." },
         { term: "Ein Vorbehalt", text: "KI-Zahlen sind tatsächlich ausgegeben; Personenzahlen sind das, was der Plan impliziert. Eine Schätzung, keine Buchhaltung." },
       ],
@@ -131,13 +131,13 @@ export const help: HelpDoc = {
         { term: "Einladungslink", text: "Wer ihn öffnet, tritt mit der gewählten Rolle bei — teile ihn also dort, wo genau das gewollt ist. Jederzeit widerrufbar." },
         { term: "E-Mail bestätigen", text: "Einladungen erreichen dich erst, wenn du deine Adresse bestätigt hast. Das Dashboard weist darauf hin und kann die E-Mail erneut senden." },
         { term: "Eigentümer / Editor", text: "Der Eigentümer verwaltet Personen und Einstellungen; der Editor ändert alles andere." },
-        { term: "Voller Leser", text: "Liest den ganzen Pulse und darf kommentieren, aber nichts ändern." },
+        { term: "Voller Leser", text: "Liest den ganzen Beat und darf kommentieren, aber nichts ändern." },
         { term: "Leser des eigenen Bereichs", text: "Sieht nur die Aufgaben, denen die eigene Ressource zugewiesen ist." },
         { term: "Aufgabenleitung", text: "Bearbeitet nur die selbst geleiteten Aufgaben und liest den Rest." },
         { term: "Kommentare", text: "An jeder Aufgabe, mit @ für die Erwähnung einer Person oder die Verknüpfung einer Aufgabe." },
         { term: "Aktivität", text: "Ein dauerhaftes Protokoll, wer was wann geändert hat." },
-        { term: "Ausblenden", text: "Nimmt einen Pulse von deinem eigenen Dashboard. Niemand sonst merkt es, sonst ändert sich nichts." },
-        { term: "Archivieren", text: "Nur Eigentümer. Setzt einen abgeschlossenen Pulse für alle auf schreibgeschützt, bis ein Eigentümer ihn wieder aktiviert. Nichts wird gelöscht, und es gibt keinen Tarifplatz frei." },
+        { term: "Ausblenden", text: "Nimmt einen Beat von deinem eigenen Dashboard. Niemand sonst merkt es, sonst ändert sich nichts." },
+        { term: "Archivieren", text: "Nur Eigentümer. Setzt einen abgeschlossenen Beat für alle auf schreibgeschützt, bis ein Eigentümer ihn wieder aktiviert. Nichts wird gelöscht, und es gibt keinen Tarifplatz frei." },
       ],
     },
     {
@@ -149,7 +149,7 @@ export const help: HelpDoc = {
       keywords: ["kanban", "status", "spalte", "suche", "filter", "ruckgangig", "wiederherstellen", "fehler", "strg z"],
       bullets: [
         { term: "Board-Ansicht", text: "Kanban-Spalten nach Status. Zieh eine Aufgabe zwischen ihnen, um den Status zu ändern." },
-        { term: "Status", text: "Pro Pulse bearbeitbar. Fertig steht immer am Ende und sperrt die Aufgabe." },
+        { term: "Status", text: "Pro Beat bearbeitbar. Fertig steht immer am Ende und sperrt die Aufgabe." },
         { term: "Filter", text: "Nach Text, Status oder Epic. Nicht passende Aufgaben werden blass statt zu verschwinden." },
         { term: "Mein Bereich", text: "Reduziert alles auf die Aufgaben, an denen du beteiligt bist." },
         { term: "Rückgängig / Wiederherstellen", text: "⌘Z und ⇧⌘Z (Strg unter Windows). Umfasst Änderungen, Verschiebungen und Löschungen." },

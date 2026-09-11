@@ -23,7 +23,7 @@ const valid = `?redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/aut
 describe("AuthorizePage (MCP consent)", () => {
   it("names the client and the account being connected", () => {
     renderAt(valid);
-    expect(screen.getByText(/Connect Claude to Pulse/)).toBeTruthy();
+    expect(screen.getByText(/Connect Claude to Beats/)).toBeTruthy();
     expect(screen.getByText(/ana@example.com/)).toBeTruthy();
   });
 
@@ -31,7 +31,7 @@ describe("AuthorizePage (MCP consent)", () => {
   // including what the assistant will not be able to do.
   it("states what the assistant can and cannot do", () => {
     renderAt(valid);
-    expect(screen.getByText(/Read your Pulses/)).toBeTruthy();
+    expect(screen.getByText(/Read your Beats/)).toBeTruthy();
     expect(screen.getByText(/cannot create, change or delete/)).toBeTruthy();
     expect(screen.getByText(/cannot see billing/)).toBeTruthy();
   });
