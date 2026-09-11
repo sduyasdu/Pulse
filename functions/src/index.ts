@@ -3,7 +3,7 @@ import { onCall } from "firebase-functions/v2/https";
 import { initializeApp } from "firebase-admin/app";
 import { DEFAULTS, log } from "./lib/conventions";
 
-// Pulse Cloud Functions entry point (Server-Functions-Spec.md).
+// Beat Cloud Functions entry point (Server-Functions-Spec.md).
 //
 // One Admin SDK app for every function — the Admin SDK bypasses security rules,
 // which is why a function is the *authoritative* writer of the fields it owns
@@ -29,10 +29,10 @@ export { onFeatureWriteDenorm, onResourceWriteFanout } from "./denorm";
 export { onPulseDelete, onMemberRemoved, onResourceDelete, onEpicDelete } from "./cascade";
 
 // SF11 — quota counters (Phase 3). The only writer of `workspace.pulseCount`,
-// which the Pulse-create rule gates on.
+// which the Beat-create rule gates on.
 export { onPulseCreateCount, onPulseDeleteCount } from "./counters";
 
-// RM10 — per-Pulse resource counter (Resource-Master-Spec §8). The writer for
+// RM10 — per-Beat resource counter (Resource-Master-Spec §8). The writer for
 // the rule that gates `maxResourcesPerPulse`, and it ships BEFORE that rule:
 // a gate reading a field nothing writes yet is inert and looks deployed.
 export { onResourceCreateCount, onResourceDeleteCount, reconcileResourceCounts } from "./counters";
@@ -60,22 +60,22 @@ export { mcpCleanup } from "./mcpCleanup";
 // sets, the uid is derived from real membership.
 export { onMasterResourceWriteResolve, onWorkspaceMemberJoinResolve, onWorkspaceMemberLeaveUnresolve } from "./roster";
 
-// The same resolution one level down, against a Pulse's own membership. A
+// The same resolution one level down, against a Beat's own membership. A
 // resource copied from the roster arrives with an email and no uid — the
-// master's uid means "in the workspace" and says nothing about THIS Pulse.
+// master's uid means "in the workspace" and says nothing about THIS Beat.
 export { onPulseResourceWriteResolve, onPulseMemberJoinResolve } from "./roster";
 
 // RM13 — deleting a roster entry detaches its copies rather than deleting them.
 // Server-side because the workspace owner doing the deleting is routinely not a
-// member of the Pulses holding those copies.
+// member of the Beats holding those copies.
 export { onMasterResourceDeletedDetach } from "./roster";
 
 // RM2/RM22 — identity changes on a roster entry reach its copies. Name,
-// initials, org role and linked email only; capacity is per-Pulse and linkedUid
+// initials, org role and linked email only; capacity is per-Beat and linkedUid
 // is resolved locally.
 export { onMasterResourceWritePropagate } from "./roster";
 
-// RM15 — bulk copy from the roster into a Pulse. A callable rather than a client
+// RM15 — bulk copy from the roster into a Beat. A callable rather than a client
 // loop because the resource counter is async: parallel creates all see the same
 // stale count, so the rule would stop the next OPERATION and none of the writes
 // inside this one.

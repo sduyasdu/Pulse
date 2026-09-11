@@ -35,7 +35,7 @@ export const emailKey = (email: string) => email.trim().toLowerCase();
  *
  * **Compares in code rather than with a `where()` query, deliberately.** Member
  * emails are NOT reliably normalised in existing data: invite acceptance writes
- * them through `emailKey()`, while the copy-link join, Pulse creation and the
+ * them through `emailKey()`, while the copy-link join, Beat creation and the
  * owner-email backfill all wrote the raw address. An equality query would
  * therefore miss anyone with a capital letter in their address — silently, in
  * the mechanism that decides whether someone shows as linked. Both writers are
@@ -163,7 +163,7 @@ export const onWorkspaceMemberJoinResolve = onDocumentWritten(
 /**
  * Someone left the workspace — clear the resolution, keep the intent (RM17).
  *
- * The workspace-level mirror of what SF7 does inside a Pulse. Losing membership
+ * The workspace-level mirror of what SF7 does inside a Beat. Losing membership
  * is not a statement about who a roster entry *is*, so `linkedEmail` survives and
  * a re-join re-resolves it. Only an explicit unlink clears the email, and only a
  * client does that.
@@ -192,12 +192,12 @@ export const onWorkspaceMemberLeaveUnresolve = onDocumentDeleted(
 );
 
 // ---------------------------------------------------------------------------
-// The same mechanism, one level down: a Pulse's own resources (RM16, second
+// The same mechanism, one level down: a Beat's own resources (RM16, second
 // trigger).
 //
-// A Pulse resource copied from a master arrives with an email and no uid,
+// A Beat resource copied from a master arrives with an email and no uid,
 // because the master's uid means "member of the workspace" and says nothing
-// about THIS Pulse. It resolves here, against this Pulse's own membership — and
+// about THIS Beat. It resolves here, against this Beat's own membership — and
 // stays unresolved, correctly, for someone who is not a collaborator (RM20's
 // "waiting" state).
 //
@@ -223,10 +223,10 @@ export const onPulseResourceWriteResolve = onDocumentWritten(
         ? await uidForEmailIn(getFirestore(), `pulses/${pulseId}/pulseMembers`, emailAfter)
         : null;
       if (await applyResolution(after.ref, uidNow, desired)) {
-        log(FN, "resolved pulse link", { pulseId, resourceId, email: emailAfter, uid: desired });
+        log(FN, "resolved beat link", { pulseId, resourceId, email: emailAfter, uid: desired });
       }
     } catch (err) {
-      logError(FN, "pulse link resolution failed", err, { pulseId, resourceId });
+      logError(FN, "beat link resolution failed", err, { pulseId, resourceId });
       throw err;
     }
   },
@@ -252,9 +252,9 @@ export const onPulseMemberJoinResolve = onDocumentCreated(
         if (typeof want !== "string" || emailKey(want) !== email) continue;
         if (await applyResolution(d.ref, (d.data()?.linkedUid as string | null) ?? null, memberUid)) resolved += 1;
       }
-      if (resolved) log(FN, "resolved pulse links on join", { pulseId, memberUid, resolved });
+      if (resolved) log(FN, "resolved beat links on join", { pulseId, memberUid, resolved });
     } catch (err) {
-      logError(FN, "pulse resolution on join failed", err, { pulseId, memberUid });
+      logError(FN, "beat resolution on join failed", err, { pulseId, memberUid });
       throw err;
     }
   },
@@ -264,12 +264,12 @@ export const onPulseMemberJoinResolve = onDocumentCreated(
  * A roster entry changed — push its IDENTITY down to every copy (RM2, RM22).
  *
  * Only the always-propagate class: name, initials, `role` and `linkedEmail`.
- * Never `capacity`, which is per-Pulse by nature; never `linkedUid`, which means
- * "collaborator on THIS Pulse" and is resolved locally; and never `type`, which
- * since RM24 is the Pulse's OWN category and has nothing to do with the roster.
+ * Never `capacity`, which is per-Beat by nature; never `linkedUid`, which means
+ * "collaborator on THIS Beat" and is resolved locally; and never `type`, which
+ * since RM24 is the Beat's OWN category and has nothing to do with the roster.
  *
  * Role and type being one field was the whole problem: the Capacity tab renames
- * a type across a Pulse, and propagation would silently undo that rename. Two
+ * a type across a Beat, and propagation would silently undo that rename. Two
  * fields, two owners, no conflict.
  *
  * Writes only the fields that actually differ, so a capacity edit on the master
@@ -292,7 +292,7 @@ export const onMasterResourceWritePropagate = onDocumentWritten(
       const next = a[field];
       if (next !== b[field]) patch[field] = typeof next === "string" ? next : null;
     }
-    // The org role lands on the copy's `role`, NOT its `type` (RM24). A Pulse's
+    // The org role lands on the copy's `role`, NOT its `type` (RM24). A Beat's
     // `type` is its own category and must never be written from here — writing
     // it was what made the Capacity tab's rename cascade unsafe.
     // `?? type` reads a roster entry written before the split.
@@ -328,14 +328,14 @@ export const onMasterResourceWritePropagate = onDocumentWritten(
 /**
  * A roster entry was deleted — DETACH its copies, never delete them (RM13).
  *
- * A Pulse's plan must not lose its people because someone tidied the roster, and
+ * A Beat's plan must not lose its people because someone tidied the roster, and
  * a departed person's past work still has to cost and report correctly. Clearing
  * `masterId` leaves each copy intact and self-sufficient, and buys a real
  * simplification: **`masterId` can never dangle**, so no reader anywhere has to
  * handle a pointer to a missing master.
  *
  * This has to be a server trigger. The workspace owner doing the deleting is
- * routinely not a member of the Pulses holding copies, so the rules would refuse
+ * routinely not a member of the Beats holding copies, so the rules would refuse
  * them the write — and widening that rule to allow it would be far worse than the
  * problem.
  *
@@ -395,7 +395,7 @@ export const applyResolutionForTest = applyResolution;
 // ---------------------------------------------------------------------------
 // Where is this person? (Resource-Master-Spec §6, RM7)
 //
-// `workspaces/{wsId}/resources/{rid}/usage/{pulseId}` — one document per Pulse
+// `workspaces/{wsId}/resources/{rid}/usage/{pulseId}` — one document per Beat
 // holding a copy, maintained by the server.
 //
 // A collection-group query over `pulses/*​/resources` would answer the same
@@ -403,12 +403,12 @@ export const applyResolutionForTest = applyResolution;
 // safely in rules is hard to get right and easy to get subtly wrong. An index
 // the server owns is readable by "workspace members" and nothing else.
 //
-// The document id IS the pulse id, so the index is naturally idempotent — a
+// The document id IS the beat id, so the index is naturally idempotent — a
 // duplicated trigger delivery writes the same document twice.
 // ---------------------------------------------------------------------------
 
-/** Does any resource in this Pulse still point at this master? Decides whether a
- * delete removes the usage entry, since a Pulse can hold more than one copy of
+/** Does any resource in this Beat still point at this master? Decides whether a
+ * delete removes the usage entry, since a Beat can hold more than one copy of
  * the same person (nothing forbids it, and the picker only guards its own
  * path). */
 async function stillUsed(db: Db, pulseId: string, masterId: string): Promise<boolean> {
@@ -417,16 +417,16 @@ async function stillUsed(db: Db, pulseId: string, masterId: string): Promise<boo
 }
 
 async function writeUsage(db: Db, pulseId: string, masterId: string): Promise<void> {
-  const pulse = await db.doc(`pulses/${pulseId}`).get();
-  if (!pulse.exists) return; // teardown — SF6 owns it
-  const workspaceId = pulse.data()?.workspaceId;
+  const beat = await db.doc(`pulses/${pulseId}`).get();
+  if (!beat.exists) return; // teardown — SF6 owns it
+  const workspaceId = beat.data()?.workspaceId;
   if (typeof workspaceId !== "string" || !workspaceId) return;
   await db.doc(`workspaces/${workspaceId}/resources/${masterId}/usage/${pulseId}`).set({
     pulseId,
-    // Denormalized so the People screen can name a Pulse the viewer cannot open
+    // Denormalized so the People screen can name a Beat the viewer cannot open
     // (RM7's accepted disclosure). Kept in step by onPulseRenameSyncUsage below;
     // without that the view goes quietly stale, which is worse than absent.
-    pulseName: pulse.data()?.name ?? "",
+    pulseName: beat.data()?.name ?? "",
     workspaceId,
     updatedAt: Date.now(),
   });
@@ -439,7 +439,7 @@ async function clearUsage(db: Db, pulseId: string, masterId: string, workspaceId
 }
 
 /**
- * A Pulse resource was created, deleted, or had its `masterId` change — keep the
+ * A Beat resource was created, deleted, or had its `masterId` change — keep the
  * usage index in step.
  *
  * One `onDocumentWritten` rather than a create and a delete pair, because detach
@@ -456,7 +456,7 @@ export const onPulseResourceUsage = onDocumentWritten(
     try {
       const db = getFirestore();
       if (typeof after === "string" && after) await writeUsage(db, pulseId, after);
-      // Only when the LAST copy of that master leaves this Pulse.
+      // Only when the LAST copy of that master leaves this Beat.
       if (typeof before === "string" && before && !(await stillUsed(db, pulseId, before))) {
         await clearUsage(db, pulseId, before);
       }
@@ -469,9 +469,9 @@ export const onPulseResourceUsage = onDocumentWritten(
 );
 
 /**
- * A Pulse was renamed — refresh the name this index denormalized.
+ * A Beat was renamed — refresh the name this index denormalized.
  *
- * RM7 accepted showing the title of a Pulse the viewer cannot open; a title that
+ * RM7 accepted showing the title of a Beat the viewer cannot open; a title that
  * silently stops matching the real one is a worse disclosure than none, because
  * it is wrong rather than merely revealing.
  */
@@ -512,17 +512,17 @@ export const onPulseRenameSyncUsage = onDocumentWritten("pulses/{pulseId}", asyn
 // itself.
 // ---------------------------------------------------------------------------
 
-/** Recompute the whole index for one workspace from the Pulses themselves.
+/** Recompute the whole index for one workspace from the Beats themselves.
  *
  * Idempotent: it writes what should be there and deletes what should not, so
  * running it twice changes nothing the second time. */
 export async function rebuildUsageForWorkspace(db: Db, workspaceId: string): Promise<{ written: number; removed: number }> {
-  const pulses = await db.collection("pulses").where("workspaceId", "==", workspaceId).get();
+  const beats = await db.collection("pulses").where("workspaceId", "==", workspaceId).get();
 
   // masterId -> (pulseId -> pulseName), built from the source of truth: the
   // copies themselves. Nothing here trusts the index it is repairing.
   const wanted = new Map<string, Map<string, string>>();
-  for (const p of pulses.docs) {
+  for (const p of beats.docs) {
     const name = String(p.data()?.name ?? "");
     const resources = await p.ref.collection("resources").get();
     for (const r of resources.docs) {
@@ -576,7 +576,7 @@ export const rebuildRosterUsage = onCall(async (request) => {
 
   const db = getFirestore();
   // The Admin SDK bypasses rules, so the membership check the rules would have
-  // made is made here — otherwise this would read every Pulse in a workspace for
+  // made is made here — otherwise this would read every Beat in a workspace for
   // anyone who asked.
   if (!(await db.doc(`workspaces/${workspaceId}/workspaceMembers/${uid}`).get()).exists) {
     throw new HttpsError("permission-denied", "You are not a member of that workspace.");

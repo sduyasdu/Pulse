@@ -7,7 +7,7 @@ import { log, logError } from "./lib/conventions";
 // Billing-and-Backend-Build-Plan Phase 3).
 //
 // Security rules can neither count a collection nor sort one, so a quota like
-// "at most 3 Pulses on Starter" needs the count materialized onto a document the
+// "at most 3 Beats on Starter" needs the count materialized onto a document the
 // rules can `get()`. This function owns `workspaces/{id}.pulseCount`.
 //
 // **Server-maintained, never client-written.** A client that could set its own
@@ -15,7 +15,7 @@ import { log, logError } from "./lib/conventions";
 // blocks `pulseCount` in the workspace update rule; the Admin SDK bypasses rules,
 // which is what makes this function the authoritative writer.
 //
-// **Counts every Pulse the org holds — archived and hidden included** (§3.2,
+// **Counts every Beat the org holds — archived and hidden included** (§3.2,
 // PL12), so the counter moves on create and delete ONLY. Archive/unarchive and
 // hide/unhide never touch it, and unarchiving therefore needs no quota check: it
 // cannot raise the count, so it can never take an org over its cap.
@@ -50,7 +50,7 @@ async function recountPulses(db: Db, workspaceId: string): Promise<number> {
   return pulseCount;
 }
 
-/** The workspace a created/deleted Pulse belonged to, or null if unusable. */
+/** The workspace a created/deleted Beat belonged to, or null if unusable. */
 function workspaceIdOf(data: FirebaseFirestore.DocumentData | undefined): string | null {
   const id = data?.workspaceId;
   return typeof id === "string" && id ? id : null;
@@ -59,16 +59,16 @@ function workspaceIdOf(data: FirebaseFirestore.DocumentData | undefined): string
 export const onPulseCreateCount = onDocumentCreated("pulses/{pulseId}", async (event) => {
   const { pulseId } = event.params;
   const workspaceId = workspaceIdOf(event.data?.data());
-  // A Pulse with no workspaceId can't be counted against a plan. Logged rather
+  // A Beat with no workspaceId can't be counted against a plan. Logged rather
   // than thrown: retrying can't conjure the field, so a throw would just burn
   // retries on a permanently unusable document.
   if (!workspaceId) {
-    log(FN, "pulse created without workspaceId — not counted", { pulseId });
+    log(FN, "beat created without workspaceId — not counted", { pulseId });
     return;
   }
   try {
     const pulseCount = await recountPulses(getFirestore(), workspaceId);
-    log(FN, "recounted pulses after create", { pulseId, workspaceId, pulseCount });
+    log(FN, "recounted beats after create", { pulseId, workspaceId, pulseCount });
   } catch (err) {
     logError(FN, "recount after create failed", err, { pulseId, workspaceId });
     throw err; // retry — a stale-high counter locks an org out of its own plan
@@ -79,12 +79,12 @@ export const onPulseDeleteCount = onDocumentDeleted("pulses/{pulseId}", async (e
   const { pulseId } = event.params;
   const workspaceId = workspaceIdOf(event.data?.data());
   if (!workspaceId) {
-    log(FN, "pulse deleted without workspaceId — not counted", { pulseId });
+    log(FN, "beat deleted without workspaceId — not counted", { pulseId });
     return;
   }
   try {
     const pulseCount = await recountPulses(getFirestore(), workspaceId);
-    log(FN, "recounted pulses after delete", { pulseId, workspaceId, pulseCount });
+    log(FN, "recounted beats after delete", { pulseId, workspaceId, pulseCount });
   } catch (err) {
     logError(FN, "recount after delete failed", err, { pulseId, workspaceId });
     throw err;
@@ -92,7 +92,7 @@ export const onPulseDeleteCount = onDocumentDeleted("pulses/{pulseId}", async (e
 });
 
 // ---------------------------------------------------------------------------
-// RM10 — per-Pulse resource counter (Resource-Master-Spec §8)
+// RM10 — per-Beat resource counter (Resource-Master-Spec §8)
 //
 // `maxResourcesPerPulse` (20 / 40 / unlimited) has only ever been enforced in
 // the client (`src/domain/entitlements.ts`), so any direct write ignored it. It
@@ -104,19 +104,19 @@ export const onPulseDeleteCount = onDocumentDeleted("pulses/{pulseId}", async (e
 // increment, server-owned so a client cannot zero its own gate. Two differences
 // worth knowing, both learned from the collections this sits next to:
 //
-//   * It **must not resurrect a deleted Pulse.** `deletePulse` is a client-side
+//   * It **must not resurrect a deleted Beat.** `deletePulse` is a client-side
 //     cascade that removes subcollection docs first, so these triggers routinely
 //     fire during a teardown. `set(..., {merge:true})` on a deleted document
-//     CREATES it, which would leave a ghost Pulse holding nothing but a count —
+//     CREATES it, which would leave a ghost Beat holding nothing but a count —
 //     and SF6 has already run, so nothing would ever clean it up.
 //   * It writes **only when the number changed**, so a burst of deletes during a
 //     teardown converges to one write instead of N.
 // ---------------------------------------------------------------------------
 
 /**
- * Recount one Pulse's resources onto `pulses/{pulseId}.resourceCount`.
+ * Recount one Beat's resources onto `pulses/{pulseId}.resourceCount`.
  *
- * Returns null when the Pulse is gone — the caller should treat that as "nothing
+ * Returns null when the Beat is gone — the caller should treat that as "nothing
  * to do", never as zero.
  */
 export async function recountResources(db: Db, pulseId: string): Promise<number | null> {
@@ -156,8 +156,8 @@ export const onResourceDeleteCount = onDocumentDeleted("pulses/{pulseId}/resourc
 /**
  * Daily reconcile — the backfill, and the safety net.
  *
- * Every Pulse that predates this counter has no `resourceCount`, and the rule
- * reads an absent counter as **0**, so those Pulses are uncapped until something
+ * Every Beat that predates this counter has no `resourceCount`, and the rule
+ * reads an absent counter as **0**, so those Beats are uncapped until something
  * happens to touch them. SF11's own `pulseCount` backfill was specified and
  * never run; making it a scheduled reconcile rather than a one-off script is how
  * this one cannot be forgotten — it needs no credentials, no operator, and no
@@ -168,24 +168,24 @@ export const onResourceDeleteCount = onDocumentDeleted("pulses/{pulseId}/resourc
  * delivery would otherwise leave a wrong number until the next write.
  *
  * Bounded per run and it converges to zero *writes* (never zero reads — one
- * `count()` per Pulse, billed at one read per 1000 documents). Revisit the
- * whole-collection scan if Pulse ever holds tens of thousands.
+ * `count()` per Beat, billed at one read per 1000 documents). Revisit the
+ * whole-collection scan if Beat ever holds tens of thousands.
  */
 const RECONCILE_LIMIT = 500;
 
 export const reconcileResourceCounts = onSchedule("every day 04:11", async () => {
   const db = getFirestore();
   try {
-    const pulses = await db.collection("pulses").select("resourceCount").limit(RECONCILE_LIMIT).get();
+    const beats = await db.collection("pulses").select("resourceCount").limit(RECONCILE_LIMIT).get();
     let corrected = 0;
-    for (const d of pulses.docs) {
+    for (const d of beats.docs) {
       const before = d.data()?.resourceCount;
       const after = await recountResources(db, d.id);
       if (after !== null && after !== before) corrected += 1;
     }
     // Logged even at zero: "ran and found nothing" and "did not run" are the two
     // states worth telling apart, and only one of them is fine.
-    log(FN, "reconciled resource counts", { scanned: pulses.size, corrected });
+    log(FN, "reconciled resource counts", { scanned: beats.size, corrected });
   } catch (err) {
     logError(FN, "resource reconcile failed", err);
     throw err;

@@ -12,15 +12,15 @@ import { log, logError } from "./lib/conventions";
 type Data = FirebaseFirestore.DocumentData;
 const asArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
-/** True while the Pulse doc still exists — i.e. this is a single-doc delete, not
- * a whole-Pulse teardown (which SF6 owns). SF7–9 skip during a teardown. */
+/** True while the Beat doc still exists — i.e. this is a single-doc delete, not
+ * a whole-Beat teardown (which SF6 owns). SF7–9 skip during a teardown. */
 async function pulseAlive(db: FirebaseFirestore.Firestore, pulseId: string): Promise<boolean> {
   return (await db.doc(`pulses/${pulseId}`).get()).exists;
 }
 
 /**
- * SF6 — Pulse delete cascade. Purge every remaining subcollection under the
- * (already-deleted) Pulse doc, and every member's dashboard index entry. Member
+ * SF6 — Beat delete cascade. Purge every remaining subcollection under the
+ * (already-deleted) Beat doc, and every member's dashboard index entry. Member
  * `myPulses` are found by a collectionGroup query on `pulseId` rather than by
  * reading `pulseMembers` — the client races to delete `pulseMembers` on teardown,
  * so that read is unreliable; the index query is not. (No declared index needed:
@@ -36,10 +36,10 @@ export const onPulseDelete = onDocumentDeleted("pulses/{pulseId}", async (event)
     const idx = await db.collectionGroup("myPulses").where("pulseId", "==", pulseId).get();
     for (const d of idx.docs) writer.delete(d.ref);
     await writer.close();
-    // Everything under the Pulse tree (features, epics, resources, comments,
+    // Everything under the Beat tree (features, epics, resources, comments,
     // costs, rates, notifications, presence, activity, pulseMembers, invites…).
     await db.recursiveDelete(db.doc(`pulses/${pulseId}`));
-    log("SF6.pulseDelete", "purged pulse", { pulseId, indexEntries: idx.size });
+    log("SF6.pulseDelete", "purged beat", { pulseId, indexEntries: idx.size });
   } catch (err) {
     logError("SF6.pulseDelete", "cascade failed", err, { pulseId });
     throw err;
@@ -47,7 +47,7 @@ export const onPulseDelete = onDocumentDeleted("pulses/{pulseId}", async (event)
 });
 
 /**
- * SF7 — Membership-removal cleanup. When a member is removed from a live Pulse,
+ * SF7 — Membership-removal cleanup. When a member is removed from a live Beat,
  * clean the docs the removing admin has no permission to touch: the member's
  * dashboard index entry, their presence, notifications addressed to them, and
  * unlink them from any resource (SF1's fan-out then re-derives feature denorms).
@@ -56,7 +56,7 @@ export const onMemberRemoved = onDocumentDeleted("pulses/{pulseId}/pulseMembers/
   const { pulseId, uid } = event.params;
   const db = getFirestore();
   try {
-    if (!(await pulseAlive(db, pulseId))) return; // whole-Pulse teardown → SF6 owns it
+    if (!(await pulseAlive(db, pulseId))) return; // whole-Beat teardown → SF6 owns it
     const writer = db.bulkWriter();
     writer.delete(db.doc(`users/${uid}/myPulses/${pulseId}`));
     writer.delete(db.doc(`pulses/${pulseId}/presence/${uid}`));

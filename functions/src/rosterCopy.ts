@@ -3,13 +3,13 @@ import { getFirestore } from "firebase-admin/firestore";
 import { log, logError } from "./lib/conventions";
 import { emailKey } from "./roster";
 
-// Copying roster entries into a Pulse (Resource-Master-Spec §8.3, RM15).
+// Copying roster entries into a Beat (Resource-Master-Spec §8.3, RM15).
 //
 // **Why this is a callable and not a client loop.** `pulses/{id}.resourceCount`
 // is written asynchronously by a trigger, so twenty parallel creates are all
 // evaluated against the same stale count and all twenty pass. The rule would
 // stop the twenty-FIRST copy operation and none of the writes inside it. SF11
-// accepts that convergence gap for Pulse creation because a burst is an edge
+// accepts that convergence gap for Beat creation because a burst is an edge
 // case there; here the burst IS the feature.
 //
 // The cost of that choice, stated rather than hidden: the Admin SDK bypasses
@@ -49,21 +49,21 @@ export const copyRosterToPulse = onCall(async (request) => {
       db.doc(`pulses/${pulseId}`).get(),
       db.doc(`pulses/${pulseId}/pulseMembers/${uid}`).get(),
     ]);
-    if (!pulseSnap.exists) throw new HttpsError("not-found", "That Pulse no longer exists.");
-    const pulse = pulseSnap.data() ?? {};
+    if (!pulseSnap.exists) throw new HttpsError("not-found", "That Beat no longer exists.");
+    const beat = pulseSnap.data() ?? {};
 
     // canWriteContent: an editor or owner, and not frozen by archive.
     const role = memberSnap.exists ? memberSnap.data()?.role : null;
     if (role !== "owner" && role !== "editor") {
       throw new HttpsError("permission-denied", "Only an owner or editor can add resources.");
     }
-    if (pulse.archivedAt != null) {
-      throw new HttpsError("failed-precondition", "This Pulse is archived and read-only.");
+    if (beat.archivedAt != null) {
+      throw new HttpsError("failed-precondition", "This Beat is archived and read-only.");
     }
 
-    const workspaceId = typeof pulse.workspaceId === "string" ? pulse.workspaceId : "";
-    // RM3: the roster and the Pulse must belong to the same workspace, and the
-    // caller must be entitled to read that roster. Without this a Pulse member
+    const workspaceId = typeof beat.workspaceId === "string" ? beat.workspaceId : "";
+    // RM3: the roster and the Beat must belong to the same workspace, and the
+    // caller must be entitled to read that roster. Without this a Beat member
     // who is not in the workspace could pull the org's people through a
     // function that bypasses the rule stopping them reading it directly.
     if (!workspaceId || !(await db.doc(`workspaces/${workspaceId}/workspaceMembers/${uid}`).get()).exists) {
@@ -114,7 +114,7 @@ export const copyRosterToPulse = onCall(async (request) => {
         id: ref.id,
         name: data.name ?? "Unnamed",
         initials: data.initials ?? "",
-        // The org role rides across; the Pulse's own `type` starts empty and is
+        // The org role rides across; the Beat's own `type` starts empty and is
         // set here, locally, by whoever is planning (RM24). `?? type` reads a
         // roster entry written before role and type were split.
         role: data.role ?? data.type ?? null,

@@ -96,7 +96,7 @@ export const onFeatureWriteDenorm = onDocumentWritten("pulses/{pulseId}/features
 
 /**
  * A resource write → if its `linkedUid` changed (linked / unlinked / deleted),
- * fan out: recompute every feature in the Pulse that references this resource.
+ * fan out: recompute every feature in the Beat that references this resource.
  * This is the case the client interim can't do atomically (Server-Functions-Spec
  * SF1 "linkedUid fan-out").
  */

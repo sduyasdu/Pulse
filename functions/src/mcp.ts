@@ -13,7 +13,7 @@ import { log, logError } from "./lib/conventions";
 // who just consented, and to write the server-owned fields of their connection
 // record.
 //
-// The customer's AI client keeps the refresh token; Pulse stores only a hash of
+// The customer's AI client keeps the refresh token; Beat stores only a hash of
 // it (§2.1), so a breach of this project yields nothing replayable.
 
 type Db = FirebaseFirestore.Firestore;
@@ -142,7 +142,7 @@ const MAX_WORKSPACES_CHECKED = 25;
 /**
  * The best tier this user has access to, across every workspace they belong to.
  *
- * **Best, not personal.** A connection is per-user and its tools span every Pulse
+ * **Best, not personal.** A connection is per-user and its tools span every Beat
  * the user can reach, which may cross workspaces — so someone on a paid team
  * should not be judged by their own free personal workspace. Generosity is also
  * the safer error here: wrongly denying consent breaks a feature the customer is
@@ -288,7 +288,7 @@ export async function liveConnection(db: Db, uid: string, connectionId: string) 
 
 /**
  * Mint the pair the client will hold: a one-hour access token, and a refresh
- * token Pulse stores **only as a hash** (§2.1).
+ * token Beat stores **only as a hash** (§2.1).
  *
  * The custom token carries `connectionId` and `scope` as claims. They are
  * re-minted here on every refresh rather than relied upon to survive one, so
@@ -317,7 +317,7 @@ async function issueTokens(db: Db, uid: string, connectionId: string, scope: str
   const { idToken } = (await res.json()) as { idToken: string };
 
   // Our own refresh token, not Firebase's: it rotates on every use (§2.1) and is
-  // stored only as a hash, so what Pulse holds cannot be replayed.
+  // stored only as a hash, so what Beat holds cannot be replayed.
   const refreshToken = randomBytes(48).toString("base64url");
   await db.doc(`mcpRefreshTokens/${sha256(refreshToken)}`).set({
     uid,
@@ -434,7 +434,7 @@ export const mcpOauthToken = onRequest({ invoker: "public", cors: true }, async 
 // ---------------------------------------------------------------------------
 // Rate limiting (MC29)
 //
-// An assistant in a loop is the plausible abuse case: it spends Pulse's compute
+// An assistant in a loop is the plausible abuse case: it spends Beat's compute
 // and the customer's Firestore reads at machine speed, and nothing else here
 // stops it.
 //

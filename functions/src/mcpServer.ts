@@ -68,7 +68,7 @@ const LATEST_PROTOCOL = SUPPORTED_PROTOCOLS[0];
  */
 const COSTS_ENABLED = false;
 
-const SERVER_INFO = { name: "pulse", title: "Pulse", version: "0.7.0" };
+const SERVER_INFO = { name: "beats", title: "Beats", version: "0.8.0" };
 
 // JSON-RPC 2.0 error codes.
 const PARSE_ERROR = -32700;
@@ -200,7 +200,7 @@ async function listAsUser(caller: Caller, path: string, pageSize: number, orderB
 // Shaping (§5): return what a reader can use, not what the database stores.
 // ---------------------------------------------------------------------------
 
-/** Pulse stores a task's start as an integer day offset from a fixed epoch, so
+/** Beat stores a task's start as an integer day offset from a fixed epoch, so
  * the canvas can do arithmetic. `x: 2400` means nothing to an assistant, and it
  * cannot convert without knowing the epoch — so every date crosses this boundary
  * as ISO. Mirrors EPOCH_MS in src/domain/dateUtils.ts; the two must agree, which
@@ -278,7 +278,7 @@ function shapeSubtask(st: Record<string, unknown>, look: Lookups) {
 /** One task, in the vocabulary the customer uses: real dates, names instead of
  * ids, and the allocation percentages that drive everything else.
  *
- * `withSubtasks` is opt-in per tool rather than always on: `get_pulse` and
+ * `withSubtasks` is opt-in per tool rather than always on: `get_beat` and
  * `get_schedule` return up to 100 tasks each, and folding every subtask into
  * those would multiply the payload for callers that asked about the schedule. */
 function shapeTask(f: Record<string, unknown>, look: Lookups, withSubtasks = false) {
@@ -310,7 +310,7 @@ function shapeTask(f: Record<string, unknown>, look: Lookups, withSubtasks = fal
       : null,
     // Always present, so a tool that omits the detail never implies a task has
     // no subtasks. `done` counts the status id, not its label, because labels
-    // are customisable per Pulse and would not compare.
+    // are customisable per Beat and would not compare.
     subtaskSummary: children.length
       ? { total: children.length, done: children.filter((c) => String(c.status ?? "") === "done").length }
       : null,
@@ -320,13 +320,13 @@ function shapeTask(f: Record<string, unknown>, look: Lookups, withSubtasks = fal
 
 /** The three lookup tables every task-shaped tool needs. One fetch each,
  * bounded, rather than a read per task. */
-async function loadLookups(caller: Caller, pulseId: string): Promise<Lookups> {
-  const [epics, resources, pulse] = await Promise.all([
-    listAsUser(caller, `pulses/${pulseId}/epics`, MAX_LIMIT),
-    listAsUser(caller, `pulses/${pulseId}/resources`, MAX_LIMIT),
-    getAsUser(caller, `pulses/${pulseId}`),
+async function loadLookups(caller: Caller, beatId: string): Promise<Lookups> {
+  const [epics, resources, beat] = await Promise.all([
+    listAsUser(caller, `pulses/${beatId}/epics`, MAX_LIMIT),
+    listAsUser(caller, `pulses/${beatId}/resources`, MAX_LIMIT),
+    getAsUser(caller, `pulses/${beatId}`),
   ]);
-  const statuses = (pulse?.statuses as { id: string; label: string }[] | undefined) ?? [];
+  const statuses = (beat?.statuses as { id: string; label: string }[] | undefined) ?? [];
   return {
     epics: new Map(epics.map((e) => [String(e.id), String(e.name ?? "Untitled epic")])),
     resources: new Map(
@@ -348,12 +348,12 @@ async function loadLookups(caller: Caller, pulseId: string): Promise<Lookups> {
 const MAX_LIMIT = 200;
 
 /** A collection read that came back exactly full may have had more behind it.
- * Saying so is the difference between "this Pulse has no blocked tasks" and "I
+ * Saying so is the difference between "this Beat has no blocked tasks" and "I
  * looked at 200 of them". Silence here reads as completeness — which is the one
  * thing a bounded scan cannot promise. */
 const coverageNote = (rows: unknown[], what: string) =>
   rows.length >= MAX_LIMIT
-    ? `Only the first ${MAX_LIMIT} ${what} in this Pulse were examined; it holds more, so this answer may be incomplete.`
+    ? `Only the first ${MAX_LIMIT} ${what} in this Beat were examined; it holds more, so this answer may be incomplete.`
     : undefined;
 export const clampLimit = (raw: unknown, fallback: number) =>
   Math.min(MAX_LIMIT, Math.max(1, Number.isFinite(Number(raw)) ? Number(raw) : fallback));
@@ -365,7 +365,7 @@ export const clampLimit = (raw: unknown, fallback: number) =>
 //
 //   readOnlyHint:    true  — nothing here writes, and each is safe to retry.
 //   destructiveHint: false — follows from the above.
-//   openWorldHint:   false — these reach Pulse's own store and nothing else. It
+//   openWorldHint:   false — these reach Beats' own store and nothing else. It
 //                            is NOT about whether the server is on the internet;
 //                            it is about whether the tool's effects escape into
 //                            an open-ended world.
@@ -374,38 +374,38 @@ export const clampLimit = (raw: unknown, fallback: number) =>
 // change to re-declare, not an implementation detail.
 const ALL_TOOLS = [
   {
-    name: "list_pulses",
-    title: "List Pulses",
-    annotations: { title: "List Pulses", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    name: "list_beats",
+    title: "List Beats",
+    annotations: { title: "List Beats", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "List the Pulses (project roadmaps) this user can access, with their role in each. " +
-      "Use this first to find a pulseId for the other tools.",
+      "List the Beats (project roadmaps) this user can access, with their role in each. " +
+      "Use this first to find a beatId for the other tools.",
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: `Max Pulses to return (default 50, max ${MAX_LIMIT}).` },
-        includeHidden: { type: "boolean", description: "Include Pulses the user has hidden from their dashboard." },
+        limit: { type: "number", description: `Max Beats to return (default 50, max ${MAX_LIMIT}).` },
+        includeHidden: { type: "boolean", description: "Include Beats the user has hidden from their dashboard." },
         includeActivity: {
           type: "boolean",
-          description: "Add lastActivityAt to each Pulse — when anything last changed in it. Costs one extra read per Pulse, so ask for it when ranking by recency, not by default.",
+          description: "Add lastActivityAt to each Beat — when anything last changed in it. Costs one extra read per Beat, so ask for it when ranking by recency, not by default.",
         },
       },
     },
   },
   {
-    name: "get_pulse",
-    title: "Get a Pulse",
-    annotations: { title: "Get a Pulse", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    name: "get_beat",
+    title: "Get a Beat",
+    annotations: { title: "Get a Beat", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "One Pulse in full: its epics, its tasks with real dates and assignees, and its people. " +
+      "One Beat in full: its epics, its tasks with real dates and assignees, and its people. " +
       "Dates are ISO; a task's length is given in both calendar and working days.",
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string", description: "From list_pulses." },
+        beatId: { type: "string", description: "From list_beats." },
         limit: { type: "number", description: `Max tasks (default 100, max ${MAX_LIMIT}).` },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -413,21 +413,21 @@ const ALL_TOOLS = [
     title: "Search tasks",
     annotations: { title: "Search tasks", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "Find tasks in a Pulse by text, status, epic or assignee, and get their subtasks in full — " +
+      "Find tasks in a Beat by text, status, epic or assignee, and get their subtasks in full — " +
       "each subtask's status, assignees, created/planned/finished dates, whether it is overdue, " +
       "and its notes. Text matches a task title OR a subtask title, case- and accent-insensitively; " +
       "`matchedIn` says which. Combine filters to narrow.",
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         query: { type: "string", description: "Text to find in the task title." },
         status: { type: "string", description: "Status id or label, e.g. 'blocked'." },
         epic: { type: "string", description: "Epic name." },
         assignee: { type: "string", description: "Person's name." },
         limit: { type: "number" },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -440,12 +440,12 @@ const ALL_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         from: { type: "string", description: "ISO date, inclusive. Defaults to today." },
         to: { type: "string", description: "ISO date, inclusive. Defaults to 30 days after `from`." },
         limit: { type: "number" },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -458,11 +458,11 @@ const ALL_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         from: { type: "string", description: "ISO date. Defaults to today." },
         to: { type: "string", description: "ISO date. Defaults to 30 days after `from`." },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -470,16 +470,16 @@ const ALL_TOOLS = [
     title: "Get costs",
     annotations: { title: "Get costs", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "Recorded costs for a Pulse, grouped by model, by person or by task. Only visible to users " +
+      "Recorded costs for a Beat, grouped by model, by person or by task. Only visible to users " +
       "whose role permits it — an empty result may mean no access rather than no costs.",
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         groupBy: { type: "string", enum: ["model", "person", "task"], description: "Default 'model'." },
         limit: { type: "number" },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -487,22 +487,22 @@ const ALL_TOOLS = [
     title: "Search resources",
     annotations: { title: "Search resources", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "The people and resources defined in a Pulse, in detail: type, capacity, the Pulse account each " +
+      "The people and resources defined in a Beat, in detail: type, capacity, the Beat account each " +
       "one is linked to (if any), and hourly rate where the user's role permits seeing it. " +
       "For how busy they are, use get_people_load instead.",
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         query: { type: "string", description: "Text to find in the name or initials." },
         type: { type: "string", description: "Resource type, e.g. 'developer'." },
         linked: {
           type: "boolean",
-          description: "True for only resources linked to a Pulse account, false for only unlinked ones.",
+          description: "True for only resources linked to a Beat account, false for only unlinked ones.",
         },
         limit: { type: "number" },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -510,20 +510,20 @@ const ALL_TOOLS = [
     title: "Search comments",
     annotations: { title: "Search comments", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "Comments in a Pulse — the discussion, newest first. Each one says what it is attached to " +
-      "(a task, a resource, or the Pulse itself) and whether it is a reply. Filter by text, author, " +
+      "Comments in a Beat — the discussion, newest first. Each one says what it is attached to " +
+      "(a task, a resource, or the Beat itself) and whether it is a reply. Filter by text, author, " +
       "what it is about, or date.",
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         query: { type: "string", description: "Text to find in the comment body." },
         author: { type: "string", description: "Author's email, or part of it." },
         about: { type: "string", description: "Name of the task or resource the comment is attached to." },
         since: { type: "string", description: "ISO date — only comments on or after it." },
         limit: { type: "number", description: `Default 50, max ${MAX_LIMIT}.` },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
   {
@@ -531,8 +531,8 @@ const ALL_TOOLS = [
     title: "Where a person is used",
     annotations: { title: "Where a person is used", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     description:
-      "Which Pulses one person from the organisation's roster is on. Takes a resourceId from search_roster, " +
-      "or a name to look up. Some results may be Pulses the user has no access to — those are marked, and the " +
+      "Which Beats one person from the organisation's roster is on. Takes a resourceId from search_roster, " +
+      "or a name to look up. Some results may be Beats the user has no access to — those are marked, and the " +
       "user cannot open them without being invited.",
     inputSchema: {
       type: "object",
@@ -546,14 +546,14 @@ const ALL_TOOLS = [
     name: "get_activity",
     title: "Get recent activity",
     annotations: { title: "Get recent activity", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    description: "Recent changes in a Pulse — who changed what, and when. Newest first.",
+    description: "Recent changes in a Beat — who changed what, and when. Newest first.",
     inputSchema: {
       type: "object",
       properties: {
-        pulseId: { type: "string" },
+        beatId: { type: "string" },
         limit: { type: "number", description: `Default 30, max ${MAX_LIMIT}.` },
       },
-      required: ["pulseId"],
+      required: ["beatId"],
     },
   },
 ] as const;
@@ -594,21 +594,21 @@ export const overlaps = (f: Record<string, unknown>, from: number, to: number) =
 export const TOOLS = ALL_TOOLS.filter((t) => COSTS_ENABLED || t.name !== "get_costs");
 
 async function callTool(caller: Caller, name: string, args: Record<string, unknown>): Promise<unknown> {
-  const pulseId = typeof args.pulseId === "string" ? args.pulseId : "";
+  const beatId = typeof args.beatId === "string" ? args.beatId : "";
 
   switch (name) {
-    case "list_pulses": {
+    case "list_beats": {
       const limit = clampLimit(args.limit, 50);
       const withActivity = args.includeActivity === true;
       // The customer's own dashboard index — the same list their browser reads,
-      // and the only listable view of "Pulses I can access" (see the note at the
+      // and the only listable view of "Beats I can access" (see the note at the
       // top of firestore.rules on why this is an index rather than a query).
       const rows = await listAsUser(caller, `users/${caller.uid}/myPulses`, limit);
       const visible = args.includeHidden ? rows : rows.filter((r) => !r.hidden);
 
-      // One ordered single-document read per Pulse, and only when asked. NOT a
-      // `lastActivityAt` maintained on the Pulse document: that would cost a
-      // write on every task edit and make the Pulse doc a contention point for
+      // One ordered single-document read per Beat, and only when asked. NOT a
+      // `lastActivityAt` maintained on the Beat document: that would cost a
+      // write on every task edit and make the Beat doc a contention point for
       // everyone working in it, to serve a field only this tool reads.
       const lastActivity = new Map<string, string | null>();
       if (withActivity) {
@@ -622,14 +622,14 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
       }
 
       return {
-        pulses: visible.map((r) => {
+        beats: visible.map((r) => {
           const id = String(r.pulseId ?? r.id);
           return {
-            pulseId: id,
-            name: r.name || "Untitled Pulse",
+            beatId: id,
+            name: r.name || "Untitled Beat",
             role: r.role,
             archived: r.archivedAt != null,
-            // When you joined, which is not when the Pulse was created — it is
+            // When you joined, which is not when the Beat was created — it is
             // the only date this index actually holds, so it is labelled for
             // what it is rather than passed off as an age.
             joinedDate: r.joinedAt ? new Date(Number(r.joinedAt)).toISOString() : null,
@@ -642,10 +642,10 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
       };
     }
 
-    case "get_pulse": {
+    case "get_beat": {
       const limit = clampLimit(args.limit, 100);
-      const look = await loadLookups(caller, pulseId);
-      const features = await listAsUser(caller, `pulses/${pulseId}/features`, limit);
+      const look = await loadLookups(caller, beatId);
+      const features = await listAsUser(caller, `pulses/${beatId}/features`, limit);
       return {
         epics: [...look.epics.values()],
         people: [...look.resources.values()].map((r) => ({ name: r.name, capacityPercent: r.capacity })),
@@ -658,8 +658,8 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
 
     case "search_tasks": {
       const limit = clampLimit(args.limit, 50);
-      const look = await loadLookups(caller, pulseId);
-      const features = await listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT);
+      const look = await loadLookups(caller, beatId);
+      const features = await listAsUser(caller, `pulses/${beatId}/features`, MAX_LIMIT);
       const q = fold(args.query);
       const wantStatus = fold(args.status);
       const wantEpic = fold(args.epic);
@@ -689,7 +689,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         matched: hits.length,
         truncated: hits.length > limit ? `${hits.length} matched; showing ${limit}.` : undefined,
         // Distinct from `truncated`: that reports how many MATCHES were shown,
-        // this reports that the search never saw the whole Pulse.
+        // this reports that the search never saw the whole Beat.
         coverage: coverageNote(features, "tasks"),
       };
     }
@@ -697,8 +697,8 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
     case "get_schedule": {
       const limit = clampLimit(args.limit, 100);
       const { from, to } = windowOf(args);
-      const look = await loadLookups(caller, pulseId);
-      const features = await listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT);
+      const look = await loadLookups(caller, beatId);
+      const features = await listAsUser(caller, `pulses/${beatId}/features`, MAX_LIMIT);
       const inWindow = features
         .filter((f) => overlaps(f, from, to))
         .sort((a, b) => Number(a.x ?? 0) - Number(b.x ?? 0));
@@ -712,8 +712,8 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
 
     case "get_people_load": {
       const { from, to } = windowOf(args);
-      const look = await loadLookups(caller, pulseId);
-      const features = await listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT);
+      const look = await loadLookups(caller, beatId);
+      const features = await listAsUser(caller, `pulses/${beatId}/features`, MAX_LIMIT);
 
       const load = new Map<string, { name: string; capacityPercent: number; allocatedPercent: number; tasks: string[] }>();
       for (const [id, r] of look.resources) {
@@ -746,10 +746,10 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
     case "get_costs": {
       const limit = clampLimit(args.limit, 100);
       const groupBy = args.groupBy === "person" || args.groupBy === "task" ? args.groupBy : "model";
-      const look = await loadLookups(caller, pulseId);
+      const look = await loadLookups(caller, beatId);
       const [costs, features] = await Promise.all([
-        listAsUser(caller, `pulses/${pulseId}/costs`, MAX_LIMIT),
-        listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${beatId}/costs`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${beatId}/features`, MAX_LIMIT),
       ]);
       const titles = new Map(features.map((f) => [String(f.id), String(f.title ?? "Untitled task")]));
 
@@ -783,13 +783,13 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
     case "search_resources": {
       const limit = clampLimit(args.limit, 50);
       const [resources, members, rates] = await Promise.all([
-        listAsUser(caller, `pulses/${pulseId}/resources`, MAX_LIMIT),
-        listAsUser(caller, `pulses/${pulseId}/pulseMembers`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${beatId}/resources`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${beatId}/pulseMembers`, MAX_LIMIT),
         // Admin-only in rules (Costs-Spec §8.3), so a member who may not see
         // rates gets [] from the 403 and no rate reaches the assistant. The
         // gate is the rule, not this code — which is the whole point of
         // reading as the customer.
-        listAsUser(caller, `pulses/${pulseId}/rates`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${beatId}/rates`, MAX_LIMIT),
       ]);
       const account = new Map(members.map((m) => [String(m.uid ?? m.id), m]));
       const rate = new Map(rates.map((r) => [String(r.resourceId ?? r.id), Number(r.hourlyCost ?? 0)]));
@@ -838,12 +838,12 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
 
     case "search_comments": {
       const limit = clampLimit(args.limit, 50);
-      const look = await loadLookups(caller, pulseId);
+      const look = await loadLookups(caller, beatId);
       const [comments, features] = await Promise.all([
         // Newest-first from the query, so filtering narrows the most recent
         // comments rather than an arbitrary slice of the whole thread.
-        listAsUser(caller, `pulses/${pulseId}/comments`, MAX_LIMIT, "createdAt desc"),
-        listAsUser(caller, `pulses/${pulseId}/features`, MAX_LIMIT),
+        listAsUser(caller, `pulses/${beatId}/comments`, MAX_LIMIT, "createdAt desc"),
+        listAsUser(caller, `pulses/${beatId}/features`, MAX_LIMIT),
       ]);
       const titles = new Map(features.map((f) => [String(f.id), String(f.title ?? "Untitled task")]));
 
@@ -879,7 +879,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
             editedAt: c.editedAt ? new Date(Number(c.editedAt)).toISOString() : null,
             author: c.authorEmail ?? c.authorUid ?? "someone",
             text: c.text ?? "",
-            // Null means a Pulse-level comment, not an orphan.
+            // Null means a Beat-level comment, not an orphan.
             about: subjectOf(c),
             replyToId: c.parentId ?? null,
             mentions: Array.isArray(c.mentions)
@@ -900,7 +900,7 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
       // leaks — the same property every other tool relies on (§1).
       const user = await getAsUser(caller, `users/${caller.uid}`);
       const workspaceId = typeof user?.personalWorkspaceId === "string" ? user.personalWorkspaceId : "";
-      if (!workspaceId) return { pulses: [], count: 0, note: "No organisation roster is available for this account." };
+      if (!workspaceId) return { beats: [], count: 0, note: "No organisation roster is available for this account." };
 
       const roster = await listAsUser(caller, `workspaces/${workspaceId}/resources`, MAX_LIMIT);
       const wantName = fold(args.name);
@@ -908,30 +908,30 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
         ? roster.find((r) => String(r.id) === args.resourceId)
         : roster.find((r) => fold(r.name).includes(wantName));
       if (!target) {
-        return { pulses: [], count: 0, note: "No such person on the roster. Use search_roster to find one." };
+        return { beats: [], count: 0, note: "No such person on the roster. Use search_roster to find one." };
       }
 
       const usage = await listAsUser(caller, `workspaces/${workspaceId}/resources/${target.id}/usage`, MAX_LIMIT);
       // Which of them the caller can actually open. Their own dashboard index is
       // the cheapest answer, and the only one that does not need a read attempt
-      // per Pulse.
+      // per Beat.
       const mine = new Set(
         (await listAsUser(caller, `users/${caller.uid}/myPulses`, MAX_LIMIT)).map((r) => String(r.pulseId ?? r.id)),
       );
 
       return {
         person: { resourceId: target.id, name: target.name, role: target.role ?? target.type ?? null },
-        pulses: usage.map((u) => ({
-          pulseId: u.pulseId,
-          name: u.pulseName || "Untitled Pulse",
+        beats: usage.map((u) => ({
+          beatId: u.pulseId,
+          name: u.pulseName || "Untitled Beat",
           // Stated per row rather than left to be inferred from a missing id.
-          // RM7 accepted naming Pulses the caller cannot open; the assistant
+          // RM7 accepted naming Beats the caller cannot open; the assistant
           // should explain that boundary, not imply the user can go and look.
           hasAccess: mine.has(String(u.pulseId)),
         })),
         count: usage.length,
         note: usage.some((u) => !mine.has(String(u.pulseId)))
-          ? "Some of these are Pulses this user is not a member of. They are listed because they belong to the same organisation, but the user cannot open them without being invited."
+          ? "Some of these are Beats this user is not a member of. They are listed because they belong to the same organisation, but the user cannot open them without being invited."
           : undefined,
       };
     }
@@ -939,9 +939,9 @@ async function callTool(caller: Caller, name: string, args: Record<string, unkno
     case "get_activity": {
       const limit = clampLimit(args.limit, 30);
       // Ordered in the query, and only `limit` documents fetched. This used to
-      // read 200 unordered and sort them, which on a Pulse with more history
+      // read 200 unordered and sort them, which on a Beat with more history
       // than that returned the newest of an arbitrary sample.
-      const recent = await listAsUser(caller, `pulses/${pulseId}/activity`, limit, "at desc");
+      const recent = await listAsUser(caller, `pulses/${beatId}/activity`, limit, "at desc");
       return {
         entries: recent.map((e) => ({
           when: e.at ? new Date(Number(e.at)).toISOString() : null,
@@ -1240,7 +1240,7 @@ export const mcpMetadata = onRequest({ invoker: "public", cors: true }, async (r
     if (!redirectUris.length) {
       res.status(400).json({
         error: "invalid_redirect_uri",
-        error_description: "No usable redirect_uris. Pulse accepts HTTPS callbacks on known assistant hosts, or loopback.",
+        error_description: "No usable redirect_uris. Beats accepts HTTPS callbacks on known assistant hosts, or loopback.",
       });
       return;
     }

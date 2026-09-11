@@ -214,7 +214,7 @@ export async function applyProDowngrade(db: Db, orgId: string): Promise<{ pulses
   // Surfaced because §5.1 keeps the *org* owner as sole editor, which can leave a
   // Pulse the org owner isn't a member of with nobody able to edit or manage it.
   if (ownerless > 0) {
-    log(FN, "downgrade left Pulses with no editor (org owner is not a member)", { orgId, pulses: ownerless });
+    log(FN, "downgrade left Beats with no editor (org owner is not a member)", { orgId, pulses: ownerless });
   }
   return { pulses: pulses.size, demoted };
 }
@@ -468,10 +468,12 @@ export const stripeWebhook = onRequest(
  * (because Firebase Auth state is per-origin) **signed out**, immediately after
  * paying. Quiet by design, so keep this list ahead of any new domain.
  *
- * `pulse.yasdu.com` is the intended branded domain and is pre-authorised here so
- * the DNS cutover needs no code change.
+ * `beats.yasdu.com` is the branded domain; `pulse.yasdu.com` stays because it
+ * still serves the same site and people still have it bookmarked. Dropping it
+ * would strand anyone who started checkout from there.
  */
 const ALLOWED_RETURN_ORIGINS = [
+  "https://beats.yasdu.com",
   "https://pulse.yasdu.com",
   "https://pulse-b9d96.web.app",
   "https://pulse-b9d96.firebaseapp.com",
@@ -483,13 +485,14 @@ const ALLOWED_RETURN_ORIGINS = [
  * `ALLOWED_RETURN_ORIGINS[0]`, so reordering the list above can't silently
  * repoint the fallback.
  *
- * Now the branded domain: `pulse.yasdu.com` resolves (CNAME to
- * `pulse-b9d96.web.app`) and serves a valid certificate, which was the condition
- * for moving it off the Firebase URL — a fallback pointing at a hostname that
- * doesn't resolve turns a recoverable redirect into a dead end. The Firebase
- * origins stay in the allowlist above, so a returnUrl from either still works.
+ * Now `beats.yasdu.com`: it resolves, serves a valid certificate and is where
+ * the product lives, which was the condition for moving the fallback — one
+ * pointing at a hostname that doesn't resolve turns a recoverable redirect into
+ * a dead end. Every other origin stays in the allowlist above, so an explicit
+ * returnUrl from any of them still works; only an absent or rejected one lands
+ * here.
  */
-const DEFAULT_RETURN_ORIGIN = "https://pulse.yasdu.com";
+const DEFAULT_RETURN_ORIGIN = "https://beats.yasdu.com";
 
 export function safeReturnUrl(raw: unknown): string {
   if (typeof raw !== "string" || !raw) return DEFAULT_RETURN_ORIGIN;

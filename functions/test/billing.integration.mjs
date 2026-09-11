@@ -222,22 +222,31 @@ assert(carryForward({ pastDueSince: 100 }, "canceled", 500) === null, "clock: ca
 // rejected or absent value lands (DEFAULT_RETURN_ORIGIN), APP is merely *an*
 // allowed origin. They diverged when the fallback moved to the branded domain,
 // and conflating them would let a future repoint pass unnoticed.
-const FALLBACK = "https://pulse.yasdu.com";
+const FALLBACK = "https://beats.yasdu.com";
 const APP = "https://pulse-b9d96.web.app";
+// The previous branded domain. Still allowed — it serves the same site and
+// people have it bookmarked — but no longer where a rejected value lands.
+const LEGACY = "https://pulse.yasdu.com";
 
 assert(safeReturnUrl(`${APP}/`) === `${APP}/`, "returnUrl: the Firebase app origin is still allowed");
 assert(
-  safeReturnUrl("https://pulse.yasdu.com/") === "https://pulse.yasdu.com/",
-  "returnUrl: the branded domain pulse.yasdu.com is allowed",
+  safeReturnUrl("https://beats.yasdu.com/") === "https://beats.yasdu.com/",
+  "returnUrl: the branded domain beats.yasdu.com is allowed",
 );
+assert(safeReturnUrl(`${LEGACY}/`) === `${LEGACY}/`, "returnUrl: the previous branded domain is still allowed");
 assert(
-  safeReturnUrl("https://pulse.yasdu.com/?billing=success") === "https://pulse.yasdu.com/?billing=success",
+  safeReturnUrl("https://beats.yasdu.com/?billing=success") === "https://beats.yasdu.com/?billing=success",
   "returnUrl: branded domain keeps its query string",
 );
-// A lookalike of the branded domain must still be rejected.
-assert(safeReturnUrl("https://pulse.yasdu.com.evil.com/") === FALLBACK, "returnUrl: branded-domain lookalike rejected");
-assert(safeReturnUrl("https://evil.pulse.yasdu.com/") === FALLBACK, "returnUrl: subdomain of the branded host rejected");
-assert(safeReturnUrl("http://pulse.yasdu.com/") === FALLBACK, "returnUrl: http on the branded domain rejected");
+// A lookalike of either branded domain must still be rejected. Both are
+// checked: an allowlist that gained an entry is exactly where a suffix match
+// creeps back in.
+assert(safeReturnUrl("https://beats.yasdu.com.evil.com/") === FALLBACK, "returnUrl: branded-domain lookalike rejected");
+assert(safeReturnUrl("https://evil.beats.yasdu.com/") === FALLBACK, "returnUrl: subdomain of the branded host rejected");
+assert(safeReturnUrl("http://beats.yasdu.com/") === FALLBACK, "returnUrl: http on the branded domain rejected");
+assert(safeReturnUrl("https://pulse.yasdu.com.evil.com/") === FALLBACK, "returnUrl: legacy-domain lookalike rejected");
+assert(safeReturnUrl("https://evil.pulse.yasdu.com/") === FALLBACK, "returnUrl: subdomain of the legacy host rejected");
+assert(safeReturnUrl("http://pulse.yasdu.com/") === FALLBACK, "returnUrl: http on the legacy domain rejected");
 assert(safeReturnUrl("https://pulse-b9d96.firebaseapp.com/x") === "https://pulse-b9d96.firebaseapp.com/x", "returnUrl: alternate Firebase domain allowed");
 assert(safeReturnUrl("http://localhost:5173/") === "http://localhost:5173/", "returnUrl: local dev allowed");
 assert(safeReturnUrl("https://evil.example.com/steal") === FALLBACK, "returnUrl: foreign origin rejected");
