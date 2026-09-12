@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -93,5 +93,42 @@ describe("the stored vocabulary is left alone", () => {
     const rules = readFileSync("firestore.rules", "utf8");
     expect(rules).toMatch(/match \/pulses\/\{pulseId\}/);
     expect(rules).toMatch(/match \/pulseMembers\/\{memberUid\}/);
+  });
+});
+
+/**
+ * Text written directly into JSX, rather than into a dictionary or a string.
+ *
+ * The first sweep of this rename looked inside string literals and reported
+ * nothing left — and missed `RequireAuth`'s "Loading Pulse…", because it sits
+ * between two tags and is not a string at all. jsdom would only catch it by
+ * rendering every route in every state, so match the shape instead.
+ */
+describe("no user-visible JSX text still says Pulse", () => {
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e): string[] =>
+      e.isDirectory() ? files(`${dir}/${e.name}`) : e.name.endsWith(".tsx") ? [`${dir}/${e.name}`] : [],
+    );
+
+  const sources = files("src").filter((f) => !f.includes(".test."));
+
+  it("has sources to scan", () => {
+    expect(sources.length).toBeGreaterThan(50);
+  });
+
+  it("finds none", () => {
+    // Rendered text between two tags, on one line, containing none of the
+    // punctuation that means code. Without those exclusions the match runs
+    // from a `>` in an expression to a `<` further down and swallows whole
+    // comment blocks — which is how the first version of this reported five
+    // offenders, none of them real.
+    const JSX_TEXT = /*#__PURE__*/ />([^<>{}();=/*\n]*)</g;
+    const offenders: string[] = [];
+    for (const f of sources) {
+      for (const m of readFileSync(f, "utf8").matchAll(JSX_TEXT)) {
+        if (/\bPulses?\b/.test(m[1])) offenders.push(`${f}: ${m[1].trim().slice(0, 60)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

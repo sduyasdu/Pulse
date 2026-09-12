@@ -1,8 +1,9 @@
 # MCP Publishing — getting Beats' connector into the assistant directories
 
-Status: **Researched 2026-08-18. MP1–MP6 decided; MP7–MP9 open (privacy policy,
-rate limiting, listing assets — none are engineering blockers to the code
-work).** · Owner: product + eng ·
+Status: **Researched 2026-08-18; revised 2026-09-12 for the Pulse→Beats rename.
+MP1–MP6 and MP8 decided; MP7 and MP9 open, MP10 decided and now the gating
+item. Nothing is listed anywhere yet — `/.well-known/openai-apps` returns 404,
+so no submission has been completed on any surface.** · Owner: product + eng ·
 Related: `MCP-Spec.md` (the server this publishes — MC1–MC28),
 `Plans-Spec.md` (MC10's entitlement gate), `About-Spec.md` (the legal entity a
 privacy policy must name)
@@ -52,8 +53,8 @@ documentation a customer's own Cloud admin follows, not a submission.
    which is why OAuth discovery is already served from a function (MCP-Spec §8).
    → MP4.
 4. **No privacy policy at all.** → MP7 (open).
-5. **Rate limiting still open** (MC11), and both vendors review against security
-   standards. → MP8 (open).
+5. **No rate limiting** (MC11), and both vendors review against security
+   standards. → MP8, since built as MC29.
 
 ## 3. Decisions
 
@@ -111,20 +112,63 @@ documentation a customer's own Cloud admin follows, not a submission.
    worse than a missing one, since it looks handled. The submission portals show
    the real value; add it then.
 
+7. **MP8 — Rate limiting.** An assistant in a loop is the plausible abuse case
+   and both vendors review security. Decided as: per-connection limits **before**
+   submission rather than after — it is easier to describe a control you have
+   than to promise one. **Built**; `MCP-Spec.md` records it as MC29, superseding
+   MC11. Numbered out of order because it was decided after MP7 was raised and
+   resolved before it.
+
 ## 4. Open
 
-7. **MP7 — The privacy policy.** The long pole, and not an engineering task: it
+Two items, and only one of them is engineering.
+
+1. **MP7 — The privacy policy.** The long pole, and not an engineering task: it
    is a legal document about **Yasdu Innovación y Servicios SA de CV**
    (`About-Spec.md`). `MCP-Privacy-Disclosure.md` in this repo records what the
    connector *actually* does with data — read from the code, not from intent — so
    whoever drafts the policy is working from facts. It must cover collection,
    use, storage, third-party sharing, retention and contact, and must be specific
    about the MCP: an AI assistant is granted read access to customer roadmaps.
-8. **MP8 — Rate limiting (MC11).** An assistant in a loop is the plausible abuse
-   case and both vendors review security. *Recommend: per-connection limits
-   before submission rather than after* — it is easier to describe a control you
-   have than to promise one.
-9. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
+2. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
    categories, docs URL, support contact, and a **test account with realistic
    sample data** a reviewer can use end to end. The demo account is the item most
    likely to be underestimated: it needs a populated Beat, not an empty one.
+
+   **All of it is now Beats vocabulary**, and the assets exist: the icon comes
+   from the kit (`public/brand/beats-appicon*.svg`), and `beats-og-light.png`
+   is the first 1200×630 image the product has ever had. Example prompts must
+   name the tools as they now are — `list_beats`, `get_beat`, parameter
+   `beatId` — because a prompt quoting `list_pulses` fails against the live
+   server.
+
+## 5. MP10 — move the OAuth issuer before submitting, not after
+
+**Decided 2026-09-12.** The server answers on `beats.yasdu.com` and calls
+itself Beats, but `ISSUER`, the connector URL and the domain-proof path are all
+still `pulse.yasdu.com` (`mcpServer.ts:1027,1196`). Deliberately: moving the
+issuer invalidates every registered assistant connection and forces
+re-authorisation, so it was kept out of the rename.
+
+Submitting to any directory changes that calculus, for two reasons:
+
+- **A listing publishes the URL.** A connector called Beats whose endpoint is
+  `pulse.yasdu.com/mcp` invites exactly the question a reviewer is paid to ask,
+  and the ChatGPT domain proof (MP4) is served from the MCP domain — so the
+  domain you verify is the old brand's.
+- **A listed URL is far more expensive to change.** Re-issuing after listing
+  breaks every connection made *through the directory* and invalidates the
+  verification already accepted. The cost of moving only ever grows.
+
+So: **move the issuer, re-verify the domain, then submit.** Today's
+re-authorisation cost is the smallest it will ever be — nothing is listed, and
+the connected population is whoever connected by hand.
+
+*Rejected: submit now and move later.* It trades a small, known cost today for
+a larger one at the worst moment, on a surface where a broken connector is
+visible to every prospective customer rather than to a handful of early users.
+
+*Rejected: keep `pulse.yasdu.com` as the issuer permanently.* It is defensible
+— an issuer is an opaque identifier, not branding — but it means the domain a
+customer grants access to never matches the product they think they are
+granting it to. That is a consent-clarity problem, not an aesthetic one.
