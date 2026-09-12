@@ -1,15 +1,15 @@
-# Pulse — Collaboration Specification
+# Beats — Collaboration Specification
 
 Status: **Decisions confirmed (D1–D14) — ready to build** · Scope: documents today's shipped
 collaboration model, then proposes enhancements. Two directions are now **chosen,
 not optional**: (1) activate the dormant workspace layer into real **Teams** that
-own Pulses; (2) replace emailed invites with a **copy-link join** model. Both are
+own Beats; (2) replace emailed invites with a **copy-link join** model. Both are
 called out below. Enhancements are phased; nothing here is built yet unless §1
 says it is.
 
 ## 1. Current state (what ships today)
 
-Pulse already has a real, working multi-tenant collaboration model. This section
+Beats already has a real, working multi-tenant collaboration model. This section
 documents it precisely — every proposal in §3+ builds on these exact shapes and
 invariants, so they are load-bearing.
 
@@ -43,12 +43,11 @@ invariants, so they are load-bearing.
 - `WorkspaceRole = "owner" | "member"` (`types/index.ts:27`) and the whole
   `workspaces/**` rules block (`firestore.rules:74-90`), plus the helpers
   `isWorkspaceMember`/`workspaceRole` (`firestore.rules:38-44`), already exist —
-  but **workspaces are not yet a user-facing collaboration surface**. Every new
-  Pulse is created in the creator's *personal* workspace
+  but **workspaces are not yet a user-facing collaboration surface**. Every new Beat is created in the creator's *personal* workspace
   (`DashboardPage.tsx:178-182`, `duplicatePulse` §1.7); there is no UI to create a
   shared workspace, invite people *to a workspace*, or list its members, and no
-  rule anywhere grants Pulse access *via* workspace membership. The workspace
-  layer is dormant plumbing that per-Pulse sharing bypasses. **§3.2 makes this the
+  rule anywhere grants Beats access *via* workspace membership. The workspace
+  layer is dormant plumbing that per-Beat sharing bypasses. **§3.2 makes this the
   chosen "Teams" direction.**
 
 ### 1.3 Roles — owner / editor / viewer
@@ -59,19 +58,19 @@ authoritative record is `pulses/{pulseId}/pulseMembers/{uid}`
 
 | Capability | Owner | Editor | Viewer |
 |---|---|---|---|
-| Read all Pulse data (epics/features/resources) | ✅ | ✅ | ✅ |
+| Read all Beat data (epics/features/resources) | ✅ | ✅ | ✅ |
 | Edit canvas/board/tasks/resources | ✅ | ✅ | ❌ |
 | Invite collaborators / revoke invites | ✅ | ✅ | ❌ |
 | Change another member's role | ✅ | ❌ | ❌ |
 | Remove a member | ✅ | ❌ | ❌ |
-| Delete the Pulse | ✅ | ❌ | ❌ |
+| Delete the Beat | ✅ | ❌ | ❌ |
 
 Enforcement is two-layer, and the rules layer is authoritative:
 
 - **Rules:** `canEditPulse` = member with role in `['owner','editor']`
   (`firestore.rules:54-56`) gates every `epics`/`features`/`resources` write
   (`firestore.rules:143-156`) and `pulses` update (`:105`); `isPulseOwner`
-  (`:57-59`) gates Pulse delete (`:106`), `pulseMembers` update/delete (`:122`),
+  (`:57-59`) gates Beats delete (`:106`), `pulseMembers` update/delete (`:122`),
   i.e. role changes and member removal.
 - **Client:** `usePulseStore.roleOf(uid)` reads the live `members` roster
   (`src/stores/pulseStore.ts:126`); `PulsePage` derives
@@ -81,7 +80,7 @@ Enforcement is two-layer, and the rules layer is authoritative:
   and `isOwner` (may remove / re-role) (`CollaboratorsDialog.tsx:37-38`). A viewer
   who forged a client write is still denied by rules.
 
-The role model is **coarse: per-Pulse, whole-Pulse.** No per-epic, per-field, or
+The role model is **coarse: per-Beat, whole-Beat.** No per-epic, per-field, or
 "comment-only" role, and editors — not just owners — can invite (§3.8).
 
 ### 1.4 Invite-by-email via the discovery index (kept — see D15)
@@ -142,9 +141,9 @@ retired, and **D17** for why the URL carries no secret.
   at all. `UnverifiedBanner` is what makes the state visible instead
   (`components/dashboard/UnverifiedBanner.tsx`).
 
-The Pulse creator's own membership is the other create path
+The Beat creator's own membership is the other create path
 (`firestore.rules:110-114`, "Case 1"): `createPulse` self-writes an `owner`
-`pulseMembers` doc, allowed because the pulse doc's `createdBy == request.auth.uid`
+`pulseMembers` doc, allowed because the Beat doc's `createdBy == request.auth.uid`
 (`pulses.ts:44-45`). The copy-link model (§3.1) adds a **third** create case,
 token-bound rather than email-bound.
 
@@ -152,13 +151,12 @@ token-bound rather than email-bound.
 
 `subscribeMyPulses` (`pulses.ts:139-142`) live-lists `users/{uid}/myPulses`
 ordered by `joinedAt`. The dashboard (`DashboardPage.tsx`) splits it three ways —
-**Your Pulses** (role `owner`), **Shared with me** (role ≠ owner), **Archived**
+**Your Beats** (role `owner`), **Shared with me** (role ≠ owner), **Archived**
 (`entry.archived`) — filtered by a name search (`DashboardPage.tsx:63-69`).
 
 The index is self-owned: `users/{uid}/myPulses/{pulseId}` is read/write only by
 `uid` itself (`firestore.rules:69-71`). Because **no one else can write another
-user's index**, entries go stale (owner changed your role or removed you; the
-Pulse was deleted) and must be **self-healed by the affected user's own client**:
+user's index**, entries go stale (owner changed your role or removed you; the Beat was deleted) and must be **self-healed by the affected user's own client**:
 
 - Dashboard effect (`DashboardPage.tsx:35-56`): for each entry, `fetchMembership`
   (`memberships.ts:16-19`, always self-readable even after removal) — if `null`,
@@ -166,11 +164,10 @@ Pulse was deleted) and must be **self-healed by the affected user's own client**
   differs, `updateMyPulseRole` reconciles the cached label (`pulses.ts:168-170`).
   Only acts on a definitive read; transient errors are left for a later retry.
 - `PulsePage` effect (`PulsePage.tsx:170-220`): heals **both directions** (D14).
-  If the opened Pulse looks `notFound` or `myRole === null`, it re-reads the
-  pulse doc and the caller's own membership directly and drops the entry **only
+  If the opened Beat looks `notFound` or `myRole === null`, it re-reads the Beat doc and the caller's own membership directly and drops the entry **only
   on a definitive "gone"**; if the caller is a confirmed member whose index has
   no entry, `ensureMyPulseEntry` (`pulses.ts:170-175`) writes it back. `load()`
-  additionally waits for **both** the pulse doc and the members roster before
+  additionally waits for **both** the Beat doc and the members roster before
   clearing `loading`, so the check never misfires on a half-loaded state
   (`pulseStore.ts:96-122`).
 
@@ -182,7 +179,7 @@ server-side.
 
 ### 1.7 Manage collaborators — invite / revoke / role-change / remove
 
-`CollaboratorsDialog` (`CollaboratorsDialog.tsx`), reached from the in-Pulse
+`CollaboratorsDialog` (`CollaboratorsDialog.tsx`), reached from the in-Beat
 **Invite** button (`PulsePage.tsx:428-437`, `MobilePulseView.tsx:56-60`,
 `136-145`), is the full management surface:
 
@@ -199,36 +196,36 @@ server-side.
 regenerate); the members list and role management stay.
 
 The dashboard also has a lighter `InviteDialog` (`InviteDialog.tsx`) wired to
-`inviteToPulse` for inviting without opening a Pulse (`DashboardPage.tsx:189-197`).
+`inviteToPulse` for inviting without opening a Beat (`DashboardPage.tsx:189-197`).
 
 ### 1.8 Archive & delete semantics
 
 - **Archive** is per-user and non-destructive: `setMyPulseArchived`
   (`pulses.ts:161-163`) flips `archived` on *your own* index entry only, hiding
-  the Pulse into your Archived section without touching the shared Pulse or
-  anyone else's view, and (per `Plans-Spec.md` PL12) without freeing a Pulse
+  the Beat into your Archived section without touching the shared Beat or
+  anyone else's view, and (per `Plans-Spec.md` PL12) without freeing a Beat
   slot. `archived` is read **nowhere** outside the dashboard's
   grouping (`DashboardPage.tsx:83-87`) and the card's styling
   (`PulseCard.tsx:25,38,62,110-119`) — not in `firestore.rules`, not in
   `functions/`, not in notifications. It is strictly a dashboard filter: an
-  "archived" Pulse stays fully editable, keeps notifying you, and is unchanged
+  "archived" Beats stays fully editable, keeps notifying you, and is unchanged
   for everyone else. **This single action is overloaded** — it is named for a
   shared lifecycle state but implemented as a personal one. §3.10 splits it into
   **Hide** (this behaviour, renamed) and **Archive** (shared, read-only).
 - **Delete** is owner-only and global: `deletePulse` (`pulses.ts:207-223`)
-  cascade-deletes `invites`/`epics`/`features`/`resources`, then the pulse doc,
+  cascade-deletes `invites`/`epics`/`features`/`resources`, then the Beat doc,
   then `pulseMembers` **last** (deleting your own member doc first would deny
   every subsequent step, `pulses.ts:208-211`), then your own index entry. It
   **cannot** clean other members' `myPulses` entries — their client self-heals
-  them. The dashboard warns delete "erases the Pulse and all its data for
+  them. The dashboard warns delete "erases the Beat and all its data for
   everyone" and suggests archiving instead (`DashboardPage.tsx:72-76`).
 
 ### 1.9 Live sync & the Resource↔account link
 
-- Every Pulse view is driven by `onSnapshot` (`pulseStore.ts:108-122`):
+- Every Beat view is driven by `onSnapshot` (`pulseStore.ts:108-122`):
   `subscribePulse`, `subscribeEpics`, `subscribeFeatures`, `subscribeResources`,
   `subscribePulseMembers`. **Firestore is the source of truth; there is no
-  optimistic layer** (see Undo-Spec.md §2). Two people editing the same Pulse
+  optimistic layer** (see Undo-Spec.md §2). Two people editing the same Beat
   already see each other's writes land live — the *data* plane of "real-time
   collaboration" exists; the *awareness* plane (presence, cursors) does not.
 - A `Resource` (a team-member row on the canvas) can be linked 1:1 to a real
@@ -250,14 +247,14 @@ What's missing or rough today, in rough priority order:
 1. **Invites are undeliverable and email-bound.** The "forget email delivery"
    state (§1.4): an invitee is never notified; discovery depends on them signing
    in with the exact invited email by chance. **Chosen fix: copy-link (§3.1).**
-2. **No team layer.** Sharing is per-Pulse, so onboarding the same 5 teammates to
-   10 Pulses is 50 manual grants with no group concept; the `workspaces` model
+2. **No team layer.** Sharing is per-Beat, so onboarding the same 5 teammates to
+   10 Beats is 50 manual grants with no group concept; the `workspaces` model
    that should solve this is dormant (§1.2). **Chosen fix: Teams (§3.2).**
 3. **No ownership transfer and no self-leave.** Only *an owner removing someone
    else* exists (§1.7). An owner can't hand off ownership, and a member can't
    remove themselves (archiving only hides their card while leaving them a live
    member). A sole owner's exit is **transfer, archive or delete** — never leave,
-   since a Pulse must always keep an owner (§3.3, `Hide-and-Archive-Spec.md` HA10);
+   since a Beat must always keep an owner (§3.3, `Hide-and-Archive-Spec.md` HA10);
    today only the first of those three is missing, and the dead end says so
    without offering a route.
 4. **No awareness / presence.** Data syncs live, but you can't see who else is
@@ -265,10 +262,10 @@ What's missing or rough today, in rough priority order:
 5. **No comments / @mentions** on tasks (§3.5).
 6. **No notifications** of any kind — invite/mention/assignment/status (§3.6).
 7. **No activity / audit log** — who changed what, when (§3.7).
-8. **Coarse permissions** — per-Pulse whole-Pulse only; no comment-only role;
+8. **Coarse permissions** — per-Beat whole-Beat only; no comment-only role;
    editors can invite (§3.8).
 9. **"Archive" is overloaded and can't express "this project is finished."**
-   The one action is personal (§1.8), so retiring a shared Pulse takes N manual
+   The one action is personal (§1.8), so retiring a shared Beat takes N manual
    archives, one per member, and signals nothing to anyone. The delete
    confirmation steers people to archive as the safe alternative
    (`DashboardPage.tsx:72-76`) — but delete is global and archive is personal,
@@ -294,15 +291,15 @@ directions lead: **copy-link invites (§3.1)** and **Teams (§3.2)**.
 ### 3.1 Copy-link join model (replaces emailed invites)
 
 **Chosen direction.** Instead of inviting by email address, an owner/editor
-**generates a shareable join link** for a Pulse, picks the role it grants
+**generates a shareable join link** for a Beat, picks the role it grants
 (default **viewer**, optionally **editor**), copies it, and sends it however they
-like (Slack, email, DM). **Pulse does not deliver anything** — which is exactly
+like (Slack, email, DM). **Beats does not deliver anything** — which is exactly
 why this needs no Cloud Function and no mail provider (§3.9).
 
 **Link doc.** `pulses/{pulseId}/joinLinks/{token}`, where `token` is an
 unguessable random doc id (≥128 bits) — **the token is the secret / the
 capability.** Fields (`JoinLink`, §5): `{ role, createdBy, createdAt, expiresAt?,
-disabled? }`. A Pulse can have more than one live link (e.g. a viewer link and an
+disabled? }`. A Beat can have more than one live link (e.g. a viewer link and an
 editor link). Revocation = **delete the link doc** (or flip `disabled`);
 regeneration = delete + create a new token, invalidating the old URL.
 
@@ -353,11 +350,11 @@ after a one-release deprecation window for the accept side. **No email, no serve
 ### 3.2 Teams (activate the workspace layer)
 
 **Chosen direction.** Turn the dormant `workspaces` layer (§1.2) into a real
-**Team**: a shared space that multiple people belong to and that **owns Pulses**.
-Adding someone to a Team grants them access to **every Pulse in that Team**, so a
-team of collaborators is set up once, not per-Pulse.
+**Team**: a shared space that multiple people belong to and that **owns Beats**.
+Adding someone to a Team grants them access to **every Beat in that Team**, so a
+team of collaborators is set up once, not per-Beat.
 
-**Access model — cascade, plus per-Pulse guests (recommended).** A Pulse's read
+**Access model — cascade, plus per-Beat guests (recommended).** A Beat's read
 becomes:
 
 ```
@@ -368,48 +365,46 @@ allow read: if isPulseMember(pulseId)
 and writes similarly OR-in the team-role check. So there are **two independent
 grant sources**, unioned:
 
-- **Team membership** cascades to *all* Pulses whose `workspaceId` is that team —
-  the rule reads the pulse doc's `workspaceId` and checks
+- **Team membership** cascades to *all* Beats whose `workspaceId` is that team —
+  the rule reads the Beat doc's `workspaceId` and checks
   `workspaceMembers/{uid}` (helpers already exist, `firestore.rules:38-44`).
-- **Per-Pulse `pulseMembers`** still works unchanged, for **guests** — external
-  collaborators who should see *one* Pulse but not join the whole team. This is
+- **Per-Beat `pulseMembers`** still works unchanged, for **guests** — external
+  collaborators who should see *one* Beats but not join the whole team. This is
   why we keep `pulseMembers` rather than folding everything into workspace
   membership: guests are a real need, and it preserves today's model as a subset.
 
-Effective capability on a Pulse = **the higher of** the user's team role and any
-per-Pulse role. This union means a team viewer can be bumped to editor on a single
-Pulse via a per-Pulse grant, and a guest with no team membership still works
+Effective capability on a Beat = **the higher of** the user's team role and any
+per-Beat role. This union means a team viewer can be bumped to editor on a single Beat via a per-Beat grant, and a guest with no team membership still works
 exactly as today.
 
-Cost/consequence to accept: cascading reads/writes make the rule `get()` the pulse
+Cost/consequence to accept: cascading reads/writes make the rule `get()` the Beat
 doc (one extra document read per rule evaluation on subcollection access) to learn
 `workspaceId`. That's the standard price of the cascade and is acceptable; the
 alternative (denormalizing `workspaceId` onto every epic/feature/resource doc)
 isn't worth the write-amplification.
 
-**Team roles vs Pulse roles — unify to three tiers (recommended).** Today
+**Team roles vs Beats roles — unify to three tiers (recommended).** Today
 `WorkspaceRole = "owner" | "member"` is too coarse. Widen it to mirror
 `PulseRole`: **`owner` · `editor` · `viewer`** at the team level, so there's *one*
-mental model. Mapping to Pulse capability:
+mental model. Mapping to Beats capability:
 
-| Team role | On every Pulse in the team | Team-management powers |
+| Team role | On every Beat in the team | Team-management powers |
 |---|---|---|
 | owner | owner-equivalent (incl. delete) | rename team, manage team members, generate team links, delete team |
 | editor | editor-equivalent | — |
 | viewer | viewer-equivalent (read-only) | — |
 
-A per-Pulse `pulseMembers` grant can only *raise* effective capability above the
-team role, never lower it (no per-Pulse "revoke from the team" in v1 — that's a
+A per-Beat `pulseMembers` grant can only *raise* effective capability above the
+team role, never lower it (no per-Beat "revoke from the team" in v1 — that's a
 sharp edge; see D11).
 
 **Personal workspace stays private (recommended).** The auto-created personal
 workspace (`isPersonal: true`, `workspaces.ts:15-30`) remains a **private,
 single-member** space — it is *not* upgradable to a shared team, because
-"upgrading" it would retroactively expose every private Pulse a user ever made.
-Instead, users **create separate, named Teams**. To share an existing personal
-Pulse, the owner **moves it into a Team** by changing its `workspaceId` (an
-owner-only action; the pulse `update` rule already requires `canEditPulse`, and we
-add a guard that the target workspace is one the caller owns). New Pulses can be
+"upgrading" it would retroactively expose every private Beat a user ever made.
+Instead, users **create separate, named Teams**. To share an existing personal Beat, the owner **moves it into a Team** by changing its `workspaceId` (an
+owner-only action; the Beat `update` rule already requires `canEditPulse`, and we
+add a guard that the target workspace is one the caller owns). New Beats can be
 created directly inside a Team.
 
 **Creating / naming / inviting to a Team.**
@@ -419,23 +414,23 @@ created directly inside a Team.
   creator becomes team `owner`.
 - **Invite to a Team:** a **team join link** (§3.1 applied to teams):
   `workspaces/{wsId}/joinLinks/{token}`, granting a team role. Opening it
-  self-creates `workspaceMembers/{uid}`, token-validated exactly like the Pulse
+  self-creates `workspaceMembers/{uid}`, token-validated exactly like the Beat
   case. Same serverless copy-link UX, one level up.
 
 **Dashboard grouping & team switcher.** Add a team selector to the dashboard
 header: **Personal** + each Team the user belongs to. Selecting a Team shows that
-Team's Pulses grouped as today (active / archived). Two wiring notes:
+Team's Beats grouped as today (active / archived). Two wiring notes:
 
-- Listing a Team's Pulses is a **plain, filtered query** on the top-level `pulses`
+- Listing a Team's Beats is a **plain, filtered query** on the top-level `pulses`
   collection — `query(collection(db,'pulses'), where('workspaceId','==',wsId))` —
   **not** a collection-group query, so it's allowed under the founding constraint
   (`firestore.rules:1-25` only bans collection-*group* lists). Guard it with a new
   `allow list` rule keyed to `isWorkspaceMember(resource.data.workspaceId)` (§4).
-  This is how a team member sees Pulses they were never per-Pulse-invited to
+  This is how a team member sees Beats they were never per-Beat-invited to
   **without** anyone writing into their self-owned `myPulses` index — the §1.6
   invariant holds.
-- `myPulses` remains the index for **personal + guest** Pulses (the cases where
-  the user *does* have a `pulseMembers` doc). Team-cascade Pulses are discovered
+- `myPulses` remains the index for **personal + guest** Beats (the cases where
+  the user *does* have a `pulseMembers` doc). Team-cascade Beats are discovered
   via the filtered query above, not `myPulses`. `MyPulseIndexEntry.workspaceId`
   already exists (`types/index.ts:110`) for grouping the ones that are indexed.
 
@@ -444,28 +439,28 @@ member list with team-role management (owner-only), remove member, generate/revo
 team links. `workspaceMembers` update/delete is already owner-gated
 (`firestore.rules:88`).
 
-**Migration (additive, no forced rewrite).** Every existing Pulse already has a
+**Migration (additive, no forced rewrite).** Every existing Beat already has a
 `workspaceId` pointing at its creator's personal workspace (`createPulse`,
 `pulses.ts:30-42`). So:
 
-- Existing Pulses stay exactly as they are — private in their owner's personal
-  workspace, shared (if at all) via per-Pulse `pulseMembers`. Nothing breaks.
-- The upgrade path is opt-in: create a Team, then **move** chosen Pulses into it
-  (change `workspaceId`) and/or create new Pulses there. Per-Pulse guests on a
-  moved Pulse keep working (union model).
+- Existing Beats stay exactly as they are — private in their owner's personal
+  workspace, shared (if at all) via per-Beat `pulseMembers`. Nothing breaks.
+- The upgrade path is opt-in: create a Team, then **move** chosen Beats into it
+  (change `workspaceId`) and/or create new Beats there. Per-Beat guests on a
+  moved Beat keep working (union model).
 - No backfill job, no data rewrite, no downtime. The only global change is the
-  rule edit that OR-s workspace membership into Pulse reads/writes.
+  rule edit that OR-s workspace membership into Beats reads/writes.
 
 **D2 (recommend the union-cascade model):** Team = shared `workspaces` doc
-(`isPersonal:false`); team membership cascades access to all its Pulses via a rule
-`get()` on the pulse's `workspaceId`; per-Pulse `pulseMembers` guests still
-allowed; effective role = max(team, per-Pulse). Team roles unified to
+(`isPersonal:false`); team membership cascades access to all its Beats via a rule
+`get()` on the Beat's `workspaceId`; per-Beat `pulseMembers` guests still
+allowed; effective role = max(team, per-Beat). Team roles unified to
 owner/editor/viewer. Personal workspace stays private and single-member; sharing
-is via separate named Teams and moving Pulses into them. Invite to a team by team
-join link (§3.1). Dashboard team switcher; team Pulses listed via a filtered
+is via separate named Teams and moving Beats into them. Invite to a team by team
+join link (§3.1). Dashboard team switcher; team Beats listed via a filtered
 (non-collection-group) `pulses` query. Migration is additive.
 
-### 3.3 Ownership transfer & leave-Pulse (near-term, serverless)
+### 3.3 Ownership transfer & leave-Beat (near-term, serverless)
 
 Two missing lifecycle actions (§2.3), both rules+UI only:
 
@@ -475,20 +470,20 @@ Two missing lifecycle actions (§2.3), both rules+UI only:
   declines to offer "owner" today (`CollaboratorsDialog.tsx:22-25,140-142`). So
   this is a **UI + guard** change: allow "Make owner", keep the "≥1 owner always"
   invariant. **Quick win.**
-- **Leave Pulse:** a member deletes **their own** `pulseMembers/{uid}` + `myPulses`
+- **Leave Beats:** a member deletes **their own** `pulseMembers/{uid}` + `myPulses`
   docs. Needs a **one-line rules addition**: today `pulseMembers` delete is
   `isPulseOwner` only (`firestore.rules:122`); add
   `|| memberUid == request.auth.uid`. **The last owner may never leave**
   (`Hide-and-Archive-Spec.md` §5.7 / HA10): their exits are **Archive** (freeze it,
-  keep everything), **Delete**, or **Transfer** first — a Pulse always has at least
+  keep everything), **Delete**, or **Transfer** first — a Beat always has at least
   one owner, because archive/unarchive/delete/promote all require one and an
-  ownerless archived Pulse is unrecoverable. Enforced exactly client-side
+  ownerless archived Beat is unrecoverable. Enforced exactly client-side
   (`CollaboratorsDialog.tsx:38`); the rules backstop is the self-delete clause
   above narrowed to `&& pulseRole(pulseId) != 'owner'`, since rules can't count
   owners. **Quick win.**
 
 **D3 (recommend both):** "Make owner" transfer with a last-owner guard, and
-"Leave Pulse" as a self-delete of one's own `pulseMembers` + `myPulses` (needs the
+"Leave Beat" as a self-delete of one's own `pulseMembers` + `myPulses` (needs the
 `memberUid == request.auth.uid` self-delete rule, narrowed so no owner may
 self-delete — HA10). For a Team, "leave team" is the analogous self-delete of one's
 own `workspaceMembers` doc, and will want the same always-an-owner invariant.
@@ -505,7 +500,7 @@ Today's data plane is live (§1.9); this adds the **awareness** plane.
   refreshed ~every 20s (>45s stale ⇒ gone). One database, one rules file; departure
   is inferred from a stale heartbeat, not instant.
 
-Surfaces as **avatar chips** in the Pulse header ("3 here") and a per-box "editing
+Surfaces as **avatar chips** in the Beat header ("3 here") and a per-box "editing
 now" indicator when a member's `presence.focusId` matches a feature id (`focusId`
 reuses the existing `selectedId`, `PulsePage.tsx:138,190-193`).
 
@@ -517,7 +512,7 @@ high-frequency streams (Undo-Spec.md §2.6) where presence is the pragmatic guar
 No OT/CRDT.
 
 **Interaction with Undo.** Undo-Spec.md is explicitly **single-user, in-memory,
-per-Pulse, field-level** (Undo-Spec.md §8, D1). Undo issues *inverse writes*
+per-Beat, field-level** (Undo-Spec.md §8, D1). Undo issues *inverse writes*
 through the same `canEditPulse` path, not a snapshot rollback — so it never
 resurrects a teammate's edit to *other* fields (Undo-Spec.md §6). Presence just
 makes it visible *why* an undo might not fully revert. Shared/collaborative undo
@@ -533,13 +528,13 @@ proves necessary.
 Threaded comments scoped to a feature:
 `pulses/{pulseId}/features/{featureId}/comments/{commentId}` (`Comment`, §5).
 
-- **Read:** any Pulse member (or team member — §3.2). **Author:** any member
+- **Read:** any Beat member (or team member — §3.2). **Author:** any member
   **including viewers** (comment-only participation is the one write a viewer
   should have — see D8/D11). **Edit/delete:** author only; owner may delete any.
 - **@mentions:** autocomplete over the member roster (`pulseStore.members`),
   storing mentioned `uid`s in `mentions[]` to drive a notification (§3.6) /
   activity entry (§3.7). Mentioning a non-member is disallowed (they can't read
-  the Pulse); offer "share a link instead" (§3.1).
+  the Beat); offer "share a link instead" (§3.1).
 - **Surfacing:** comment count + latest snippet on `DetailsTab` for the selected
   feature, and a Kanban-card comment badge (consistent with the card icon row,
   Kanban-Spec.md §4).
@@ -564,7 +559,7 @@ is now **the main reason a backend would exist at all** (§3.9): invites went
 serverless (§3.1), so notifications and the audit log (§3.7) are the only
 server-needing features — and both are optional/deferrable.
 
-Channels: **in-app first** (the inbox). Because Pulse no longer sends any email
+Channels: **in-app first** (the inbox). Because Beats no longer sends any email
 (§3.1), an email channel would re-introduce a mail provider — recommend **in-app
 only for v1**, revisit email later (D12).
 
@@ -575,7 +570,7 @@ Deferred behind the serverless slice.
 
 ### 3.7 Activity / audit log
 
-Append-only per-Pulse feed at `pulses/{pulseId}/activity/{id}` (`Activity`, §5).
+Append-only per-Beat feed at `pulses/{pulseId}/activity/{id}` (`Activity`, §5).
 
 - **Read:** any member/team member. **Write:** **server-only via Cloud Function**
   strongly preferred — an audit log a client can forge or selectively omit isn't
@@ -585,7 +580,7 @@ Append-only per-Pulse feed at `pulses/{pulseId}/activity/{id}` (`Activity`, §5)
   store-mutation boundary the Undo engine records at (`recordSingle`/`recordMany`,
   `pulseStore.ts`), so one gesture = one entry (matches Undo-Spec.md §5).
 
-**D7 (recommend):** per-Pulse append-only `activity`, written server-side by a
+**D7 (recommend):** per-Beat append-only `activity`, written server-side by a
 Cloud Function at the logical-action boundary; members read. Ships after
 notifications (shares the — optional — backend).
 
@@ -629,7 +624,7 @@ client's own boundary or skip the audit log. This is the D9 reframe.
 > wiring, copy, migration and tests live there. Where the two disagree, that
 > document wins — it corrects two things sketched here: the freeze is **not** one
 > clause on `canEditPulse` (only 3 of the write paths route through it — see its
-> §4.1), and deleting an archived Pulse needs an explicit owner-delete exemption
+> §4.1), and deleting an archived Beat needs an explicit owner-delete exemption
 > or the client-side cascade denies itself (its §4.4).
 
 Today's one action (§1.8) is named for a shared lifecycle state and implemented
@@ -638,9 +633,9 @@ what they say:
 
 | | **Hide** (per-user) | **Archive** (shared) |
 |---|---|---|
-| Scope | Your dashboard only | The Pulse, for everyone |
+| Scope | Your dashboard only | The Beat, for everyone |
 | Who | Any member, for themselves | **Owner only** |
-| Effect | Moves your card to a **Hidden** section | Pulse becomes **read-only for all members** |
+| Effect | Moves your card to a **Hidden** section | Beats becomes **read-only for all members** |
 | Editable | Yes — nothing changes | **No** — unarchive first |
 | Counts against `maxPulses` | **Yes** (unchanged) | **Yes** — archiving is not quota relief (`Plans-Spec.md` PL12) |
 | Reversible by | You | Any owner |
@@ -648,7 +643,7 @@ what they say:
 **Hide is today's behaviour, renamed.** It stays a pure dashboard filter with no
 behavioural change of any kind — same access, same notifications, same edits.
 Renaming it is the point: the word "archive" is what made people expect a shared
-lifecycle state. A hidden Pulse still counts against quota, because the quota is
+lifecycle state. A hidden Beat still counts against quota, because the quota is
 an **org-level** count and hiding is a **per-user** preference — letting it
 change the count would both be incoherent (whose hide wins?) and an obvious way
 to dodge the cap.
@@ -670,18 +665,17 @@ self-serve-bypassed by flipping your own flag.
 
 **Rules** (detail in §4; authoritative version in `Hide-and-Archive-Spec.md` §4).
 Every write path is frozen by an `isPulseActive(pulseId)` clause — but there is
-**no single chokepoint** to hang it on: only `epics`, `resources` and the pulse
+**no single chokepoint** to hang it on: only `epics`, `resources` and the Beat
 doc's own `update` route through `canEditPulse`; `features` and `costs` go
 through `callerEditScope`, and `comments` through `isPulseMember`. Each needs its
 own clause. The unarchive write itself must stay permitted: on `pulses/{p}`, an
 owner may update when the diff touches only `archivedAt`/`archivedBy`/`updatedAt`.
-Deleting an archived Pulse stays allowed (`isPulseOwner`, unchanged) — archive
+Deleting an archived Beat stays allowed (`isPulseOwner`, unchanged) — archive
 freezes editing, it isn't a deletion guard — and because `deletePulse` is a
 **client-side cascade**, the subcollection delete rules need an explicit
-owner exemption or an archived Pulse becomes undeletable.
+owner exemption or an archived Beat becomes undeletable.
 
-**The cost to accept:** `isPulseArchived()` is one extra rules `get()` on the
-pulse doc for every subcollection write. Subcollection writes already spend a
+**The cost to accept:** `isPulseArchived()` is one extra rules `get()` on the Beat doc for every subcollection write. Subcollection writes already spend a
 `get()` on `pulseMembers` for the role, so this makes two — well inside the
 10-`get()` per-request budget, but it is not free, and it is on the hot write
 path. The alternative (a copy of the flag in each subcollection doc) is worse:
@@ -689,14 +683,14 @@ it can go stale and would need a fan-out write to set.
 
 **Client wiring.** `PulsePage` derives `canEdit` from `editScope === "all"`
 (`PulsePage.tsx:102-107`), and `editScope` comes from the role/caps
-(`Permissions-Spec.md` §4). Fold archived in **there** — an archived Pulse
+(`Permissions-Spec.md` §4). Fold archived in **there** — an archived Beat
 resolves to `editScope: "none"` — and every existing disabled state, drag guard,
 and hidden control follows automatically, with no per-component work.
 
 **The warning.** Read-only must be explained, not just enforced, or it reads as a
 bug:
 
-- A persistent banner in the Pulse: *"This Pulse is archived. Unarchive it to
+- A persistent banner in the Beat: *"This Beat is archived. Unarchive it to
   make changes."* — with an **Unarchive** button for owners, and *"Ask an owner
   to unarchive it"* for everyone else.
 - The Toolbar carries an **Archived** chip next to the name.
@@ -704,12 +698,12 @@ bug:
   paste) is swallowed and surfaces the same message as a transient notice rather
   than failing silently or throwing a rules error.
 - Archiving asks for confirmation, naming the consequence: *"Archiving makes
-  this Pulse read-only for all N members. Any owner can unarchive it."*
+  this Beat read-only for all N members. Any owner can unarchive it."*
 
 **Quota interaction** is specified in `Plans-Spec.md` (§3.2, §5, §5.1, **PL12**):
-archived Pulses **do** count against `maxPulses`, exactly like active ones, and
+archived Beats **do** count against `maxPulses`, exactly like active ones, and
 so do hidden ones. Neither action is quota relief — an org at its cap frees a
-slot only by **deleting** a Pulse (archived ones included) or **upgrading**.
+slot only by **deleting** a Beat (archived ones included) or **upgrading**.
 Consequences for this feature: `workspace.pulseCount` needs no archive
 awareness (create/delete move it, nothing else), unarchive needs **no** quota
 check (it can't raise the count), and the archive UI must never imply it will
@@ -718,7 +712,7 @@ now cleared by delete/upgrade rather than by archiving.
 
 **Migration.** Existing `myPulses.archived` entries carry today's *personal*
 meaning, so they migrate to `hidden` — never to the new shared archive, which
-would surprise the other members of every Pulse anyone had tidied away. The
+would surprise the other members of every Beat anyone had tidied away. The
 index is self-owned and self-healed already (§1.6), so the dashboard's existing
 reconcile loop (`DashboardPage.tsx:46-74`) does it: if an entry has `archived`
 and no `hidden`, write `hidden = archived` and delete `archived`. Converges in
@@ -747,11 +741,11 @@ collection-*group* queries.
 | Token self-join (§3.1) | `pulses/{p}/pulseMembers/{uid}` | unchanged | **new Case 3**: `memberUid == request.auth.uid && exists(joinLinks/$(request.resource.data.joinToken)) && get(that).data.role == request.resource.data.role && !disabled && (expiresAt == null \|\| expiresAt > request.time)` |
 | Retire email invites (§3.1) | `pulses/{p}/invites`, `inviteIndex/**` | — | **delete these rule blocks** (`firestore.rules:92-99,125-141`) after the deprecation window; drop Case 2 (`:118-121`) |
 | Team access cascade (§3.2) | `pulses/{p}` + subcollections | `isPulseMember(p) \|\| isWorkspaceMember(get(pulses/$(p)).data.workspaceId)` | writes OR-in `workspaceRole(...) in ['owner','editor']`; delete OR-in team `owner` |
-| List a team's Pulses (§3.2) | `pulses` (top-level) | **new** `allow list: if isWorkspaceMember(resource.data.workspaceId)` (plain filtered query, not collection-group) | — |
+| List a team's Beats (§3.2) | `pulses` (top-level) | **new** `allow list: if isWorkspaceMember(resource.data.workspaceId)` (plain filtered query, not collection-group) | — |
 | Team roles/members (§3.2) | `workspaces/{w}/workspaceMembers` | already `isWorkspaceMember` (`:84`) | already owner-gated (`:88`); widen role enum to owner/editor/viewer |
 | Team join link (§3.2) | `workspaces/{w}/joinLinks/{token}` | `get`: `isSignedIn()` | create/delete: team owner; self-join creates `workspaceMembers/{uid}` token-validated (mirror of Case 3) |
-| Move Pulse to a team (§3.2) | `pulses/{p}` | unchanged | `update` already `canEditPulse`; add guard that `request.resource.data.workspaceId` is a workspace the caller owns |
-| Leave-Pulse (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | **add** to delete (`:122`): `\|\| (memberUid == request.auth.uid && pulseRole(p) != 'owner')` — no owner may self-delete, so a Pulse always keeps one (`Hide-and-Archive-Spec.md` HA10) |
+| Move Beats to a team (§3.2) | `pulses/{p}` | unchanged | `update` already `canEditPulse`; add guard that `request.resource.data.workspaceId` is a workspace the caller owns |
+| Leave-Beat (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | **add** to delete (`:122`): `\|\| (memberUid == request.auth.uid && pulseRole(p) != 'owner')` — no owner may self-delete, so a Beat always keeps one (`Hide-and-Archive-Spec.md` HA10) |
 | Transfer ownership (§3.3) | `pulses/{p}/pulseMembers/{uid}` | unchanged | already `isPulseOwner` update (`:122`) — **no rules change**, UI only |
 | Archive freeze (§3.10) | `pulses/{p}` **and every content subcollection** | unchanged | every write gate ANDs `isPulseActive(p)` = `get(/…/pulses/$(p)).data.archivedAt == null` — `canEditPulse` for epics/resources, `callerEditScope` for features/costs, `isPulseMember` for comments; deletes keep an owner exemption. Per-gate, **not** one chokepoint (`Hide-and-Archive-Spec.md` §4.1, §4.4) |
 | Archive / unarchive (§3.10) | `pulses/{p}` | unchanged | `update`: `isPulseOwner(p)` **and** `request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archivedAt','archivedBy','updatedAt'])` — the only write that may cross the freeze |
@@ -767,9 +761,9 @@ Three constraints to call out, because they shape the architecture:
    The joining member doc carries `joinToken`; the rule `get()`s the link and
    matches its `role` and validity — so a client can't forge a role or reuse a
    revoked/expired link. This is the token analogue of today's email-bound Case 2.
-2. **Team access is a rule `get()` on the pulse doc.** The cascade learns
-   `workspaceId` by reading the pulse doc inside the subcollection rules; the
-   self-owned `myPulses` invariant (§1.6) is untouched because team Pulses are
+2. **Team access is a rule `get()` on the Beat doc.** The cascade learns
+   `workspaceId` by reading the Beat doc inside the subcollection rules; the
+   self-owned `myPulses` invariant (§1.6) is untouched because team Beats are
    *listed via a filtered query*, never written into anyone's index.
 3. **Cross-user delivery is still server-only by construction** (§1.6): user A
    can't write user B's `notifications`, so §3.6/§3.7 are the *only* things needing
@@ -835,7 +829,7 @@ Reuse rather than duplicate:
   `linkResourceId` auto-binds the new member to that resource row (§1.9, D10).
 - Presence `focusId` reuses the UI's existing `selectedId` (`PulsePage.tsx:138`).
 - `MyPulseIndexEntry.workspaceId` (`types/index.ts:110`) already lets the dashboard
-  group indexed Pulses by team.
+  group indexed Beats by team.
 
 Core `Feature`/`Epic`/`Resource`/`Pulse` shapes are unchanged for all of the above.
 
@@ -844,13 +838,13 @@ Core `Feature`/`Epic`/`Resource`/`Pulse` shapes are unchanged for all of the abo
 Ordered so the **serverless near-term slice** lands first, Teams next, and the
 optional backend features last.
 
-1. **Copy-link invites (§3.1) + Leave-Pulse + Transfer ownership (§3.3).** The
+1. **Copy-link invites (§3.1) + Leave-Beat + Transfer ownership (§3.3).** The
    near-term, entirely serverless slice. `joinLinks` + token self-join rule, the
    Share-panel UI reframe, the `memberUid == request.auth.uid` self-delete rule,
    and the "Make owner" transfer. Retire the email-invite UI; keep
    `resolvePendingInvites` for one deprecation window.
 2. **Hide + Archive split (§3.10).** Small, serverless, and independent of the
-   billing work — archived Pulses count against quota like any other
+   billing work — archived Beats count against quota like any other
    (`Plans-Spec.md` PL12), so `workspace.pulseCount` needs no archive awareness
    and this can land before or after the counter function. Rename
    `myPulses.archived` → `hidden` (self-heal migration), add
@@ -862,8 +856,8 @@ optional backend features last.
 3. **Retire `invites`/`inviteIndex` (§3.1).** After the window: delete the rule
    blocks, `invites.ts`, `resolvePendingInvites`, and the `inviteIndex` docs/types.
 4. **Teams (§3.2).** The workspace activation: widen `WorkspaceRole`, the cascade
-   read/write rules, the team-Pulse `list` rule, team creation/naming, team join
-   links, move-Pulse-to-team, the dashboard team switcher. Largest serverless
+   read/write rules, the team-Beat `list` rule, team creation/naming, team join
+   links, move-Beat-to-team, the dashboard team switcher. Largest serverless
    piece; additive migration.
 5. **Presence & concurrent-edit awareness (§3.4).** Heartbeat presence, header
    avatars, "editing now" chip. Riskiest for multi-user correctness; sequenced
@@ -888,13 +882,13 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
    `inviteIndex` and `resolvePendingInvites` are all live and now carry the
    second invite kind. Read D1 as "add copy-links", not "remove email invites".
 2. **D2 — Teams via the workspace layer.** *Recommend:* union-cascade
-   (team membership grants all team Pulses; per-Pulse guests still allowed;
-   effective role = max(team, per-Pulse)); team roles unified to
+   (team membership grants all team Beats; per-Beat guests still allowed;
+   effective role = max(team, per-Beat)); team roles unified to
    owner/editor/viewer; personal workspace stays private/single-member; share by
-   creating named Teams + moving Pulses in; team switcher on the dashboard; team
-   Pulses listed via a filtered `pulses` query. *Confirm the union-cascade model
+   creating named Teams + moving Beats in; team switcher on the dashboard; team
+   Beats listed via a filtered `pulses` query. *Confirm the union-cascade model
    and the "personal stays private" stance.*
-3. **D3 — Ownership transfer & leave-Pulse (near-term).** *Recommend:* ship both in
+3. **D3 — Ownership transfer & leave-Beat (near-term).** *Recommend:* ship both in
    phase 1; add the `memberUid == request.auth.uid` self-delete rule; keep a
    last-owner guard; "leave team" as the workspace analogue. *Confirm.*
 4. **D4 — Presence backend.** *Recommend:* Firestore heartbeat (`presence/{uid}` +
@@ -907,7 +901,7 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
    `users/{uid}/notifications` inbox, cross-user entries **written server-side
    only**; start mention + assignment; **in-app only** (no email in v1). *Confirm
    the type set and that email is out of scope.*
-7. **D7 — Activity log (optional backend).** *Recommend:* per-Pulse append-only
+7. **D7 — Activity log (optional backend).** *Recommend:* per-Beat append-only
    `activity`, written by a Cloud Function at the logical-action boundary, members
    read. *Confirm server-written vs. a client-append-only interim.*
 8. **D8 — Permission granularity.** *Recommend:* comment-only viewers now; defer
@@ -922,14 +916,14 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     (§1.9). *Recommend:* let a `JoinLink` optionally carry `linkResourceId` to
     auto-bind a joining member to a resource row, and start keying behavior
     (assignment notifications, §3.6) off `linkedUid`. *Confirm this is desired.*
-11. **D11 — Who may create a link, and per-Pulse override direction.**
+11. **D11 — Who may create a link, and per-Beat override direction.**
     (a) Link creation: **✅ DECIDED — `canEditPulse` (owner + editor).** Both
     owners and editors can generate/copy/revoke join links.
-    (b) **✅ DECIDED — accepted for v1.** In Teams, a per-Pulse grant can only
-    *raise* capability above the team role, never lower it (no per-Pulse
-    "exclude a team member" yet); a team member sees every team Pulse at least at
-    their team role. Per-Pulse exclusions are a possible later addition.
-12. **D12 — Email channel later.** Pulse sends no email at all now (§3.1). If
+    (b) **✅ DECIDED — accepted for v1.** In Teams, a per-Beat grant can only
+    *raise* capability above the team role, never lower it (no per-Beat
+    "exclude a team member" yet); a team member sees every team Beat at least at
+    their team role. Per-Beat exclusions are a possible later addition.
+12. **D12 — Email channel later.** Beats sends no email at all now (§3.1). If
     notifications (D6) ever want email, that re-introduces a mail provider.
     *Recommend:* defer; in-app only for the foreseeable roadmap. *Confirm.*
 13. **D13 — Hide vs Archive (§3.10). ✅ DECIDED (split, archived stays counted).**
@@ -938,7 +932,7 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     by any owner, enforced in rules via `canEditPulse(p) && isPulseActive(p)`,
     with a banner explaining the freeze and pointing at unarchive. **Both count
     against `maxPulses`** — archiving is never quota relief; a slot is freed only
-    by deleting a Pulse (archived ones included) or upgrading
+    by deleting a Beat (archived ones included) or upgrading
     (`Plans-Spec.md` **PL12**, which revises §5.1 accordingly). Existing
     `myPulses.archived` migrates to `hidden`, never to the shared state.
     *Still to confirm:* owner-only, or may editors archive too?
@@ -953,14 +947,14 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     *Why:* removal used to be one-way and unrecoverable. Every other writer of
     the index (`createPulse`, `duplicatePulse`, `joinPulseViaLink`,
     `resolvePendingInvites`) fires only when access is *granted*, so a single
-    spurious delete hid a live Pulse from its dashboard permanently — the member
+    spurious delete hid a live Beat from its dashboard permanently — the member
     could still open it by URL, and the page would load, edit and log activity
     without ever restoring the card. Owners are the worst case: they never click
     their own join link, and no other client may write their index. This is not
     hypothetical — `EEbetLzJ7PHCtJA0I0ku` ("Product Roadmap") was invisible to
     its own owner while `pulses/…/pulseMembers/{owner}` was intact; the entry was
     restored by hand on 2026-08-14.
-    *Rejected:* (a) *unconditional write-back on every Pulse open* — cheaper than
+    *Rejected:* (a) *unconditional write-back on every Beat open* — cheaper than
     a read but it would resurrect an entry the user is entitled to have gone, and
     overwrite per-user state on every load; (b) *checking `metadata.fromCache` in
     the store's listeners* — narrower (it doesn't cover a listener torn down by an
@@ -1003,7 +997,7 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     therefore went to **whoever registered that address first** — and since the
     invite resolves silently at sign-in, neither the inviter nor the real
     recipient would ever see it happen. The reads are gated too: a squatter who
-    cannot accept could still *enumerate* which Pulses an address was invited
+    cannot accept could still *enumerate* which Beats an address was invited
     to, by whom, and as what.
     *Cost, accepted:* existing unconfirmed password accounts cannot accept
     invitations until they confirm. This is why the client half ships first
@@ -1015,7 +1009,7 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     above; (b) *verifying only at accept time and leaving the reads open* —
     keeps the disclosure for no benefit; (c) *blocking unconfirmed accounts from
     signing in at all* — far more disruptive than the problem, and it breaks
-    Pulses they legitimately own.
+    Beats they legitimately own.
 
 17. **D17 — The email-bounded link carries no token. ✅ DECIDED.**
     `/invite/:pulseId?to=<email>` contains a destination and a display hint, and
@@ -1031,21 +1025,20 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     is the only place the page can learn which address the invitation is for.
     It is validated against an email shape before rendering
     (`displayableEmail`), because it is attacker-controllable text appearing in
-    a sentence that reads as Pulse speaking.
+    a sentence that reads as Beat speaking.
     *Rejected:* (a) *token + email* — the token becomes the real credential the
     moment anything falls back to it; (b) *no `?to=` at all* — "permission
     denied" is all the page could say to someone in the extremely common
     wrong-account case.
 
 18. **D18 — The invite form proposes linked people who lack access. ✅ DECIDED.**
-    `candidatesFrom` (`EmailInvitePanel.tsx`) lists this Pulse's resources that
+    `candidatesFrom` (`EmailInvitePanel.tsx`) lists this Beat's resources that
     carry a `linkedEmail` but no `linkedUid`, minus current members and
     outstanding invites, deduped by address. One click invites them at the
     chosen role and copies their link.
-    *Why:* `linkedUid` is set only when the address resolved against **this
-    Pulse's membership** (`Resource-Master-Spec.md` RM19 and the resolvers in
+    *Why:* `linkedUid` is set only when the address resolved against **this Beat's membership** (`Resource-Master-Spec.md` RM19 and the resolvers in
     `functions/src/roster.ts`), so its absence is already the app's own record
-    of "we know exactly who this is, and they cannot open the Pulse." The Pulse
+    of "we know exactly who this is, and they cannot open the Beat." The Beat
     is holding the address; making the inviter notice the gap and retype it is
     work the data has already done.
     *Member emails are checked as well*, despite `linkedUid` covering it in
@@ -1055,6 +1048,6 @@ editing and shared undo (§3.4, Undo-Spec.md §10); email delivery of anything
     *Rejected:* (a) *suggesting every linked resource* — the ones with
     `linkedUid` are already in, so most rows would be no-ops; (b) *auto-inviting
     on link* — RM's own rule is that master-level linking implies nothing about
-    Pulse access, and this would quietly reverse it; (c) *a separate "invite
+    Beats access, and this would quietly reverse it; (c) *a separate "invite
     everyone missing" button* — role is per-person, and one button cannot ask.
 

@@ -1,4 +1,4 @@
-# Pulse — Billing & Backend Functions Build Plan
+# Beats — Billing & Backend Functions Build Plan
 
 Companion to **`Plans-Spec.md`**, **`Server-Functions-Spec.md`**, and
 **`Backend-Architecture-Spec.md`** (what to build and why). This is the **how**, in order,
@@ -8,7 +8,7 @@ against the codebase. *Written at `8fed153`; status blocks below refreshed at `9
 backend functions (SF3 + rules + client UX), so it shares the Functions foundation with the
 hardening functions. Sequence everything by dependency and risk on one timeline.
 
-**Original baseline (historical):** Pulse was **100% serverless** — a React client talking
+**Original baseline (historical):** Beats was **100% serverless** — a React client talking
 straight to Firestore, with no Cloud Functions at all. Phase 0 stood the runtime up; nothing
 server-side could precede it.
 
@@ -48,7 +48,7 @@ so the cutover needs no release.
    Firebase URL to `https://pulse.yasdu.com` and redeploy the two callables. It is deliberately
    still the Firebase URL, because a fallback pointing at a hostname that doesn't resolve turns
    a recoverable redirect into a dead end.
-6. **Then** publish the URL on the Yasdu site — see `Yasdu-Site-Pulse-Listing-Spec.md` §3.5.
+6. **Then** publish the URL on the Yasdu site — see `Yasdu-Site-Beats-Listing-Spec.md` §3.5.
 
 **Both Firebase domains keep serving the app.** Two consequences to expect rather than debug:
 existing sessions **do not carry over** (Firebase Auth state is per-origin, so everyone signs
@@ -67,7 +67,7 @@ parallel with Phase 0–2, so Phase 3 isn't blocked when it's ready.
   $0/$6/$12 per **editor seat**/mo (USD), quota-only (no feature gating). Encoded in
   `entitlements.ts`.
 - **Stripe account** — *mostly done, **in test mode only**.* The two per-seat products
-  ("Pulse Pro" $6, "Pulse Business" $12) exist **with `tier` metadata** (which is how SF3 and
+  ("Beats Pro" $6, "Beats Business" $12) exist **with `tier` metadata** (which is how SF3 and
   the Checkout callable both resolve a tier — on the **Product**, mirrored to the Price; see
   Plans-Spec §9.6 B), and `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` are in Secret
   Manager and bound to the deployed functions. **Still open:** point the webhook endpoint at
@@ -120,7 +120,7 @@ existing client logic in `src/domain/denorm.ts` (`featureDenorm`) and the store'
   `resources`, `children[].resources`, `lead`. Skip the write if it's the function's own
   denorm-only change (before/after diff) — avoids loops.
 - Trigger `onDocumentWritten pulses/{p}/resources/{r}` — on `linkedUid` change, **fan out**:
-  recompute every feature in the Pulse referencing `r`.
+  recompute every feature in the Beat referencing `r`.
 
 **Rules** — no change; `firestore.rules` already reads `assignedUids`/`leadUid`. Client keeps
 writing them optimistically (SF1 reconciles) — decide at build time whether to stop the
@@ -140,11 +140,11 @@ priority than the log/notification hardening in Phase 4, and unblocked by anythi
 
 **New** `functions/src/cascade.ts`
 
-- **SF6 — Pulse delete cascade** (`onDocumentDeleted pulses/{p}`): purge all subcollections
+- **SF6 — Beats delete cascade** (`onDocumentDeleted pulses/{p}`): purge all subcollections
   (features, epics, resources, comments, notifications, presence, activity, pulseMembers,
   billing is separate) and every member's `users/{uid}/myPulses/{p}`.
 - **SF7 — Membership-removal cascade** (`onDocumentDeleted pulses/{p}/pulseMembers/{uid}`):
-  clean the removed member's `myPulses` entry, their notifications/presence in that Pulse,
+  clean the removed member's `myPulses` entry, their notifications/presence in that Beat,
   and unlink them from resources (`linkedUid`).
 - **SF8 — Resource-delete integrity** (`onDocumentDeleted …/resources/{r}`): strip `r` from
   every feature's `resources`/`children[].resources`/`lead` (SF1 then re-derives the
@@ -154,7 +154,7 @@ priority than the log/notification hardening in Phase 4, and unblocked by anythi
 
 All idempotent (re-deletion is a no-op) and batched.
 
-**Exit:** deleting a Pulse / removing a member / deleting a resource or epic leaves no
+**Exit:** deleting a Beat / removing a member / deleting a resource or epic leaves no
 dangling cross-user or cross-doc references; a removed member's dashboard shows nothing
 stale even before their own self-heal runs.
 
@@ -165,7 +165,7 @@ stale even before their own self-heal runs.
 The **hard security boundary**. The plan must never be client-writable. Gated on Phase 0
 and the Stripe account (PL1–3 are now **decided**, §2/§3). Billing is keyed by
 **Organization = Workspace** (`orgId === workspaceId`, PL6). The model is **quota-only** —
-no feature gating; tiers differ by editor seats / Pulses / collaborators / resources.
+no feature gating; tiers differ by editor seats / Beats / collaborators / resources.
 
 **Already shipped (Phase 3 groundwork, committed):** `Workspace.country`/`stripeCustomerId`/
 `stripeSubscriptionId`; `PlanTier`/`BillingDoc`/`Entitlements` types; `domain/entitlements.ts`
@@ -209,34 +209,34 @@ already ships):
 - **Editor roster (PL9, rules-native):** `Workspace.editorUids[]` writable only by the org
   owner, `.size() ≤ editorSeatLimit` (`get billing/{ws}`), owner always included — synchronous,
   race-free.
-- **Pulse owner/editor**: allowed only when the target uid ∈ that org's `editorUids`.
-- **Create-Pulse**: only a licensed editor of `pulse.workspaceId`, under `maxPulses`.
+- **Beat owner/editor**: allowed only when the target uid ∈ that org's `editorUids`.
+- **Create-Beat**: only a licensed editor of `pulse.workspaceId`, under `maxPulses`.
 - **Add collaborator / resource**: under `maxCollaborators` / `maxResourcesPerPulse`.
 - Count gates use **SF11 counters** (`workspace.pulseCount`, `collaboratorUids[]`,
   `pulse.resourceCount`) via `get()` (PL5 Option b). Editor seats are the `editorUids` array,
   not a counter. **No feature flags.**
 
 **Edit** `rules/security.test.ts` — extend `describe("billing")` with the quota gates
-(create-Pulse editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Starter).
+(create-Beat editor-only + cap, editor-seat cap, collaborator/resource caps; absent ⇒ Starter).
 
 **Edit** client
 - Consume `entitlementsFor(billing)` (already built) to soft-gate growth with an **upsell**
-  ("You've hit your plan's limit — upgrade"). Collaborators don't see **New Pulse**.
-- **PL4 read-only lock (§5.1):** on Starter, derive which Pulses are over the limit (**every**
-  Pulse the org holds — archived and hidden included, PL12 — ordered by `createdAt`, newest
-  beyond `maxPulses`) and render them **read-only** with a **"delete another Pulse or upgrade"**
+  ("You've hit your plan's limit — upgrade"). Collaborators don't see **New Beat**.
+- **PL4 read-only lock (§5.1):** on Starter, derive which Beats are over the limit (**every**
+  Beats the org holds — archived and hidden included, PL12 — ordered by `createdAt`, newest
+  beyond `maxPulses`) and render them **read-only** with a **"delete another Beat or upgrade"**
   affordance. Client-derived (rules can't sort/count). *(Revised: this previously said
-  "non-archived" and offered "archive another Pulse to edit this" — archiving is a lifecycle
+  "non-archived" and offered "archive another Beat to edit this" — archiving is a lifecycle
   state, not quota relief, so it frees nothing. `Plans-Spec.md` PL12, `Hide-and-Archive-Spec.md`
-  §7/HA8.)* Note this also needs a `list` rule on top-level `pulses` to fetch the org's Pulses
+  §7/HA8.)* Note this also needs a `list` rule on top-level `pulses` to fetch the org's Beats
   at all — it arrives with Teams (`Collaboration-Spec.md` §4). Feed the result to
   `pulseLock(pulse, planLocked)` in `PulsePage`; the precedence and its tests already exist.
 - **Members & seats screen (PL9):** a new org-admin surface to manage `Workspace.editorUids[]`
   — add/remove licensed editors, showing seats used / purchased and a link to buy more (Stripe
-  portal). This is net-new (today there's only per-Pulse Collaborators).
-- **Dashboard grouped by Organization** (Plans-Spec §3.3): "Your Pulses" (orgs you edit) and
+  portal). This is net-new (today there's only per-Beat Collaborators).
+- **Dashboard grouped by Organization** (Plans-Spec §3.3): "Your Beats" (orgs you edit) and
   "Shared with you" (orgs you collaborate in), grouped per org. When an editor belongs to
-  **>1** org, **New Pulse prompts which org** (or derives it from the org section it was
+  **>1** org, **New Beats prompts which org** (or derives it from the org section it was
   invoked in).
 - ~~Turn the account-menu **"Billing & payment"** stub into the real screen.~~ **DONE** —
   `BillingDialog.tsx`, opened from `AccountMenu.tsx:94`; the `soon` flag is gone. Shows tier,
@@ -253,7 +253,7 @@ already ships):
 
 **Exit:** an org admin subscribes through Stripe, the tier lands in `billing/{ws}` via SF3,
 a growth action is blocked at the quota (enforced in rules) with an upsell, the dashboard
-groups by org and prompts for the org on New Pulse, and a self-upgrade write is rejected.
+groups by org and prompts for the org on New Beats, and a self-upgrade write is rejected.
 
 *Progress against that exit:* the subscribe path and the SF3 write are **done**; the
 self-upgrade write is **already rejected** (`billing/{orgId}` is `write: if false`). Still
@@ -330,6 +330,6 @@ prerequisites are still in flight.
 | Stripe delivers webhooks **at-least-once** | SF3 recomputes from current subscription state; ignore out-of-order by `updatedAt`/event id |
 | Cross-user cleanup **can't** be client-side | Ship SF6–9 (Phase 2); until then self-heal is the only cover — a known, bounded gap |
 | **Mexico invoicing is manual** | Operational, not code: ensure a finance process files the factura global from Stripe; billing UI must not imply the Stripe receipt is a tax invoice |
-| Org drift (Pulse ↔ billing) | Resolve org via `Pulse.workspaceId` only; never a separate `billingOrgId` |
+| Org drift (Beats ↔ billing) | Resolve org via `Pulse.workspaceId` only; never a separate `billingOrgId` |
 | Denorm/log flips introducing loops | Skip-own-writes + denorm-only guard from Phase 0; before/after diffs |
 | Account deletion orphaning data | SF15 (Phase 4); until then, deletion is rare and manually recoverable |

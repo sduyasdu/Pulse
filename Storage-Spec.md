@@ -1,26 +1,26 @@
-# Pulse — Bring Your Own Storage (BYOS) Spec
+# Beats — Bring Your Own Storage (BYOS) Spec
 
 Status: **Proposal — decisions open (ST1–ST13)** · Owner: product + eng ·
-Related: `Pulse-Product-Spec.md` (§3 attachments, §9 "attachments are base64 data URLs",
+Related: `Beats-Product-Spec.md` (§3 attachments, §9 "attachments are base64 data URLs",
 §10.5 "real file storage"), `Server-Functions-Spec.md` (**SF5–SF7**, added by this spec),
 `Permissions-Spec.md` (read/write scopes), `Plans-Spec.md` (gating candidate),
 `Changelog-Spec.md` (`attachment` entries)
 
 ## 0. What this is (and isn't)
 
-Pulse stores no files. This spec adds **Bring Your Own Storage**: a Pulse is connected
+Beats stores no files. This spec adds **Bring Your Own Storage**: a Beat is connected
 to a **Google Drive** or **Microsoft OneDrive** account belonging to the customer, and
-every file uploaded to that Pulse lands in a folder tree there that mirrors the Pulse's
-own shape — workspace → Pulse → epic → task.
+every file uploaded to that Beat lands in a folder tree there that mirrors the Beat's
+own shape — workspace → Beats → epic → task.
 
-The customer's data stays in the customer's storage. Pulse holds a **pointer**, never
+The customer's data stays in the customer's storage. Beats holds a **pointer**, never
 the bytes.
 
 The hard problem this spec exists to answer is **§6: what happens to that folder tree
-when the Pulse changes underneath it** — a task is renamed, moved to another epic, or
+when the Beat changes underneath it** — a task is renamed, moved to another epic, or
 deleted; an epic is renamed; someone reorganizes the folders by hand in Drive.
 
-Not in scope: Pulse-hosted storage (S3/GCS) as an alternative backend (**ST1**), file
+Not in scope: Beats-hosted storage (S3/GCS) as an alternative backend (**ST1**), file
 preview/thumbnails, in-app editing, versioning beyond what the provider gives, and
 Dropbox/Box/SharePoint-library variants (**ST2**).
 
@@ -67,7 +67,7 @@ export interface StorageConnection {
 
 | Provider | Scope | Why |
 |---|---|---|
-| Google Drive | `drive.file` | Grants access **only to files this app creates**. Pulse cannot see the rest of the user's Drive, which is the difference between "connect Pulse" being a shrug and being a security review. |
+| Google Drive | `drive.file` | Grants access **only to files this app creates**. Beats cannot see the rest of the user's Drive, which is the difference between "connect Beats" being a shrug and being a security review. |
 | OneDrive / Graph | `Files.ReadWrite` (+ `offline_access`) | Graph has no true per-file equivalent; the app-folder scope (`Files.ReadWrite.AppFolder`) is narrower but hides the tree from the user in their own OneDrive, defeating the point. **ST3.** |
 
 The asymmetry is real and should be surfaced in the connect dialog rather than papered
@@ -75,29 +75,28 @@ over: Google users grant less than OneDrive users do.
 
 ## 3. Who owns the connection (the first real decision)
 
-A Pulse is shared; storage accounts are personal. Three options:
+A Beat is shared; storage accounts are personal. Three options:
 
-1. **Per-Pulse, one connection** *(recommended)* — an owner connects their account and
+1. **Per-Beat, one connection** *(recommended)* — an owner connects their account and
    every member's uploads land there. One tree, one bill, one place to look.
 2. **Per-member** — each person's files go to their own Drive. Fragmented: a task's
    attachments scatter across accounts, and a departing member takes theirs with them.
-3. **Per-workspace** — one connection shared by every Pulse in the workspace, with a
-   subfolder per Pulse. Natural for teams; needs the workspace layer to be real first.
+3. **Per-workspace** — one connection shared by every Beat in the workspace, with a
+   subfolder per Beat. Natural for teams; needs the workspace layer to be real first.
 
 *Recommend option 1 now, with the tree laid out so option 3 is a re-parent later
 (§5's root already nests a workspace level).*
 
 **The consequence to accept and communicate:** files belong to the connecting account.
-If that person leaves, revokes access, or deletes the folder, every attachment in the
-Pulse breaks. Mitigations: warn on disconnect, name the storage owner in Pulse settings,
-require the storage owner to be a Pulse **owner**, and support **transfer** (connect a
+If that person leaves, revokes access, or deletes the folder, every attachment in the Beat breaks. Mitigations: warn on disconnect, name the storage owner in Beat settings,
+require the storage owner to be a Beat **owner**, and support **transfer** (connect a
 new account, re-point or copy the tree — **ST4**).
 
 ## 4. Credentials — never in the browser
 
 OAuth **authorization-code flow with PKCE**, completed server-side. The refresh token is
 the keys to someone's Drive; it must never reach the client, and must not be readable
-through Firestore rules by anyone, including the Pulse owner.
+through Firestore rules by anyone, including the Beat owner.
 
 - **`SF5 — Storage OAuth broker`** (new, registered in `Server-Functions-Spec.md`):
   handles the redirect, exchanges the code, and stores the refresh token in **Secret
@@ -125,7 +124,7 @@ through Firestore rules by anyone, including the Pulse owner.
               └── 2026-07/{Task title}/
 ```
 
-**The load-bearing rule: Pulse never addresses a folder by its path.** Every entity that
+**The load-bearing rule: Beats never addresses a folder by its path.** Every entity that
 owns a folder gets a mapping row keyed by the entity's own stable id:
 
 ```ts
@@ -159,7 +158,7 @@ because nothing resolves files by name.
   sibling name repeats, append the entity's short id — `Conciliaciones ~7f3a`. Ugly in
   the rare case, predictable in every case (**ST5**).
 
-## 6. Keeping the tree in sync when the Pulse changes
+## 6. Keeping the tree in sync when the Beat changes
 
 ### 6.1 Principle — reconcile, don't replay
 
@@ -171,32 +170,32 @@ result; never increment"* — and it's what makes the whole thing safe: replayin
 stream gets permanently wrong after one dropped or out-of-order event, whereas a
 reconciler that runs twice, or late, or after a crash, converges anyway.
 
-### 6.2 What each Pulse change means remotely
+### 6.2 What each Beat change means remotely
 
-| Change in Pulse | Remote operation | If it fails |
+| Change in Beats | Remote operation | If it fails |
 |---|---|---|
 | Task/epic **renamed** | rename folder (`remoteId` unchanged) | Nothing breaks — links resolve by id. Retried; the folder simply keeps its old name until then. |
 | Task **moved to another epic** | move folder to the new parent | Retried. Meanwhile the file lives under the old epic; correct content, stale location. |
 | Task **deleted** | move folder to `_Archive/{YYYY-MM}/` | Retried. **Never a hard delete** (§6.3). |
-| Epic **deleted** | its tasks are re-parented in Pulse (existing behaviour) → each task folder moves; the empty epic folder moves to `_Archive` | Per-node retry. |
-| Pulse **renamed** | rename the Pulse folder | Cosmetic. |
-| Attachment **deleted** in Pulse | default: leave the file, drop the pointer (**ST6**) | — |
+| Epic **deleted** | its tasks are re-parented in Beats (existing behaviour) → each task folder moves; the empty epic folder moves to `_Archive` | Per-node retry. |
+| Beats **renamed** | rename the Beat folder | Cosmetic. |
+| Attachment **deleted** in Beats | default: leave the file, drop the pointer (**ST6**) | — |
 | Folder **renamed/moved by hand in Drive** | **nothing.** We key by id, so the user's organization wins. `remoteName` re-syncs on next touch. | — |
 | Folder **deleted/trashed in Drive** | node → `missing`; re-created lazily on next upload; existing attachments show as broken with a "file removed in Drive" hint | — |
 
 ### 6.3 Deletion is never destructive
 
-Pulse must not delete a customer's files from a customer's storage. A deleted task's
+Beats must not delete a customer's files from a customer's storage. A deleted task's
 folder is **moved to `_Archive/{YYYY-MM}/`**, keeping the content recoverable and out of
-the working tree. Emptying `_Archive` is a deliberate, separate action in Pulse settings —
-or the user's own job in Drive. This also makes deletion **undo-friendly**: Pulse's undo
+the working tree. Emptying `_Archive` is a deliberate, separate action in Beat settings —
+or the user's own job in Drive. This also makes deletion **undo-friendly**: Beats' undo
 restores the task document, and the reconciler moves the folder back out of `_Archive`
 because the desired state says it should exist again.
 
 ### 6.4 Queue, ordering, coalescing
 
-- One **work queue per Pulse** (`pulses/{p}/storageJobs/{jobId}`), so operations on a
-  single tree never race; different Pulses run in parallel.
+- One **work queue per Beat** (`pulses/{p}/storageJobs/{jobId}`), so operations on a
+  single tree never race; different Beats run in parallel.
 - Jobs are keyed **by entity id**, not appended: a task renamed five times while offline
   collapses to one reconcile of the current name. (Titles are already debounced by
   `useDebouncedText`, but that only thins the writes; coalescing is what bounds the API
@@ -213,7 +212,7 @@ because the desired state says it should exist again.
 
 ### 6.5 Lazy creation
 
-Folders are created **on first upload**, not when a task is created. A Pulse with 400
+Folders are created **on first upload**, not when a task is created. A Beat with 400
 tasks and 3 attachments should have 3 task folders, not 400. The reconciler creates the
 missing ancestors on demand, which also makes the tree self-healing after a manual
 delete in Drive.
@@ -223,7 +222,7 @@ delete in Drive.
 **Upload — the browser sends the bytes, the server never touches them.**
 
 1. Client asks **SF7** for an upload target: `{pulseId, featureId, fileName, size, mime}`.
-2. SF7 checks Pulse membership and edit scope, resolves/creates the task folder (§6.5),
+2. SF7 checks Beats membership and edit scope, resolves/creates the task folder (§6.5),
    and asks the provider for a **single-file upload session** — Drive resumable session
    URL, or Graph `createUploadSession`. Both are short-lived and scoped to *one* file.
 3. Client `PUT`s the bytes directly to that URL (chunked, resumable, with progress).
@@ -281,11 +280,11 @@ by what clicking does; nothing migrates automatically (**ST8**).
 
 | Situation | Behaviour |
 |---|---|
-| No connection configured | Upload control is hidden/disabled with "Connect storage to upload files"; pasting links still works. **BYOS is optional; Pulse without it is exactly today's Pulse.** |
+| No connection configured | Upload control is hidden/disabled with "Connect storage to upload files"; pasting links still works. **BYOS is optional; Beats without it is exactly today's Beats.** |
 | Connection `needs-reauth` | Uploads blocked with a re-connect prompt; existing files still downloadable if the token can still be refreshed, otherwise a clear error. |
 | Provider outage / throttle | Uploads fail with a retry affordance; canvas editing is unaffected (nothing blocks on storage). |
-| File deleted in Drive | Attachment renders as `missing` with an explanation, not a dead link. The Pulse record is kept — the pointer is evidence the file existed. |
-| Storage owner leaves the Pulse | Warn at removal time; connection keeps working until revoked (files belong to their account). Transfer flow is **ST4**. |
+| File deleted in Drive | Attachment renders as `missing` with an explanation, not a dead link. The Beat record is kept — the pointer is evidence the file existed. |
+| Storage owner leaves the Beat | Warn at removal time; connection keeps working until revoked (files belong to their account). Transfer flow is **ST4**. |
 | Quota exhausted | Provider's error surfaced verbatim — it's the customer's quota, and only they can fix it. |
 
 ## 10. Permissions, audit, plans
@@ -294,25 +293,24 @@ by what clicking does; nothing migrates automatically (**ST8**).
   anywhere, a Task Lead on tasks they lead. **Downloading** follows the feature's read
   scope, enforced in SF7 — a My-Beat viewer can't fetch a file on a task outside their
   beat.
-- **Connecting/disconnecting** storage is `editConfig` **and** Pulse-owner (it spends
+- **Connecting/disconnecting** storage is `editConfig` **and** Beat-owner (it spends
   someone's personal storage and creates a lasting dependency).
 - **Activity log:** add an `attachment` entity kind with `upload` / `remove` verbs,
   `scopeUids` mirroring the parent feature; plus `pulse`-level `storage-connected` /
   `storage-disconnected`. Who put a customer document into a shared Drive is exactly the
   kind of thing an audit trail is for.
-- **Plans:** BYOS is a plausible paid feature and a plausible quota (files or bytes per
-  Pulse). Listed in `Plans-Spec.md` §3.1 as a candidate; the call is PL2's.
+- **Plans:** BYOS is a plausible paid feature and a plausible quota (files or bytes per Beat). Listed in `Plans-Spec.md` §3.1 as a candidate; the call is PL2's.
 
 ## 11. Migration and rollout
 
 1. **Nothing to migrate, mostly.** There are no stored files today; legacy `data:` URI
-   pastes (if any exist in real Pulses) can be swept into the connected drive by a
+   pastes (if any exist in real Beats) can be swept into the connected drive by a
    one-shot job — worth doing precisely because data URIs bloat feature documents against
    the 1 MiB ceiling (**ST9**).
 2. Ship **read-only-ish first**: connect + upload + download, with the reconciler doing
    creation only. Then enable rename/move/archive reconciliation. The tree being slightly
    stale is harmless (§5); the upload path is what users need.
-3. Feature-flag per Pulse so early adopters can be onboarded by hand.
+3. Feature-flag per Beat so early adopters can be onboarded by hand.
 
 ## 12. Implementation notes
 
@@ -323,7 +321,7 @@ by what clicking does; nothing migrates automatically (**ST8**).
   The client never calls a provider API directly.
 - **Functions** (`SF5`/`SF6`/`SF7`) are the first Cloud Functions in the project;
   `Server-Functions-Spec.md` §1 conventions apply (2nd gen, TypeScript, idempotent).
-  This also means BYOS is the change that ends "Pulse ships fully serverless" — budget
+  This also means BYOS is the change that ends "Beats ships fully serverless" — budget
   for the deployment/CI work that comes with the first function, not just the feature.
 - **`Attachments.tsx`** grows a file input + drop zone with progress, shown only when a
   connection is active. Its current paste-a-link path is untouched.
@@ -334,7 +332,7 @@ by what clicking does; nothing migrates automatically (**ST8**).
 
 ## 13. Open decisions (ST1–ST13)
 
-1. **ST1 — Pulse-hosted storage too?** Offer GCS/S3 as a default backend for customers
+1. **ST1 — Beats-hosted storage too?** Offer GCS/S3 as a default backend for customers
    who don't want to connect a drive? *Recommend: not now — BYOS is the differentiator;
    revisit if onboarding friction shows up.*
 2. **ST2 — Provider set.** Drive + OneDrive first. Dropbox/Box/SharePoint document
@@ -348,7 +346,7 @@ by what clicking does; nothing migrates automatically (**ST8**).
    copying gigabytes must be explicit.*
 5. **ST5 — Collision suffixes.** Always disambiguate deterministically, or only when the
    provider rejects a duplicate? *Recommend always — one behaviour on both providers.*
-6. **ST6 — Deleting an attachment in Pulse.** Drop the pointer only (default), move the
+6. **ST6 — Deleting an attachment in Beat.** Drop the pointer only (default), move the
    file to `_Archive`, or offer the choice per deletion? *Recommend pointer-only, with
    "also remove from Drive" as an explicit checkbox.*
 7. **ST7 — Drive downloads.** Proxy the bytes vs. grant per-file reader links.
@@ -356,20 +354,20 @@ by what clicking does; nothing migrates automatically (**ST8**).
 8. **ST8 — Legacy/pasted attachments.** Leave all three kinds coexisting forever?
    *Recommend yes; a pasted link is a legitimate thing to want.*
 9. **ST9 — Sweep existing data-URI attachments** into the connected drive? *Recommend
-   yes, one-shot, opt-in per Pulse — it also shrinks feature docs.*
+   yes, one-shot, opt-in per Beat — it also shrinks feature docs.*
 10. **ST10 — Workspace-level connections** (§3 option 3): when, and does it supersede
-    per-Pulse or coexist? *Recommend coexist, Pulse-level overriding workspace-level.*
+    per-Beat or coexist? *Recommend coexist, Beat-level overriding workspace-level.*
 11. **ST11 — Subtask attachments.** The product spec says subtasks have attachments; the
     type says they don't. Fix the spec, or add them (and give them folders)? *Recommend
     fixing the spec — task-level folders are the right granularity.*
 12. **ST12 — Storage status surface.** A dedicated Storage settings panel, or fold it
-    into the existing Pulse settings? *Recommend a panel: connection state, tree link,
+    into the existing Beat settings? *Recommend a panel: connection state, tree link,
     failing nodes, re-sync, disconnect.*
 13. **ST13 — Plan gating.** Is BYOS a paid feature, and is there a file/byte quota?
     Product's call, tracked as a candidate in `Plans-Spec.md` §3.1.
 
 > **Cross-refs added with this spec:** `Server-Functions-Spec.md` gains **SF5** (OAuth
 > broker), **SF6** (folder-tree reconciler) and **SF7** (upload/download broker);
-> `Plans-Spec.md` §3.1 lists BYOS as a gating candidate; `Pulse-Product-Spec.md` §9's
+> `Plans-Spec.md` §3.1 lists BYOS as a gating candidate; `Beats-Product-Spec.md` §9's
 > "attachments are base64 data URLs" gap and §10.5's "real file storage" item are
 > answered here.

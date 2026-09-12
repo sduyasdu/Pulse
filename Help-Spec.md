@@ -1,16 +1,16 @@
-# Pulse — In-app Help Spec
+# Beats — In-app Help Spec
 
 Status: **Ready to build — HL2/HL5/HL9 resolved, HL8 withdrawn; HL1, HL3, HL4, HL6, HL7, HL10–HL13 open with recommendations (none blocking). v1 ships English only; all locales fall back to it.** · Owner: product + eng ·
-Related: `Pulse-Product-Spec.md` (the functionality being summarized),
+Related: `Beats-Product-Spec.md` (the functionality being summarized),
 `Costs-Spec.md` (§6 the Cost view), `Permissions-Spec.md` (roles a reader may hold)
 
 ## 0. What this is (and isn't)
 
-A **help panel** inside a Pulse: a short, localized summary of what the tool does
+A **help panel** inside a Beat: a short, localized summary of what the tool does
 and how its less obvious ideas work — opened from a `?` icon in the toolbar, next to
 **Effort scale**.
 
-The bar for "done" is low on purpose: someone who has just been invited to a Pulse
+The bar for "done" is low on purpose: someone who has just been invited to a Beat
 should be able to answer *"why is that box taller than this one?"* in under a minute
 without leaving the app.
 
@@ -19,7 +19,7 @@ per-control contextual help, a what's-new/changelog feed (that's the activity lo
 neighbour, not this), or support contact forms.
 
 It **does** include a search box (§2.1) — not because eight sections are hard to
-scan, but because readers don't know Pulse's vocabulary. Someone types *gantt*,
+scan, but because readers don't know Beats' vocabulary. Someone types *gantt*,
 *salary*, *zoom* or *timesheet*; the copy says canvas, hourly cost, day width and
 hours. Search is where that gap gets closed.
 
@@ -246,7 +246,7 @@ Help that lies is worse than no help. Two cheap guards:
   dedicated owner, no review cadence.
 
 Adding a section is a product decision, not a code one: the section list is the
-promise about what Pulse *is*.
+promise about what Beats *is*.
 
 ## 8. Implementation notes
 

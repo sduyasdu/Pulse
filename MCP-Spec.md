@@ -1,6 +1,6 @@
-# Pulse — MCP Server Spec
+# Beats — MCP Server Spec
 
-Status: **Phase 0 BUILT and live — read-only, customer-facing, hosted by Pulse,
+Status: **Phase 0 BUILT and live — read-only, customer-facing, hosted by Beats,
 nine tools. MC1–MC10, MC14–MC32 decided; MC12 is the only one still open.
 MC11 is superseded by MC29 (rate limiting, built). MC13 shipped as recommended.
 Revised as it was built: MC2/MC4/MC6 on 2026-08-17 when remote replaced local,
@@ -14,25 +14,25 @@ attribution)
 
 ## 0. What this is (and isn't)
 
-An **MCP server for Pulse**, hosted by Pulse and added to an AI assistant by
-URL. It lets the assistant read the customer's Pulse data — "what's slipping",
+An **MCP server for Beats**, hosted by Beats and added to an AI assistant by
+URL. It lets the assistant read the customer's Beat data — "what's slipping",
 "who's overloaded this month", "summarise Q3" — using the customer's own
 permissions.
 
-It is a **product feature**, not an internal tool (MC1). Any Pulse user can
+It is a **product feature**, not an internal tool (MC1). Any Beat user can
 connect an assistant, name the connection, see it listed, and revoke it.
 
 **Not** in scope for v1: writes of any kind (MC5 — the path is designed, not
 built), billing or subscription access, member management or invitations, and
-**storing any long-lived customer credential on Pulse's servers** (§2 — the
+**storing any long-lived customer credential on Beats' servers** (§2 — the
 refresh token lives with the customer's AI client, not with us).
 
 ## 1. The spine: the MCP acts as the user
 
 Everything else follows from this.
 
-Pulse has exactly one authorization boundary: **`firestore.rules`**. Roles,
-archive locks, the last-owner guard, plan quotas and per-Pulse membership all
+Beats has exactly one authorization boundary: **`firestore.rules`**. Roles,
+archive locks, the last-owner guard, plan quotas and per-Beat membership all
 live there and nowhere else. A server that reached Firestore through the Admin
 SDK would **bypass all of it** and have to re-implement every rule, correctly,
 forever, in a second place — the precise failure this codebase is arranged to
@@ -53,7 +53,7 @@ in front of them. That removes the constraint that made a device-code flow
 necessary — device codes exist for processes that *cannot* open a browser.
 
 **The customer's experience is what was asked for either way:** approve in a
-browser where they are already signed in, see the connection listed in Pulse,
+browser where they are already signed in, see the connection listed in Beats,
 revoke it in one click. Only the mechanism underneath changed.
 
 ```
@@ -75,7 +75,7 @@ AI client                    Pulse (hosted MCP + auth)          Customer's brows
  └─ every MCP call: Authorization: Bearer <ID token>
 ```
 
-### 2.1 Pulse re-mints on every refresh (MC14)
+### 2.1 Beats re-mints on every refresh (MC14)
 
 `/oauth/token` is a real endpoint, not a proxy to Firebase's. On refresh it:
 
@@ -101,10 +101,9 @@ Two things fall out of it that are worth having regardless:
   connection record each time rather than frozen at first mint. Phase 2 can
   upgrade a read connection to write from the consent screen alone.
 
-**Pulse still stores no usable customer credential.** What it holds is
+**Beats still stores no usable customer credential.** What it holds is
 `{ refreshTokenHash, uid, connectionId, scope }` — a hash is not a token, so a
-breach yields nothing that can be replayed. The argument that kept this off
-Pulse's servers (§6) therefore still holds.
+breach yields nothing that can be replayed. The argument that kept this off Beat's servers (§6) therefore still holds.
 
 **Every request is made *as the customer*.** The MCP server verifies the bearer
 ID token, then reads Firestore **through the REST API using that same token**, so
@@ -124,7 +123,7 @@ re-minting refresh and the same revocation behaviour, so §2.1 and §3 cover bot
 
 ## 3. Connections and revocation (MC4, revised)
 
-The customer's requirement — revoke a connection from inside Pulse — is
+The customer's requirement — revoke a connection from inside Beats — is
 unchanged. Hosting it makes the enforcement *simpler and cheaper*.
 
 `users/{uid}/connections/{connectionId}` holds `name` (customer-supplied),
@@ -168,25 +167,25 @@ fixed now so writes are an increment, not a redesign:
   renders "*Ana's Claude (via MCP)*". Without this, "who changed what" quietly becomes
   untrue the day writes ship.
 - **Quotas apply for free.** Because the MCP acts as the user (§1), a
-  create-Pulse through it hits the same `workspace.pulseCount` gate as the UI.
+  create-Beat through it hits the same `workspace.pulseCount` gate as the UI.
   Nothing extra to build, and nothing to forget.
 
 ## 5. What v1 exposes
 
 MCP separates **resources** (things to read) from **tools** (things to call).
-Pulse v1 is resources plus read-shaped tools.
+Beats v1 is resources plus read-shaped tools.
 
 | Name | Kind | Returns |
 | --- | --- | --- |
-| `list_pulses` | tool | the customer's Pulses: id, name, role, archived |
-| `get_pulse` | tool | one Pulse: epics, tasks, resources, statuses |
+| `list_beats` | tool | the customer's Beats: id, name, role, archived |
+| `get_beat` | tool | one Beat: epics, tasks, resources, statuses |
 | `search_tasks` | tool | tasks matching text/status/epic/assignee, **with their subtasks in full** |
 | `get_schedule` | tool | tasks in a date window with dates, effort and assignees |
 | `get_people_load` | tool | per-person allocation over a window, against capacity |
 | `get_costs` | tool | cost summary by model / person / task — **admins only**, mirroring `viewPeopleCost` |
-| `search_resources` | tool | resource detail: type, capacity, linked Pulse account, hourly rate where the role permits |
+| `search_resources` | tool | resource detail: type, capacity, linked Beat account, hourly rate where the role permits |
 | `search_comments` | tool | comments, newest first, with what each is attached to and whether it is a reply |
-| `get_activity` | tool | recent changes on a Pulse |
+| `get_activity` | tool | recent changes on a Beat |
 
 **Planned, not built — `Resource-Master-Spec.md` §10 / RM21.** Listed here so the
 tool surface has one home, and marked so nobody reads them as shipped:
@@ -194,14 +193,14 @@ tool surface has one home, and marked so nobody reads them as shipped:
 | Name | Kind | Returns | RM phase |
 | --- | --- | --- | --- |
 | `search_roster` | tool | the **workspace's** people — name, type, teams, link state, master rate where permitted | 1 |
-| `get_resource_usage` | tool | which Pulses one person is on, and whether they have assignments there | 2 |
+| `get_resource_usage` | tool | which Beats one person is on, and whether they have assignments there | 2 |
 | `list_teams` | tool | teams in the workspace, with their sizes | 3 |
 
-These are the first tools to answer a question **across** Pulses. Two notes that
+These are the first tools to answer a question **across** Beats. Two notes that
 matter more than the shapes:
 
 - **`search_roster` must not blur into `search_resources`.** The existing tool is
-  Pulse-scoped and takes a `pulseId`; the new one is workspace-scoped. Overlapping
+  Beat-scoped and takes a `pulseId`; the new one is workspace-scoped. Overlapping
   descriptions are how an assistant picks the wrong tool, so the scope has to be
   unmistakable in both.
 - **They add no authorization.** Reading as the customer (§1) means a
@@ -222,7 +221,7 @@ assigned, and every unnecessary field is tokens the customer pays for twice
 
 ## 6. Distribution and transport (MC6, revised)
 
-**A remote MCP server that Pulse hosts, added by URL**, over the current
+**A remote MCP server that Beat hosts, added by URL**, over the current
 streamable-HTTP transport, handled statelessly so it runs as request/response on
 the same serverless platform as the existing callables rather than holding open
 connections.
@@ -237,10 +236,10 @@ The two costs of hosting are answered rather than accepted: **credential
 liability** by not storing refresh tokens (§2), and **per-request expense** by
 dropping the rules-level connection check (§3). What genuinely remains is an
 **uptime obligation** — when this is down, a customer's assistant is broken, and
-that is new for Pulse.
+that is new for Beats.
 
-**Firestore reads are the dominant cost either way**, billed to Pulse, and
-unaffected by this decision: a `get_pulse` over a 200-task Pulse is 200-plus
+**Firestore reads are the dominant cost either way**, billed to Beats, and
+unaffected by this decision: a `get_beat` over a 200-task Beats is 200-plus
 reads whoever runs the query. That is what §5's bounded tools and MC11's rate
 limit are actually protecting.
 
@@ -254,7 +253,7 @@ assistant relays.
 ## 7. Phasing (MC9)
 
 1. **Phase 0 — internal, unpublished.** Same service, same OAuth flow, used by the
-   team against real Pulses for a fortnight. The point is to find out **which
+   team against real Beats for a fortnight. The point is to find out **which
    tools are actually worth exposing** before the surface becomes a public
    contract that can't be changed freely.
 2. **Phase 1 — customer read-only.** Publish the package, ship `/link` and
@@ -283,13 +282,13 @@ assistant relays.
   what it can see, and how to revoke it. A permission-granting feature with no
   explanation is one nobody trusts.
 - **i18n**: consent screen and connection list, six locales.
-- **An uptime story.** This is the first Pulse surface whose outage breaks
+- **An uptime story.** This is the first Beat surface whose outage breaks
   something outside the app (MC6). Decide what "down" means and who hears about
   it before customers do.
 
 ## 9. Decisions
 
-1. **MC1 — Who is it for? → DECIDED: customers.** Any Pulse user can connect
+1. **MC1 — Who is it for? → DECIDED: customers.** Any Beat user can connect
    their own assistant. *Rejected: an internal-only tool* — it would answer a
    different question, and the design constraints (consent, revocation, support)
    only appear when strangers use it. Phase 0 (MC9) still dogfoods it first,
@@ -302,7 +301,7 @@ assistant relays.
    The device-code flow survives for the optional local server.)* *Rejected:
    personal access tokens* — a long-lived string in a config file is a leak that
    stays valid until noticed, and the copy-paste step is where setup goes wrong.
-   *Rejected: Pulse storing the refresh token* — it would recreate exactly the
+   *Rejected: Beats storing the refresh token* — it would recreate exactly the
    breach liability that argued against hosting at all.
 3. **MC3 — The MCP acts as the user, never as an admin. → DECIDED.** The client
    SDK with the customer's token, so `firestore.rules` stays the only
@@ -330,8 +329,7 @@ assistant relays.
    edited has a developer's adoption ceiling, and remote also reaches web and
    mobile clients a local server cannot.)* *Rejected: local as the front door*,
    though it stays published as a fallback for customers who want the credential
-   on their own machine. **Accepted cost: an uptime obligation** — the first
-   Pulse surface whose outage breaks something outside the app.
+   on their own machine. **Accepted cost: an uptime obligation** — the first Beat surface whose outage breaks something outside the app.
 7. **MC7 — Assistant writes are attributed → DECIDED: `via: "mcp"` + connection name
    on activity entries.** *Rejected: recording them as ordinary user edits* —
    the activity log's only job is "who changed what", and an assistant's edit
@@ -359,7 +357,7 @@ assistant relays.
     shape of traffic — is what MC29 implements, with the counters on the
     connection document so the limiter costs no extra read or write. Kept for the
     reasoning: an assistant in a loop is the plausible failure, and it spends the
-    customer's money and Pulse's quota at once.
+    customer's money and Beat's quota at once.
 12. **MC12 — Connection lifetime.** Should a connection expire after N days
     unused? *Recommend: no hard expiry, but surface `lastUsedAt` prominently and
     prompt to prune. A connection that stops working silently is worse support load
@@ -370,7 +368,7 @@ assistant relays.
     second permission axis over the same data is how the two drift. Built that
     way, and the tool carries a note saying an empty result may mean no access
     rather than no costs, because those are indistinguishable to a reader.
-14. **MC14 — Pulse re-mints the token on every refresh → DECIDED (§2.1).**
+14. **MC14 — Beats re-mints the token on every refresh → DECIDED (§2.1).**
     The claims carrying `connectionId` and `scope` are re-issued hourly from the
     connection record, so nothing depends on whether Firebase preserves custom
     -token claims across a refresh. *Rejected: proxying refresh straight to
@@ -400,8 +398,8 @@ assistant relays.
     Consequences to state plainly rather than rediscover: **a tool-surface change
     needs the customer to reconnect the connector**, and neither the favicon fix
     nor anything else we serve can invalidate an icon a client has already
-    cached — every icon Pulse serves was verified correct (the ICO decoded to
-    the Pulse mark at 16px and 32px) while a stale one was still on screen.
+    cached — every icon Beat serves was verified correct (the ICO decoded to
+    the Beats mark at 16px and 32px) while a stale one was still on screen.
 16. **MC16 — Icon-probe paths get real files, not the SPA → DECIDED.** Firebase
     Hosting's catch-all rewrite answered `/apple-touch-icon.png` and
     `/apple-touch-icon-precomposed.png` with `200 text/html`, the same shape as
@@ -445,13 +443,13 @@ assistant relays.
     rule rather than by a check in the tool. Where that produces an empty result
     it carries the same note `get_costs` does, because an absent rate is not
     evidence of a free resource. *Rejected: folding resource detail into
-    `get_pulse`* — it already returns name and capacity for every person, and
+    `get_beat`* — it already returns name and capacity for every person, and
     widening it would make the common call more expensive to serve the rare one.
     *Rejected: reporting per-resource task load here* — `get_people_load` answers
     that against a window, and duplicating it would cost a 200-document read on
     every resource lookup. `search_comments` resolves `targetId` to the task or
     resource name, treats a missing `targetKind` as a task (pre-resource-comment
-    data), and returns null for Pulse-level comments — which means unattached,
+    data), and returns null for Beat-level comments — which means unattached,
     not orphaned.
     Version moved 0.2.0 → 0.3.0, which is what MC17 keys on: this is the first
     surface change to announce itself to already-connected clients.
@@ -498,7 +496,7 @@ assistant relays.
     the one member whose identity is least likely to be recorded anywhere else.
     Invisible in the app, because an owner already knows who they are. Fixed at
     the source (both writers now take the creator's email) and repaired on load
-    for existing Pulses. The repair has to be done **by an owner**: the
+    for existing Beats. The repair has to be done **by an owner**: the
     `pulseMembers` update rule pins `email` on self-edits so a member cannot
     rewrite the identity their access was granted against, and the owner branch
     is the only exception — which happens to be exactly who is affected.
@@ -513,7 +511,7 @@ assistant relays.
     `bestTierFor()` now resolves the tier and `MCP_TIERS` decides; today it lists
     every tier, so nothing is denied. **To gate it, edit `MCP_TIERS`.**
     Resolution is **best-across-workspaces**, not personal: a connection is
-    per-user and its tools span every Pulse that user can reach, so someone on a
+    per-user and its tools span every Beat that user can reach, so someone on a
     paid team must not be judged by their free personal workspace. Wrongly
     denying consent breaks a paid feature; wrongly allowing it costs bounded
     reads. Workspaces are enumerated from the user's own dashboard index, so this
@@ -538,14 +536,14 @@ assistant relays.
 24. **MC24 — Subtasks are returned by `search_tasks` only, and text search
     reaches their titles (v0.4.0).** Subtasks live as an embedded `children[]`
     array on the task document, so returning them costs no extra read. They are
-    nonetheless **opt-in per tool**: `get_pulse` and `get_schedule` return up to
+    nonetheless **opt-in per tool**: `get_beat` and `get_schedule` return up to
     100 tasks each, and folding every subtask into those multiplies the payload
     for a caller who asked about the schedule. `search_tasks` is where someone
     has already narrowed to the task they mean.
     Every task-shaped result now carries `subtaskSummary` (`total`, `done`) even
     where the detail is omitted, so a tool that leaves subtasks out never implies
     a task has none. `done` counts the status **id**, not the label, because
-    labels are customisable per Pulse and would not compare across them.
+    labels are customisable per Beat and would not compare across them.
     Text search matches a subtask title as well as the task's own — the thing
     someone remembers is often the checklist line — and each hit carries
     `matchedIn: "title" | "subtask"` so a result whose title looks unrelated is
@@ -562,7 +560,7 @@ assistant relays.
     both together: the newer revision (to stop downgrading every client) and
     `icons`/`websiteUrl` (legitimate members of it). Reconnecting then failed
     with the same customer-facing error as MC15 — *"Your account was authorized,
-    but Pulse returned an error when connecting."*
+    but Beats returned an error when connecting."*
     The logs separate cause from noise cleanly, which is the one good outcome
     here. OAuth completed (`connection approved, tier: pro`; `code exchanged`),
     `initialize` returned 200 — and **every** `initialize` answering 2025-11-25
@@ -588,7 +586,7 @@ assistant relays.
     `listAsUser` issued a plain REST list with no `orderBy`, so it returned
     documents in **id** order — and activity ids are random auto-ids. Reading 200
     and sorting them in memory therefore sampled 200 arbitrary entries and
-    presented the newest of *those* as the newest overall. On any Pulse with more
+    presented the newest of *those* as the newest overall. On any Beat with more
     than 200 entries the answer was wrong, and wrong in the most plausible way
     available: real entries, real timestamps, correct ordering, just not the
     right ones. `search_comments` had the same shape. Both now order in the
@@ -601,22 +599,21 @@ assistant relays.
     collection capped at `MAX_LIMIT` now returns a `coverage` note when the read
     came back full. `truncated` already existed but answers a different question
     — how many *matches* were displayed — and its presence made the silence about
-    source coverage look deliberate. Without this, "no blocked tasks in this
-    Pulse" and "no blocked tasks among the 200 I looked at" were the same
+    source coverage look deliberate. Without this, "no blocked tasks in this Beat" and "no blocked tasks among the 200 I looked at" were the same
     response. Pagination would be the complete fix; disclosure is the honest
     minimum, and it ships now.
-28. **MC28 — `lastActivityAt` is derived, never maintained (`list_pulses`,
-    `includeActivity`).** Opt-in, one ordered single-document read per Pulse.
-    *Rejected: a `lastActivityAt` field on the Pulse document* — it was proposed
+28. **MC28 — `lastActivityAt` is derived, never maintained (`list_beats`,
+    `includeActivity`).** Opt-in, one ordered single-document read per Beat.
+    *Rejected: a `lastActivityAt` field on the Beat document* — it was proposed
     here as "cheapest" and it is not. It costs a write per activity event (every
-    task drag, edit, comment — hundreds a day on an active Pulse) against a read
+    task drag, edit, comment — hundreds a day on an active Beat) against a read
     per MCP call that asks (a handful a day), and Firestore writes cost roughly
     3× reads. The stronger objection is contention, not price: Firestore sustains
-    about one write per second per document, so writing the Pulse doc on every
+    about one write per second per document, so writing the Beat doc on every
     content change would serialise people who are not editing that document at
     all. Debouncing narrows the cost gap but not the contention, and adds a
     denormalized field that can drift. `joinedDate` is also returned and labelled
-    as such — it is when *you* joined, not when the Pulse was created, and the
+    as such — it is when *you* joined, not when the Beat was created, and the
     index holds no other date.
     The same reasoning drives the dashboard: `createdAt` **is** denormalized onto
     the index entry, because it is immutable — written once, cannot drift, no
@@ -647,7 +644,7 @@ assistant relays.
     not be described as a quota.** The numbers are a starting point, not a
     measurement — the `tool called` log lines carry the real distribution.
     *Deferred:* per-tool weighting. `search_comments` reads up to 400 documents
-    and `list_pulses` up to 50, so a flat cap is 3,000–24,000 reads a minute
+    and `list_beats` up to 50, so a flat cap is 3,000–24,000 reads a minute
     depending on which tool. Worth adding once there is usage to weight against.
     *Not covered by this, and stated so it is not assumed:* a user can multiply
     their budget by connecting several assistants. The fix is a **per-tier cap on
@@ -703,9 +700,9 @@ assistant relays.
     collection becomes readable through MCP with no second copy of the rule, and
     a rules bug stays one bug.
     **`get_resource_usage` extends an existing disclosure to a new channel.**
-    Per RM7 it names Pulses the caller cannot open. That was already decided for
+    Per RM7 it names Beats the caller cannot open. That was already decided for
     the UI, but an assistant *saying* it is more startling than a list showing it,
-    so the tool description must state that these are Pulses the user has no
+    so the tool description must state that these are Beats the user has no
     access to — the assistant should explain the boundary rather than imply the
     user can go and look.
     **Adding them is a surface change**, so `SERVER_INFO.version` moves, each
@@ -714,8 +711,8 @@ assistant relays.
     directory listings (MP5) have shipped by then, the annotations are also a
     re-submission concern rather than a detail.
     *Deferred with the reasoning recorded so it is not re-proposed casually:*
-    cross-Pulse people load — the most valuable question the roster makes askable
-    and the most expensive, N Pulses × the per-Pulse cost against tools already
+    cross-Beat people load — the most valuable question the roster makes askable
+    and the most expensive, N Beats × the per-Beat cost against tools already
     capped at `MAX_LIMIT`, which is the exact shape MC29's rate limiting exists
     for. Build a purpose-made aggregate if demand appears; do not fan out
     `get_people_load`.

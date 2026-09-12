@@ -1,4 +1,4 @@
-# Pulse — Backend Architecture Spec
+# Beats — Backend Architecture Spec
 
 Status: **Proposal — architecture + full server-function registry** · Owner: eng ·
 Supersedes/expands: `Server-Functions-Spec.md` (SF1–SF4 carried forward verbatim in intent).
@@ -20,7 +20,7 @@ Related: `Permissions-Spec.md`, `Plans-Spec.md`, `Collaboration-Spec.md`, `Chang
 
 ### A.1 Where we are today (the baseline every decision starts from)
 
-Pulse is **fully serverless**: a React 19 + Vite client talks directly to Firestore
+Beats is **fully serverless**: a React 19 + Vite client talks directly to Firestore
 (+ Firebase Auth + Hosting), project `pulse-b9d96`. There is **no `functions/` directory and
 no Cloud Functions**. Firestore security rules (`firestore.rules`) are the *only* server-side
 trust boundary. Every capability that "should" be server work is currently done by the client
@@ -32,10 +32,10 @@ as an interim, and the codebase is honest about it (`// self-heal`, `// interim`
 | Feature permission denorms (`assignedUids`/`leadUid`) | `pulseStore.reconcileDenorms` (`pulseStore.ts:95`) + `domain/denorm.ts` | **Fail-closed** (stale ⇒ fewer tasks visible) |
 | Activity log authoring | `domain/activityRecorder.ts`, `services/firestore/activity.ts` | **Fail-open** (dropped entry) |
 | Notifications authoring | `components/comments/notify.ts` → `services/firestore/notifications.ts` (path `pulses/{p}/notifications`) | Fail-open (missed ping) |
-| Pulse cascade delete | `pulses.deletePulse` (`pulses.ts:213`) — deletes `invites/epics/features/resources`, pulse doc, `pulseMembers`, own `myPulses` | Leaves `activity/comments/notifications/presence/joinLinks` orphaned; other members' `myPulses` go stale |
+| Beats cascade delete | `pulses.deletePulse` (`pulses.ts:213`) — deletes `invites/epics/features/resources`, pulse doc, `pulseMembers`, own `myPulses` | Leaves `activity/comments/notifications/presence/joinLinks` orphaned; other members' `myPulses` go stale |
 | Resource-delete integrity | `pulseStore.removeResource` strips the id from every feature | Only runs on the deleting editor's client, with full roster in memory |
 | Epic-delete integrity | `pulseStore.removeEpic` clears `epicId` on orphans | Same |
-| Member profile denorm | `PulsePage.tsx:121` `syncMyMemberPhoto` (own `photoURL`, only for the open Pulse) | Stale/missing on other Pulses; `displayName` never denormed |
+| Member profile denorm | `PulsePage.tsx:121` `syncMyMemberPhoto` (own `photoURL`, only for the open Beat) | Stale/missing on other Beats; `displayName` never denormed |
 | `myPulses` self-heal | `DashboardPage.tsx:31`, `PulsePage.tsx:145`, `pulses.removeMyPulseEntry/updateMyPulseRole` | Only the *affected* user's own client can fix their index |
 | Presence GC | `PresenceBar.tsx` client-side stale filter (`STALE_MS=45_000`) + `clearPresence` on unload | Dead tab ⇒ stale doc lingers forever |
 | User provisioning | `authStore.bootstrap` → `users.ensureUserDoc` (creates `users/{uid}` + personal workspace) | Runs only if the client cooperates on first sign-in |
@@ -148,7 +148,7 @@ is impossible from any client, and possible only from the Admin SDK.
 member-to-member **client** writes permitted by rules (`firestore.rules:198-207`: create allowed
 for a member, `actorUid` pinned to self, `targetUid` must be a member). This differs from
 Collaboration-Spec §3.6/D6's envisioned self-owned `users/{uid}/notifications` (which *would* be
-server-mandatory). Because today's notifications live inside the Pulse the actor can already
+server-mandatory). Because today's notifications live inside the Beat the actor can already
 write, SF2 is **reliability/dedupe/batching/transport hardening, not a security boundary** — the
 same posture as SF4. If notifications ever move to the self-owned per-user path, they become
 server-mandatory (like SF7's cross-user cleanup). Called out so SF2's scope isn't overstated.
@@ -168,8 +168,8 @@ identified here.
 | **SF2** ★ | Notification authoring | dedupe/batch `notifications/*` (+ transport handoff to SF10) | `onWritten` features (assign/status), `onCreated` comments | Reliability | Medium |
 | **SF3** ★ | Billing / plan sync | `billing/{uid}` — the **only** writer | HTTPS webhook (payment provider) | **Hard security boundary** | **High (at monetization)** |
 | **SF4** ★ | Activity-log authoring (authoritative) | `pulses/{p}/activity/*` server-written | `onWritten` features/epics/resources/pulseMembers/pulse | Trust/completeness | Medium |
-| **SF5** | Member profile denorm sync | `PulseMember.photoURL`/`displayName` across all a user's Pulses (+ linked `Resource` display) | `onWritten` `users/{uid}` | Cosmetic hardening | Low |
-| **SF6** | Pulse cascade delete | purge **all** subcollections + every member's `myPulses` | `onDeleted` `pulses/{p}` | Integrity (cross-user) | High |
+| **SF5** | Member profile denorm sync | `PulseMember.photoURL`/`displayName` across all a user's Beats (+ linked `Resource` display) | `onWritten` `users/{uid}` | Cosmetic hardening | Low |
+| **SF6** | Beats cascade delete | purge **all** subcollections + every member's `myPulses` | `onDeleted` `pulses/{p}` | Integrity (cross-user) | High |
 | **SF7** | Membership removal cascade | on member remove/leave: clean their `notifications`, `presence`, unlink `Resource.linkedUid`, drop their `myPulses` | `onDeleted` `pulseMembers/{uid}` | Integrity (cross-user) | High |
 | **SF8** | Resource-delete integrity | strip a deleted resource id from every feature's `resources`/`children`/`alloc`/`lead` | `onDeleted` `resources/{r}` | Fail-closed hardening | Medium |
 | **SF9** | Epic-delete integrity | clear/re-parent `epicId` on orphaned features | `onDeleted` `epics/{e}` | Hardening | Medium |
@@ -178,23 +178,22 @@ identified here.
 | **SF12** | Presence GC | delete stale `presence/*` heartbeats | `onSchedule` (~1–2 min) | Cost/hygiene | Low |
 | **SF13** | Join-link / invite lifecycle cleanup | delete expired/disabled `joinLinks`; retire `inviteIndex`/`invites` | `onSchedule` (daily) + one-shot | Hygiene | Low |
 | **SF14** | User provisioning | create `users/{uid}` + personal workspace on account creation | Auth `beforeUserCreated` | Reliability | Medium |
-| **SF15** | Account deletion cleanup | tear down a deleted user's owned Pulses, memberships, indexes, billing, workspace | Auth user-deleted lifecycle | Compliance/integrity | Medium |
+| **SF15** | Account deletion cleanup | tear down a deleted user's owned Beats, memberships, indexes, billing, workspace | Auth user-deleted lifecycle | Compliance/integrity | Medium |
 | **SF16** | Activity retention (fallback sweeper) | prune `activity/*` past plan retention **if** native TTL is insufficient | `onSchedule` (daily) | Hygiene | Low (prefer native TTL) |
 
 **Deliberately excluded (with justification):**
 
 - **Dashboard / capacity aggregation function.** The Team tab's load bars (`TeamTab.tsx`,
-  `domain/assignments.ts` — formerly also the Capacity tab, merged in Product-Spec PR1) and dashboard summaries (`usePulseSummary.ts`) compute over a single
-  Pulse's already-subscribed, bounded data (features/resources) on the client. Moving them
+  `domain/assignments.ts` — formerly also the Capacity tab, merged in Product-Spec PR1) and dashboard summaries (`usePulseSummary.ts`) compute over a single Beat's already-subscribed, bounded data (features/resources) on the client. Moving them
   server-side adds cost and a read-path function for no security or correctness gain. **Excluded**;
-  revisit only if a cross-Pulse/workspace rollup (Changelog CL10) is ever built.
+  revisit only if a cross-Beat/workspace rollup (Changelog CL10) is ever built.
 - **Search index (e.g. Algolia/Typesense sync).** No full-text search feature exists or is
   specced. **Excluded** until a search feature is on the roadmap.
 - **`myPulses` write-through on grant/rename.** Tempting to have a function keep every member's
   `myPulses` label live, but the self-heal pattern (Collaboration-Spec §1.6) already covers it
   fail-closed and is a *load-bearing invariant* the specs want preserved. The only cross-user
   `myPulses` writes we add are **deletions** on teardown (SF6/SF7/SF15), where self-heal is
-  strictly worse (a card pointing at a deleted Pulse). **Excluded** for the update case; included
+  strictly worse (a card pointing at a deleted Beat). **Excluded** for the update case; included
   only for the delete case.
 - **Undo/redo server history.** Explicit non-goal (Undo-Spec §10, Collaboration-Spec §3.4): undo
   stays single-user, in-memory, client-only. **Excluded.**
@@ -251,7 +250,7 @@ this doc's completeness:
   role-change / removed** (Collaboration-Spec §5 type set). Only the "comment" type ships today
   (`Notification.type: "comment"`, `types/index.ts:203`).
 - **Why server-side:** reliability, dedupe, batching, and email/push (SF10) — *not* a security
-  boundary, because the shipped notifications collection is a member-writable Pulse subcollection
+  boundary, because the shipped notifications collection is a member-writable Beat subcollection
   (§A.4 note). A function removes the client from the "did the author's browser stay open long
   enough to write all N notifications" path.
 - **Trigger:** `onDocumentWritten` features (assignment/status), `onDocumentCreated` comments.
@@ -280,8 +279,8 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF3` and 
 
 - **Owns:** `billing/{orgId} = { tier, status, currentPeriodEnd, seats?, source, updatedAt,
   stripeCustomerId, stripeSubscriptionId, country, currency }`, the **only** writer. Keyed by
-  **Organization**, and **`orgId === workspaceId`** (Plans-Spec §1, PL6) — a Pulse's org is its
-  `workspaceId`, which selects whose billing doc gates the Pulse.
+  **Organization**, and **`orgId === workspaceId`** (Plans-Spec §1, PL6) — a Beat's org is its
+  `workspaceId`, which selects whose billing doc gates the Beat.
 - **Why server-side (mandatory):** the plan is a **hard security boundary** — a client-writable
   plan lets anyone self-upgrade to Pro. **No client interim for *writing* the plan exists**; until
   SF3 ships, absent doc ⇒ Free (Plans-Spec §4), i.e. paid tiers don't exist and the account-menu
@@ -295,9 +294,9 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF3` and 
   doesn't force a provider retry.
 - **Rules interaction:** `billing/{orgId}` is `read: if isOrgAdmin(orgId)` (an `owner` in that
   workspace's `WorkspaceMember`)`; write: if false`; rules `get()` it (bypassing its read rule) to
-  gate Pulse actions on `pulse.workspaceId` — the `entitlement ∧ capability` seam
+  gate Beats actions on `pulse.workspaceId` — the `entitlement ∧ capability` seam
   (Permissions-Spec §6.5, Plans-Spec §5).
-- **Dependencies:** SF11 (quota counters) pairs with it; ownership-transfer moving a Pulse's
+- **Dependencies:** SF11 (quota counters) pairs with it; ownership-transfer moving a Beat's
   `workspaceId` (PL7) must not orphan entitlements.
 - **Acceptance:** every provider event lands as the correct `billing/{orgId}` state within one call;
   replays/out-of-order deliveries never regress a newer state; an unsigned/invalid request is
@@ -334,12 +333,12 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 #### SF5 — Member profile denorm sync
 
 - **Owns:** the denormalized copies of a user's profile that other members are allowed to read —
-  `PulseMember.photoURL` (and `displayName`, if we add it) on **every** Pulse the user is a member
+  `PulseMember.photoURL` (and `displayName`, if we add it) on **every** Beats the user is a member
   of, and (optionally) the display fields shown on a `Resource` linked to that account.
 - **Why server-side:** members can't read each other's `users/{uid}` docs (`firestore.rules:95`),
   so the avatar/name must be denormalized onto member-readable docs. Today the client self-syncs
-  **only its own `photoURL`, and only for the currently-open Pulse** (`PulsePage.tsx:121`); a user
-  who is a member of 20 Pulses but opens one leaves the other 19 stale, and `displayName` is never
+  **only its own `photoURL`, and only for the currently-open Beat** (`PulsePage.tsx:121`); a user
+  who is a member of 20 Beats but opens one leaves the other 19 stale, and `displayName` is never
   denormed. A function fans a `users/{uid}` profile change out to all the user's `pulseMembers`
   docs (which it can find via the Admin SDK — the client can't, without a collection-group query).
 - **Trigger:** `onDocumentWritten` `users/{uid}` when `photoURL`/`displayName` changes. To find the
@@ -347,7 +346,7 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
   collection-group query (Admin SDK is unaffected by the rule limitation — that ban is a client
   read-rule constraint, not a server one) **or** reads the user's `myPulses` index (self-owned,
   server-readable) and updates each `pulseMembers/{uid}`.
-- **Interim (fail-open, cosmetic):** self-sync on Pulse open. A stale avatar is a cosmetic glitch,
+- **Interim (fail-open, cosmetic):** self-sync on Beats open. A stale avatar is a cosmetic glitch,
   gates nothing.
 - **Idempotency:** recompute-from-source (copy the current profile values); write only on diff.
 - **Rules interaction:** none — `photoURL` self-write is already allowed; the server write bypasses
@@ -358,18 +357,18 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 
 ---
 
-#### SF6 — Pulse cascade delete
+#### SF6 — Beats cascade delete
 
-- **Owns/does:** on Pulse deletion, **purge every subcollection** and **every member's `myPulses`
+- **Owns/does:** on Beats deletion, **purge every subcollection** and **every member's `myPulses`
   entry**, atomically-enough that no orphan remains readable by path.
 - **Why server-side:** two gaps in the client interim (`pulses.deletePulse`, `pulses.ts:213`):
   1. It deletes only `invites/epics/features/resources` + `pulseMembers` + the deleter's *own*
      `myPulses`. It **leaves `activity`, `comments`, `notifications`, `presence`, `joinLinks`
-     orphaned** — and while the pulse doc is gone, orphaned subcollection docs can linger (cost,
-     and a former path-reader risk if the pulse doc is ever recreated with the same id).
+     orphaned** — and while the Beat doc is gone, orphaned subcollection docs can linger (cost,
+     and a former path-reader risk if the Beat doc is ever recreated with the same id).
   2. It **cannot** clean *other* members' `myPulses` (a client can't write another user's index) —
      those go stale and rely on each member's dashboard self-heal (Collaboration-Spec §1.8). A
-     function can and should clean them via the Admin SDK, so a deleted Pulse leaves *no* stale
+     function can and should clean them via the Admin SDK, so a deleted Beat leaves *no* stale
      cards anywhere.
 - **Trigger:** `onDocumentDeleted` `pulses/{p}`. (Alternatively an `onCall` "deletePulse" that
   does the whole teardown transactionally and then deletes the doc — see D-list; recommendation:
@@ -382,7 +381,7 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 - **Rules interaction:** none (Admin SDK). The client keeps its interim delete for responsiveness;
   the function guarantees full teardown.
 - **Dependencies:** shares teardown logic with SF15 (account deletion deletes the user's owned
-  Pulses). Must enumerate members **before** deleting `pulseMembers` to know whose `myPulses` to
+  Beats). Must enumerate members **before** deleting `pulseMembers` to know whose `myPulses` to
   clean.
 - **Acceptance:** after deletion, no doc under `pulses/{p}/**` remains, and no `users/*/myPulses/{p}`
   entry survives, within one invocation.
@@ -393,7 +392,7 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 
 - **Owns/does:** when a `pulseMembers/{uid}` doc is deleted (owner removes a member, or a member
   leaves — `memberships.removeMember`/`leavePulse`), clean up everything keyed to that member in
-  that Pulse: their `notifications` (target or actor), their `presence/{uid}` heartbeat, **unlink**
+  that Beat: their `notifications` (target or actor), their `presence/{uid}` heartbeat, **unlink**
   any `Resource.linkedUid == uid` (the resource stays; the account link clears), and drop their
   `users/{uid}/myPulses/{p}` entry.
 - **Why server-side:** the client interim only covers the *self* case: `leavePulse` deletes the
@@ -414,7 +413,7 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
   SF1's resource trigger, so they compose automatically. SF15 (account deletion) reuses this per
   membership.
 - **Acceptance:** within one invocation of a membership deletion, the member's `presence`,
-  `notifications`, and `myPulses` for that Pulse are gone and any resource linked to them is
+  `notifications`, and `myPulses` for that Beat are gone and any resource linked to them is
   unlinked.
 
 ---
@@ -535,10 +534,10 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
   moment a link expires; and the legacy-invite retirement must reach docs across all users'
   `inviteIndex/{email}` shards, which only the Admin SDK can enumerate.
 - **Trigger:** `onSchedule` daily (expiry sweep) + a manually-invoked one-shot (retirement).
-  *(Note: the current `InviteLink` on the Pulse doc — `types/index.ts:221` — has no `expiresAt`;
+  *(Note: the current `InviteLink` on the Beat doc — `types/index.ts:221` — has no `expiresAt`;
   the richer `joinLinks/{token}` model with `expiresAt`/`disabled` is Collaboration-Spec §5. SF13
-  targets that model; if links stay on the pulse doc it degrades to just the retirement sweep.)*
-- **Interim:** revocation today = overwrite/clear the pulse `invite` field (immediate); expiry
+  targets that model; if links stay on the Beat doc it degrades to just the retirement sweep.)*
+- **Interim:** revocation today = overwrite/clear the Beat `invite` field (immediate); expiry
   isn't modeled yet. Fail-closed (an expired link the rule still honored would be the risk — so if
   `expiresAt` is added, **the rule must check it**, `expiresAt == null || expiresAt > request.time`;
   SF13 is cleanup, the rule is the boundary).
@@ -579,22 +578,22 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 
 #### SF15 — Account deletion cleanup
 
-- **Owns/does:** when a user deletes their account, tear down their footprint: delete the Pulses
-  they solely own (via SF6's cascade), remove their `pulseMembers` docs across all Pulses (via
+- **Owns/does:** when a user deletes their account, tear down their footprint: delete the Beats
+  they solely own (via SF6's cascade), remove their `pulseMembers` docs across all Beats (via
   SF7's cascade per membership), delete their `users/{uid}` subtree (`myPulses`, `notifications`),
-  their `billing/{uid}`, and their personal workspace. Handle sole-owner Pulses per policy
+  their `billing/{uid}`, and their personal workspace. Handle sole-owner Beats per policy
   (delete, or block deletion until ownership transferred — D-list).
 - **Why server-side:** there is **no cleanup today** — `users` delete is `false`
-  (`firestore.rules:96`), and a client can't reach cross-Pulse/cross-user docs anyway. Account
+  (`firestore.rules:96`), and a client can't reach cross-Beat/cross-user docs anyway. Account
   deletion is a compliance/data-hygiene need (GDPR-style "delete my data"). Only the Admin SDK can
   enumerate and delete a user's footprint.
 - **Trigger:** Auth user-deletion lifecycle event (the 2nd-gen analogue of `onUserDeleted`).
 - **Interim:** none (feature doesn't exist).
 - **Idempotency:** all deletes idempotent; safe to re-run.
 - **Rules interaction:** none (Admin SDK). Enables a real "Delete account" UI later.
-- **Dependencies:** reuses SF6 (owned-Pulse teardown) and SF7 (per-membership cleanup); interacts
-  with the last-owner guard (must not orphan a shared Pulse — transfer or delete per policy).
-- **Acceptance:** after account deletion, no doc keyed to that uid (owned Pulses, memberships,
+- **Dependencies:** reuses SF6 (owned-Beat teardown) and SF7 (per-membership cleanup); interacts
+  with the last-owner guard (must not orphan a shared Beat — transfer or delete per policy).
+- **Acceptance:** after account deletion, no doc keyed to that uid (owned Beats, memberships,
   indexes, billing, personal workspace) remains, within the function's run.
 
 ---
@@ -635,7 +634,7 @@ functions, and add a function-test harness alongside `npm run test:rules`.
   Ship reconciling (client keeps optimistic writes); do **not** flip to reject client writes yet.
 
 **Phase 2 — Cross-user integrity the client physically cannot do (High).**
-- **SF6** (Pulse cascade delete) + **SF7** (membership removal cascade). These clean *other* users'
+- **SF6** (Beats cascade delete) + **SF7** (membership removal cascade). These clean *other* users'
   self-owned docs — impossible from any client. Group them; they share the Admin-SDK teardown
   helpers and SF15 will reuse both. Ship SF8/SF9 (resource/epic delete integrity) in the same
   deploy — all four are `onDeleted` integrity sweeps.
@@ -687,12 +686,12 @@ Each carries a **recommended default** so nothing blocks on it.
    client writes `assignedUids`/`leadUid` optimistically for latency; SF1 is the authority that
    reconciles/heals. Do **not** flip rules to reject client writes of these keys unless a concrete
    abuse appears (a scoped role already can't write features at all, Permissions-Spec §4.7).
-6. **Pulse delete & account delete: `onCall` vs `onDeleted` trigger.** *Recommend:* an **`onCall`**
+6. **Beats delete & account delete: `onCall` vs `onDeleted` trigger.** *Recommend:* an **`onCall`**
    entry point for user-initiated teardown (SF6/SF15) so the client gets a completion signal and
    ordering is controlled, **plus** an `onDeleted` backstop so a direct doc delete still triggers
    cleanup. Confirm.
-7. **Sole-owner Pulses on account deletion (SF15).** Delete them outright, or block account
-   deletion until ownership is transferred? *Recommend:* on account deletion, **delete** Pulses the
+7. **Sole-owner Beats on account deletion (SF15).** Delete them outright, or block account
+   deletion until ownership is transferred? *Recommend:* on account deletion, **delete** Beats the
    user solely owns (they're the billing owner and no one else can own them) and cascade; surface a
    pre-deletion warning listing them. Confirm vs a transfer-first policy.
 8. **Quota enforcement depth (PL5). → DECIDED: rule-enforced counters (SF11), Option b.**

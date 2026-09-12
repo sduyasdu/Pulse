@@ -1,15 +1,15 @@
-# Pulse — About Spec
+# Beats — About Spec
 
 Status: **Built and shipped — AB1–AB10 all resolved.** ·
 Owner: product + eng ·
-Related: `Yasdu-Site-Pulse-Listing-Spec.md` (the Pulse↔Yasdu relationship as told to
+Related: `Yasdu-Site-Beats-Listing-Spec.md` (the Beats↔Yasdu relationship as told to
 the public), `Help-Spec.md` (the other "what is this?" surface), `Plans-Spec.md`
 (the billing entry that About sits beside in the same menu)
 
 ## 0. What this is (and isn't)
 
 An **About** entry at the bottom of the account menu, opening a small dialog that
-says three things: this is Pulse, Pulse is a Yasdu product, and this is the exact
+says three things: this is Beat, Beats is a Yasdu product, and this is the exact
 build you are looking at.
 
 It exists for the two moments nothing else in the app covers: someone asks *"who
@@ -30,7 +30,7 @@ to check for; a reload is the update.
 sign-out divider (AB1).** Sign out keeps the bottom of the menu.
 
 The account menu is rendered in exactly one place: `DashboardPage.tsx:197`. It is
-**not** in the Pulse toolbar and **not** in the mobile Pulse header, so About is
+**not** in the Beat toolbar and **not** in the mobile Beat header, so About is
 reachable from the dashboard only. That is acceptable for v1 and worth stating out
 loud, because "it's in the account menu" reads as "it's everywhere" and it isn't
 (AB2).
@@ -40,7 +40,7 @@ loud, because "it's in the account menu" reads as "it's everywhere" and it isn't
 A centred modal in the shape `AccountDialog`/`BillingDialog` already use — same
 overlay, same dismiss behaviour, same close affordance. Contents, top to bottom:
 
-1. **Pulse lockup** — `<PulseLockup variant="light" size={22} />`. Live SVG, not an
+1. **Beats lockup** — `<BeatsLockup variant="light" size={22} />`. Live SVG, not an
    image; it already exists in `shared/Logo.tsx`.
 2. **One line of product description.** Reuse the existing tagline string
    `auth.tagline` ("Visual, graph-first project planning.") rather than writing a
@@ -49,7 +49,7 @@ overlay, same dismiss behaviour, same close affordance. Contents, top to bottom:
 4. **A rule**, then the Yasdu attribution:
    - the Yasdu lockup image (§3), max 96 px wide, linked to `https://yasdu.com`
      (`target="_blank" rel="noopener noreferrer"`),
-   - the line **"Pulse is a Yasdu product."**,
+   - the line **"Beats is a Yasdu product."**,
    - the copyright line (§5).
 
 The dialog is informational: no form, no state, nothing to save. It must be
@@ -73,7 +73,7 @@ white-wordmark one and is invisible on white. The light-surface counterpart is
 
 ### 3.2 Which one actually ships
 
-**Pulse has no dark mode.** There is no `prefers-color-scheme` rule and no theme
+**Beats has no dark mode.** There is no `prefers-color-scheme` rule and no theme
 state anywhere in `src/` — surfaces are individually hardcoded, and the account
 menu and its dialogs are `#FFFFFF`.
 
@@ -85,8 +85,8 @@ a real theme later **(AB4)**.
 
 ### 3.3 How they're vendored
 
-Copy both into `public/brand/`, renamed to match the existing Pulse assets there
-(`pulse-lockup-dark.svg`, `pulse-mark-black.svg`, …):
+Copy both into `public/brand/`, renamed to match the existing Beats assets there
+(`beats-lockup-dark.svg`, `beats-mark-black.svg`, …):
 
 ```
 public/brand/yasdu-lockup-light.png   ← YASDU logo color_Mesa de trabajo 1.png
@@ -98,7 +98,7 @@ which would need URL-encoding in every reference and would break the moment some
 re-exports the artboard. Rename on the way in **(AB5)**.
 
 **PNG, not SVG, and that is a real difference from every other logo in this app.**
-Pulse's own marks are inline SVG (`shared/Logo.tsx`) and scale freely; the Yasdu kit
+Beats' own marks are inline SVG (`shared/Logo.tsx`) and scale freely; the Yasdu kit
 ships PNG plus a `.ai` source with no SVG export. At 427 px native and a 96 px
 display width the raster has ~4.4× headroom, so it stays crisp through 3× displays
 — but it must be given explicit `width`/`height` to avoid layout shift, and `alt="Yasdu"`.
@@ -132,7 +132,7 @@ and a fallback for `npm run dev` outside a git checkout.
 
 As shipped, on two lines:
 
-> Pulse is a Yasdu product.
+> Beats is a Yasdu product.
 > © 2026 Yasdu Innovación y Servicios SA de CV · México
 
 - **`{year}` is the build year, stamped by `__APP_BUILT__` — not
@@ -158,7 +158,7 @@ fails. New keys:
 "about.visitYasdu":    "Visit yasdu.com"             ← link label / aria-label
 ```
 
-**Not translated:** "Pulse", "Yasdu", the version string's digits, and the ©
+**Not translated:** "Beats", "Yasdu", the version string's digits, and the ©
 symbol. Product and company names stay as-is across all six languages — the
 convention already stated at the top of `en.ts` **(AB9)**.
 
@@ -168,7 +168,7 @@ so a locale can reorder it.
 ## 7. Accessibility
 
 - The dialog gets `role="dialog"`, `aria-modal="true"` and `aria-labelledby`
-  pointing at the "About Pulse" heading.
+  pointing at the "About Beats" heading.
 - The Yasdu logo is `<img alt="Yasdu">` — it is the *content* of the attribution,
   not decoration, so it is not `aria-hidden`.
 - The external link says where it goes (`about.visitYasdu`), not "click here", and
@@ -185,14 +185,14 @@ so a locale can reorder it.
    read as "last of the options", with Sign out as the group's closer.
 2. **AB2 — Reach. ✅ RESOLVED: dashboard only in v1.** The account menu renders at
    `DashboardPage.tsx:197` and nowhere else. *Rejected: also mounting AccountMenu in
-   the Pulse toolbar and mobile header* — that is a menu-placement project with its
+   the Beat toolbar and mobile header* — that is a menu-placement project with its
    own layout questions, and it would hold About hostage to it.
 3. **AB3 — Which file is the light-mode logo. ✅ RESOLVED:
    `YASDU logo color_Mesa de trabajo 1.png`.** The request named
    `naranja blanco` for both modes; opening the files shows `naranja blanco` is the
    white-wordmark lockup, which is invisible on the dialog's white surface.
 4. **AB4 — Light/dark selection. ✅ RESOLVED: surface, not theme; ship both files,
-   render the light one.** Pulse has no dark mode — no `prefers-color-scheme`, no
+   render the light one.** Beats has no dark mode — no `prefers-color-scheme`, no
    theme state. *Rejected: wiring a `prefers-color-scheme` swap now* — it would be
    the app's only theme-aware element, and it would flip the Yasdu logo while every
    surface around it stayed white.

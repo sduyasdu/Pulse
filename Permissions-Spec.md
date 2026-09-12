@@ -1,16 +1,16 @@
-# Pulse — Granular Permissions Specification
+# Beats — Granular Permissions Specification
 
 Status: **Proposal — role set fixed by product owner; P11 & P12 resolved; P1–P10 open** ·
-Scope: designs a **more granular per-Pulse permissions system** on top of today's
+Scope: designs a **more granular per-Beat permissions system** on top of today's
 coarse owner/editor/viewer model. Spec/design only — no application code changes.
 Related: `Collaboration-Spec.md`, `Server-Functions-Spec.md` (SF1 — the denorm
 maintainer this spec's scoped roles rely on).
 
-The product owner has fixed the shipped per-Pulse role presets. In addition to
+The product owner has fixed the shipped per-Beat role presets. In addition to
 **owner** (unchanged: full control + manage members + delete), there are four presets:
 
 1. **Editor** — edits everything (today's editor).
-2. **Full Viewer** — read-only, sees the entire Pulse (today's viewer).
+2. **Full Viewer** — read-only, sees the entire Beat (today's viewer).
 3. **My-Beat Viewer** — read-only, but can only **see** tasks where their linked
    resource is assigned (a restricted-**read** role).
 4. **Task Lead** *(role #4 — recommended name; see §3.4)* — can only **edit** tasks
@@ -21,7 +21,7 @@ presets above are the only things the everyday UI exposes. Everything is grounde
 what `firestore.rules` can enforce and is backward-compatible (existing viewer →
 Full Viewer, existing editor → Editor, no migration write). Builds on
 `Collaboration-Spec.md` (Teams, copy-link joins, D1–D14) but **supersedes D11b**: a
-per-Pulse grant is now **authoritative for that Pulse and may narrow *or* raise** the
+per-Beat grant is now **authoritative for that Beat and may narrow *or* raise** the
 team-role floor (product owner: raise-only removed — see §6, P11).
 
 ---
@@ -36,13 +36,13 @@ Authoritative record: `pulses/{pulseId}/pulseMembers/{uid}` (`PulseMember`,
 
 | Capability | Owner | Editor | Viewer |
 |---|---|---|---|
-| Read all Pulse data (epics/features/resources/comments) | ✅ | ✅ | ✅ |
+| Read all Beat data (epics/features/resources/comments) | ✅ | ✅ | ✅ |
 | Edit tasks (`features`) / epics / resources | ✅ | ✅ | ❌ |
-| Edit Pulse config (statuses, resourceTypes, graphConfig, name, `invite`) | ✅ | ✅ | ❌ |
+| Edit Beats config (statuses, resourceTypes, graphConfig, name, `invite`) | ✅ | ✅ | ❌ |
 | Comment (`comments`) | ✅ | ✅ | ✅ (any member) |
 | Generate / revoke a join link, invite | ✅ | ✅ | ❌ |
 | Change roles / remove members | ✅ | ❌ | ❌ |
-| Delete the Pulse | ✅ | ❌ | ❌ |
+| Delete the Beat | ✅ | ❌ | ❌ |
 
 ### 1.2 How it's enforced today (the layer any proposal must fit)
 
@@ -54,7 +54,7 @@ Two-layer; **the rules layer is authoritative** (`firestore.rules`):
 - `canEditPulse(pulseId)` — role in `['owner','editor']` (`:54-56`); gates every
   `epics`/`features`/`resources` write (`:193,198,214`) and the `pulses` update
   (`:117`).
-- `isPulseOwner(pulseId)` — role `== 'owner'` (`:57-59`); gates Pulse `delete`
+- `isPulseOwner(pulseId)` — role `== 'owner'` (`:57-59`); gates Beats `delete`
   (`:120`) and `pulseMembers` update/delete (`:143-150`).
 - `comments` create is gated by `isPulseMember` (`:206`), **not** `canEditPulse` — so
   **viewers already comment today**. Delete is author-or-owner.
@@ -114,15 +114,15 @@ Scenarios the three flat roles can't express — now realized by the four preset
 - Preserve every current invariant: self-owned `users/{uid}/myPulses` index; a member
   may only self-write their own membership `photoURL` (and one new hint field, §7);
   **no role/scope self-escalation**; ≥1 owner always (`CollaboratorsDialog.tsx:39-40`).
-- Compose with Teams (Collaboration-Spec §3.2): a per-Pulse grant is **authoritative for
-  that Pulse — it overrides the team role, narrowing or raising** (supersedes D11b; §6,
-  P11). The team role applies only where the member has no per-Pulse grant.
+- Compose with Teams (Collaboration-Spec §3.2): a per-Beat grant is **authoritative for
+  that Beat — it overrides the team role, narrowing or raising** (supersedes D11b; §6,
+  P11). The team role applies only where the member has no per-Beat grant.
 
 **Non-goals (this round)**
 
 - **Per-epic / per-field ACLs.** Enforcing "edit only epic X" or "edit only field Y"
   needs a per-write ACL lookup / brittle field allow-list — deferred (P9).
-- **Object-level sharing with outsiders.** Membership stays whole-Pulse; outsiders
+- **Object-level sharing with outsiders.** Membership stays whole-Beat; outsiders
   enter via a join link (Collaboration-Spec §3.1).
 
 ---
@@ -229,7 +229,7 @@ Both scoped roles **depend on the member being linked to a Resource** (`linkedUi
 
 Remaining references in this spec use **Task Lead**.
 
-**Task Lead read scope (P5).** *Recommended:* **full read of the whole Pulse, edit
+**Task Lead read scope (P5).** *Recommended:* **full read of the whole Beat, edit
 only led tasks.** A lead needs surrounding context (dependencies, other epics) to do
 their job, and full read costs nothing in rules (no query constraints — the only
 gate is on writes). *Alternative:* restrict read to led tasks (like My-Beat but keyed
@@ -330,7 +330,7 @@ Consequences to design around:
   - `comments` — a comment is visible iff its target feature is in the beat. Per-doc
     this is enforceable (`get()` the target feature, check `uid in assignedUids`); for
     lists the client queries comments **per visible feature** (comments are already
-    fetched per-target in the DetailsTab flow). Pulse-level comments (`targetId==null`)
+    fetched per-target in the DetailsTab flow). Beat-level comments (`targetId==null`)
     → treat as visible to beat viewers (recommend) or hide (P6).
   - `pulse` doc, `presence`, own `notifications` — unchanged (membership-gated).
 
@@ -411,7 +411,7 @@ index. The clean case.
   delete and last-owner semantics are unchanged.
 - **Last-owner "≥1 owner"** stays client-enforced (rules can't count) — already the
   case (`CollaboratorsDialog.tsx:39-40`).
-- **Self-owned `myPulses` index untouched**; caps live only on the Pulse-side member
+- **Self-owned `myPulses` index untouched**; caps live only on the Beat-side member
   doc. `MyPulseIndexEntry.role` stays a display cache.
 
 ### 4.7 What is client-side-only, and why acceptable
@@ -424,7 +424,7 @@ index. The clean case.
 | "≥1 owner always" | No count/query in rules | Existing client guard; self-write can't drop own owner caps. |
 
 None of these lets a user reach **another member's data** beyond their scope or touch
-the Pulse lifecycle — the acceptable v1 line.
+the Beat lifecycle — the acceptable v1 line.
 
 ---
 
@@ -432,7 +432,7 @@ the Pulse lifecycle — the acceptable v1 line.
 
 - **Preset picker.** The Editor/Viewer `<select>` (`:124-133`) widens to **Owner ·
   Editor · Full Viewer · My-Beat Viewer · Task Lead**, each with a one-line helper:
-  - Full Viewer — "reads & comments on the whole Pulse."
+  - Full Viewer — "reads & comments on the whole Beat."
   - My-Beat Viewer — "sees only tasks their linked resource is on."
   - Task Lead — "edits only the tasks they lead; reads the rest." ("Make owner" stays
     the separate transfer action, `:134-141`.) Only a member with `manageMembers`
@@ -451,7 +451,7 @@ the Pulse lifecycle — the acceptable v1 line.
   the label to **Custom** with a "Reset to preset" link. Keeps the everyday path to
   "pick a role" while leaving full granularity available.
 - **Self-view.** Non-managers see their own badge + a plain-language summary ("You can:
-  see your beat, comment") so scoped members understand why parts of the Pulse are
+  see your beat, comment") so scoped members understand why parts of the Beat are
   hidden or read-only.
 - **Join-link roles.** The link role picker (Collaboration-Spec §3.1) may offer Full
   Viewer / My-Beat Viewer / Task Lead / Editor, never Owner (extends the existing
@@ -461,25 +461,24 @@ the Pulse lifecycle — the acceptable v1 line.
 
 ## 6. Interaction with the Teams / workspace layer
 
-Supersedes Collaboration-Spec **D11b** (raise-only). **A per-Pulse grant overrides the
-team role for that Pulse — it can narrow as well as raise** (product owner decision,
+Supersedes Collaboration-Spec **D11b** (raise-only). **A per-Beat grant overrides the
+team role for that Beat — it can narrow as well as raise** (product owner decision,
 P11 resolved):
 
 - **Team roles stay owner/editor/viewer** (Collaboration-Spec §3.2), mapping to the
   Owner/Editor/Full-Viewer bundles. They are the **default/floor only when the member
-  has no per-Pulse membership doc** on that Pulse.
-- **Per-Pulse membership is authoritative.** If a `pulseMembers/{uid}` doc exists for
-  the Pulse, **its `caps` fully replace** the team-role bundle — higher *or* lower. So a
-  team Editor can be set to **My-Beat Viewer** or **Task Lead** on one Pulse and is
+  has no per-Beat membership doc** on that Beat.
+- **Per-Beat membership is authoritative.** If a `pulseMembers/{uid}` doc exists for
+  the Beat, **its `caps` fully replace** the team-role bundle — higher *or* lower. So a
+  team Editor can be set to **My-Beat Viewer** or **Task Lead** on one Beat and is
   genuinely restricted there; scoped roles now bite team members too, not just guests.
 - **Effective capability (no union):** `caps = pulseMembersDoc ? caps(pulseMembersDoc)
-  : bundle(workspaceRole)`. Precedence is *presence of the per-Pulse doc*, not
+  : bundle(workspaceRole)`. Precedence is *presence of the per-Beat doc*, not
   max-of-the-two.
 - **Rule shape (changes from the old OR-cascade).** Reads/writes can **no longer** be a
   simple `isPulseMember || isWorkspaceMember` OR — that would re-grant the team floor and
   defeat a narrowing grant. Instead: `myCaps(pulseId)` = if the caller's
-  `pulseMembers/{uid}` doc `exists()`, use its materialized `caps`; **else** `get()` the
-  pulse doc for `workspaceId` and use the workspace-role bundle. Every gate (read, edit,
+  `pulseMembers/{uid}` doc `exists()`, use its materialized `caps`; **else** `get()` the Beat doc for `workspaceId` and use the workspace-role bundle. Every gate (read, edit,
   beat, lead, manage) evaluates against that single resolved `caps`.
 
 ---
@@ -495,17 +494,16 @@ There is **no feature gating** — every tier has every feature. The plan layer 
 **quantity limits**, and it splits the roles into two **license classes**:
 
 - **Editor seats (paid)** — roles **owner** and **editor**. These are the users who may
-  **create Pulses** and fully edit. Editors are an **explicit licensed roster**,
-  `Workspace.editorUids[]` (Plans-Spec §3.1, PL9 option B): a user may hold owner/editor on a
-  Pulse **only if** they're on it, and rules cap the roster at the org's seat limit (Pro = 1;
+  **create Beats** and fully edit. Editors are an **explicit licensed roster**,
+  `Workspace.editorUids[]` (Plans-Spec §3.1, PL9 option B): a user may hold owner/editor on a Beat **only if** they're on it, and rules cap the roster at the org's seat limit (Pro = 1;
   Teams/Business = purchased `billing.seats`) — so promoting/creating past your paid seats is
   rejected synchronously.
 - **Collaborators (free)** — roles **full viewer**, **my-beat viewer**, **task lead**. They
-  don't consume a seat and **cannot create Pulses**; they participate in Pulses the org's
+  don't consume a seat and **cannot create Beats**; they participate in Beats the org's
   editors own, up to the collaborator quota. (A task lead edits its own tasks but still
-  can't create Pulses — editing ≠ a seat.)
+  can't create Beats — editing ≠ a seat.)
 
-- **Enforcement** mirrors §4 but is quota-based: a growth action (create Pulse, promote to
+- **Enforcement** mirrors §4 but is quota-based: a growth action (create Beats, promote to
   editor, add collaborator, add resource) checks the org's entitlements —
   `entitlements(pulse.workspaceId)` / `editorSeatLimit()` — read via `get()` on the
   `billing/{workspaceId}` doc (the org is the workspace, Plans-Spec §1/PL6). Plan absent ⇒
@@ -596,12 +594,12 @@ docs working. No destructive migration.
    fixed four-role set has no no-comment tier. *Recommend:* keep Full Viewer
    comment-capable; add a silent-viewer preset only if a real need appears.
 5. **P5 — Task Lead read scope + name.** *Recommend:* name **"Task Lead"**; read scope
-   **full Pulse, edit only led tasks** (context matters, costs nothing in rules).
+   **full Beats, edit only led tasks** (context matters, costs nothing in rules).
    *Alternative:* read only led tasks (enforceable like §4.3, hides context). *Confirm
    name and full-read.*
 6. **P6 — My-Beat Viewer's non-feature reads.** *Recommend:* epics + resources readable
    (context for the visible tasks); comments visible only on visible features
-   (per-doc enforced, client queries per-feature); Pulse-level comments visible.
+   (per-doc enforced, client queries per-feature); Beat-level comments visible.
    *Confirm, or tighten to also hide the roster.*
 7. **P7 — Link-grantable roles.** *Recommend:* links may grant Full Viewer / My-Beat
    Viewer / Task Lead / Editor, never Owner. *Confirm the scoped roles are
@@ -613,11 +611,11 @@ docs working. No destructive migration.
 10. **P10 — Materialized caps vs derive-in-rules.** *Recommend:* materialize on the
     member doc (rules read values; one `get()`), legacy fallback, no backfill.
     *Confirm the client↔rules preset table sync is acceptable.*
-11. **P11 — Teams composition. ✅ RESOLVED (raise-only removed).** A per-Pulse grant is
-    **authoritative for that Pulse and may narrow *or* raise** the team floor (§6);
+11. **P11 — Teams composition. ✅ RESOLVED (raise-only removed).** A per-Beat grant is
+    **authoritative for that Beat and may narrow *or* raise** the team floor (§6);
     presence of a `pulseMembers` doc replaces the team role. So My-Beat Viewer / Task
     Lead now restrict team members too. Supersedes Collaboration-Spec D11b; rules resolve
-    a single `caps` (per-Pulse doc if present, else workspace role) — **no** OR-cascade.
+    a single `caps` (per-Beat doc if present, else workspace role) — **no** OR-cascade.
 12. **P12 — `assignedUids`/`leadUid` maintainer. ✅ RESOLVED (client-maintained now).**
     The client maintains both denorms and the `linkedUid`-change fan-out in v1. Server
     hardening is tracked as **`Server-Functions-Spec.md` SF1** (not a loose open
@@ -625,7 +623,7 @@ docs working. No destructive migration.
 13. **P13 — Where the client reads its own `readScope` from. ✅ RESOLVED (the roster
     snapshot, re-applied on every snapshot).** The scoped listeners (`features`,
     `costs`) can only be created once the caller's read scope is known (§4.3), so
-    whatever resolves it sits in front of the Pulse's first paint. It is resolved from
+    whatever resolves it sits in front of the Beat's first paint. It is resolved from
     the `pulseMembers` snapshot the store already subscribes to — a member may list
     that collection and their own doc is always in the result — and re-applied on
     every subsequent snapshot, tearing the two listeners down and reopening them
@@ -633,8 +631,8 @@ docs working. No destructive migration.
 
     *Rejected: a one-shot `fetchMembership` getDoc*, which is what shipped first. It
     is authoritative — a server read, never stale — but it spends a full round trip
-    in front of the two listeners carrying the Pulse's actual contents, and that delay
-    is what let the canvas paint its empty-Pulse placeholder over a Pulse full of
+    in front of the two listeners carrying the Beat's actual contents, and that delay
+    is what let the canvas paint its empty-Beat placeholder over a Beat full of
     work. It also had no answer for a **live** demotion: the running listener was
     refused with no path back short of a reload.
 
@@ -642,7 +640,7 @@ docs working. No destructive migration.
     server has since changed, so the unconstrained query is issued and refused. That
     is recoverable and is recovered: the server's roster follows moments later, the
     scope changes, and the resubscribe clears the refusal it caused rather than
-    leaving the Pulse behind an error screen. Only the *scoped* listeners' refusals
+    leaving the Beat behind an error screen. Only the *scoped* listeners' refusals
     are cleared this way — an `epics` refusal is a real fault and stands
     (`src/stores/pulseStore.ts:159`).
 

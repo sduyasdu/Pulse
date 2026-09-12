@@ -1,6 +1,6 @@
 # MCP privacy disclosure — source material
 
-**This is not a privacy policy.** It is the factual record of what Pulse's MCP
+**This is not a privacy policy.** It is the factual record of what Beats' MCP
 connector actually does with data, read out of the code on 2026-08-18, so that
 whoever drafts the policy (`MCP-Publishing-Spec.md` MP7) is working from what the
 system does rather than what anyone remembers it doing.
@@ -14,17 +14,17 @@ the Claude directory and a blocker at OpenAI's.
 
 ## 1. The disclosure that matters most
 
-**Connecting an assistant sends Pulse data to a third-party AI vendor.**
+**Connecting an assistant sends Beat data to a third-party AI vendor.**
 
-Everything a tool returns leaves Pulse and goes to whoever operates the assistant
+Everything a tool returns leaves Beats and goes to whoever operates the assistant
 (Anthropic, OpenAI, Google, or a self-hosted client). That includes, concretely:
 
 | Tool | Personal data it can return |
 | --- | --- |
-| `search_resources` | Team member **names**, and the **email address** of the Pulse account each resource is linked to |
+| `search_resources` | Team member **names**, and the **email address** of the Beat account each resource is linked to |
 | `search_comments` | Full **comment text** written by colleagues, and each author's **email address** |
 | `get_activity` | Who changed what and when, by **email address** |
-| `get_pulse`, `search_tasks`, `get_schedule`, `get_people_load` | Names, assignments, capacity and workload |
+| `get_beat`, `search_tasks`, `get_schedule`, `get_people_load` | Names, assignments, capacity and workload |
 | `get_costs` | Cost data — **only where the user's role already permits it** |
 
 Two properties are worth stating plainly in the policy because they are unusual
@@ -35,11 +35,10 @@ and favourable:
   ordinary security rules apply unchanged. Cost data is gated by the same
   `viewPeopleCost` capability as the UI.
 - **A user consenting can expose colleagues' data.** The data returned is not
-  only their own — comments, names and emails belong to other members of the same
-  Pulse. This is inherent to any collaboration tool integration, and it should be
+  only their own — comments, names and emails belong to other members of the same Beat. This is inherent to any collaboration tool integration, and it should be
   disclosed rather than glossed.
 
-## 2. What Pulse stores for the connector
+## 2. What Beats stores for the connector
 
 | Where | Fields | Lifetime |
 | --- | --- | --- |
@@ -49,10 +48,10 @@ and favourable:
 | `mcpClients/{client_id}` | client id, declared redirect URIs, client name | Indefinite. **Contains no user data** — it describes an AI product, not a person |
 
 **Tokens are stored only as SHA-256 hashes.** Neither the access token nor the
-refresh token is recoverable from Pulse's database, so a breach of this project
+refresh token is recoverable from Beats' database, so a breach of this project
 yields nothing replayable. Worth stating: it is a real, checkable property.
 
-**No copies of Pulse content are made for the connector.** Tool results are
+**No copies of Beat content are made for the connector.** Tool results are
 computed per request and returned; nothing is cached or written.
 
 ## 3. Logs
@@ -73,7 +72,7 @@ actual setting before stating a number in the policy.
   Authentication, Cloud Logging. Processor for all of the above.
 - **Google Identity Toolkit** — the custom-token-for-ID-token exchange at
   connection and refresh.
-- **The AI vendor the customer chooses** — receives tool results, as §1. Pulse
+- **The AI vendor the customer chooses** — receives tool results, as §1. Beats
   has no contractual relationship with them; the customer initiates it by
   connecting.
 - **Stripe** — billing, unrelated to the MCP but part of the same policy.

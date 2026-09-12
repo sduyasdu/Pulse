@@ -1,4 +1,4 @@
-# Pulse — Costs Build Plan
+# Beats — Costs Build Plan
 
 Companion to **`Costs-Spec.md`** (what to build and why). This is **how**, in order,
 against the codebase as it stands at `5a36519`.
@@ -112,7 +112,7 @@ an entry appears in the Activity tab.
 effort panel: the task's entries listed with model, tokens, amount and derived
 $/Mtok; add / edit / delete inline. The form renders from the type's
 `attributes[]` — enum → select, text → input with a `datalist` of models already
-used in this Pulse, resourceRef → the existing resource picker with `ResourceBadge`.
+used in this Beat, resourceRef → the existing resource picker with `ResourceBadge`.
 Gate on `canEdit` (the prop DetailsTab already receives, which is per-feature).
 
 Money input takes dollars and converts to micros at the boundary; display via
@@ -163,8 +163,8 @@ panning, zooming and switching density.
 - **Number legibility** — `$1.2M` style abbreviation in narrow period cells, full
   value in the tooltip; the panel already drops labels that can't fit
   (`showNum` in `AssignmentPanel.tsx`).
-- **Scale check** — the v1 client subscribes every cost in the Pulse, like features.
-  Fine for hundreds. If a Pulse reaches thousands, that's the trigger for a rollup
+- **Scale check** — the v1 client subscribes every cost in the Beat, like features.
+  Fine for hundreds. If a Beat reaches thousands, that's the trigger for a rollup
   function and an entry in `Server-Functions-Spec.md`, not a client fix.
 - **Deploy** — hosting *and* `--only firestore` (see the Phase 1 warning).
 

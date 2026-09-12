@@ -1,7 +1,7 @@
-# Pulse — by Yasdu
+# Beats — by Yasdu
 
 Visual, graph-first project planning on an infinite canvas. See
-`Pulse-Product-Spec.md` for the product spec and `Pulse-Prototype.html` for
+`Beats-Product-Spec.md` for the product spec and `Pulse-Prototype.html` for
 the original interaction-design prototype (kept as a reference only — this
 directory is the real, persisted, multi-tenant app built from it).
 

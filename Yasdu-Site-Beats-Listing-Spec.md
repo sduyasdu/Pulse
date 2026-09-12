@@ -1,11 +1,10 @@
-# Spec — List Pulse on the Yasdu site
+# Spec — List Beats on the Yasdu site
 
-**Audience:** a Claude Code session working in the **Yasdu website repo** (not the Pulse repo).
-**Goal:** add Pulse to the Yasdu product site — what it is, what it does, what it costs — and
+**Audience:** a Claude Code session working in the **Yasdu website repo** (not the Beat repo).
+**Goal:** add Beats to the Yasdu product site — what it is, what it does, what it costs — and
 link visitors to the live app.
 
-This document is the **content source of truth**. Every product fact below was taken from the
-Pulse codebase, not from marketing material. Do not invent features, benefits, metrics,
+This document is the **content source of truth**. Every product fact below was taken from the Beat codebase, not from marketing material. Do not invent features, benefits, metrics,
 customer counts, or testimonials. If something you want to say isn't in §3, it isn't
 verified — leave it out or ask.
 
@@ -18,15 +17,15 @@ convention, or a design system. Establish these first, and match them:
 
 1. **Stack and build** — framework, router, styling approach, how pages are added.
 2. **Existing product pages.** Yasdu promotes other products; find one and read it end to
-   end. **Pulse's page must be a sibling of that page in structure, tone, and length**, not a
+   end. **Beat's page must be a sibling of that page in structure, tone, and length**, not a
    new invention. Reuse existing components rather than adding new ones.
 3. **Navigation** — how a product is registered in menus, footers, sitemaps, product indexes.
-   List every place a product appears; Pulse must appear in all of them.
+   List every place a product appears; Beats must appear in all of them.
 4. **i18n** — does the site translate content? If yes, find the dictionary mechanism and
-   whether keys must exist in every language (Pulse's own app enforces exactly that). Add
-   Pulse's strings the same way. If the site is English-only, keep Pulse English-only.
+   whether keys must exist in every language (Beats' own app enforces exactly that). Add
+   Beats' strings the same way. If the site is English-only, keep Beats English-only.
 5. **SEO conventions** — meta/OG tags, structured data, sitemap. Match what other products do.
-6. **Analytics** — if outbound clicks are tracked, tag Pulse's CTAs the same way.
+6. **Analytics** — if outbound clicks are tracked, tag Beats' CTAs the same way.
 
 Report what you found before building. If the site turns out to have no product-page pattern
 at all, stop and ask rather than inventing one.
@@ -35,10 +34,10 @@ at all, stop and ask rather than inventing one.
 
 ## 2. Deliverables
 
-1. **A Pulse product page** — the main deliverable. Content from §3.
+1. **A Beats product page** — the main deliverable. Content from §3.
 2. **A pricing section or page** — the three plans from §3.4. Follow the site's existing
    pricing convention if one exists.
-3. **Entry links to the app** — primary CTA on the Pulse page, plus wherever the site's
+3. **Entry links to the app** — primary CTA on the Beat page, plus wherever the site's
    pattern puts product links (nav, footer, product index, home page).
 4. **Navigation/index registration** — every location found in §1.3.
 5. **SEO metadata** — title, description, OG image if the site uses them.
@@ -47,13 +46,13 @@ at all, stop and ask rather than inventing one.
 
 ## 3. Verified product facts
 
-### 3.1 What Pulse is
+### 3.1 What Beats is
 
 One line, taken verbatim from the app's own login screen:
 
 > **Visual, graph-first project planning.**
 
-Branded in-app as **"Pulse — by Yasdu"**. Use that relationship; Pulse is a Yasdu product,
+Branded in-app as **"Beats — by Yasdu"**. Use that relationship; Beats is a Yasdu product,
 not a separate company.
 
 The single idea that distinguishes it, from the in-app help:
@@ -68,11 +67,11 @@ surprising part:
 > a tall box is heavier work than a short one of the same length.
 
 That is the hook: **a roadmap where size means work**, not just duration. A Gantt chart tells
-you when; Pulse also tells you how much. Everything else on the page is supporting detail.
+you when; Beats also tells you how much. Everything else on the page is supporting detail.
 
 ### 3.2 Features — all verified as shipped
 
-Derived from the in-app help (`src/help/en.ts` in the Pulse repo), which is editorially bound
+Derived from the in-app help (`src/help/en.ts` in the Beat repo), which is editorially bound
 to document **only what is actually deployed**. Group and trim as the site's page pattern
 requires; do not add to this list.
 
@@ -85,7 +84,7 @@ requires; do not add to this list.
 | **Plan vs. actual** | Set a baseline plan and compare against real progress, including delay lines. |
 | **Kanban board** | Board view with user-defined, reorderable statuses; "Done" is reserved and always last. |
 | **Epics and subtasks** | Group work into epics; tasks carry subtasks with their own resources. |
-| **Working together** | Per-Pulse invites, live presence, comments, and an activity log of who changed what. |
+| **Working together** | Per-Beat invites, live presence, comments, and an activity log of who changed what. |
 | **Undo** | Undo for editing actions. |
 | **Filters and search** | Filter by active period; search tasks, epics and people. |
 | **Mobile** | A dedicated touch UI on phones, not a shrunken desktop canvas. |
@@ -94,7 +93,7 @@ requires; do not add to this list.
 
 **Do NOT advertise:** file attachments, cloud-storage integration (Google Drive etc.),
 email or push notifications, SSO/SAML, an API, exports, or integrations. Some are specified
-in the Pulse repo but **none are built**. Advertising a spec is advertising a lie.
+in the Beat repo but **none are built**. Advertising a spec is advertising a lie.
 
 ### 3.3 Getting started
 
@@ -111,9 +110,9 @@ details are entered on Stripe's hosted pages, never in the app.
 |---|---|---|---|
 | Price (per editor / month) | **$0** | **$6** | **$12** |
 | Editor seats | 1 | per seat bought | per seat bought |
-| Pulses | 3 | 5 | Unlimited |
+| Beats | 3 | 5 | Unlimited |
 | Collaborators | 10 | 20 | Unlimited |
-| Resources per Pulse | 20 | 40 | Unlimited |
+| Resources per Beat | 20 | 40 | Unlimited |
 
 Two things that must be communicated, because they are the model:
 
@@ -127,14 +126,14 @@ Two things that must be communicated, because they are the model:
 > ### ⚠️ "Pro" is the **middle, paid** tier — not the free one
 >
 > The tiers were renamed on 2026-08-10. The free tier is **Starter**; **Pro is the $6 paid
-> tier** (it was previously called Teams). If you find older Pulse material — a draft, a
+> tier** (it was previously called Teams). If you find older Beats material — a draft, a
 > screenshot, a cached spec — calling Pro the *free* tier, that material predates the rename
 > and is wrong.
 >
 > Order the columns **Starter → Pro → Business**, cheapest first, and label Starter "Free".
 > "Upgrade to Pro" is now correct and expected copy.
 
-**Price accuracy.** These figures come from the Pulse spec and match the Stripe products
+**Price accuracy.** These figures come from the Beat spec and match the Stripe products
 today. **Stripe is what actually charges the customer.** If you can check the live Stripe
 prices, do; if they disagree with this table, stop and ask rather than publishing either
 number.
@@ -151,7 +150,7 @@ unless someone with authority confirms the wording.
 https://pulse.yasdu.com
 ```
 
-This is a decided branded domain (2026-08-10), not a placeholder. Pulse's backend already
+This is a decided branded domain (2026-08-10), not a placeholder. Beats' backend already
 pre-authorises it, so the app side needs nothing further.
 
 > ### ⚠️ Verify it resolves before you ship the link
@@ -181,15 +180,15 @@ Link behaviour: the site's existing convention wins. If there is none, open in t
 (it's a Yasdu product, not an external site) and don't add `noopener` theatrics for a
 first-party link.
 
-Suggested CTA wording — pick one and use it consistently: **"Open Pulse"**, **"Start free"**,
-**"Try Pulse free"**. Avoid "Sign up free" if the site's other products use different verbs.
+Suggested CTA wording — pick one and use it consistently: **"Open Beats"**, **"Start free"**,
+**"Try Beats free"**. Avoid "Sign up free" if the site's other products use different verbs.
 
 ### 3.6 Brand tokens
 
-Pulse's own palette, so the page can feel like the product it links to. Use these only as far
+Beats' own palette, so the page can feel like the product it links to. Use these only as far
 as the Yasdu design system allows — **the site's system wins over these values**.
 
-| Token | Hex | Use in Pulse |
+| Token | Hex | Use in Beats |
 |---|---|---|
 | Navy | `#123359` | App header, Business tier accent |
 | Orange (primary) | `#D85A28` | Primary buttons, active state |
@@ -218,7 +217,7 @@ like.
 2. **No roadmap language as if shipped.** No "coming soon" either, unless someone with
    authority supplies the commitment.
 3. **Say what tiers actually differ by** (quantities, §3.4), never feature checkmarks.
-4. **Match the site's voice**, not Pulse's in-app voice. The help text quoted above is a good
+4. **Match the site's voice**, not Beats' in-app voice. The help text quoted above is a good
    source of *facts*; it is not necessarily the right *register* for a marketing page.
 5. **Accessibility parity** with the rest of the site: real heading hierarchy, alt text on
    any image, contrast that passes whatever bar the site already meets.
@@ -229,8 +228,8 @@ like.
 
 Verify each; don't assume.
 
-- [ ] Pulse page exists, builds, and renders — run the site's own build and lint.
-- [ ] Pulse appears in **every** navigation surface identified in §1.3.
+- [ ] Beat page exists, builds, and renders — run the site's own build and lint.
+- [ ] Beats appears in **every** navigation surface identified in §1.3.
 - [ ] Every CTA points at `https://pulse.yasdu.com` (§3.5), from one shared constant, and that
       URL returns HTTP 200 with a valid certificate (`curl -sI` it — do not skip this).
 - [ ] The pricing table matches §3.4 exactly — three tiers, Starter → Pro → Business, Starter
@@ -262,9 +261,9 @@ Resolve these with the user first — each changes the work materially:
 
 ## 7. Non-goals
 
-- No changes to the Pulse app itself. This spec only touches the Yasdu site repo.
+- No changes to the Beats app itself. This spec only touches the Yasdu site repo.
 - No sign-up, checkout, or payment flow on the Yasdu site. Registration and Stripe Checkout
-  both live inside Pulse; the site's only job is to explain and link.
+  both live inside Beats; the site's only job is to explain and link.
 - No blog post, launch email, changelog entry, or social copy.
 - No analytics/tag-manager setup beyond matching what other product pages already do.
 
@@ -272,7 +271,7 @@ Resolve these with the user first — each changes the work materially:
 
 ## Appendix — provenance
 
-Every fact in §3 traces to the Pulse repo, should the executing session (or a reviewer) want
+Every fact in §3 traces to the Beat repo, should the executing session (or a reviewer) want
 to check it:
 
 | Fact | Source |

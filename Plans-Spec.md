@@ -1,4 +1,4 @@
-# Pulse — Plans & Entitlements Spec
+# Beats — Plans & Entitlements Spec
 
 Status: **PL1–PL12 resolved; PL13–PL16 decided 2026-08-15; PL17 (currency presentment + Amex switch) built 2026-08-16** · Owner: product + eng ·
 Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
@@ -6,8 +6,8 @@ Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
 (PL8); **quota-only** model, no feature gating (PL2); tiers **Starter/Pro/Business** at
 **$0/$6/$12 per editor seat/mo** (PL1) with the §3.2 quotas (PL3); a seat = an **editor**
-(PL11); launch **Mexico**, invoicing manual (PL10/10-a); **archived Pulses count against the
-Pulses quota** — delete or upgrade to free a slot, never archive (PL12). See §2–§3, §8.
+(PL11); launch **Mexico**, invoicing manual (PL10/10-a); **archived Beats count against the
+Beats quota** — delete or upgrade to free a slot, never archive (PL12). See §2–§3, §8.
 
 **Acceptance (§9.5b, PL13–16):** USD stays the list price with per-currency
 `currency_options` (**not** a second Price — see PL13); the plans form must read prices
@@ -19,7 +19,7 @@ features are configuration, not code (PL15/16).
 This spec defines the **subscription/plan layer**: what each paid tier unlocks and
 which limits it imposes. It is a **different axis** from `Permissions-Spec.md`:
 
-- **Permissions (authorization):** *which member* may do *what* in a Pulse (roles/caps).
+- **Permissions (authorization):** *which member* may do *what* in a Beat (roles/caps).
 - **Plans (entitlement):** does the **owner's subscription** unlock a feature / allow a
   quantity — regardless of role.
 
@@ -35,46 +35,45 @@ Spec/design only — no application code changes.
 
 ## 1. Who "the plan owner" is — the Organization
 
-A Pulse's entitlements come from a **single billing entity: an Organization** — not from
+A Beat's entitlements come from a **single billing entity: an Organization** — not from
 an individual member, and not from each member's own plan.
 
 > **The Organization *is* the Workspace (PL6, decided — option 1).** Rather than a new
 > parallel entity, an Organization is the app's existing **`Workspace`** extended with
 > billing + legal identity (country, Stripe, org roles). So `orgId === workspaceId`, and a
-> Pulse's org is its existing **`Pulse.workspaceId`** — no separate `billingOrgId` and no
+> Beats' org is its existing **`Pulse.workspaceId`** — no separate `billingOrgId` and no
 > second membership roster. "Organization" is the name for the billing/legal face of a
 > Workspace. Everything below that says "Organization" is a property of that Workspace.
 
-- Every Pulse belongs to exactly one **Workspace/Organization** (`Pulse.workspaceId`). The
-  Organization holds the subscription; its plan entitles *all* Pulses in that workspace.
+- Every Beat belongs to exactly one **Workspace/Organization** (`Pulse.workspaceId`). The
+  Organization holds the subscription; its plan entitles *all* Beats in that workspace.
   (Supersedes the earlier `billingOwnerUid`/`billingOrgId` sketch — billing attaches to the
   workspace, not a single user account. Both are retired; see §7.)
 - **Members' own plans are irrelevant.** A member with no subscription of their own can
-  fully use a Pulse in a paid (Pro/Business) Organization — the *Organization* pays. A
+  fully use a Beat in a paid (Pro/Business) Organization — the *Organization* pays. A
   collaborator never needs a paid seat; only editors do. This is intended.
 - **Solo / personal use** is just the user's **personal workspace** acting as a
   single-admin personal Organization (auto-created on sign-up — it already exists as
-  `user.personalWorkspaceId`). There is always a workspace behind a Pulse, so there is
+  `user.personalWorkspaceId`). There is always a workspace behind a Beat, so there is
   always an org; "no organization" is not a state.
-- **A Pulse never leaves its Organization (PL7).** There is **no cross-org transfer** —
+- **A Beat never leaves its Organization (PL7).** There is **no cross-org transfer** —
   `Pulse.workspaceId` is fixed at creation. "Make owner" grants co-ownership to another member
-  **of the same org** (consuming an editor seat); billing stays with that org. So a Pulse's
+  **of the same org** (consuming an editor seat); billing stays with that org. So a Beat's
   entitlements never change hands.
 
 ### 1.1 The Organization entity (= the extended Workspace)
 
 An **Organization** is a **Workspace** in its role as the account that subscribes, pays,
-and is invoiced. It owns Pulses (its `workspaceId` Pulses) and, beyond what a Workspace
+and is invoiced. It owns Beats (its `workspaceId` Beats) and, beyond what a Workspace
 holds today, has:
 
 - **Administrators** — the existing **`WorkspaceMember`** roster carries the org roles:
   workspace `owner` → org **admin**, workspace `member` → org **member** (PL9). Admins
   manage the subscription and billing, the org's country/tax details, and org/workspace
   membership. A user can administer more than one Organization (they're an owner in more
-  than one workspace); a user's *plan-level* rights in a Pulse come from that Pulse's org,
-  never from the user. Org **admin** is a distinct axis from a Pulse's per-Pulse roles
-  (`Permissions-Spec.md`): being an org admin does **not** grant edit rights inside a
-  Pulse, and a Pulse owner/editor is not automatically an org admin. (**PL9** — confirm
+  than one workspace); a user's *plan-level* rights in a Beat come from that Beat's org,
+  never from the user. Org **admin** is a distinct axis from a Beat's per-Beat roles
+  (`Permissions-Spec.md`): being an org admin does **not** grant edit rights inside a Beat, and a Beat owner/editor is not automatically an org admin. (**PL9** — confirm
   whether to keep the `owner/member` names or rename to `admin/member`; the mapping is the
   point.)
 - **A country of establishment** — the ISO 3166-1 country the Organization is legally
@@ -98,7 +97,7 @@ arrears** ("mass" billing at month end) via Stripe. For Mexican customers the pr
 > American Express in Mexico, which will not authorise a cross-currency charge at all. The
 > figures in this table are the USD reference amounts; §9.5b owns what is actually shown.
 
-| Tier | $/editor/mo | Editor seats | Pulses/org | Collaborators/org | Resources/Pulse |
+| Tier | $/editor/mo | Editor seats | Beats/org | Collaborators/org | Resources/Beats |
 |---|---|---|---|---|---|
 | **Starter** | **$0** (free) | 1 (fixed) | 3 | 10 | 20 |
 | **Pro** | **$6** | per purchased seat | 5 | 20 | 40 |
@@ -107,7 +106,7 @@ arrears** ("mass" billing at month end) via Stripe. For Mexican customers the pr
 - **Starter is the free default** — the absence of a subscription (no Stripe product). One
   editor (the org owner), enough to plan solo and invite collaborators.
 - **Pro / Business bill per editor seat** (Stripe subscription `quantity` = editor
-  count). Pulses / collaborators / resources are the tier's caps; editors are the billing
+  count). Beats / collaborators / resources are the tier's caps; editors are the billing
   driver and, on Pro/Business, are limited only by the seats purchased.
 
 ## 3. Entitlements = quantity limits only (no feature gating)
@@ -123,38 +122,38 @@ Two kinds of member, per Organization:
 
 - **Editors** are an **explicit, licensed roster** — `Workspace.editorUids[]`, a list of the
   users who hold a **paid editor seat**. Only a licensed editor can be made **owner/editor**
-  on the org's Pulses, and only editors can **create Pulses** and fully edit. The roster is
+  on the org's Beats, and only editors can **create Beats** and fully edit. The roster is
   **owner-managed** (the org admin adds/removes editors on a "Members & seats" screen); the
   owner is always in it; **rules cap its length** at the tier's editor-seat limit (Starter = 1;
   Pro/Business = purchased `seats`) — a synchronous, race-free check. This is the seat
   count Stripe bills (`quantity`).
 - **Collaborators** (roles **full viewer** / **my-beat viewer** / **task lead**) are **free**,
-  are **not** on the editor roster, don't consume a seat, and **cannot create Pulses** — they
-  only participate in Pulses the org's editors own. They're invited **per-Pulse** and counted
+  are **not** on the editor roster, don't consume a seat, and **cannot create Beats** — they
+  only participate in Beats the org's editors own. They're invited **per-Beat** and counted
   per-org toward `maxCollaborators` (via SF11, §5).
 
 A **user's role is per-Organization**: the same person can be a collaborator in one org and a
 licensed editor in several others — each editorship consuming one seat **in that org**. Every
 user also gets their own free **Starter** org (their personal workspace), where they are the
-single editor and can create up to 3 Pulses.
+single editor and can create up to 3 Beats.
 
 > **Rule gate:** setting a `PulseMember` role to owner/editor requires the target uid to be in
-> that org's `editorUids` (rules `get()` the workspace). So a Pulse can never have an unlicensed
-> editor, and the seat cap is enforced once, at the roster, not per-Pulse.
+> that org's `editorUids` (rules `get()` the workspace). So a Beat can never have an unlicensed
+> editor, and the seat cap is enforced once, at the roster, not per-Beat.
 
 ### 3.2 Quotas (per org, unless noted)
 
 | Quota | Starter | Pro | Business |
 |---|---|---|---|
 | Editor seats | 1 (fixed) | purchased | purchased |
-| Pulses per org | 3 | 5 | ∞ |
+| Beats per org | 3 | 5 | ∞ |
 | Collaborators per org | 10 | 20 | ∞ |
-| Resources per Pulse | 20 | 40 | ∞ |
+| Resources per Beat | 20 | 40 | ∞ |
 
-**"Pulses per org" counts _every_ Pulse the org holds — archived and hidden included.**
+**"Beats per org" counts _every_ Beats the org holds — archived and hidden included.**
 The quota measures what the org **stores**, not what it is currently allowed to edit, so
 neither archiving (shared, `Collaboration-Spec.md` §3.10) nor hiding (per-user) frees a
-slot. The only ways to get capacity back are to **delete** a Pulse — archived ones very
+slot. The only ways to get capacity back are to **delete** a Beat — archived ones very
 much included — or to upgrade.
 
 The consequence to state plainly in the UI (§6), because it is the whole point of the
@@ -165,20 +164,20 @@ maintain and explain — one number per org, moved only by create and delete. It
 "you've hit your plan's limit" must offer **delete** and **upgrade** as the routes
 forward, never "archive something".
 
-Checks happen at the **point of growth** (create Pulse, add editor/collaborator, add
+Checks happen at the **point of growth** (create Beats, add editor/collaborator, add
 resource), never on read; enforced client-side for v1 (PL5), with a counter function later
 if a collection count must be authoritative. Encoded in `src/domain/entitlements.ts`
 (`Entitlements` = `{ maxEditors, maxPulses, maxCollaborators, maxResourcesPerPulse }`;
 `maxEditors: null` on Pro/Business means "bounded by purchased seats", `editorSeatLimit()`).
 
-### 3.3 Dashboard — Pulses grouped by Organization
+### 3.3 Dashboard — Beats grouped by Organization
 
-Because a user can belong to several orgs, the dashboard groups Pulses **by Organization**:
+Because a user can belong to several orgs, the dashboard groups Beats **by Organization**:
 
-- **Your Pulses** — Pulses in orgs where you're an **editor/owner**, grouped under each org.
-- **Shared with you** — Pulses in orgs where you're a **collaborator**, grouped under each org.
-- The **New Pulse** action appears only for editors (collaborators can't create). If a user
-  is an editor in **more than one** org, creating a Pulse **prompts which org** it belongs to
+- **Your Beats** — Beats in orgs where you're an **editor/owner**, grouped under each org.
+- **Shared with you** — Beats in orgs where you're a **collaborator**, grouped under each org.
+- The **New Beat** action appears only for editors (collaborators can't create). If a user
+  is an editor in **more than one** org, creating a Beat **prompts which org** it belongs to
   (or the app derives it from dashboard context — e.g. the org section the action was invoked
   from). With a single editor org, that org is used implicitly.
 
@@ -195,7 +194,7 @@ The plan **must not be client-writable** (a user could set themselves to Starter
   caller is an `owner` in `WorkspaceMember` for that workspace (org admin); `allow write: if
   false` (no client writes ever — the tier is set from Stripe's subscription state, never by
   a client).
-- Rules gating a Pulse action read it with
+- Rules gating a Beat action read it with
   `get(/databases/$(db)/documents/billing/$(pulse.workspaceId))` — security-rules `get()`
   bypasses the doc's own read rule, so the doc stays private but still gate-able.
 - **Absent doc = Starter** (the free default — a newly-created Organization has no billing doc
@@ -204,7 +203,7 @@ The plan **must not be client-writable** (a user could set themselves to Starter
 ## 5. Enforcement
 
 There is **no feature gating** — enforcement is entirely about **quantity limits** at the
-point of growth (create Pulse, add editor/collaborator, add resource).
+point of growth (create Beats, add editor/collaborator, add resource).
 
 - **Editor seats — enforced synchronously in rules (PL9 option B).** The editor roster is
   `Workspace.editorUids[]`, owner-written; the rule caps `editorUids.size() ≤ editorSeatLimit`
@@ -212,13 +211,13 @@ point of growth (create Pulse, add editor/collaborator, add resource).
   included. Because it's an array in one doc, there's **no counter lag and no race** — you can
   never exceed your paid seats. Making a `PulseMember` owner/editor requires the target uid ∈
   the org's `editorUids` (rules `get()` the workspace).
-- **Create-Pulse gate.** Only a licensed **editor** of the target org may create a Pulse
+- **Create-Beat gate.** Only a licensed **editor** of the target org may create a Beat
   (uid ∈ `editorUids` — a synchronous `get()`), and only while under `maxPulses`.
   Collaborators can't create.
 - **Collection counts — server-maintained counters (PL5 — Option b).** Rules can't count a
   collection, so **SF11** (`Backend-Architecture-Spec`) keeps the counters rules read via
   `get()`:
-  - `workspace.pulseCount` → gate Pulse create (`< maxPulses`). Counts **every** Pulse in
+  - `workspace.pulseCount` → gate Beats create (`< maxPulses`). Counts **every** Beats in
     the org, archived and hidden included (§3.2), so SF11 moves it on **create and delete
     only** — archive/unarchive and hide/unhide never touch it. Unarchiving therefore needs
     no quota check: it can't raise the count, so it can never take the org over its cap.
@@ -240,12 +239,12 @@ below applies **only when downgrading to the free tier (Starter)**; paid→paid 
 handled at the source (the portal blocks reducing seats below the current editor count) and
 are otherwise out of scope for v1.
 
-- **Pulses over the limit → newest become read-only; delete or upgrade to unlock.** On
-  dropping to Starter (3 Pulses), the **oldest** `maxPulses` by `createdAt` stay editable and
+- **Beats over the limit → newest become read-only; delete or upgrade to unlock.** On
+  dropping to Starter (3 Beats), the **oldest** `maxPulses` by `createdAt` stay editable and
   the **newest** beyond that are **read-only** (viewable, not editable), never deleted. The
-  cap counts **every** Pulse the org holds, archived included (§3.2), so the only ways to
-  unlock a locked Pulse are to **delete** another Pulse — archived ones included — or to
-  **upgrade**. Enforced **client-side** (the lock is derived from the Pulse list ordered by
+  cap counts **every** Beats the org holds, archived included (§3.2), so the only ways to
+  unlock a locked Beat are to **delete** another Beat — archived ones included — or to
+  **upgrade**. Enforced **client-side** (the lock is derived from the Beat list ordered by
   `createdAt` + the tier cap; rules can't count/sort — PL5); a bypass only lets someone
   exceed a commercial limit, not a security boundary.
   - **Archiving does not unlock anything** (revised — this bullet previously said archiving
@@ -255,11 +254,11 @@ are otherwise out of scope for v1.
     which 3 stay live — the choice is made for them by `createdAt`, and changing it means
     deleting. The read-only lock itself is still never destructive, so nothing is lost
     without an explicit delete; but the UI must be honest that delete/upgrade are the only
-    two routes, and must make deleting an **archived** Pulse an easy, obvious path (that is
+    two routes, and must make deleting an **archived** Beat an easy, obvious path (that is
     the intended place to reclaim a slot).
 - **Editors are demoted to a single editor.** Starter allows **1 editor seat**, so on the
   downgrade every editor/owner **except the org owner** (the workspace owner — the only user
-  who can trigger a billing change) is **demoted to full viewer** across the org's Pulses.
+  who can trigger a billing change) is **demoted to full viewer** across the org's Beats.
   They keep access and their data; they lose edit until the org re-subscribes and the owner
   re-promotes them. Done **server-side** (SF3, or a companion, when the billing doc flips to
   Starter/canceled) so it happens regardless of client, keeping `workspace.ownerId` as the sole
@@ -284,7 +283,7 @@ are otherwise out of scope for v1.
 
 **PL6 decided (option 1): the Organization is the existing `Workspace`, extended.** No
 separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second roster —
-`orgId === workspaceId`, and a Pulse's org is its existing `Pulse.workspaceId`.
+`orgId === workspaceId`, and a Beat's org is its existing `Pulse.workspaceId`.
 
 - **`Workspace.editorUids: string[]`** (PL9 option B) — the licensed editor roster;
   owner-written, rules-capped at the tier's seat limit; the owner is always included.
@@ -300,7 +299,7 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
   updatedAt, stripeCustomerId, stripeSubscriptionId, country, currency, taxStatus? }`.
   Keyed by workspace id.
 - **Retired:** `Pulse.billingOwnerUid` and the interim `Pulse.billingOrgId` — the org is
-  resolved from `Pulse.workspaceId`, so a Pulse can never drift from its org.
+  resolved from `Pulse.workspaceId`, so a Beat can never drift from its org.
 - No change to `PulseMember`/`Resource`/`Feature`. Entitlements are read, never stored on
   those.
 
@@ -310,11 +309,10 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    seat / month**, USD, billed monthly in arrears via Stripe, VAT-inclusive for MX.
 2. **PL2 — Feature gating. → DECIDED: none.** All tiers have all features; tiers differ by
    quantity limits only (§3). No feature flags in `Entitlements`.
-3. **PL3 — Quota numbers. → DECIDED (§3.2).** Starter 1 editor / 3 Pulses / 10 collaborators /
+3. **PL3 — Quota numbers. → DECIDED (§3.2).** Starter 1 editor / 3 Beats / 10 collaborators /
    20 resources; Pro (per seat) 5 / 20 / 40; Business unlimited. (Matches `entitlements.ts`.)
 4. **PL4 — Downgrade behaviour. → DECIDED (§5.1).** Graceful, never destructive, and only on
-   dropping to **Starter**: the **newest** over-limit Pulses go **read-only** (**delete another
-   Pulse — archived ones included — or upgrade** to unlock; archiving does *not* free a slot,
+   dropping to **Starter**: the **newest** over-limit Beats go **read-only** (**delete another Beat — archived ones included — or upgrade** to unlock; archiving does *not* free a slot,
    PL12); every editor **except the org owner** is **demoted
    to full viewer** (keep access, lose edit) server-side; **collaborators unaffected**; a grace
    window on `past_due`.
@@ -332,20 +330,20 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
    bill must span multiple workspaces — not needed now.
 7. **PL7 — Ownership transfer & billing. → DECIDED: no cross-org transfer.** "Make owner"
    grants co-ownership **within the same org** (consumes an editor seat); billing stays with
-   that org. A Pulse **never** moves between organizations — `Pulse.workspaceId` is fixed at
+   that org. A Beat **never** moves between organizations — `Pulse.workspaceId` is fixed at
    creation. Simplifies everything: no cross-org capacity/access/seat accounting.
 8. **PL8 — Payment provider. → DECIDED: Stripe.** Drives SF3's webhook shape and the §9
    country/tax design. (Was Stripe vs RevenueCat vs other.)
 9. **PL9 — Editor licensing & org roles. → DECIDED: Option B (explicit roster).** Editors are
    an explicit, owner-managed roster `Workspace.editorUids[]` (§3.1) — rules-capped at the seat
-   limit; being a Pulse owner/editor requires being on it. Managed on a new **"Members & seats"**
+   limit; being a Beat owner/editor requires being on it. Managed on a new **"Members & seats"**
    screen (a Phase-3 build). `WorkspaceMember` stays `owner`/`member` (`owner` = billing admin,
    `isOrgAdmin`). SF11 no longer counts editors (the array is rules-native).
-10. **PL10 — Launch country. → DECIDED: Mexico (MX).** Pulse launches billing in **Mexico
+10. **PL10 — Launch country. → DECIDED: Mexico (MX).** Beats launches billing in **Mexico
     only**; Organizations are Mexico-based (`country: "MX"`), priced in **USD** with **IVA
     (16%) included** (VAT-inclusive) via Stripe Tax. Additional countries are a later
     expansion (§9.4).
-    - **PL10-a — CFDI/invoicing at launch. → DECIDED: none in Pulse; the factura global is
+    - **PL10-a — CFDI/invoicing at launch. → DECIDED: none in Beats; the factura global is
       issued MANUALLY, out of band.** No CFDI code, no PAC integration, no invoicing function
       is built — removed from scope. Customers get only the (non-fiscal) Stripe receipt;
       Mexican origin is inferred from **card country**; finance/the accountant reads the
@@ -356,11 +354,11 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
     (role owner/editor) in the org; collaborators (viewers / task leads / my-beat viewers)
     are free and don't consume seats. `billing.seats` = purchased editor seats = Stripe
     subscription `quantity`. Starter is fixed at 1 editor; Pro/Business bill per editor.
-12. **PL12 — Do archived Pulses count against `maxPulses`? → DECIDED: yes, they count.**
-    The Pulses quota counts **every** Pulse the org holds — active, archived
+12. **PL12 — Do archived Beats count against `maxPulses`? → DECIDED: yes, they count.**
+    The Beats quota counts **every** Beats the org holds — active, archived
     (`Collaboration-Spec.md` §3.10) and per-user *hidden* alike. Archiving is a lifecycle
-    state, never quota relief, so an org at its cap **cannot** create another Pulse by
-    archiving; the only routes are **delete** (archived Pulses very much included) or
+    state, never quota relief, so an org at its cap **cannot** create another Beat by
+    archiving; the only routes are **delete** (archived Beats very much included) or
     **upgrade**. `workspace.pulseCount` therefore moves on create/delete only, which keeps
     it a single number per org with no archive-aware bookkeeping. Rationale: the quota
     measures what the org **stores**, and an archive that didn't count would make Starter
@@ -375,17 +373,17 @@ separate `organizations/{orgId}` collection, no `Pulse.billingOrgId`, no second 
 
 **Provider: Stripe** (PL8, decided). The guiding principle is to **lean on Stripe's own
 compliance machinery for per-country legal requirements rather than building tax/invoice
-logic in Pulse.** Pulse's job is to model the Organization and its country correctly and
+logic in Beats.** Beats' job is to model the Organization and its country correctly and
 hand that to Stripe; Stripe computes tax.
 
 > **Scope note — read §9.5 for the actual launch.** §9.1–§9.4 describe the *future*
 > multi-country vision (where Stripe also produces the legal invoice). That does **not**
-> hold for the Mexico launch: Stripe cannot issue a SAT-valid CFDI, so at launch Pulse
+> hold for the Mexico launch: Stripe cannot issue a SAT-valid CFDI, so at launch Beats
 > **builds no invoicing** — the factura global is done **manually, out of band** (§9.5).
 > Only the subscription/tax/entitlement parts (§9.1, §9.3 entitlement sync) are in the
 > launch build.
 
-### 9.1 Mapping Pulse → Stripe
+### 9.1 Mapping Beats → Stripe
 
 - One **Stripe Customer per Organization/Workspace** (`Workspace.stripeCustomerId`), created on
   first subscribe. The customer's **address (country)** and any **Tax IDs** (VAT/CUIT/EIN/
@@ -412,13 +410,13 @@ hand that to Stripe; Stripe computes tax.
   security rules against handling card data). The account-menu "Billing & payment" screen
   deep-links into the portal.
 
-### 9.3 What Pulse still owns
+### 9.3 What Beats still owns
 
 - **Correct org country & legal identity** — capture at org creation, editable by admins;
   this is the input Stripe Tax/Invoicing depends on, so it must be accurate.
 - **Entitlement sync** — SF3 translates Stripe subscription/tax events into
   `billing/{orgId}` (idempotently; Stripe delivers webhooks at-least-once). Invoices/tax
-  are read-only artifacts in Stripe; Pulse links to them, never regenerates them.
+  are read-only artifacts in Stripe; Beats links to them, never regenerates them.
 - **Immutability of issued documents** — a later change to the org's country affects
   *future* invoices only; already-issued invoices are legal records and are never
   rewritten.
@@ -429,7 +427,7 @@ Country-aware invoicing is explicitly a **future** capability, not v1. Sequence:
 1. Stripe Customer + Subscription per Org; tier sync via SF3; hosted Checkout/Portal.
    (Enough to charge and gate — single-country to start, PL10.)
 2. Turn on **Stripe Tax** + Tax ID collection for the launch countries (PL10).
-3. Expand jurisdictions / enable local e-invoicing where Stripe offers it, as Pulse sells
+3. Expand jurisdictions / enable local e-invoicing where Stripe offers it, as Beats sells
    into more countries.
 
 The org data model (§1.1, §7) is designed now so this can land later without a migration:
@@ -438,18 +436,18 @@ the country-aware tax/invoicing work needs.
 
 ### 9.5 Launch country: Mexico (PL10, decided)
 
-Pulse launches billing in **Mexico only**. Concretely:
+Beats launches billing in **Mexico only**. Concretely:
 
 - **Currency:** USD, **VAT-inclusive** for MX. **Tax:** **IVA** (VAT) 16% — calculated by
   **Stripe Tax** (Mexico supported) and included in the $6/$12 price. No tax IDs collected
   in-app at launch (see below).
 - **Stripe covers:** IVA calculation via Stripe Tax, USD charges, and hosted Checkout/Portal.
-  That is the full extent of billing Pulse builds for Mexico at launch.
+  That is the full extent of billing Beats builds for Mexico at launch.
 
-- **PL10-a — CFDI approach at launch. → DECIDED: no invoicing in Pulse; the factura global
-  is issued MANUALLY, out of band.** Pulse (and any integrated service) issues **no fiscal
+- **PL10-a — CFDI approach at launch. → DECIDED: no invoicing in Beat; the factura global
+  is issued MANUALLY, out of band.** Beats (and any integrated service) issues **no fiscal
   documents at all** at launch:
-  - Pulse builds **no CFDI code, no PAC integration, and no invoice-issuing function** —
+  - Beats builds **no CFDI code, no PAC integration, and no invoice-issuing function** —
     none of it is in scope. **Removed from the build entirely.**
   - Each customer receives only the **generic Stripe invoice/receipt** for their charge,
     which has **no legal (fiscal) status in Mexico**. The billing UI must not imply it's a
@@ -458,8 +456,8 @@ Pulse launches billing in **Mexico only**. Concretely:
     (Stripe card/issuer country), **not** from a collected RFC or address — keeps onboarding
     frictionless; no fiscal-data capture.
   - The SAT-required **factura global** (CFDI to público en general) is produced **manually
-    by finance/the accountant, outside Pulse** — they read the period's collections from the
-    **Stripe dashboard** and file the global invoice with the SAT themselves. Pulse's only
+    by finance/the accountant, outside Beats** — they read the period's collections from the
+    **Stripe dashboard** and file the global invoice with the SAT themselves. Beats' only
     job is to make the charge data available in Stripe (which it already is).
   - **Trade-off (accepted):** no automation and no per-customer CFDI. Automating this — a
     scheduled collections job and/or a PAC integration for per-customer CFDIs — is a
@@ -651,15 +649,15 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
 **B. Product catalog — product (Stripe dashboard)**
 
 > ⚠️ **Pending in Stripe (as of 2026-08-10).** The $6 tier was renamed **Teams → Pro**. The
-> live Stripe product is still named *"Pulse Teams"* and still carries `tier: "teams"`.
+> live Stripe product is still named *"Beats Teams"* and still carries `tier: "teams"`.
 > `readTier()` in `functions/src/billing.ts` accepts `"teams"` as a **legacy alias for
 > `"pro"`**, so nothing is broken and the dashboard edit can happen at any time — but until
-> it's done, the product name on customer **invoices and receipts** still reads "Pulse Teams".
+> it's done, the product name on customer **invoices and receipts** still reads "Beats Teams".
 > Rename the product and switch the metadata to `pro` before taking real payments.
 
-- Product **"Pulse Pro"** → recurring **per-seat** Price billed by `quantity`:
+- Product **"Beats Pro"** → recurring **per-seat** Price billed by `quantity`:
   **$6 USD / editor / month**.
-- Product **"Pulse Business"** → recurring **per-seat** Price billed by `quantity`:
+- Product **"Beats Business"** → recurring **per-seat** Price billed by `quantity`:
   **$12 USD / editor / month**.
 - **No Starter product** — Starter is the free default (absence of a subscription; 1 editor).
 - Monthly billing **in arrears** (usage/quantity finalized at period end — "mass billing").
@@ -709,4 +707,4 @@ ship, grouped by owner. This is the prerequisite the build plan calls "Stripe ac
 - `Workspace.stripeCustomerId` / `stripeSubscriptionId` (types shipped).
 - Customer metadata `workspaceId` ↔ our workspace; **Product** metadata `tier` ↔ our tier
   (mirrored onto the Price as the webhook's fallback — see §9.6 B).
-- Seats (PL11): subscription `quantity` = unique users across the org's Pulses.
+- Seats (PL11): subscription `quantity` = unique users across the org's Beats.

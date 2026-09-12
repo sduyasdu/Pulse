@@ -1,4 +1,4 @@
-# Pulse — Stripe Go-Live Runbook
+# Beats — Stripe Go-Live Runbook
 
 Status: **Complete as of 2026-08-16 — §2–§6 all done, verified by a real
 purchase. GL1 resolved (quota enforcement shipped); GL2 (CFDI invoicing) is the
@@ -50,7 +50,7 @@ configuration and tax settings are all per-mode and must be recreated.
 2. **Recreate the products and prices.** Starter is never a Stripe product — it is
    the absence of a subscription.
 
-   | | Pulse Pro | Pulse Business |
+   | | Beats Pro | Beats Business |
    | --- | --- | --- |
    | Price | $6 USD | $12 USD |
    | Recurring | monthly, in arrears | monthly, in arrears |
@@ -78,8 +78,8 @@ configuration and tax settings are all per-mode and must be recreated.
    product first then falls back to price, which is why the Price copy is worth
    having too. (`Plans-Spec.md` §9.6 B said "every Price" until 2026-08-13.)
 
-   **Name it "Pulse Pro" with `tier: "pro"` from the start.** The test-mode catalog
-   is still "Pulse Teams" / `tier: "teams"`, which `readTier` tolerates via a legacy
+   **Name it "Beats Pro" with `tier: "pro"` from the start.** The test-mode catalog
+   is still "Beats Teams" / `tier: "teams"`, which `readTier` tolerates via a legacy
    alias — a fresh live catalog means that alias never has to matter, and invoices
    read correctly from the first charge.
 
@@ -249,7 +249,7 @@ already taken — refund in the Stripe dashboard — and it does **not** restore
 1. **GL1 — Ship live billing before rules-side quota enforcement? ✅ RESOLVED
    2026-08-15: enforcement shipped, so the question lapsed.** SF11
    (`functions/src/counters.ts`) maintains `workspace.pulseCount` by recount, the
-   Pulse-create rule gates on it against the plan, and the dashboard explains the
+   Beat-create rule gates on it against the plan, and the dashboard explains the
    limit rather than leaving a bare permissions error. Quotas are no longer
    advisory. *The original recommendation — acceptable briefly, but not past the
    first handful of paying orgs — was never tested, because enforcement landed

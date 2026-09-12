@@ -1,4 +1,4 @@
-# Pulse — working notes
+# Beats — working notes
 
 Setup, scripts and the data model live in `README.md`. This file is only for
 things that pass every check you'd normally run and still ship broken.
@@ -17,7 +17,7 @@ npx firebase deploy --only functions      --project pulse-b9d96
 time — there are three shapes, and they want opposite orders:
 
 - A gate that reads a field **nothing writes yet** is inert → ship the writer
-  first. SF11's `workspace.pulseCount` had to exist before the Pulse-create rule
+  first. SF11's `workspace.pulseCount` had to exist before the Beat-create rule
   reading it could mean anything.
 - A gate that restricts what the **live client already does** breaks it → ship
   the client first, or make the rule tolerant of both shapes.
@@ -31,9 +31,9 @@ gate.)*
 ## `deletePulse` is a client-side cascade — new write gates must exempt owner deletes
 
 `deletePulse` (`src/services/firestore/pulses.ts`) deletes every subcollection
-doc, then the pulse doc, then `pulseMembers` **last**, all through the ordinary
+doc, then the Beat doc, then `pulseMembers` **last**, all through the ordinary
 security rules. So **any restriction added to a write path also applies to that
-teardown**, and an over-broad one makes a Pulse undeletable.
+teardown**, and an over-broad one makes a Beat undeletable.
 
 When adding a gate, check it against the cascade and keep an owner escape:
 
@@ -43,8 +43,8 @@ allow delete: if <your gate> && (<the new condition> || pulseRole(pulseId) == 'o
 
 This has bitten twice — the archive freeze on the content collections, and the
 always-an-owner rule on `pulseMembers` (which needed a further carve-out for
-"the pulse doc is already gone"). See `Hide-and-Archive-Spec.md` §4.4 and §5.7.
-Owners can already delete the whole Pulse, so the exemption grants nothing new.
+"the Beat doc is already gone"). See `Hide-and-Archive-Spec.md` §4.4 and §5.7.
+Owners can already delete the whole Beat, so the exemption grants nothing new.
 
 ## Sign-out terminates Firestore, so it must reload the page
 
@@ -102,8 +102,8 @@ state.
 
 Every live read in `src/services/firestore/` now takes an `onError` and every
 caller renders it — swept 2026-08, after the same bug reached the canvas: a
-refused `features` listener drew an empty Pulse, which reads as lost work. Its
-siblings (`epics`, `resources`, the pulse doc, `myPulses`) had no handler at
+refused `features` listener drew an empty Beat, which reads as lost work. Its
+siblings (`epics`, `resources`, the Beat doc, `myPulses`) had no handler at
 all, so a refusal never called back and the page span forever instead. Same
 fault, opposite symptom.
 

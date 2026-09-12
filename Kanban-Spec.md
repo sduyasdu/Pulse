@@ -1,10 +1,10 @@
-# Pulse — Kanban Board View Specification
+# Beats — Kanban Board View Specification
 
-Status: **Draft for sign-off (D1–D14)** · Scope: v1 (one alternative view inside a single Pulse; desktop + mobile). Custom statuses (D14) designed but phased.
+Status: **Draft for sign-off (D1–D14)** · Scope: v1 (one alternative view inside a single Beat; desktop + mobile). Custom statuses (D14) designed but phased.
 
 ## 1. Goal
 
-Give an editor/viewer a **status-first, board-style** way to look at one Pulse's
+Give an editor/viewer a **status-first, board-style** way to look at one Beat's
 tasks, as an alternative to the time-based canvas. The canvas
 (`src/components/canvas/CanvasView.tsx`) answers *"when does everything
 happen and who's over/under-loaded on the timeline?"*; the assignment panel
@@ -63,7 +63,7 @@ reuses `STATUS_META[status].label` and its `bg`/`border`/`text` colors so the
 board reads identically to the canvas boxes and the mobile list pills
 (`MobileTaskList.tsx:100`). Each header shows a count of cards in the column.
 (The v1 board assumes today's fixed four statuses; §12 / D14 generalizes these
-columns to per-Pulse custom statuses in a later phase, at which point the
+columns to per-Beat custom statuses in a later phase, at which point the
 columns render from `pulse.statuses` instead of the constant.)
 
 Within each column, cards are further **grouped by epic and sorted by start
@@ -72,7 +72,7 @@ date** — see §5.2 / D5.
 Alternative selectable groupings (a small segmented control in the toolbar,
 "Group by: Status · Epic · Assignee"):
 
-- **By Epic** — columns are the Pulse's epics plus a "No epic" column, mirroring
+- **By Epic** — columns are the Beat's epics plus a "No epic" column, mirroring
   the epic grouping `MobileTaskList` already builds (`MobileTaskList.tsx:38-42`)
   and the `epicFilter` semantics. Dragging a card between epic columns calls the
   existing `moveFeatureToEpic(id, epicId)` (`pulseStore.ts:233`) — note this also
@@ -266,7 +266,7 @@ wrapped) store action. Specifically:
 
 **The one change that *does* touch the data model is custom statuses (§12) —
 and it is the largest work item in this spec.** It converts `FeatureStatus`
-from a hardcoded union + static `STATUS_META` into per-Pulse configurable data.
+from a hardcoded union + static `STATUS_META` into per-Beat configurable data.
 It is intentionally **out of scope for the v1 board** and phased later (D14).
 
 ## 8. Permissions
@@ -354,9 +354,9 @@ tablets to the desktop layout).
   keep the shared ones (search, status/epic filters, add task/epic, undo/redo,
   invite, effort scale).
 
-## 12. Custom statuses (per-Pulse configurable)
+## 12. Custom statuses (per-Beat configurable)
 
-**D14 — Statuses become per-Pulse configurable data**: users can add a new
+**D14 — Statuses become per-Beat configurable data**: users can add a new
 status, **insert it in the middle**, recolor/rename it, and reorder columns —
 except **"Done", which is a reserved terminal status** that cannot be removed,
 renamed away from its identity, or reordered out of the terminal slot, and which
@@ -385,11 +385,11 @@ dynamic:
 
 ### 12.2 Proposed model
 
-Store an **ordered status list on the Pulse doc**, alongside the existing
-per-Pulse config it already carries (`Pulse.graphConfig`, `Pulse.resourceTypes`,
+Store an **ordered status list on the Beat doc**, alongside the existing
+per-Beat config it already carries (`Pulse.graphConfig`, `Pulse.resourceTypes`,
 `src/types/index.ts:42-47`), managed by a new store action in the same shape as
 the existing `setResourceTypes` (`pulseStore.ts:140`, which already records an
-undo entry and writes one pulse field):
+undo entry and writes one Beat field):
 
 ```ts
 interface StatusDef { id: string; label: string; color: string } // color = base; bg/text derived
@@ -398,7 +398,7 @@ interface Pulse { /* … */ statuses: StatusDef[] }  // ordered; "done" reserved
 
 - `Feature.status` (and `Subtask.status`) change from the union to a **status
   `id`** (`string`). `id` is stable and opaque so rename/recolor never rewrites
-  feature docs; only reorder/insert changes the Pulse's `statuses` array, never
+  feature docs; only reorder/insert changes the Beat's `statuses` array, never
   the features.
 - **`done` is a reserved id.** It always exists, is always the terminal column,
   and cannot be deleted or moved out of terminal position. The board's Done
@@ -413,15 +413,15 @@ interface Pulse { /* … */ statuses: StatusDef[] }  // ordered; "done" reserved
 
 ### 12.3 Migration
 
-- **Backfill / default.** A Pulse with no `statuses` array defaults to today's
+- **Backfill / default.** A Beat with no `statuses` array defaults to today's
   four (`planned`, `in-progress`, `blocked`, `done`) with their current
-  `STATUS_META` colors — so existing Pulses look unchanged. Because ids equal
+  `STATUS_META` colors — so existing Beats look unchanged. Because ids equal
   today's string values, **existing `Feature.status` values need no rewrite**
   (they already are the ids). This makes the migration additive and lazy: write
   the default `statuses` on first edit, or fall back to a constant default when
   the field is absent (mirrors how `graphConfigOf` falls back to
   `DEFAULT_GRAPH_CONFIG`, `pulseStore.ts:436`).
-- **Lookups become Pulse-scoped.** Replace direct `STATUS_META[status]` reads
+- **Lookups become Beat-scoped.** Replace direct `STATUS_META[status]` reads
   with a helper `statusMetaOf(pulse, id)` that resolves from `pulse.statuses`
   (with the derived bg/text) and returns a safe fallback for an unknown id
   (e.g. a task on a status that was just deleted → treat as the nearest
@@ -447,7 +447,7 @@ interface Pulse { /* … */ statuses: StatusDef[] }  // ordered; "done" reserved
   cost of a manual move-first step. (`done` is never deletable regardless.)
 - **Status editor UI.** A small management surface (add / rename / recolor /
   reorder, drag handles, "done" pinned) — natural home is the board itself
-  (edit-columns affordance) and/or a Pulse settings menu.
+  (edit-columns affordance) and/or a Beat settings menu.
 
 **Recommendation:** phase it. Ship the v1 board on the fixed four statuses;
 implement custom statuses as a dedicated later phase because it spans the type
@@ -464,7 +464,7 @@ system, three render sites, the filter, migration, and a new editor UI.
 - Cascading a card→Done down to its subtasks (each subtask keeps its own
   `finishedAt`).
 - Multi-select / bulk-move of cards.
-- Cross-Pulse boards or a portfolio board (single-Pulse only).
+- Cross-Beat boards or a portfolio board (single-Beat only).
 
 ## 14. Proposed implementation phases
 
@@ -502,7 +502,7 @@ system, three render sites, the filter, migration, and a new editor UI.
   between columns but its DetailsTab stays locked.
 - Rules-emulator: a board status write from a viewer is denied; from an editor
   is allowed (reuses existing `features` write coverage).
-- (Custom-statuses phase) migration: a Pulse with no `statuses` field resolves
+- (Custom-statuses phase) migration: a Beat with no `statuses` field resolves
   to the default four and existing `Feature.status` ids render unchanged;
   deleting a status is disabled while any task/subtask still references it
   (user must move those cards first) and always disabled for `done`.
@@ -540,7 +540,7 @@ system, three render sites, the filter, migration, and a new editor UI.
 13. **D13 — Add-epic affordance on the board** (reuse `addEpic`,
     `pulseStore.ts:147`); a new epic appears as an empty band in every column.
     Keep add-task per column / per epic-group. *Settled (new scope).*
-14. **D14 — Custom per-Pulse statuses** (§12): ordered `Pulse.statuses`
+14. **D14 — Custom per-Beat statuses** (§12): ordered `Pulse.statuses`
     (`{id,label,color}[]`), `Feature.status` becomes a status **id**, **"Done"
     reserved + terminal** (stamps finished date + lock), migrate off the
     hardcoded `FeatureStatus` union + `STATUS_META`, derive bg/text via `hexA`,

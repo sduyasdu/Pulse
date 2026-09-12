@@ -1,4 +1,4 @@
-# MCP Publishing — getting Pulse's connector into the assistant directories
+# MCP Publishing — getting Beats' connector into the assistant directories
 
 Status: **Researched 2026-08-18. MP1–MP6 decided; MP7–MP9 open (privacy policy,
 rate limiting, listing assets — none are engineering blockers to the code
@@ -10,7 +10,7 @@ privacy policy must name)
 ## 0. What this is
 
 `MCP-Spec.md` covers the server. This covers **distribution**: what each
-assistant vendor requires before it will list Pulse, what Pulse fails today, and
+assistant vendor requires before it will list Beats, what Beats fails today, and
 the decisions taken to close the gap.
 
 Written from the vendors' own submission docs, read on 2026-08-18. Directory
@@ -38,7 +38,7 @@ The asymmetry worth internalising: **Claude and ChatGPT are review queues you
 can enter today; Google is not a queue at all.** For Gemini the deliverable is
 documentation a customer's own Cloud admin follows, not a submission.
 
-## 2. What Pulse failed on when this was assessed
+## 2. What Beats failed on when this was assessed
 
 1. **No tool annotations anywhere.** All nine tools carried `name`,
    `description`, `inputSchema` and nothing else. Both vendors name this as a
@@ -63,7 +63,7 @@ documentation a customer's own Cloud admin follows, not a submission.
    one directory but not the other is a second thing to keep in step. All nine
    are reads against the customer's own data, so all nine are
    `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false` — the
-   last because these tools reach only Pulse's own store, never the open
+   last because these tools reach only Beats' own store, never the open
    internet. **When Phase 2 lands writes, these flip per tool and it is a
    submission-affecting change, not a detail.**
 2. **MP2 — Redirect validation is host-exact, parsed, not prefix-matched.**
@@ -96,7 +96,7 @@ documentation a customer's own Cloud admin follows, not a submission.
 5. **MP5 — Claude first, ChatGPT second, Gemini as documentation.**
    Claude's queue costs the least beyond MP1 (no domain verification, no video,
    no test matrix) and will surface reviewer feedback that applies to ChatGPT's
-   stricter pass. Gemini gets a "connect Pulse in Gemini Enterprise" page rather
+   stricter pass. Gemini gets a "connect Beats in Gemini Enterprise" page rather
    than a submission, because there is nothing to submit to. *Rejected: chasing
    the consumer Gemini app* — it is partnership-only and needs a Google
    partnerships contact, which is business development, not engineering.
@@ -127,4 +127,4 @@ documentation a customer's own Cloud admin follows, not a submission.
 9. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
    categories, docs URL, support contact, and a **test account with realistic
    sample data** a reviewer can use end to end. The demo account is the item most
-   likely to be underestimated: it needs a populated Pulse, not an empty one.
+   likely to be underestimated: it needs a populated Beat, not an empty one.

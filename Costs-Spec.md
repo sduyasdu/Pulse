@@ -1,4 +1,4 @@
-# Pulse — Costs Spec (cost types, AI tokens & pricing)
+# Beats — Costs Spec (cost types, AI tokens & pricing)
 
 Status: **PARKED 2026-08-23 — the whole costing model is being rethought (CO21).
 The feature is HIDDEN, not removed: every cost surface is behind one flag, the
@@ -9,13 +9,13 @@ Previously: AI costing shipped; people costing (§8) ready to build — CO13/17/
 resolved; CO14–CO16, CO18, CO19 open; CO1/3/6/12 open (implementation-level).
 · Owner: product + eng ·
 Related: **`Costs-Build-Plan.md`** (phased implementation plan),
-`Pulse-Product-Spec.md` (§3 Core entities, §6 Resource & assignment views),
+`Beats-Product-Spec.md` (§3 Core entities, §6 Resource & assignment views),
 `Permissions-Spec.md` (capabilities), `Plans-Spec.md` (entitlement gating),
 `Changelog-Spec.md` (activity entries), `Server-Functions-Spec.md` (future rollups)
 
 ## 0. What this is (and isn't)
 
-This spec adds a **cost layer** to a Pulse: what a task costs in money, how that
+This spec adds a **cost layer** to a Beat: what a task costs in money, how that
 money is measured, and how it reads across time.
 
 The central decision: **cost is not a kind of Resource.** A Resource stays what §3
@@ -50,8 +50,8 @@ different feature with a different name, not a tightening of this one. §8.9 and
 record the specific inaccuracies this buys, so nobody has to rediscover them.
 
 What this spec also does *not* cover: budgeted/estimated cost (**CO9**), invoicing
-the customer, multi-currency (**CO8**), and the Pulse's own subscription billing —
-that's `Plans-Spec.md`, a different axis entirely (what the *owner pays Pulse*, not
+the customer, multi-currency (**CO8**), and the Beat's own subscription billing —
+that's `Plans-Spec.md`, a different axis entirely (what the *owner pays Beat*, not
 what a *project costs*).
 
 ## 1. Model at a glance
@@ -131,7 +131,7 @@ export interface CostTypeDef {
 
 **Where the registry lives (CO1).** Built-in types are code
 (`src/domain/costTypes.ts`), the way `DEFAULT_STATUSES` is — they carry logic
-(price scales, inheritance) that doesn't belong in user data. A Pulse may
+(price scales, inheritance) that doesn't belong in user data. A Beat may
 *override prices* (§4) but not invent a type in this phase. *Recommend: code
 registry now; `Pulse.costTypes?: CostTypeDef[]` later if user-defined types are
 wanted, mirroring how `Pulse.statuses` extends `DEFAULT_STATUSES`.*
@@ -227,13 +227,12 @@ Why this is the right call and not just the cheap one:
 - Real spend rarely equals list price anyway — commitments, discounts, batch and
   cache tiers all move it. Actuals are the only figure that's true for *your*
   account.
-- It removes a whole maintenance surface: no catalog to curate, no per-Pulse
+- It removes a whole maintenance surface: no catalog to curate, no per-Beat
   overrides, no "which price applied on which date" question.
 
 What this costs, stated plainly: **you cannot forecast an AI cost from a token
 estimate**, because nothing knows what a token costs until you've spent some. If
-forecasting is wanted later, the natural move is to derive a blended rate from that
-Pulse's own history (last N entries for the model) rather than reintroduce a
+forecasting is wanted later, the natural move is to derive a blended rate from that Beat's own history (last N entries for the model) rather than reintroduce a
 catalog — and it pairs with CO9's estimate entries.
 
 Rate cards return only with the human cost type (§8), where an hourly rate is a
@@ -407,7 +406,7 @@ the same look.
 ### 6.2 What the totals total (CO11 resolved)
 
 **Every period is totalled, whether or not it's on screen.** The left Total column
-is each row's *entire* cost across the Pulse — all time, all periods — not a sum of
+is each row's *entire* cost across the Beat — all time, all periods — not a sum of
 the visible cells. The bottom-right corner cell is the grand total on the same
 basis.
 
@@ -438,7 +437,7 @@ the **time window** is ignored.
 - **Write** follows the parent feature's **edit** scope. A Task Lead logging AI
   spend on a task they lead must work; that's the main data-entry path. Editors
   write anywhere, viewers nowhere.
-- **Rate cards and type config** follow `editConfig` (they're Pulse-level
+- **Rate cards and type config** follow `editConfig` (they're Beat-level
   settings), not `editScope`.
 - **No `editCosts` capability** (**CO12**) — AI costs derive their gate from the
   feature they hang off. *Recommend confirming this rather than adding one: another
@@ -475,13 +474,12 @@ match /costs/{costId} {
   are the exception** — the log is member-readable, so a rate delta in it would
   defeat §8.7 (**CO18**).
 - **Plans**: cost tracking is a plausible paid feature and a plausible quota
-  (entries per Pulse). Not decided here — if gated, it lands as a flag in
+  (entries per Beat). Not decided here — if gated, it lands as a flag in
   `Plans-Spec.md` §3.1 and composes as `entitlement ∧ capability`.
 
 ## 8. The `people` cost type — costing human effort
 
-The second cost type, and the one that makes the §2 abstraction earn its keep: a
-Pulse can now show what its *labour* costs alongside what its AI costs, in the same
+The second cost type, and the one that makes the §2 abstraction earn its keep: a Beat can now show what its *labour* costs alongside what its AI costs, in the same
 view, on the same calendar.
 
 ### 8.1 Required behaviour
@@ -493,7 +491,7 @@ view, on the same calendar.
    cost.
 5. Hours are **8 per weekday**; weekends count only when the task's weekend flag
    is on.
-6. **People costs are visible to Pulse admins only.**
+6. **People costs are visible to Beat admins only.**
 
 Everything below is how those six land without a sync surface and without leaking
 anyone's rate.
@@ -546,7 +544,7 @@ exist and the underlying document is unreadable.
 
 ### 8.4 Hours, and where they come from
 
-Pulse already knows how long a task takes and how much of a person is on it. People
+Beats already knows how long a task takes and how much of a person is on it. People
 cost reuses that rather than inventing a parallel model:
 
 ```
@@ -588,7 +586,7 @@ The reasoning, recorded because it will be questioned later:
 
 - **A rate change is a fan-out write storm if materialized.** One senior developer's
   raise would rewrite every people-cost row for that person across every task in
-  every Pulse — potentially thousands of documents, each one a write, each one an
+  every Beat — potentially thousands of documents, each one a write, each one an
   activity-log entry. Derived, it is a single-document edit and every figure moves.
 - **Materialized rows carry no information the derivation doesn't.** Requirement 4
   says a rate change *updates* the record, so the stored row is always just the
@@ -607,7 +605,7 @@ The reasoning, recorded because it will be questioned later:
 **What would have forced materialization** — freezing a rate against a closed period,
 or invoicing — is explicitly out of scope (§0.1), so nothing does. If it ever returns,
 the shape is a **snapshot on demand**: a "close the month" action writing immutable
-rows, mirroring Pulse's existing `plannedX` / `estEffort` lock idiom rather than a
+rows, mirroring Beats' existing `plannedX` / `estEffort` lock idiom rather than a
 background reconciler. A materialized-and-synced variant would have to be a server
 function per `Server-Functions-Spec.md` §4 — the client cannot be trusted to fan a
 rate change across other people's tasks.
@@ -694,7 +692,7 @@ One rate per resource, applied across all time. Give someone a raise in July and
 June's reported labour cost changes with it.
 
 **Accepted, per §0.1.** It also matches how the rest of the model already behaves:
-change a box and its history changes, because Pulse stores the current plan rather
+change a box and its history changes, because Beats stores the current plan rather
 than a ledger of past states.
 
 The upgrade path exists if the need ever appears — **effective-dated rates** at
@@ -730,7 +728,7 @@ already in place.
   `updateCost` / `deleteCost`, mirroring `resources.ts`. Wire into `pulseStore`
   alongside features and resources.
 - **`firestore.indexes.json`** — a `costs` index on `featureId` if per-task queries
-  are used; the v1 client subscribes the whole collection per Pulse (as it does for
+  are used; the v1 client subscribes the whole collection per Beat (as it does for
   features) and filters in memory. Revisit if an entry count gets large enough to
   matter — that's when a rollup function belongs in `Server-Functions-Spec.md`.
 - **i18n** — every new string goes into **all six** dictionaries (`en`, `es`, `pt`,
@@ -754,10 +752,10 @@ already in place.
    costs. Splitting later is additive (§2.1).
 4. **CO4 — Ship vendor prices? ✅ RESOLVED: no price table at all.** Unit cost is
    always calculated from actuals — enter tokens and dollars, $/Mtok falls out.
-   No catalog, no per-Pulse overrides, no as-of-when question. Accepted
+   No catalog, no per-Beat overrides, no as-of-when question. Accepted
    consequence: **AI cost can't be forecast from a token estimate** until there's
    history to blend a rate from (§4).
-5. **CO5 — Pulse-level costs. ✅ RESOLVED: no.** `featureId` is required; every
+5. **CO5 — Beat-level costs. ✅ RESOLVED: no.** `featureId` is required; every
    cost hangs off a task. That's also what guarantees each entry has a span to
    prorate over and a permission scope to inherit, so nothing can fall outside the
    period columns (§5.1).
@@ -781,7 +779,7 @@ already in place.
 
    Note the interaction with CO4: with no price table, a *token* estimate can't be
    priced. When estimates land, they'll be entered in **dollars**, or priced from
-   a rate blended out of that Pulse's own history.
+   a rate blended out of that Beat's own history.
 
    Adding them later costs one optional field on `CostEntry`:
 
@@ -829,9 +827,9 @@ already in place.
     alternative is accepting that all members can see all rates.
 15. **CO15 — Who is an "admin"?** *Recommend `owner`, plus `custom` roles carrying a
     new `viewPeopleCost` capability.* Alternatives: reuse `manageMembers` (fewer
-    flags, but conflates "can add people" with "can see their pay"), or Pulse-owner
+    flags, but conflates "can add people" with "can see their pay"), or Beat-owner
     only (simplest, no new capability).
-16. **CO16 — Is 8 hours/day configurable?** *Recommend a Pulse-level `hoursPerDay`
+16. **CO16 — Is 8 hours/day configurable?** *Recommend a Beat-level `hoursPerDay`
     defaulting to 8*, since 7.5 and 6-productive-hours are both common. One number,
     same home as `graphConfig`.
 18. **CO18 — Logging rate changes.** *Recommend logging the event without values*
@@ -845,8 +843,7 @@ already in place.
 
 None of these blocks starting the build; each can be settled by whoever picks it up.
 
-1. **CO1 — Type registry location.** Code registry vs. user-defined types on the
-   Pulse doc. *Recommend: code now; `Pulse.costTypes` later if needed.*
+1. **CO1 — Type registry location.** Code registry vs. user-defined types on the Beat doc. *Recommend: code now; `Pulse.costTypes` later if needed.*
 3. **CO3 — Multiple measures on one type.** Moot in practice (AI has one measure,
    the human type will have one), but the shape allows it. How a single amount
    would split across several measures is deferred until a type needs it.
@@ -859,7 +856,7 @@ None of these blocks starting the build; each can be settled by whoever picks it
     column to every role preset for a permission with no meaning apart from "can
     edit this task" (§7).*
 
-> **Cross-refs (in place):** `Pulse-Product-Spec.md` §3 defines Cost as a core entity
+> **Cross-refs (in place):** `Beats-Product-Spec.md` §3 defines Cost as a core entity
 > alongside Feature/Resource, and §6 lists the Cost view; `Permissions-Spec.md` §4.5
 > records that costs inherit the parent feature's read/write gates rather than adding
 > an `editCosts` capability; `Changelog-Spec.md` §2.1 carries the `cost` entity kind;
@@ -922,7 +919,7 @@ a tool whose data the app no longer shows.
 
 ### 21.5 What this blocks
 
-`Resource-Master-Spec.md` phase 6 — master-level rates with per-Pulse overrides
+`Resource-Master-Spec.md` phase 6 — master-level rates with per-Beat overrides
 (RM9) — is **parked with it**. It is the most expensive part of that plan and it
 would be built against a model that is about to change.
 

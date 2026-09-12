@@ -1,10 +1,10 @@
-# Pulse — Product Spec
+# Beats — Product Spec
 
 **by Yasdu** · Visual project planning on an infinite canvas
 
-## 1. What Pulse is
+## 1. What Beats is
 
-Pulse is a graph-first project management tool. Instead of a conventional Gantt chart, features and tasks live as draggable boxes on an infinite 2D canvas: the x-axis is time (start date and duration), and the y-axis is grouped into "epics" — user-defined swimlanes. A box's height is not decorative — it encodes **work intensity** (parallel effort per day), so effort is a visual, graphable property alongside schedule, not a separate spreadsheet.
+Beats is a graph-first project management tool. Instead of a conventional Gantt chart, features and tasks live as draggable boxes on an infinite 2D canvas: the x-axis is time (start date and duration), and the y-axis is grouped into "epics" — user-defined swimlanes. A box's height is not decorative — it encodes **work intensity** (parallel effort per day), so effort is a visual, graphable property alongside schedule, not a separate spreadsheet.
 
 A working HTML/React prototype exists (`Pulse-Prototype.html` in this delivery) and is the source of truth for interaction design and the effort model. This spec describes what it does so a real, persisted, multi-user version can be built from it.
 
@@ -18,7 +18,7 @@ A working HTML/React prototype exists (`Pulse-Prototype.html` in this delivery) 
 
 ## 3. Core entities
 
-**Pulse** — one roadmap instance (the prototype's code calls this a "board"; the product-facing name for it is a **Pulse**, not to be confused with the app name). Has a name (e.g. "Pulse de conciliaciones"), used as the browser tab title (`{boardName} — Pulse`). A user has access to several Pulses — see §8.
+**Beats** — one roadmap instance (the prototype's code calls this a "board"; the product-facing name for it is a **Beats**, not to be confused with the app name). Has a name (e.g. "Beats de conciliaciones"), used as the browser tab title (`{boardName} — Pulse`). A user has access to several Beats — see §8.
 
 **Epic** — a swimlane: `id, name, color, y0, y1` (vertical extent), plus optional manual overrides (`manualY0/Y1/MinX/MaxX`) that extend but never clip the auto-fit extent computed from its features. Resizable via edge/corner drag handles on the canvas.
 
@@ -47,7 +47,7 @@ A working HTML/React prototype exists (`Pulse-Prototype.html` in this delivery) 
 
 ## 4. The Graph Effort model
 
-This is Pulse's key differentiator vs. a plain Gantt chart: box **height** is a first-class, editable unit of work, not styling.
+This is Beat's key differentiator vs. a plain Gantt chart: box **height** is a first-class, editable unit of work, not styling.
 
 - Global scale: `stepPx` (pixels per step, default 16) and `workPerStep` (work units per step, default 1) — user-adjustable via an "Effort scale" settings popover.
 - `workOf(box)` = work units implied by the box's height, snapped to whole steps.
@@ -81,20 +81,20 @@ This is Pulse's key differentiator vs. a plain Gantt chart: box **height** is a 
 
 ## 7. Branding
 
-- Wordmark "Pulse" with a small Yasdu logo mark and an uppercase "by Yasdu" tag in the toolbar.
+- Wordmark "Beats" with a small Yasdu logo mark and an uppercase "by Yasdu" tag in the toolbar.
 - Yasdu color tokens: background `#FDFCF8`, ink `#1F2330`, primary orange `#D85A28`/`#EE7240`, navy `#123359`/`#0A1428`, plus per-status colors (planned/in-progress/blocked/done).
 - Typography: Inter (body), Space Grotesk (display/headings), JetBrains Mono (numeric/technical labels).
-- Every board can be given its own name, shown next to the Pulse wordmark and reflected in the document title.
+- Every board can be given its own name, shown next to the Beats wordmark and reflected in the document title.
 
 ## 8. Accounts, multi-tenancy & sharing
 
 The real app is multi-tenant and multi-user, modeled on the same shape Trello uses for workspaces and boards:
 
-- **Every signed-in user lands on a home/dashboard listing every Pulse they have access to** — the ones they created plus any they've been invited to collaborate on. This is the top-level "several pulses" view the user always starts from.
-- **Workspace** — the tenancy boundary. Each user gets a personal workspace automatically on signup (so they can start working alone immediately), and can additionally belong to any number of shared/team workspaces. A workspace has members with roles (owner / member, at minimum) and owns a set of Pulses.
-- **Pulse membership & invites** — a Pulse belongs to exactly one workspace. Within that, an owner or editor can invite a collaborator by email to a specific Pulse (not necessarily the whole workspace) — mirrors Trello's ability to add someone to one board without making them a full workspace member. Invited users who don't have an account yet go through sign-up first, then land directly on the Pulse they were invited to.
-- **Roles per Pulse** (suggested, refine with the team before building): **Owner** (full control, can delete the Pulse, manage members), **Editor** (can edit everything §3–§6 covers), **Viewer** (read-only — useful for stakeholders who just want to watch progress). Enforce this both in the UI (hide/disable controls) and at the data layer (security rules / server-side checks) — never rely on the client alone.
-- **Data isolation** — every query and every write must be scoped to a workspace/Pulse the requesting user is actually a member of. This is a hard multi-tenant requirement, not a nice-to-have: one tenant must never be able to read or write another's data, even via a crafted request.
+- **Every signed-in user lands on a home/dashboard listing every Beat they have access to** — the ones they created plus any they've been invited to collaborate on. This is the top-level "several beats" view the user always starts from.
+- **Workspace** — the tenancy boundary. Each user gets a personal workspace automatically on signup (so they can start working alone immediately), and can additionally belong to any number of shared/team workspaces. A workspace has members with roles (owner / member, at minimum) and owns a set of Beats.
+- **Beats membership & invites** — a Beat belongs to exactly one workspace. Within that, an owner or editor can invite a collaborator by email to a specific Beat (not necessarily the whole workspace) — mirrors Trello's ability to add someone to one board without making them a full workspace member. Invited users who don't have an account yet go through sign-up first, then land directly on the Beat they were invited to.
+- **Roles per Beat** (suggested, refine with the team before building): **Owner** (full control, can delete the Beat, manage members), **Editor** (can edit everything §3–§6 covers), **Viewer** (read-only — useful for stakeholders who just want to watch progress). Enforce this both in the UI (hide/disable controls) and at the data layer (security rules / server-side checks) — never rely on the client alone.
+- **Data isolation** — every query and every write must be scoped to a workspace/Beats the requesting user is actually a member of. This is a hard multi-tenant requirement, not a nice-to-have: one tenant must never be able to read or write another's data, even via a crafted request.
 - **Resources vs. real accounts** — today a "Resource" (§3) is just a freeform name/initials with no login. Decide during implementation whether every Resource must map 1:1 to a real invited user (cleanest for permissions and notifications) or whether "placeholder" resources without accounts should still be allowed for lightweight capacity planning (matches the prototype's current freedom to add a resource by typing a name). Recommendation: allow both, but visually distinguish resources that are linked to a real account from ones that aren't.
 
 ### Authentication
@@ -102,8 +102,8 @@ The real app is multi-tenant and multi-user, modeled on the same shape Trello us
 - Use **Firebase Authentication** for identity:
   - **Google sign-in** (OAuth) as the primary, frictionless path.
   - **Email + password** as the fallback for users who don't want to use Google.
-- Firebase issues the session/identity token; the app's backend verifies it and resolves it to an internal user record (workspace memberships, role per Pulse, etc.) — Firebase itself doesn't need to know about workspaces or Pulses, it's purely the identity provider.
-- Invite-by-email should tie into this cleanly: an invited email gets a pending-invite record; when that email signs in via Google or registers with matching email/password, the invite auto-resolves into workspace/Pulse membership.
+- Firebase issues the session/identity token; the app's backend verifies it and resolves it to an internal user record (workspace memberships, role per Beat, etc.) — Firebase itself doesn't need to know about workspaces or Beats, it's purely the identity provider.
+- Invite-by-email should tie into this cleanly: an invited email gets a pending-invite record; when that email signs in via Google or registers with matching email/password, the invite auto-resolves into workspace/Beats membership.
 - Firebase's own project (Firestore + Firebase Auth, optionally Cloud Functions) is a reasonable default datastore choice given the auth choice, but that's an implementation decision for §9/build time, not a hard requirement of this spec — Postgres-with-Firebase-Auth-only is equally valid if the team prefers a relational store for the roadmap data.
 
 ## 9. What the prototype does NOT yet do (gap for the real build)
@@ -117,11 +117,11 @@ The real app is multi-tenant and multi-user, modeled on the same shape Trello us
 ## 10. Suggested scope for v1 of the real app
 
 1. Firebase Authentication wired up: Google sign-in + email/password, with a personal workspace auto-created per new user.
-2. Multi-tenant data model: Workspace → Pulse (§8) with membership, roles, and per-Pulse email invites; data access scoped and enforced server-side, not just hidden in the UI.
-3. Multi-Pulse support with real persistence (each Pulse = one roadmap), backed by a real datastore, replacing the prototype's in-memory `INITIAL_*` state.
+2. Multi-tenant data model: Workspace → Beats (§8) with membership, roles, and per-Beat email invites; data access scoped and enforced server-side, not just hidden in the UI.
+3. Multi-Beat support with real persistence (each Beat = one roadmap), backed by a real datastore, replacing the prototype's in-memory `INITIAL_*` state.
 4. Everything in §3–§6 reproduced faithfully — this is the differentiated UX, don't simplify it away.
 5. Real file storage for attachments (object storage + signed URLs) instead of inline data URLs.
-6. Autosave / optimistic updates so nothing is lost on refresh; ideally realtime sync if multiple collaborators edit the same Pulse at once.
+6. Autosave / optimistic updates so nothing is lost on refresh; ideally realtime sync if multiple collaborators edit the same Beat at once.
 
 
 ## 11. Decisions
@@ -153,7 +153,7 @@ The real app is multi-tenant and multi-user, modeled on the same shape Trello us
    a 320px row already carries a badge, a name, three actions, a link select and
    three bars. So the per-person editors are disclosed one row at a time
    (`TeamTab.tsx`, the `editing` state) rather than always shown, and resource
-   types — which are Pulse configuration, not a fact about any person — moved
+   types — which are Beats configuration, not a fact about any person — moved
    behind an icon button in the header.
 
 2. **PR2 — The over-allocation count is raised on the bell, not printed in a
@@ -174,6 +174,6 @@ The real app is multi-tenant and multi-user, modeled on the same shape Trello us
 
    *Deviation from that precedent, deliberately:* the quota notice keys its
    persisted dismissal on the **limit**, so an upgrade is a new fact and the
-   notice returns. This one keys on the **Pulse**. A plan limit changes when you
+   notice returns. This one keys on the **Beats**. A plan limit changes when you
    upgrade; this number moves with every drag, so keying on it would resurface
    the warning mid-edit — the opposite of dismissing it.

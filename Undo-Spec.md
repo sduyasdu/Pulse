@@ -1,15 +1,15 @@
-# Pulse — Undo / Redo Specification
+# Beats — Undo / Redo Specification
 
-Status: **Decisions locked (D1–D4)** · Scope: v1 (single-user, per-Pulse, in-memory)
+Status: **Decisions locked (D1–D4)** · Scope: v1 (single-user, per-Beat, in-memory)
 
 ## 1. Goal
 
-Let an editor reverse their recent changes to a Pulse with a familiar
+Let an editor reverse their recent changes to a Beat with a familiar
 `Cmd/Ctrl+Z` (and redo with `Shift+Cmd/Ctrl+Z`), covering the everyday canvas
 edits: adding/moving/resizing/deleting tasks and epics, assigning people,
 editing subtasks and attachments, and epic membership changes.
 
-Undo must behave sanely in Pulse's **real-time, multi-user** model: it reverses
+Undo must behave sanely in Beats' **real-time, multi-user** model: it reverses
 *the acting user's* logical action against the *current* state — it is not a
 time-machine that rolls the whole document back to an earlier global snapshot.
 
@@ -148,7 +148,7 @@ When applying an op, per doc:
   it back.
 - **Permission lost** (role downgraded to viewer): undo/redo disabled; the write
   would be denied by rules anyway.
-- **Pulse changed / reloaded:** history is dropped (see §8).
+- **Beats changed / reloaded:** history is dropped (see §8).
 
 Implementation note: applying a `patch` op reads the current doc from the store,
 overlays only `keys`, and issues the existing `updateX` writer — so field-level
@@ -163,7 +163,7 @@ Undo pops from undo→applies inverse→pushes to redo; redo is the mirror.
 
 - **In-memory only**, not persisted to Firestore and **not shared** between
   users — it is the local editing history of this browser session.
-- **Per-Pulse.** Scoped by `pulseId`; navigating to another Pulse or back to the
+- **Per-Beat.** Scoped by `pulseId`; navigating to another Beat or back to the
   dashboard **clears** both stacks (guard: commands carry `pulseId`).
 - **Bounded** to the last N actions (proposal: 50) to cap memory.
 - Cleared on full reload (acceptable for v1; persistence is a non-goal).
@@ -184,7 +184,7 @@ Undo pops from undo→applies inverse→pushes to redo; redo is the mirror.
 
 - Cross-user / server-side collaborative undo (OT/CRDT). Out of scope.
 - Persisting history across reloads or devices.
-- Undoing membership/invite/workspace changes (people & access), Pulse
+- Undoing membership/invite/workspace changes (people & access), Beats
   create/delete, and resource-type reordering side effects — these live outside
   the canvas edit loop; revisit later.
 - A visible history panel / named checkpoints.
@@ -216,7 +216,7 @@ Undo pops from undo→applies inverse→pushes to redo; redo is the mirror.
    fields its command owned, preserving a concurrent editor's changes to other
    fields. Same-field co-edits are last-writer-wins. (§3, §6.) Consequence:
    `record()` must capture the exact key set of every mutation.
-2. **D2 — History: 50 actions, in-memory, per-Pulse, cleared on reload.** No
+2. **D2 — History: 50 actions, in-memory, per-Beat, cleared on reload.** No
    cross-reload or cross-device persistence in v1. (§8.)
 3. **D3 — "Move task to another epic" is one undo entry**, reversing both the
    `epicId` and the `y` reposition together. (§4, `moveFeatureToEpic`.)

@@ -1,4 +1,4 @@
-# Resource Master — one roster, many Pulses
+# Resource Master — one roster, many Beats
 
 Status: **Phases 0–2 BUILT and live. Phase 6 (master rates) PARKED — see
 Costs-Spec §21.
@@ -9,20 +9,20 @@ Owner: product + eng ·
 Related: `Permissions-Spec.md` (the capability model teams must NOT duplicate),
 `Costs-Spec.md` §8.3 (rates, the one genuinely sensitive collection),
 `Plans-Spec.md` (PL6 — the Workspace *is* the billing org; `maxResourcesPerPulse`),
-`Collaboration-Spec.md` (Pulse membership), `Server-Functions-Spec.md` (SF1's
+`Collaboration-Spec.md` (Beats membership), `Server-Functions-Spec.md` (SF1's
 resource fan-out, the precedent for propagation)
 
 ## 0. What this is
 
-Today a resource exists only inside one Pulse
-(`pulses/{pulseId}/resources/{rid}`). The same person is retyped in every Pulse
+Today a resource exists only inside one Beat
+(`pulses/{pulseId}/resources/{rid}`). The same person is retyped in every Beat
 they work on, their name drifts between them, and there is no way to ask "what is
 Ana working on across everything".
 
-This adds a **workspace-level roster** — masters — that Pulses draw from, plus
+This adds a **workspace-level roster** — masters — that Beats draw from, plus
 **teams** for grouping and sharing.
 
-**What it is not:** a change to how a Pulse is read or rendered. That is the
+**What it is not:** a change to how a Beat is read or rendered. That is the
 central constraint, not a nice-to-have — see §2.
 
 ## 1. Where things live
@@ -40,24 +40,24 @@ pulses/{pulseId}/
 ```
 
 The two `pulses/` collections are listed because **they do not change**. Every
-rule that governs reading a Pulse stays exactly as it is.
+rule that governs reading a Beat stays exactly as it is.
 
-## 2. A Pulse gets a copy, not a reference (RM1)
+## 2. A Beat gets a copy, not a reference (RM1)
 
 The decision that constrains everything else, and the permission model makes it
 for us.
 
-`firestore.rules:273` reads `allow read: if isPulseMember(pulseId)`. Pulse access
+`firestore.rules:273` reads `allow read: if isPulseMember(pulseId)`. Beats access
 comes from `pulseMembers` and **nothing else** — workspace membership is required
-only to *create* a Pulse (`firestore.rules:286`). So an invited collaborator is
-routinely a Pulse member who is not a workspace member, and today they can still
-see the Pulse's resources because those live inside the Pulse.
+only to *create* a Beat (`firestore.rules:286`). So an invited collaborator is
+routinely a Beat member who is not a workspace member, and today they can still
+see the Beat's resources because those live inside the Beat.
 
-If a Pulse held only a pointer into `workspaces/{wsId}/resources/{rid}`, then
+If a Beat held only a pointer into `workspaces/{wsId}/resources/{rid}`, then
 rendering it would require that collaborator to read a workspace collection
 guarded by `allow read: if isWorkspaceMember(workspaceId)`
 (`firestore.rules:224`). Two outcomes, both bad: it breaks for them, or you widen
-that rule and hand anyone invited to a single Pulse the org's **entire roster** —
+that rule and hand anyone invited to a single Beat the org's **entire roster** —
 names, types, and eventually rates.
 
 So: **copying is not a compromise, it is the only shape that leaves the
@@ -75,17 +75,17 @@ pulses/{pulseId}/resources/{rid}
 
 ## 3. Every field belongs to exactly one propagation class (RM2)
 
-Rename a person at master level and twelve Pulses hold a stale name. But blindly
+Rename a person at master level and twelve Beats hold a stale name. But blindly
 syncing everything destroys deliberate local edits, and the user cannot tell why
 their number keeps reverting. So each field belongs to exactly one class:
 
 | Class | Fields | Behaviour |
 | --- | --- | --- |
 | **Always** | name, initials, `role` (the org role, RM22/RM24), avatar, `linkedEmail` | Identity. A person's name is not a per-project fact. Overwritten on master change. |
-| **Never** | `type` — the Pulse's OWN category (RM24) | Different question from `role`: who they are vs how this Pulse files them. |
-| **Derived, never propagated** | `linkedUid` | Resolved locally from `linkedEmail` against *this* Pulse's membership (§5). Copying a master's uid down would assert a Pulse membership that may not exist. |
-| **Never** | capacity, allocations | Per-Pulse *by nature* — someone is 100% here and 30% there. The master's value is a default used at copy time only. |
-| **Unless overridden** | hourly rate | Tracks the master until someone sets it in this Pulse, then never again. See §7. |
+| **Never** | `type` — the Beat's OWN category (RM24) | Different question from `role`: who they are vs how this Beat files them. |
+| **Derived, never propagated** | `linkedUid` | Resolved locally from `linkedEmail` against *this* Beats' membership (§5). Copying a master's uid down would assert a Beat membership that may not exist. |
+| **Never** | capacity, allocations | Per-Beat *by nature* — someone is 100% here and 30% there. The master's value is a default used at copy time only. |
+| **Unless overridden** | hourly rate | Tracks the master until someone sets it in this Beat, then never again. See §7. |
 
 **Unless-overridden** needs an `inherited` marker. Without it there is no way to
 distinguish "this equals the master because it was copied" from "someone typed
@@ -99,15 +99,15 @@ An earlier draft of this section put an `inherited` array on the resource; it
 would have marked nothing.
 
 **Derived** is not a weaker form of propagation — it is the absence of it.
-`linkedUid` is computed locally against *this* Pulse's membership, and pushing a
-master's uid down would assert a Pulse membership that may not exist (§5).
+`linkedUid` is computed locally against *this* Beats' membership, and pushing a
+master's uid down would assert a Beat membership that may not exist (§5).
 
 **Detach** is the escape hatch: clearing `masterId` makes a copy purely local and
 stops all propagation, permanently.
 
 Propagation is a **server fan-out**, following SF1's existing resource fan-out
 (`functions/src/denorm.ts`) rather than inventing a mechanism. Bounded by the
-number of Pulses holding the resource, which the §6 index already knows.
+number of Beats holding the resource, which the §6 index already knows.
 
 ## 4. Teams: grouping is easy, sharing is where scope explodes (RM3, RM4)
 
@@ -116,22 +116,22 @@ A team is a document (`workspaces/{wsId}/teams/{teamId}`); membership is a
 counts are small, and `array-contains` answers "who is in this team" without a
 join collection.
 
-**Sharing is deliberately NOT the Pulse model.** Pulse has roles plus a
+**Sharing is deliberately NOT the Beat model.** Beats has roles plus a
 materialized capability bundle (`Permissions-Spec.md` §4.1). Reproducing that
 here would give the product a **third** authorization system, after workspace
-seats and Pulse roles, and every future feature would then have to ask which of
+seats and Beats roles, and every future feature would then have to ask which of
 the three governs it.
 
 Two levels, and they mean one narrow thing:
 
-- **use** — see the team, and copy its resources into a Pulse
+- **use** — see the team, and copy its resources into a Beat
 - **manage** — edit the team's membership and its resources
 
-**Same workspace only**, and the copy target must be a Pulse *in that same
+**Same workspace only**, and the copy target must be a Beat *in that same
 workspace*. The Workspace is the billing org (PL6), so cross-workspace sharing
 crosses a billing boundary and immediately raises "whose seat does this consume",
 which has no cheap answer. It also bounds §6's disclosure neatly: a usage index
-can only ever name Pulses inside the org that already owns the roster.
+can only ever name Beats inside the org that already owns the roster.
 
 ## 5. Linking: email is the intent, uid is the resolution (RM5, RM16–RM18)
 
@@ -153,9 +153,9 @@ workspace member, `linkedUid` resolves immediately; otherwise it stays empty and
 the roster entry is still perfectly usable — which is the point, because a
 roster exists before its people have logged in.
 
-### 5.2 At Pulse level
+### 5.2 At Beat level
 
-A Pulse resource carries both fields too, **stored, not read from the master** —
+A Beat resource carries both fields too, **stored, not read from the master** —
 `RM1` requires the copy to be self-sufficient because a non-workspace member
 cannot read master documents.
 
@@ -163,15 +163,15 @@ Two ways one gets there, with different constraints, and the difference is
 deliberate (RM18):
 
 - **Copied from a master.** Brings the master's `linkedEmail`, which may name
-  someone who is not a collaborator on this Pulse. `linkedUid` is left unresolved
-  until they are. **That address is visible to every member of this Pulse**,
+  someone who is not a collaborator on this Beat. `linkedUid` is left unresolved
+  until they are. **That address is visible to every member of this Beat**,
   including external collaborators — a deliberate disclosure, decided in RM19.
 - **Linked by hand in the Team tab.** Unchanged from today: the dropdown offers
   **only current collaborators** (`TeamTab.tsx:215`), so a hand-made link always
   resolves at once.
 
 While `masterId` is set, `linkedEmail` is **locked locally** — the master owns
-who this is. A Pulse that genuinely needs to disagree detaches (`RM13`), which is
+who this is. A Beat that genuinely needs to disagree detaches (`RM13`), which is
 the escape hatch that already exists.
 
 ### 5.3 Resolution happens on arrival, in two places (RM16)
@@ -182,7 +182,7 @@ usable:
 | Event | Effect |
 | --- | --- |
 | Someone joins the **workspace** | Resolve `linkedUid` on master resources whose `linkedEmail` matches |
-| Someone joins a **Pulse** | Resolve `linkedUid` on that Pulse's resources whose `linkedEmail` matches |
+| Someone joins a **Beats** | Resolve `linkedUid` on that Beat's resources whose `linkedEmail` matches |
 
 The second is what closes the loop for a master copied in ahead of its person:
 the resource sits with an email and no uid until they accept the invitation, and
@@ -195,13 +195,13 @@ single query rather than a member-doc read followed by a `users/{uid}` lookup.
 ### 5.4 Removal clears the resolution, not the intent (RM17)
 
 Today SF7 (`functions/src/cascade.ts:65`) sets `linkedUid: null` when a member is
-removed from a Pulse. That stays — but it now clears **only the uid**. The email
+removed from a Beat. That stays — but it now clears **only the uid**. The email
 survives, so if that person is invited back, §5.3 re-resolves them and the link
 returns.
 
 That makes "unlink" two distinct operations, and they must not be confused:
 
-- **Removed from the Pulse** → clear `linkedUid`, keep `linkedEmail`. A
+- **Removed from the Beat** → clear `linkedUid`, keep `linkedEmail`. A
   membership change is not a statement about who this resource *is*.
 - **The user unlinks deliberately** → clear both. That is a statement.
 
@@ -214,14 +214,14 @@ the same behaviour correct instead of a bug.
 
 Unchanged and load-bearing: **being linked grants nothing.** Access is
 `pulseMembers`, full stop. A resource linked to someone who is not a member is
-inert — they do not see the Pulse, and SF1's `assignedUids` will carry a uid that
+inert — they do not see the Beat, and SF1's `assignedUids` will carry a uid that
 matches no reader, which is harmless and correct.
 
 ### 5.6 Showing which links are live, and which are waiting (RM20)
 
-Inside a Pulse it must be visible **at a glance** which linked people are actually
+Inside a Beat it must be visible **at a glance** which linked people are actually
 collaborators here and which are not — otherwise a roster copied from a master
-looks like a fully staffed team when half of it cannot see the Pulse.
+looks like a fully staffed team when half of it cannot see the Beat.
 
 **No new field is needed, and none should be added.** The distinction is exactly
 the two fields already in §5:
@@ -229,8 +229,8 @@ the two fields already in §5:
 | State | Data | Means |
 | --- | --- | --- |
 | **Not linked** | no `linkedEmail` | a placeholder — a role, a contractor, a name with no account behind it |
-| **Linked, live** | `linkedEmail` + `linkedUid` | a current collaborator on this Pulse |
-| **Linked, waiting** | `linkedEmail`, no `linkedUid` | rostered, but **not a collaborator here** — they cannot see this Pulse |
+| **Linked, live** | `linkedEmail` + `linkedUid` | a current collaborator on this Beat |
+| **Linked, waiting** | `linkedEmail`, no `linkedUid` | rostered, but **not a collaborator here** — they cannot see this Beat |
 
 That mapping is exact rather than approximate, and it stays exact on its own:
 RM16 sets `linkedUid` when someone joins, RM17 clears it when they are removed.
@@ -238,10 +238,10 @@ A stored `isCollaborator` flag would say the same thing while being able to drif
 from it, which is the only way this can go wrong.
 
 **Say what is true, not what is guessed.** "Linked, waiting" has two causes that
-the Pulse genuinely cannot tell apart: the person has an account but was never
+the Beat genuinely cannot tell apart: the person has an account but was never
 invited here (or was removed), or they have no account at all. Distinguishing
-them would mean reading a user document that a Pulse member has no right to read.
-So the label is about *this Pulse* — "not a collaborator on this Pulse", true in
+them would mean reading a user document that a Beat member has no right to read.
+So the label is about *this Beat* — "not a collaborator on this Beat", true in
 both cases and the only part that affects what they can see.
 
 The visible consequence to surface alongside it: a waiting link means **no
@@ -263,48 +263,46 @@ and the wrong one — scoping that in rules is hard to get right and easy to get
 subtly wrong.
 
 Instead: a **server-maintained usage index**,
-`workspaces/{wsId}/resources/{rid}/usage/{pulseId}`, written by a trigger when a
-Pulse resource carrying a `masterId` is created or deleted. Server-owned, so the
+`workspaces/{wsId}/resources/{rid}/usage/{pulseId}`, written by a trigger when a Beat resource carrying a `masterId` is created or deleted. Server-owned, so the
 rule is simply "workspace members may read" — the same shape as SF11's counters.
-Each entry stores the Pulse id and a **denormalized Pulse name**.
+Each entry stores the Beat id and a **denormalized Beat name**.
 
-**The viewer may not have access to every Pulse in that list**, and the answer is
-decided: show the **title and a count** anyway, for Pulses in the same workspace.
+**The viewer may not have access to every Beat in that list**, and the answer is
+decided: show the **title and a count** anyway, for Beats in the same workspace.
 
 That is a real disclosure, recorded as such: any workspace member learns the
-names of Pulses they cannot open, and who is staffed on them. It is accepted
-because the roster and the Pulses belong to the same organisation, and because
+names of Beats they cannot open, and who is staffed on them. It is accepted
+because the roster and the Beats belong to the same organisation, and because
 the intended follow-up — the linked user asking for access (RM14) — needs a name
 to request against. The denormalized name must be refreshed on rename, or the
 view goes quietly stale.
 
 **Assignment counts are computed on demand, not maintained.** "Does Ana have
-tasks in this Pulse" changes on every task edit; maintaining it by trigger is a
+tasks in this Beat" changes on every task edit; maintaining it by trigger is a
 write per edit and makes the resource document a contention point — the same
 trade rejected for `lastActivityAt` in `MCP-Spec.md` MC28. Compute it when the
-resource detail is opened, for the Pulses the viewer can actually read.
+resource detail is opened, for the Beats the viewer can actually read.
 
 ## 7. Rates belong to the person, and still have to be copied (RM8, RM9)
 
 An hourly rate is a property of a human being, not of a project, so the master
-holds it. But it cannot be *read* from the master at Pulse render time, for a
+holds it. But it cannot be *read* from the master at Beat render time, for a
 reason specific to this codebase:
 
 `pulses/{pulseId}/rates/{resourceId}` is gated by
-`isPulseMember(pulseId) && canViewPeopleCost(pulseId)` — a **Pulse-level**
-capability. A Pulse admin who is not a workspace member can read rates in their
-Pulse today and must continue to. Master rates live at
+`isPulseMember(pulseId) && canViewPeopleCost(pulseId)` — a **Beat-level**
+capability. A Beat admin who is not a workspace member can read rates in their Beat today and must continue to. Master rates live at
 `workspaces/{wsId}/resourceRates/{rid}`, readable by workspace **owners** only
 (`WorkspaceRole` is `owner | member`, `src/types/index.ts:76`).
 
-So the rate is copied down like everything else, into the existing per-Pulse
+So the rate is copied down like everything else, into the existing per-Beat
 rates collection, under the rule that already exists. Cost reporting keeps
 working unchanged for everyone who can do it today, including non-workspace
 members.
 
 **Why the copy needs a marker.** A stale rate is not cosmetic like a stale name —
 it produces wrong money, in cost reports and budgets, so propagation matters more
-here than for identity. But a per-Pulse rate is legitimate and common: this
+here than for identity. But a per-Beat rate is legitimate and common: this
 client is billed differently, this engagement was quoted at last year's rate and
 must stay frozen, this project carries a negotiated discount. Which leaves two
 states that are **identical in the data**:
@@ -317,15 +315,15 @@ states that are **identical in the data**:
 Overwrite both and you silently undo a commercial decision; overwrite neither and
 the master is decorative. So:
 
-- **on copy** → the Pulse rate is written `inherited: true`
+- **on copy** → the Beat rate is written `inherited: true`
 - **master rate changes** → the fan-out touches only docs still marked inherited
-- **someone edits the rate in the Pulse** → `inherited` goes false, permanently
+- **someone edits the rate in the Beat** → `inherited` goes false, permanently
 - **"reset to master rate"** → sets it back to true, for the customer who changed
   their mind
 
 This is why rate is a *third* propagation class (§3) rather than being forced
 into one of the other two. Name is always-propagate — nobody has a different name
-per project. Capacity is never-propagate — a different value per Pulse is the
+per project. Capacity is never-propagate — a different value per Beat is the
 normal case. Rate is genuinely in between: usually the same everywhere, so
 propagation is valuable; sometimes deliberately different, so overwriting is
 destructive.
@@ -338,16 +336,16 @@ workspace-member-readable, and Firestore security is per document.
 
 `maxResourcesPerPulse` is 20 / 40 / unlimited by tier
 (`src/domain/entitlements.ts:16`). **It is enforced only in the client. There is
-no rule** — nothing in `firestore.rules` counts resources in a Pulse, so today
+no rule** — nothing in `firestore.rules` counts resources in a Beat, so today
 the cap is a suggestion that any direct write ignores.
 
 That was survivable while resources were typed in one at a time. "Copy this team
-into my Pulse" makes exceeding it a single click, so this has to be closed before
+into my Beat" makes exceeding it a single click, so this has to be closed before
 phase 1 ships, not after.
 
 Note it is already reachable without masters: `duplicatePulse` in *full* mode
 (`src/services/firestore/pulses.ts`) copies every resource from the source, so
-duplicating a 40-resource Pulse into a Starter workspace already creates 40.
+duplicating a 40-resource Beats into a Starter workspace already creates 40.
 Closing this fixes that too.
 
 ### 8.1 The counter
@@ -362,7 +360,7 @@ pattern:
   and never repairs itself. A recount is idempotent and self-healing: whatever
   the stored number was, the next create or delete corrects it.
 - **Server-owned.** `firestore.rules:40` lists `SERVER_COUNTERS()` for the
-  workspace document; the Pulse update rule needs the same treatment for
+  workspace document; the Beat update rule needs the same treatment for
   `resourceCount`. A client that can set its own counter can set it to zero, and
   the gate becomes decoration.
 
@@ -382,18 +380,16 @@ Two things to watch, both cheap to check and expensive to discover late:
 
 - **The `get()` budget.** The resource-create rule already calls
   `canWriteContent(pulseId)`, which reads documents. Adding a quota check means
-  reading the Pulse doc for its `workspaceId` and then `planTierOf(orgId)`, which
+  reading the Beat doc for its `workspaceId` and then `planTierOf(orgId)`, which
   itself does an `exists()` plus up to two `get()`s on `billing/{orgId}`. Rules
   cap document accesses per request. **Measure it in
   `rules/security.test.ts` before assuming it fits.** If it does not, the fallback
   is to denormalize the *limit* (`pulses/{id}.maxResources`) alongside the count,
   reducing the rule to one read — at the cost of refreshing it whenever the plan
   changes.
-- **Absent means zero**, exactly as `pulseCount` does (`firestore.rules:67`). A
-  Pulse that predates the counter reads as 0 and gets a free pass until its first
+- **Absent means zero**, exactly as `pulseCount` does (`firestore.rules:67`). A Beat that predates the counter reads as 0 and gets a free pass until its first
   create or delete triggers a recount. **Backfill it.** SF11's own `pulseCount`
-  backfill was specified and never run; repeating that here means every existing
-  Pulse silently carries no cap until someone touches it.
+  backfill was specified and never run; repeating that here means every existing Beat silently carries no cap until someone touches it.
 
 ### 8.3 The rule alone cannot stop the burst
 
@@ -402,7 +398,7 @@ sufficient.
 
 The counter is written **asynchronously by a trigger**. SF11 accepts the
 consequence explicitly — "a rapid burst of creates can transiently allow one past
-the cap before the counter catches up" — because for Pulse creation a burst is an
+the cap before the counter catches up" — because for Beat creation a burst is an
 edge case.
 
 For "copy this team in", **the burst is the normal path.** A parallel write of
@@ -435,21 +431,21 @@ A new dashboard section is not just a route:
 
 ## 10. MCP surface (RM21)
 
-The roster is the first thing in Pulse that answers a question **across** Pulses,
+The roster is the first thing in Beats that answers a question **across** Beats,
 which is exactly the shape an assistant is good at. Three tools, and they inherit
 their permissions rather than declaring any.
 
 | Tool | Returns | Phase |
 | --- | --- | --- |
 | `search_roster` | the workspace's people: name, type, teams, link state (§5.6), master rate where the caller may see it | 1 |
-| `get_resource_usage` | which Pulses one person is on, and whether they have assignments there (RM7, RM8) | 2 |
+| `get_resource_usage` | which Beats one person is on, and whether they have assignments there (RM7, RM8) | 2 |
 | `list_teams` | teams in the workspace with their sizes | 3 |
 
 **`search_roster` is deliberately not `search_resources`.** The existing tool
-answers "who is on *this Pulse*" and takes a `pulseId`; this one answers "who
+answers "who is on *this Beat*" and takes a `pulseId`; this one answers "who
 does this organisation have". Two tools whose descriptions do not separate
 cleanly is how an assistant picks the wrong one, so the names and descriptions
-have to make the scope obvious — `search_resources` stays Pulse-scoped and
+have to make the scope obvious — `search_resources` stays Beat-scoped and
 unchanged.
 
 **Permissions come for free, and that is the point.** The MCP service reads as
@@ -462,22 +458,22 @@ caller who cannot read them simply gets none — and the result carries the same
 because an absent rate must not read as a free person.
 
 **`get_resource_usage` surfaces RM19's and RM7's disclosure through a new
-channel.** It will name Pulses the caller cannot open. That is the same decision
+channel.** It will name Beats the caller cannot open. That is the same decision
 already taken for the UI, but an assistant *saying* it out loud is more startling
 than seeing it in a list, so the tool description must state plainly that these
-are Pulses the user has no access to — the assistant should explain the boundary,
+are Beats the user has no access to — the assistant should explain the boundary,
 not imply the user can go and look.
 
-**Deliberately not built: cross-Pulse people load.** "Who is over-committed across
+**Deliberately not built: cross-Beat people load.** "Who is over-committed across
 everything" is the most valuable question the roster makes askable, and the most
-expensive: it means reading features from every Pulse a person appears in, N ×
-the per-Pulse cost, against tools already capped at 200 documents (`MC29`'s rate
+expensive: it means reading features from every Beat a person appears in, N ×
+the per-Beat cost, against tools already capped at 200 documents (`MC29`'s rate
 limits exist for exactly this shape of request). The usage index makes it
-*possible* — it says which Pulses to look at — but it should wait for evidence
+*possible* — it says which Beats to look at — but it should wait for evidence
 that people ask for it, and then probably be a purpose-built aggregate rather
 than a fan-out of `get_people_load`.
 
-**Copying a resource into a Pulse is a Phase 2 write tool**, not a read. It is a
+**Copying a resource into a Beat is a Phase 2 write tool**, not a read. It is a
 good first candidate when MCP writes land: bounded, idempotent-ish, and the
 callable already has to exist for the UI (RM15).
 
@@ -494,13 +490,13 @@ Each phase is shippable and leaves the product coherent.
    the rule, because a gate reading a field nothing writes yet is inert and looks
    deployed. The backfill is the reconcile rather than a script — SF11's
    `backfill-pulse-counts.mjs` exists and was never run, and a scheduled job needs
-   no operator and no credentials. **Until its first run, Pulses that predate the
+   no operator and no credentials. **Until its first run, Beats that predate the
    counter read as 0 and stay uncapped** (asserted in `rules/security.test.ts`, so
-   it is a decision on the record rather than a surprise), and any Pulse already
+   it is a decision on the record rather than a surprise), and any Beat already
    over its tier cap will begin refusing new resources once the true count lands.
    The `get()` budget §8.2 warned about was measured, not assumed: 103 rules tests
    pass with the quota check in place.
-1. **Masters + copy into a Pulse**, the bulk path as a callable (RM15), with
+1. **Masters + copy into a Beat**, the bulk path as a callable (RM15), with
    linking by email and the two resolution triggers (RM16). `masterId` and
    `linkedEmail` written from the very first copy, even though nothing propagates
    yet — retrofitting provenance onto copies that already exist means guessing.
@@ -509,7 +505,7 @@ Each phase is shippable and leaves the product coherent.
    `workspaces/{ws}/resources/{rid}/usage/{pulseId}`, read-only to clients, with
    a button on each person card and the `get_resource_usage` MCP tool. RM7's
    disclosure is implemented as decided and stated in both surfaces: inaccessible
-   Pulses are named, marked, and explained rather than hidden or shown as broken
+   Beats are named, marked, and explained rather than hidden or shown as broken
    links.
 3. **Teams**, grouping only.
 4. **Team sharing**, two levels, same workspace.
@@ -524,33 +520,33 @@ Each phase is shippable and leaves the product coherent.
 
 ## Decisions
 
-1. **RM1 — A Pulse holds a copy carrying `masterId`, not a reference → DECIDED.**
-   Pulse access is `isPulseMember` alone (`firestore.rules:273`), independent of
+1. **RM1 — A Beat holds a copy carrying `masterId`, not a reference → DECIDED.**
+   Beats access is `isPulseMember` alone (`firestore.rules:273`), independent of
    workspace membership, so an invited collaborator is routinely not a workspace
    member. A reference model would require them to read
    `workspaces/{wsId}/resources`, guarded by `isWorkspaceMember`
    (`firestore.rules:224`) — which either breaks for them or, if widened, exposes
-   the org's entire roster to anyone invited to one Pulse. *Rejected: (c) assign
-   the master to the Pulse* — that is the reference model, and it fails on the
+   the org's entire roster to anyone invited to one Beat. *Rejected: (c) assign
+   the master to the Beat* — that is the reference model, and it fails on the
    above. *Rejected: (a) copy with no link* — cheap and sync-free, but it makes
    the master a clipboard: RM6 becomes impossible and names drift permanently.
-   The copy is what the Pulse renders from; the pointer is provenance only, never
+   The copy is what the Beat renders from; the pointer is provenance only, never
    dereferenced at read time.
 2. **RM2 — Propagation is per-field, in four classes → DECIDED.** *Always*
    (identity: name, initials, type, avatar, **`linkedEmail`**); *never* (capacity
-   and allocations, which are per-Pulse by nature); *unless overridden* (rate,
+   and allocations, which are per-Beat by nature); *unless overridden* (rate,
    §7); *derived* (**`linkedUid`**, computed locally per §5 and never pushed down
-   — a master's uid would assert a Pulse membership that may not exist).
+   — a master's uid would assert a Beat membership that may not exist).
    *Rejected: propagate everything* — it stomps deliberate local edits with no
    way for the user to see why a value reverted. *Rejected: propagate nothing* —
-   then a rename never reaches the Pulses, which is most of the point. The
+   then a rename never reaches the Beats, which is most of the point. The
    `inherited` marker exists because otherwise "equals the master because it was
    copied" and "typed here on purpose" are indistinguishable. Detaching (clearing
    `masterId`) stops propagation permanently.
-3. **RM3 — Masters are workspace-scoped, and a copy target must be a Pulse in the
+3. **RM3 — Masters are workspace-scoped, and a copy target must be a Beat in the
    same workspace → DECIDED.** The Workspace is the billing org (PL6), so this
    keeps the roster inside one billing and permission boundary, and bounds RM7's
-   disclosure to Pulses the org already owns. *Rejected: cross-workspace copying*
+   disclosure to Beats the org already owns. *Rejected: cross-workspace copying*
    — it crosses a billing boundary and raises "whose seat does this consume",
    which has no cheap answer.
 4. **RM4 — Teams are documents; membership is `teamIds[]` on the resource →
@@ -558,10 +554,10 @@ Each phase is shippable and leaves the product coherent.
    counts are small. *Rejected: a join collection* — more documents and more
    rules for no capability gained at this scale.
 5. **RM5 — Team sharing is two levels (`use`, `manage`), same workspace only →
-   DECIDED.** *Rejected: mirroring the Pulse role/caps model* — it would make team
+   DECIDED.** *Rejected: mirroring the Beat role/caps model* — it would make team
    sharing the product's **third** authorization system after workspace seats and
-   Pulse roles, and every later feature would have to ask which one governs it.
-   The actual requirement is narrow: let someone build Pulses using my team.
+   Beats roles, and every later feature would have to ask which one governs it.
+   The actual requirement is narrow: let someone build Beats using my team.
 6. **RM6 — A link is to an EMAIL; the uid is resolved state → DECIDED (§5).**
    `linkedEmail` is what someone meant; `linkedUid` is what it resolved to once
    that person had an account with access. Normalised with the existing
@@ -575,27 +571,27 @@ Each phase is shippable and leaves the product coherent.
    link would resurrect after being cleared. Splitting intent from resolution
    makes that same behaviour correct rather than a bug, and the conflict
    disappears rather than being worked around.
-7. **RM7 — "Where used" shows the Pulse title and a count even for Pulses the
+7. **RM7 — "Where used" shows the Beat title and a count even for Beats the
    viewer cannot open → DECIDED (product).** Served from a server-maintained
    `usage/{pulseId}` index rather than a collection-group query, which is hard to
    scope safely in rules. **The disclosure is deliberate and worth restating:** any
-   workspace member learns the names of Pulses they cannot open, and who is
-   staffed on them. Accepted because roster and Pulses belong to the same
+   workspace member learns the names of Beats they cannot open, and who is
+   staffed on them. Accepted because roster and Beats belong to the same
    organisation, and because RM14's request-access flow needs a name to request
-   against. Consequence: the denormalized Pulse name must be refreshed on rename
-   or the view goes quietly stale. *Rejected: hiding inaccessible Pulses entirely*
+   against. Consequence: the denormalized Beat name must be refreshed on rename
+   or the view goes quietly stale. *Rejected: hiding inaccessible Beats entirely*
    — safer, but it makes RM6's "where is this person" answer silently incomplete,
    which is worse than a disclosure the org already tolerates internally.
 8. **RM8 — Per-resource assignment counts are computed on demand → DECIDED.**
    Maintaining them by trigger is a write per task edit and makes the resource
    document a contention point — the same trade rejected in `MCP-Spec.md` MC28 for
    `lastActivityAt`, for the same reasons. Computed when the detail view opens,
-   only for Pulses the viewer can read.
+   only for Beats the viewer can read.
 9. **RM9 — Rates belong to the person, and are copied down marked `inherited` →
    DECIDED (product + eng).** The master holds the rate because a rate is a
    property of a human, not a project. It is nonetheless copied into
    `pulses/{id}/rates/{resourceId}` rather than read live, because that collection
-   is gated by `canViewPeopleCost(pulseId)` — a **Pulse** capability — and a Pulse
+   is gated by `canViewPeopleCost(pulseId)` — a **Beats** capability — and a Beat
    admin who is not a workspace member can read rates today and must continue to.
    Master rates live in their own collection
    (`workspaces/{wsId}/resourceRates/{rid}`, workspace owners only), separate from
@@ -604,7 +600,7 @@ Each phase is shippable and leaves the product coherent.
    The copy carries `inherited` because "equals the master because it was copied"
    and "typed here on purpose" are the same bytes, and a stale rate is wrong
    money rather than a wrong label. Master changes refresh only inherited copies;
-   editing a Pulse's rate ends its tracking permanently.
+   editing a Beat's rate ends its tracking permanently.
    *Rejected: resolving the rate server-side per request* — heavier, and it makes
    every cost view depend on a function being up. *Rejected: propagating rates
    unconditionally* — it silently reverses a deliberate commercial decision (a
@@ -612,7 +608,7 @@ Each phase is shippable and leaves the product coherent.
    moved.
 10. **RM10 — `maxResourcesPerPulse` gets a server-owned counter and a rule →
     DECIDED (§8).** It is enforced **only in the client** today
-    (`src/domain/entitlements.ts:16`); no rule counts resources in a Pulse, so any
+    (`src/domain/entitlements.ts:16`); no rule counts resources in a Beat, so any
     direct write ignores it. Already reachable without masters — `duplicatePulse`
     in full mode copies every resource from the source — and a "copy this team in"
     button makes it a single click. `pulses/{id}.resourceCount` on the SF11
@@ -625,8 +621,7 @@ Each phase is shippable and leaves the product coherent.
     self-healing.
     Two traps recorded so they are not rediscovered: the rule must fit inside the
     per-request document-access budget (measure it, or denormalize the limit onto
-    the Pulse instead), and an absent counter reads as **zero**, so every existing
-    Pulse is uncapped until backfilled — SF11's own backfill was specified and
+    the Beat instead), and an absent counter reads as **zero**, so every existing Beat is uncapped until backfilled — SF11's own backfill was specified and
     never run. Deploy order is counter → backfill → rule → UI.
 11. **RM11 — Phase in the order of §11 → DECIDED.** Provenance (`masterId`) is
     written from the first copy even though nothing propagates until phase 5,
@@ -637,9 +632,9 @@ Each phase is shippable and leaves the product coherent.
     nothing.
 
 12. **RM13 — Deleting a master DETACHES its copies; it never deletes them →
-    DECIDED (product).** A Pulse's plan must not lose its people because someone
+    DECIDED (product).** A Beat's plan must not lose its people because someone
     tidied the roster, and a deleted person's past work still has to cost and
-    report correctly. So `masterId` is cleared on every copy and each Pulse is
+    report correctly. So `masterId` is cleared on every copy and each Beat is
     left intact and self-sufficient. Consequence: **`masterId` never dangles**, so
     no reader has to handle a pointer to a missing master.
     **The detach is two documents, not one.** Clearing `masterId` on the resource
@@ -648,7 +643,7 @@ Each phase is shippable and leaves the product coherent.
     from is a dangling reference in the one place where a mistake is denominated
     in currency. So detaching must also clear `inherited` on
     `pulses/{id}/rates/{resourceId}`. The same applies to a manual detach.
-    *Rejected: cascade-deleting the copies* — it destroys plan data in Pulses the
+    *Rejected: cascade-deleting the copies* — it destroys plan data in Beats the
     person deleting the master may not even be able to open. *Rejected: refusing
     to delete a master that is in use* — it makes the roster un-tidyable, and RM7's
     usage index already tells you where it is used if you want to look first.
@@ -657,7 +652,7 @@ Each phase is shippable and leaves the product coherent.
     The counter is written asynchronously, so a parallel write of twenty resources
     has all twenty evaluated against the same stale count and all twenty pass. The
     rule would stop the twenty-*first* copy operation and none of the writes inside
-    it. SF11 accepts that convergence gap for Pulse creation because a burst is an
+    it. SF11 accepts that convergence gap for Beat creation because a burst is an
     edge case there; for "copy this team in" **the burst is the normal path**, so
     the same trade does not carry over. A callable reading the count, checking the
     tier and writing with the Admin SDK is the only place the check and the writes
@@ -666,9 +661,9 @@ Each phase is shippable and leaves the product coherent.
     eventual convergence is the right trade.
 15. **RM16 — Resolution happens on arrival, via two triggers → DECIDED (§5.3).**
     Someone joining the **workspace** resolves `linkedUid` on master resources
-    matching their email; someone joining a **Pulse** resolves it on that Pulse's
+    matching their email; someone joining a **Beats** resolves it on that Beat's
     resources. Both are bounded queries on an email that has just become usable.
-    This is what closes the loop for a master copied into a Pulse ahead of its
+    This is what closes the loop for a master copied into a Beat ahead of its
     person: the resource waits with an email and no uid, and works the moment they
     accept. *Rejected: resolving lazily on read* — every reader would need write
     permission to persist the result, and `assignedUids` (SF1) is derived from the
@@ -693,110 +688,108 @@ Each phase is shippable and leaves the product coherent.
     typos and phantom links that never resolve, whereas a master-derived one has a
     curated roster behind it and a resolution path (RM16) that will complete on
     its own.
-18. **RM19 — A Pulse resource stores the linked email in the clear, including for
+18. **RM19 — A Beat resource stores the linked email in the clear, including for
     someone who is not a collaborator → DECIDED (product).** Required for RM16:
     the address is what resolution matches on when that person later joins.
     **The disclosure is deliberate and stated so nobody discovers it as a
-    surprise:** resource documents are readable by every Pulse member, so copying
-    a master into a Pulse shows staff email addresses to any collaborator on that
-    Pulse — including an external one invited to that project alone. Accepted
-    because a person on a Pulse's roster is part of that project's team, and
+    surprise:** resource documents are readable by every Beat member, so copying
+    a master into a Beat shows staff email addresses to any collaborator on that Beat — including an external one invited to that project alone. Accepted
+    because a person on a Beat's roster is part of that project's team, and
     appearing as such is what the field is for. *Rejected: storing only a hash* —
     it still resolves, but the UI can then never say who a resource is waiting
     for, which turns an unresolved link into an unexplained blank. *Rejected:
     storing the email only once it resolves* — it breaks precisely the case RM16
     exists to serve, a master copied in ahead of its person.
-19. **RM20 — A Pulse distinguishes live links from waiting ones, derived rather
+19. **RM20 — A Beat distinguishes live links from waiting ones, derived rather
     than stored → DECIDED (§5.6).** Three states, read straight off the two fields
     of §5: no `linkedEmail` is a placeholder; `linkedEmail` + `linkedUid` is a
     current collaborator; `linkedEmail` without a uid is rostered but **not a
-    collaborator on this Pulse**. Without the distinction a roster copied from a
-    master looks like a fully staffed team when half of it cannot open the Pulse.
+    collaborator on this Beat**. Without the distinction a roster copied from a
+    master looks like a fully staffed team when half of it cannot open the Beat.
     *Rejected: an `isCollaborator` flag* — it would say the same thing while being
     able to drift from it, and the derivation is already exact and self-maintaining
     (RM16 sets the uid on join, RM17 clears it on removal).
-    The label states what is true of *this Pulse*, not what it guesses about the
+    The label states what is true of *this Beat*, not what it guesses about the
     person: "not a collaborator here" covers both "has an account but was never
-    invited" and "has no account yet", which a Pulse cannot tell apart without
+    invited" and "has no account yet", which a Beat cannot tell apart without
     reading a user document it has no right to read. Surface the consequence too —
     a waiting link means no My-Beat visibility and no notifications, because SF1's
     `assignedUids` has no uid to carry. Offering the invite from that row is the
     natural affordance, and the mirror of RM14.
 20. **RM21 — The roster gets three MCP tools, and they inherit permissions →
     DECIDED (§10).** `search_roster` (phase 1), `get_resource_usage` (phase 2),
-    `list_teams` (phase 3). Named to separate cleanly from the Pulse-scoped
+    `list_teams` (phase 3). Named to separate cleanly from the Beat-scoped
     `search_resources`, because two tools whose descriptions overlap is how an
     assistant picks the wrong one. No new authorization: the service reads as the
     customer, so a non-workspace-member gets a 403 that becomes an empty result,
     and master rates stay behind their own workspace-owner-only collection — with
     the same "empty may mean no access" note the cost tools already carry.
-    `get_resource_usage` will name Pulses the caller cannot open, per RM7; its
+    `get_resource_usage` will name Beats the caller cannot open, per RM7; its
     description must say so, because an assistant stating it aloud is more
-    startling than a list showing it. *Rejected for now: cross-Pulse people load*
+    startling than a list showing it. *Rejected for now: cross-Beat people load*
     — the most valuable question the roster makes askable and the most expensive,
-    N Pulses × the per-Pulse read cost against tools already capped at 200
+    N Beats × the per-Beat read cost against tools already capped at 200
     documents. Wait for evidence of demand, then build a purpose-made aggregate
     rather than fanning out `get_people_load`.
 
 ## Open
 
-- **RM12 — Does the master roster have its own quota?** Per-Pulse caps still
+- **RM12 — Does the master roster have its own quota?** Per-Beat caps still
     apply on copy, so the exposure is storage rather than entitlement.
     *Recommend: no master cap initially*, and revisit if a workspace ever holds an
     unreasonable roster. Tiers differ only by quantity (`Plans-Spec.md` §3), so if
     a cap is added it must be a quantity, not a feature gate.
-- **RM14 — Request access.** A linked user who can see they are staffed on a
-    Pulse they cannot open should be able to ask. Out of scope for phase 1;
+- **RM14 — Request access.** A linked user who can see they are staffed on a Beat they cannot open should be able to ask. Out of scope for phase 1;
     listed because RM7's disclosure was accepted partly on the strength of it, and
     a decision that leans on a future feature should say so.
 22. **RM22 — The org role is a managed vocabulary, owned at workspace level and
-    read-only inside a Pulse → DECIDED.** `type` was free text on the roster and a
-    per-Pulse managed list (`Pulse.resourceTypes`) inside a Pulse, and RM2 put it
+    read-only inside a Beat → DECIDED.** `type` was free text on the roster and a
+    per-Beat managed list (`Pulse.resourceTypes`) inside a Beat, and RM2 put it
     in the always-propagate class. Those three facts could not all hold: the
-    Capacity tab's `renameType` **rewrites `type` on every resource in the Pulse**,
+    Capacity tab's `renameType` **rewrites `type` on every resource in the Beat**,
     so the next propagation would silently undo a rename the customer had just
     made — exactly the "stomps a deliberate local edit with nothing on screen to
     explain it" failure RM2 exists to prevent.
     Resolved by moving ownership up rather than dropping propagation:
-    `Workspace.resourceRoles` is a managed list with the same shape as a Pulse's
-    `resourceTypes`, a roster entry picks its role from it, and the Pulse copy
+    `Workspace.resourceRoles` is a managed list with the same shape as a Beat's
+    `resourceTypes`, a roster entry picks its role from it, and the Beat copy
     shows the role **disabled**, with a title saying where it is managed. The
     rename cascade skips roster-linked resources, because a rename that
     half-applies is worse than one that visibly does not.
     *Rejected: making `type` a copy-time default like capacity* — simpler, and it
     was the recommendation until the vocabulary question surfaced. A role is not
-    per-Pulse the way capacity is: someone is 30% on one project and 100% on
+    per-Beat the way capacity is: someone is 30% on one project and 100% on
     another, but they are a Designer everywhere. Copy-time-only would also have
     left the roster with no vocabulary at all, where "Backend" and "backend" are
     two roles with nothing to reconcile them.
-    *Rejected: seeding the Pulse's `resourceTypes` from the master on copy* —
-    it mixes two vocabularies into one list, so deleting an org role from a Pulse
+    *Rejected: seeding the Beat's `resourceTypes` from the master on copy* —
+    it mixes two vocabularies into one list, so deleting an org role from a Beat
     would look possible and mean nothing.
     Removing a role from the list leaves it on the people who already have it, as
-    the Pulse's own type list already does: the label stops being offered, and
+    the Beat's own type list already does: the label stops being offered, and
     nobody's record is rewritten behind their back.
 23. **RM23 — A person is one colour everywhere.** The roster badge was grey while
-    Pulse badges were coloured by resource id, so the same human was a different
-    colour in each Pulse and grey on the People screen. Both now key on
+    Beats badges were coloured by resource id, so the same human was a different
+    colour in each Beat and grey on the People screen. Both now key on
     `masterId` when there is one, falling back to the local id for a resource
-    typed straight into a Pulse — so someone copied from the roster looks the same
-    in the roster and in every Pulse holding them. Cosmetic, but it is the cheapest
+    typed straight into a Beat — so someone copied from the roster looks the same
+    in the roster and in every Beat holding them. Cosmetic, but it is the cheapest
     signal that two rows are the same person.
 24. **RM24 — `role` and `type` are two fields with two owners → DECIDED.**
-    RM22 propagated the org role into the Pulse's `type`, which meant one field
-    answered two questions: *who is this person* and *how does this Pulse file
-    them*. That forced a read-only `type` in the Pulse, a rename cascade that had
+    RM22 propagated the org role into the Beat's `type`, which meant one field
+    answered two questions: *who is this person* and *how does this Beat file
+    them*. That forced a read-only `type` in the Beat, a rename cascade that had
     to skip roster-linked resources, and a Capacity tab that relabelled the same
     control depending on where someone came from — three workarounds for one
     conflation.
-    Split: **`role` is inherited, always, and read-only in a Pulse. `type` is
+    Split: **`role` is inherited, always, and read-only in a Beat. `type` is
     local, always, and always editable.** Propagation writes `role` and never
     touches `type`; a copy arrives with the org's role and a blank type for
-    whoever is planning to set. Nothing a Pulse owns can be undone by
+    whoever is planning to set. Nothing a Beat owns can be undone by
     propagation, so the rename cascade covers every resource again and the
     exceptions disappear.
     In the UI the two sit where they belong: `role` beside the name, because it is
-    who the person is; `type` in the field list, because it is how this Pulse
+    who the person is; `type` in the field list, because it is how this Beat
     groups them. Both are searchable in both tabs, along with name and email.
     *Rejected: keeping one field* — it is what RM22 tried, and every consequence
     was a special case. *Rejected: renaming the roster's field in place* — entries
@@ -804,7 +797,7 @@ Each phase is shippable and leaves the product coherent.
     `role ?? type` and a self-heal moves it across the first time the People
     screen loads. No migration script, for the reason recorded about SF11's
     backfill: one that has to be remembered does not get run.
-    **Known residue:** Pulse copies made before this split carry the org role in
+    **Known residue:** Beats copies made before this split carry the org role in
     their local `type`. It is harmless — it reads as a local type someone chose —
     and the next master edit propagates the role into its proper field. Clear it
     by hand if it bothers you; there is too little of it to justify a migration.

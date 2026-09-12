@@ -1,4 +1,4 @@
-# Pulse — Server Functions Spec
+# Beats — Server Functions Spec
 
 Status: **Registry — open** · Owner: product + eng · Related: `Permissions-Spec.md`, `Plans-Spec.md`, `Collaboration-Spec.md`, `Changelog-Spec.md`
 
@@ -8,7 +8,7 @@ else in the registry below is still deferred.
 
 ## 0. Purpose
 
-Pulse ships **fully serverless today**: a React client talking directly to Firestore
+Beats ships **fully serverless today**: a React client talking directly to Firestore
 (+ Firebase Auth + Hosting). There are **no Cloud Functions** yet.
 
 This document is the **single registry for every capability that is deferred to
@@ -50,7 +50,7 @@ here (an `SF#`) and references it. See §4 (Adding an entry).
 | **SF7** | Attachment upload/download broker | issues per-file upload sessions; membership-checked downloads | HTTPS (callable) | `Storage-Spec.md` §7, §10 | Deferred (**no client interim possible**) |
 
 > ⚠️ **Numbering conflict — unresolved.** This registry numbers the Storage functions
-> **SF5–SF7**, but `Backend-Architecture-Spec.md` §B numbers **SF6** Pulse-cascade-delete,
+> **SF5–SF7**, but `Backend-Architecture-Spec.md` §B numbers **SF6** Beat-cascade-delete,
 > **SF7** membership-removal, **SF8** resource-delete, **SF9** epic-delete and **SF11**
 > quota counters. **The deployed code follows the architecture spec's numbering** —
 > `functions/src/cascade.ts` exports SF6–SF9 as the delete cascades, and they are live in
@@ -84,8 +84,8 @@ a subtask, or as `lead`) must be recomputed.
    own `resources`, `children[].resources`, and `lead`. (Skip if the write was the
    function's own denorm-only update — compare before/after to avoid loops.)
 2. `pulses/{p}/resources/{r}` — if `linkedUid` changed, **fan out**: find every feature
-   in the Pulse whose `resources`, any `children[].resources`, or `lead` references `r`,
-   and recompute each. (Read the Pulse's features once; batch the updates.)
+   in the Beat whose `resources`, any `children[].resources`, or `lead` references `r`,
+   and recompute each. (Read the Beat's features once; batch the updates.)
 
 **Algorithm (per feature):**
 ```
@@ -141,8 +141,7 @@ webhook, keeping it the single writer. The account-menu "Billing & payment" entr
 the real screen (`BillingDialog.tsx`), not a stub.
 
 **What is NOT yet enforced.** Paid tiers exist and resolve correctly, but the quota gates
-are **client-side only**: `firestore.rules` still has no `editorUids` cap and no
-Pulse/collaborator/resource limits, and **SF11** counters don't exist. Until both land, a
+are **client-side only**: `firestore.rules` still has no `editorUids` cap and no Beat/collaborator/resource limits, and **SF11** counters don't exist. Until both land, a
 determined client can exceed a *commercial* limit — not a security boundary, since the
 plan doc itself remains `write: if false`.
 
@@ -166,7 +165,7 @@ the subscription **item**, not the subscription; and `Invoice.subscription` is n
 `invoice.parent.subscription_details.subscription`.
 
 **PL4 downgrade (Plans-Spec §5.1).** When an org *flips off* a paid plan, SF3 demotes every
-editor/owner across the org's Pulses except `workspace.ownerId` to full viewer and collapses
+editor/owner across the org's Beats except `workspace.ownerId` to full viewer and collapses
 `editorUids` to `[ownerId]`. Nothing is deleted; collaborators are untouched. `past_due`
 does **not** demote — it rides Stripe's dunning, and the client grants a matching **15-day**
 grace window (`DELINQUENCY_GRACE_DAYS`) measured from `pastDueSince`, which SF3 stamps on the
@@ -176,7 +175,7 @@ would mean `active → past_due → canceled` — the usual involuntary-churn pa
 
 **Rules interaction:** `billing/{orgId}` is `read: if isOrgAdmin(orgId); write: if false`
 (admin = an `owner` in that workspace's `WorkspaceMember`); security rules `get()` it
-(bypassing the read rule) to gate Pulse actions on the Pulse's `workspaceId`. See
+(bypassing the read rule) to gate Beats actions on the Beat's `workspaceId`. See
 `Plans-Spec.md` §4–§5.
 
 **Related future functions:** **SF11** quota counters (`workspace.pulseCount`,
@@ -186,7 +185,7 @@ registry here (see the numbering note under §2).
 
 ### SF4 — Change-log authoring (authoritative)
 
-**Owns:** the durable per-Pulse change log `pulses/{p}/activity/{entryId}`
+**Owns:** the durable per-Beat change log `pulses/{p}/activity/{entryId}`
 (`ChangeEntry`, `Changelog-Spec.md` §3). When SF4 ships it is the **only** trusted writer;
 rules reject client-authored (`source:'client'`) creates and the log becomes genuinely
 append-only-by-the-server.
@@ -243,7 +242,7 @@ events never duplicate an entry.
 
 **Why server-side (mandatory):** a refresh token is standing access to a customer's
 entire connected drive. It must never reach the browser and must not be readable through
-Firestore rules by anyone — including the Pulse owner who authorized it. **There is no
+Firestore rules by anyone — including the Beat owner who authorized it. **There is no
 acceptable client interim**: until SF5 ships, BYOS does not exist and attachments remain
 pasted links (`Storage-Spec.md` §1).
 
@@ -261,12 +260,12 @@ flips the connection to `needs-reauth` rather than failing silently.
 ### SF6 — Storage folder-tree reconciler
 
 **Owns:** `pulses/{p}/storageNodes/*` (entity id → provider folder id) and the remote
-folder tree that mirrors the Pulse (`Storage-Spec.md` §5).
+folder tree that mirrors the Beat (`Storage-Spec.md` §5).
 
 **Why server-side (mandatory):** it needs credentials (SF5), and it must keep running
 after the browser tab closes. **No client interim.**
 
-**Trigger:** writes to features / epics / the pulse doc, plus a per-Pulse
+**Trigger:** writes to features / epics / the Beat doc, plus a per-Beat
 `storageJobs/*` queue that coalesces by entity id.
 
 **Design — reconcile, never replay** (§1's "recompute from source"): compute the desired

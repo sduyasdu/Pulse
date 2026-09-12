@@ -1,7 +1,7 @@
-# Pulse — Change-Log / Activity-Log Specification
+# Beats — Change-Log / Activity-Log Specification
 
 Status: **Ready to build — all decisions (CL1–CL12) resolved** ·
-Owner: product + eng · Scope: designs a **durable, shared, per-Pulse activity log**
+Owner: product + eng · Scope: designs a **durable, shared, per-Beat activity log**
 (`pulses/{id}/activity`) — *who changed what, when*. Spec/design only, no application code changes.
 Related: `Collaboration-Spec.md` (§3.6 notifications, **§3.7** which sketched this as
 the `activity` placeholder — this spec supersedes and renames it), `Permissions-Spec.md`
@@ -24,8 +24,8 @@ capture (`src/stores/pulseStore.ts`).
 
 ### 1.1 What a change log is *here*
 
-A **durable, shared, append-only, per-Pulse audit/activity trail** recording, for every
-meaningful change in a Pulse, **who** did it, **what** entity it touched, **what kind of
+A **durable, shared, append-only, per-Beat audit/activity trail** recording, for every
+meaningful change in a Beat, **who** did it, **what** entity it touched, **what kind of
 change** it was, **when**, and a **compact human-readable summary** (plus, for a small
 set of high-value fields, a before→after). It is read by any member (subject to the caps
 model, §5) and surfaces as an "Activity" timeline (§6). It is the answer to "who moved
@@ -33,15 +33,15 @@ this task / changed this status / removed this member, and when?".
 
 ### 1.2 It is distinct from the two existing per-change mechanisms
 
-Pulse already captures per-change information twice. The change log is a **third,
+Beats already captures per-change information twice. The change log is a **third,
 deliberately different** record — the table is load-bearing for the whole design:
 
 | Aspect | **Undo** (`undoStore.ts`) | **Notifications** (`notifications.ts`) | **Change log** (this spec) |
 |---|---|---|---|
 | Durability | Ephemeral (in-memory) | Durable | **Durable** |
-| Scope | Per-user, per-tab | Per-recipient inbox | **Per-Pulse, shared** |
+| Scope | Per-user, per-tab | Per-recipient inbox | **Per-Beat, shared** |
 | Audience | Only the actor | The targeted member(s) | **All members** (caps-scoped) |
-| Lifetime | Until reload / Pulse switch (`MAX_HISTORY=50`) | Until read/deleted | **Retention window** (§7) |
+| Lifetime | Until reload / Beats switch (`MAX_HISTORY=50`) | Until read/deleted | **Retention window** (§7) |
 | Purpose | Reverse *my* last action | Tell *you* something happened | **Record that it happened, for everyone** |
 | Direction | Inverse-command (before *and* after) | Forward event | **Forward, immutable** |
 
@@ -57,8 +57,8 @@ boundary (§4.1) but are three separate stores.
   dates), **not** a diff of every field (`notes` HTML, `x`/`y` pixels, `alloc` maps). No
   "restore to this version" — undo already covers reversal for the actor, and a general
   restore is a much larger feature (CL9).
-- **Not a cross-Pulse / global activity feed.** The log is strictly per-Pulse
-  (`pulses/{id}/activity/**`), mirroring how every other Pulse subcollection is scoped.
+- **Not a cross-Beat / global activity feed.** The log is strictly per-Beat
+  (`pulses/{id}/activity/**`), mirroring how every other Beat subcollection is scoped.
   A workspace-wide "everything across my Teams" roll-up is a possible later feature
   (CL10), out of scope now.
 - **Not a security/compliance-grade tamper-proof audit** in v1. The v1 client-emitted
@@ -135,7 +135,7 @@ intent); the server path (SF4) re-derives it from before/after.
 
 ### 3.1 Collection & document shape
 
-A per-Pulse append-only subcollection, mirroring every other Pulse-scoped collection:
+A per-Beat append-only subcollection, mirroring every other Beat-scoped collection:
 
 ```
 pulses/{pulseId}/activity/{entryId}
@@ -345,7 +345,7 @@ assignedUids" entry. The exclusion is a first-class requirement, not an optimiza
 **Recommendation:** reads gate on `isPulseMember` plus the caller's read scope, exactly
 like `features` do today (`firestore.rules:219-222`). A full-scope member
 (`callerReadScope == 'all'`: owner, editor, Full Viewer, Task Lead) reads the whole log.
-This is one `get()` on the member doc — the same cost as every other Pulse read.
+This is one `get()` on the member doc — the same cost as every other Beat read.
 
 Team-cascade note: once the workspace/Team cascade lands (Collaboration-Spec §3.2), the
 read gate OR-s in `isWorkspaceMember(...)` the same way the other collections will — the
@@ -403,7 +403,7 @@ retention pruning (§7.2) as the actual data-lifetime control. Flagged CL6.
 
 Consistent with the app's existing panels, badges, and avatar/`ResourceBadge` language.
 
-### 6.1 Per-Pulse "Activity" panel
+### 6.1 Per-Beat "Activity" panel
 
 - A new **Activity** tab in the left panel (sibling to Team / Comments tabs), or a header
   "Activity" affordance, showing the reverse-chronological timeline.
@@ -470,8 +470,7 @@ An append-only log grows without bound; it needs a lifetime policy.
   recommended. Resolved (CL6).
 - Retention is **not** the free/paid *read* gate (§5.3) — it's the data-lifetime control.
   The two compose: Free users read a recent window of a 30-day-retained log.
-- **Cost note:** entries are small (§2.3) and low-frequency (one per gesture); even a busy
-  Pulse produces on the order of hundreds/day, well within Firestore economics. No
+- **Cost note:** entries are small (§2.3) and low-frequency (one per gesture); even a busy Beat produces on the order of hundreds/day, well within Firestore economics. No
   counter/quota function is needed (unlike Plans-Spec PL5).
 
 ---
@@ -538,7 +537,7 @@ is additive under `pulses/{id}/activity/**` plus optional `Feature`-adjacent rea
    the per-task Activity section (§6.2) is the only per-task surface.
 9. **CL9 — Restore / time-travel. ✅ RESOLVED: deferred (non-goal).** Undo covers
    actor-side reversal; a general "restore to this entry" is out of scope for now.
-10. **CL10 — Cross-Pulse / workspace roll-up. ✅ RESOLVED: per-Pulse only.** No global
+10. **CL10 — Cross-Beat / workspace roll-up. ✅ RESOLVED: per-Beat only.** No global
     feed this round; revisit with the Teams layer.
 11. **CL11 — Idempotency keys. ✅ RESOLVED (approach):** the client stamps `clientKey`;
     SF4 uses a deterministic `entryId` from the event and replaces matching client drafts.
