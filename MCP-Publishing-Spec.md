@@ -123,13 +123,30 @@ documentation a customer's own Cloud admin follows, not a submission.
 
 Two items, and only one of them is engineering.
 
-1. **MP7 — The privacy policy.** The long pole, and not an engineering task: it
-   is a legal document about **Yasdu Innovación y Servicios SA de CV**
-   (`About-Spec.md`). `MCP-Privacy-Disclosure.md` in this repo records what the
-   connector *actually* does with data — read from the code, not from intent — so
-   whoever drafts the policy is working from facts. It must cover collection,
-   use, storage, third-party sharing, retention and contact, and must be specific
-   about the MCP: an AI assistant is granted read access to customer roadmaps.
+1. **MP7 — The privacy policy. Drafted 2026-09-14, awaiting legal review and
+   publication.** `Privacy-Policy.md` covers collection, use, storage,
+   third-party sharing, retention, rights and contact, with §4 devoted to the
+   connector — that an assistant reads with the user's own credentials and sees
+   nothing more, that the data reaches the vendor's systems and is theirs from
+   then on, and that one person's consent can expose colleagues' names, emails
+   and comments. Its facts come from `MCP-Privacy-Disclosure.md` and the code.
+
+   **What exists today does not close this.** `www.yasdu.com/privacy` serves a
+   PDF dated 24/11/2023, and the page describes it as Y Tools' policy — it
+   predates the connector and names a different product, so it cannot make the
+   MCP-specific statement both directories require.
+
+   Blocking items inside the draft, all marked **[CONFIRM]**: the privacy
+   contact address, the registered postal address, Cloud Logging retention (do
+   not publish a number without checking the project's actual setting), the
+   cross-border transfer mechanism, and the legal review itself.
+
+   **One of them is an engineering dependency, not a drafting one.** The draft
+   says account deletion is handled by request. Automated teardown (SF15) is not
+   built — `Backend-Architecture-Spec.md:42` records the behaviour as "nothing",
+   with `users` delete denied by rule — so until it ships, that sentence is a
+   promise kept by hand. The manual procedure has to exist before the sentence
+   is published, or the policy states something untrue on the first request.
 2. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
    categories, docs URL, support contact, and a **test account with realistic
    sample data** a reviewer can use end to end. The demo account is the item most
