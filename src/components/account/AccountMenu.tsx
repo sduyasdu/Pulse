@@ -8,6 +8,7 @@ import { AccountDialog } from "./AccountDialog";
 import { BillingDialog } from "./BillingDialog";
 import { AboutDialog } from "./AboutDialog";
 import { ConnectedAssistantsDialog } from "./ConnectedAssistantsDialog";
+import { DeleteAccountDialog } from "./DeleteAccountDialog";
 
 /** Avatar button in the dashboard toolbar. Clicking it opens the account menu
  * (My account, the language override, billing later), and "My account" opens
@@ -28,6 +29,7 @@ export function AccountMenu() {
   const [about, setAbout] = useState(false);
   const [assistants, setAssistants] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const name = userDoc?.displayName?.trim() || "";
 
@@ -108,6 +110,9 @@ export function AccountMenu() {
 
             <div className="border-t py-1" style={{ borderColor: "#F1F5F9" }}>
               <MenuItem icon="logout" label={t("account.signOut")} danger onClick={() => { setOpen(false); void signOutUser(); }} />
+              {/* Below Sign out and behind a confirmation, because the two sit
+                  next to each other and only one of them is reversible. */}
+              <MenuItem icon="delete_forever" label={t("account.deleteAccount")} danger onClick={() => { setOpen(false); setDeleting(true); }} />
             </div>
           </div>
         </>
@@ -117,6 +122,7 @@ export function AccountMenu() {
       {billing && <BillingDialog onClose={() => setBilling(false)} />}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
       {assistants && <ConnectedAssistantsDialog onClose={() => setAssistants(false)} />}
+      {deleting && <DeleteAccountDialog email={email} onClose={() => setDeleting(false)} />}
     </div>
   );
 }

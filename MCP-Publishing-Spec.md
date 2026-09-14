@@ -141,12 +141,9 @@ Two items, and only one of them is engineering.
    not publish a number without checking the project's actual setting), the
    cross-border transfer mechanism, and the legal review itself.
 
-   **One of them is an engineering dependency, not a drafting one.** The draft
-   says account deletion is handled by request. Automated teardown (SF15) is not
-   built — `Backend-Architecture-Spec.md:42` records the behaviour as "nothing",
-   with `users` delete denied by rule — so until it ships, that sentence is a
-   promise kept by hand. The manual procedure has to exist before the sentence
-   is published, or the policy states something untrue on the first request.
+   The engineering dependency this once carried is **closed**: SF15 shipped, so
+   the policy describes a self-serve control rather than promising a manual
+   procedure nobody had written.
 2. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
    categories, docs URL, support contact, and a **test account with realistic
    sample data** a reviewer can use end to end. The demo account is the item most

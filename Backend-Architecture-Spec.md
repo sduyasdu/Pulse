@@ -39,7 +39,7 @@ as an interim, and the codebase is honest about it (`// self-heal`, `// interim`
 | `myPulses` self-heal | `DashboardPage.tsx:31`, `PulsePage.tsx:145`, `pulses.removeMyPulseEntry/updateMyPulseRole` | Only the *affected* user's own client can fix their index |
 | Presence GC | `PresenceBar.tsx` client-side stale filter (`STALE_MS=45_000`) + `clearPresence` on unload | Dead tab ⇒ stale doc lingers forever |
 | User provisioning | `authStore.bootstrap` → `users.ensureUserDoc` (creates `users/{uid}` + personal workspace) | Runs only if the client cooperates on first sign-in |
-| Account deletion cleanup | **nothing** (`users` delete rule = `false`) | Orphaned data on account deletion |
+| Account deletion cleanup | **SF15, shipped** — `deleteAccount` callable (`functions/src/account.ts`), reachable from Account → Delete account | — |
 | Billing / plan | **nothing** — account-menu "Billing & payment" is a stub (`AccountMenu.tsx:92`) | Everyone is Free; no paid tier exists |
 | Invite resolution (legacy) | `users.resolvePendingInvites` (being retired, Collaboration-Spec §3.1) | Client-run on each sign-in |
 
@@ -578,6 +578,18 @@ Adopted **unchanged**; normative text in `Server-Functions-Spec.md §3 SF4` and 
 
 #### SF15 — Account deletion cleanup
 
+**Status: shipped 2026-09-14** as a callable pair — `previewAccountDeletion` and `deleteAccount`
+(`functions/src/account.ts`), with the confirmation UI in
+`src/components/account/DeleteAccountDialog.tsx`.
+
+**Departure from the trigger named below, deliberately.** This codebase is entirely 2nd-gen, which
+has no after-delete Auth event — only the blocking before-create/before-sign-in ones. And a trigger
+is the wrong shape regardless: it runs once the identity is already gone, so a failed teardown
+strands the footprint with no signed-in user able to retry. The callable inverts the order — audit,
+then tear down, then delete the identity last — and gives the client the completion signal §D item
+6 asks for. Teardown drives SF6 and SF7 by deleting the documents they watch, rather than
+re-implementing them.
+
 - **Owns/does:** when a user deletes their account, tear down their footprint: delete the Beats
   they solely own (via SF6's cascade), remove their `pulseMembers` docs across all Beats (via
   SF7's cascade per membership), delete their `users/{uid}` subtree (`myPulses`, `notifications`),
@@ -690,10 +702,19 @@ Each carries a **recommended default** so nothing blocks on it.
    entry point for user-initiated teardown (SF6/SF15) so the client gets a completion signal and
    ordering is controlled, **plus** an `onDeleted` backstop so a direct doc delete still triggers
    cleanup. Confirm.
-7. **Sole-owner Beats on account deletion (SF15).** Delete them outright, or block account
-   deletion until ownership is transferred? *Recommend:* on account deletion, **delete** Beats the
-   user solely owns (they're the billing owner and no one else can own them) and cascade; surface a
-   pre-deletion warning listing them. Confirm vs a transfer-first policy.
+7. **Sole-owner Beats on account deletion (SF15). ✅ RESOLVED 2026-09-14 — split by whether
+   anyone else is in the Beat.** The recommendation here was to delete them all and warn; that is
+   right for a Beat the user is alone in, and wrong for one with other members, where it destroys
+   the work of people who never consented and cannot be asked. The shipped rule:
+
+   - **Sole owner, no other members** → deleted with the account. Nobody else is affected.
+   - **Sole owner, other members present** → account deletion **refuses**, naming those Beats and
+     their member counts. Make someone else an owner, or delete the Beat deliberately, then retry.
+
+   It is the same invariant the last-owner guard already enforces (a Beat always keeps an owner),
+   applied one level up, and it leaves the user two existing controls to resolve it with rather
+   than a dead end. *Also refuses on a live subscription* — cancelling a customer's plan on their
+   behalf is a billing decision, and a subscription that outlives the account keeps charging.
 8. **Quota enforcement depth (PL5). → DECIDED: rule-enforced counters (SF11), Option b.**
    SF11 maintains `workspace.pulseCount` / `editorUids[]` / `collaboratorUids[]` /
    `pulse.resourceCount`; rules gate growth against them. Ships **with SF3 in Phase 3**.

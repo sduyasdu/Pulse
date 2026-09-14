@@ -90,3 +90,10 @@ export { onPulseResourceUsage, onPulseRenameSyncUsage } from "./roster";
 // repairing a missed delivery. A maintainer without a way to catch up existing
 // rows is half a feature.
 export { rebuildRosterUsage, reconcileRosterUsage } from "./roster";
+
+// SF15 — self-service account deletion. A callable pair rather than an Auth
+// lifecycle trigger: 2nd-gen has no after-delete event, and a trigger would run
+// once the identity is already gone, leaving a failed teardown with no signed-in
+// user able to retry it. Teardown drives SF6 and SF7 by deleting the documents
+// they watch, instead of copying their logic.
+export { previewAccountDeletion, deleteAccount } from "./account";

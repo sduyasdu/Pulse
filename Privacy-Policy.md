@@ -235,13 +235,20 @@ respond within [CONFIRM — the period your applicable law requires].
 Some of this you can do yourself today: you can edit or delete your content
 directly, and revoke assistant connections from your account settings.
 
-**Account deletion is handled by request rather than by a self-serve control.**
-Write to the address above and we will delete your account and the data
-associated with it. [CONFIRM — this is an operational commitment you must
-actually be able to meet. Automated teardown on account deletion (SF15) is not
-built; `Backend-Architecture-Spec.md:42` records the current behaviour as
-"nothing". Until SF15 ships, honouring this requires a manual procedure, and
-that procedure should exist before this sentence is published.]
+**You can delete your account yourself**, from *Account → Delete account*. The
+screen tells you first what deleting would do — which Beats are destroyed, which
+you are merely removed from — and asks you to type your email address to
+confirm. Deletion removes your profile, the Beats only you hold, your
+memberships, your assistant connections, any pending invitations to you, and
+your personal organisation and its billing record.
+
+Two things stop it, because neither is ours to decide for you:
+
+- **A Beat you alone own that other people are still in.** Deleting your account
+  would take their work with it. Make someone else an owner, or delete the Beat
+  yourself, and then come back.
+- **A live subscription.** Cancel it first, so nothing is charged after the
+  account is gone.
 
 Note that content you contributed to a shared Beat — a comment, an edit in the
 activity log — may remain visible to that Beat's other members after you leave,
