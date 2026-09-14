@@ -340,6 +340,7 @@ export const de: Dict = {
   "del.cta": "Mein Konto l\u00f6schen",
   "del.deleting": "Wird gel\u00f6scht\u2026",
   "del.reauth": "Aus Sicherheitsgr\u00fcnden melde dich neu an und versuch es erneut \u2014 das ist nur direkt nach der Anmeldung erlaubt.",
+  "del.partial": "Das L\u00f6schen ist auf halbem Weg abgebrochen, ein Teil deiner Daten ist also bereits weg. Ein erneuter Versuch ist unbedenklich \u2014 was schon erledigt ist, wird einfach \u00fcbersprungen.",
   "del.failed": "Konto konnte nicht gel\u00f6scht werden. Es wurde nichts weiter entfernt.",
   "account.signOut": "Abmelden",
   "account.language": "Sprache",

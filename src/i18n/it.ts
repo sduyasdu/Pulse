@@ -340,6 +340,7 @@ export const it: Dict = {
   "del.cta": "Elimina il mio account",
   "del.deleting": "Eliminazione\u2026",
   "del.reauth": "Per sicurezza, accedi di nuovo e riprova \u2014 \u00e8 consentito solo subito dopo l'accesso.",
+  "del.partial": "L'eliminazione si \u00e8 fermata a met\u00e0, quindi una parte dei tuoi dati non c'\u00e8 pi\u00f9. Puoi riprovare senza rischi: ci\u00f2 che \u00e8 gi\u00e0 stato fatto viene semplicemente saltato.",
   "del.failed": "Non \u00e8 stato possibile eliminare il tuo account. Non \u00e8 stato rimosso altro.",
   "account.signOut": "Esci",
   "account.language": "Lingua",

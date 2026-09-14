@@ -37,6 +37,7 @@ export type DeleteAccountOutcome =
   | { ok: false; reason: "reauth-required" }
   | { ok: false; reason: "sole-owner-beats"; blockers: DeletionBlocker[] }
   | { ok: false; reason: "active-subscription" }
+  | { ok: false; reason: "partial" }
   | { ok: false; reason: "failed" };
 
 /**
@@ -64,6 +65,7 @@ export async function deleteAccount(): Promise<DeleteAccountOutcome> {
       return { ok: false, reason: "sole-owner-beats", blockers: details?.beats ?? [] };
     }
     if (message.includes("active-subscription")) return { ok: false, reason: "active-subscription" };
+    if (message.includes("partial")) return { ok: false, reason: "partial" };
     return { ok: false, reason: "failed" };
   }
 }

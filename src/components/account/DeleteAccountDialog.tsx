@@ -55,7 +55,10 @@ export function DeleteAccountDialog({ email, onClose }: { email: string; onClose
     setBusy(false);
     if (result.reason === "sole-owner-beats") setBlockers(result.blockers);
     else if (result.reason === "active-subscription") setPreview((p) => (p ? { ...p, canDelete: false } : p));
-    else setError(result.reason === "reauth-required" ? t("del.reauth") : t("del.failed"));
+    else if (result.reason === "reauth-required") setError(t("del.reauth"));
+    // "partial" means the teardown began and stopped. Retrying is safe — every
+    // step is idempotent — and saying so matters more than an apology.
+    else setError(result.reason === "partial" ? t("del.partial") : t("del.failed"));
   };
 
   return (

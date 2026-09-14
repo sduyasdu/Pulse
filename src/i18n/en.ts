@@ -346,6 +346,7 @@ export const en = {
   "del.cta": "Delete my account",
   "del.deleting": "Deleting\u2026",
   "del.reauth": "For your security, sign in again and then retry \u2014 this is only allowed on a fresh sign-in.",
+  "del.partial": "Deleting stopped part-way, so some of your data is already gone. It's safe to try again \u2014 the parts that finished are simply skipped.",
   "del.failed": "Couldn't delete your account. Nothing further was removed.",
   "account.signOut": "Sign out",
   "account.language": "Language",

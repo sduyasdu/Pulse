@@ -340,6 +340,7 @@ export const fr: Dict = {
   "del.cta": "Supprimer mon compte",
   "del.deleting": "Suppression\u2026",
   "del.reauth": "Par s\u00e9curit\u00e9, reconnectez-vous puis r\u00e9essayez \u2014 cela n'est autoris\u00e9 que sur une connexion r\u00e9cente.",
+  "del.partial": "La suppression s'est arr\u00eat\u00e9e en cours de route, une partie de vos donn\u00e9es a donc d\u00e9j\u00e0 disparu. Vous pouvez r\u00e9essayer sans risque : ce qui est d\u00e9j\u00e0 fait est simplement ignor\u00e9.",
   "del.failed": "Impossible de supprimer votre compte. Rien de plus n'a \u00e9t\u00e9 retir\u00e9.",
   "account.signOut": "Se déconnecter",
   "account.language": "Langue",

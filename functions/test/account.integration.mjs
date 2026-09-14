@@ -69,6 +69,51 @@ await beat("b_coowned", "Co-owned", { [ME]: "owner", [OTHER]: "owner" });
   assert(!all.includes("b_ghost"), "stale index row for a deleted Beat is ignored");
 }
 
+// Everything the teardown will delete must be resolved by the audit, not
+// discovered mid-teardown.
+//
+// This is the regression. The `workspaceMembers` collection-group query needs an
+// index, and it used to be issued in the middle of the teardown — so in
+// production it threw *after* Beats had already been deleted, leaving a
+// half-deleted account behind an error that claimed nothing had been removed.
+// The emulator does not enforce indexes, so the failure itself cannot be
+// reproduced here; what is pinned instead is the property that made it
+// survivable: every read happens before the first destructive write.
+{
+  await db.doc("workspaces/ws_me/workspaceMembers/u_me").set({ uid: ME, role: "owner" });
+  await db.doc("workspaces/ws_other/workspaceMembers/u_me").set({ uid: ME, role: "editor" });
+  await db.doc("inviteIndex/me@example.com/pending/b_invited").set({ pulseId: "b_invited" });
+  await db.doc("mcpAuthCodes/hash1").set({ uid: ME });
+  await db.doc("mcpRefreshTokens/hash2").set({ uid: ME });
+  await db.doc("workspaces/ws_me").set({ id: "ws_me", ownerId: ME, isPersonal: true });
+
+  const a = await auditAccountForTest(db, ME);
+  const paths = a.refs.map((r) => r.path).sort();
+  assert(paths.includes("workspaces/ws_me/workspaceMembers/u_me"), "audit resolves the owned org membership");
+  assert(paths.includes("workspaces/ws_other/workspaceMembers/u_me"), "audit resolves a membership in someone else's org");
+  assert(paths.includes("inviteIndex/me@example.com/pending/b_invited"), "audit resolves pending invitations by email");
+  assert(paths.includes("mcpAuthCodes/hash1"), "audit resolves connector auth codes");
+  assert(paths.includes("mcpRefreshTokens/hash2"), "audit resolves connector refresh tokens");
+  assert(a.ownedOrgId === "ws_me", "audit identifies the personal org this user owns");
+}
+
+// The personal org is torn down only when this user actually owns it. An org
+// someone else owns must survive, however the user's profile points at it —
+// deleting it would take a stranger's roster and billing with it.
+//
+// (An earlier version of this case asserted `ownedOrgId !== "ws_other"`, which
+// no mutation could ever falsify: `ownedOrgId` is only ever derived from the
+// user's own `personalWorkspaceId`, so it could not have been "ws_other" under
+// any implementation. It passed, and proved nothing.)
+{
+  await db.doc("workspaces/ws_me").set({ id: "ws_me", ownerId: OTHER, isPersonal: false });
+  const a = await auditAccountForTest(db, ME);
+  assert(a.ownedOrgId === null, "an org owned by someone else is never marked for deletion");
+  await db.doc("workspaces/ws_me").set({ id: "ws_me", ownerId: ME, isPersonal: true });
+  const b = await auditAccountForTest(db, ME);
+  assert(b.ownedOrgId === "ws_me", "the user's own personal org still is");
+}
+
 if (failed) {
   console.error(`\n${failed} assertion(s) FAILED`);
   process.exit(1);

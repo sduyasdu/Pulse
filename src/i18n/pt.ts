@@ -340,6 +340,7 @@ export const pt: Dict = {
   "del.cta": "Excluir minha conta",
   "del.deleting": "Excluindo\u2026",
   "del.reauth": "Por seguran\u00e7a, entre novamente e tente de novo \u2014 isso s\u00f3 \u00e9 permitido logo ap\u00f3s entrar.",
+  "del.partial": "A exclus\u00e3o parou no meio, ent\u00e3o parte dos seus dados j\u00e1 se foi. Pode tentar de novo com seguran\u00e7a \u2014 o que j\u00e1 terminou \u00e9 apenas ignorado.",
   "del.failed": "N\u00e3o foi poss\u00edvel excluir sua conta. Nada mais foi removido.",
   "account.signOut": "Sair",
   "account.language": "Idioma",

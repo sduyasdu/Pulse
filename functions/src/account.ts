@@ -53,6 +53,15 @@ interface Audit {
   blockers: Blocker[];
   /** A live paid subscription. Deletion stops on this too. */
   subscription: { orgId: string; status: string } | null;
+  /** Everything else the teardown deletes, resolved up front. Gathering these
+   * during the audit is not tidiness: the `workspaceMembers` collection-group
+   * query needs an index, and when it was issued mid-teardown its failure
+   * arrived *after* Beats had already been deleted — leaving a half-deleted
+   * account and an error message claiming nothing had been removed. Reads that
+   * can fail belong before the first destructive write. */
+  refs: FirebaseFirestore.DocumentReference[];
+  /** The personal organisation, if this user owns it. */
+  ownedOrgId: string | null;
 }
 
 /**
@@ -63,7 +72,7 @@ interface Audit {
  * half-gone and the user unable to finish or undo.
  */
 async function audit(db: FirebaseFirestore.Firestore, uid: string): Promise<Audit> {
-  const out: Audit = { beatsToDelete: [], beatsToLeave: [], blockers: [], subscription: null };
+  const out: Audit = { beatsToDelete: [], beatsToLeave: [], blockers: [], subscription: null, refs: [], ownedOrgId: null };
 
   // `myPulses` is the user's own index of every Beat they belong to, and the
   // only listable view of it — membership lives inside each Beat, which cannot
@@ -102,6 +111,28 @@ async function audit(db: FirebaseFirestore.Firestore, uid: string): Promise<Audi
     const status = billing.exists ? String(billing.data()?.status ?? "") : "";
     const live = billing.exists && Boolean(billing.data()?.stripeSubscriptionId) && status !== "canceled";
     if (live) out.subscription = { orgId, status };
+    const ws = await db.doc(`workspaces/${orgId}`).get();
+    if (ws.exists && ws.data()?.ownerId === uid) out.ownedOrgId = orgId;
+  }
+
+  // Organisation memberships, wherever they are. Needs the collection-group
+  // index on `workspaceMembers.uid` (firestore.indexes.json).
+  const wsMembers = await db.collectionGroup("workspaceMembers").where("uid", "==", uid).get();
+  for (const d of wsMembers.docs) out.refs.push(d.ref);
+
+  // Invitations addressed to this person but never accepted: keyed by email, so
+  // they outlive the uid unless removed here.
+  const email = emailKey(String(user.data()?.email ?? ""));
+  if (email) {
+    const pending = await db.collection(`inviteIndex/${email}/pending`).get();
+    for (const d of pending.docs) out.refs.push(d.ref);
+  }
+
+  // Connector credentials. Hashes, so nothing here is replayable, but they are
+  // keyed to the uid and go when the account does.
+  for (const c of ["mcpAuthCodes", "mcpRefreshTokens"]) {
+    const snap = await db.collection(c).where("uid", "==", uid).get();
+    for (const d of snap.docs) out.refs.push(d.ref);
   }
   return out;
 }
@@ -152,6 +183,11 @@ export const deleteAccount = onCall(async (request) => {
   }
 
   try {
+    // Everything below is a write. Every read that could fail already ran in
+    // the audit, so reaching this point means the plan is known and the only
+    // remaining failures are write failures — which retry cleanly, because each
+    // step is idempotent.
+
     // 1. Beats the caller solely owns and nobody else is in. Deleting the Beat
     //    document fires SF6, which purges the subtree and every member's index.
     for (const b of a.beatsToDelete) await db.doc(`pulses/${b.beatId}`).delete();
@@ -160,58 +196,31 @@ export const deleteAccount = onCall(async (request) => {
     //    clears their index row, presence, notifications and resource link.
     for (const b of a.beatsToLeave) await db.doc(`pulses/${b.beatId}/pulseMembers/${uid}`).delete();
 
+    // 3. Organisation memberships, pending invitations, connector credentials.
     const writer = db.bulkWriter();
-
-    // 3. Organisation memberships, wherever they are.
-    const wsMembers = await db.collectionGroup("workspaceMembers").where("uid", "==", uid).get();
-    for (const d of wsMembers.docs) writer.delete(d.ref);
-
-    // 4. Invitations addressed to this person but never accepted. Keyed by
-    //    email, so they survive the uid unless removed here.
-    const email = emailKey(String(request.auth?.token?.email ?? ""));
-    let invites = 0;
-    if (email) {
-      const pending = await db.collection(`inviteIndex/${email}/pending`).get();
-      for (const d of pending.docs) writer.delete(d.ref);
-      invites = pending.size;
-    }
-
-    // 5. Connector credentials. Hashes, so nothing here is replayable, but they
-    //    are keyed to the uid and the policy says they go when the account does.
-    const codes = await db.collection("mcpAuthCodes").where("uid", "==", uid).get();
-    for (const d of codes.docs) writer.delete(d.ref);
-    const refresh = await db.collection("mcpRefreshTokens").where("uid", "==", uid).get();
-    for (const d of refresh.docs) writer.delete(d.ref);
-
+    for (const ref of a.refs) writer.delete(ref);
     await writer.close();
 
-    // 6. The personal workspace and its billing record, if this user owns it.
-    //    A shared org they merely belonged to is left alone — step 3 removed
-    //    their membership and the org belongs to someone else.
-    const user = await db.doc(`users/${uid}`).get();
-    const orgId = user.exists ? String(user.data()?.personalWorkspaceId ?? "") : "";
-    if (orgId) {
-      const ws = await db.doc(`workspaces/${orgId}`).get();
-      if (ws.exists && ws.data()?.ownerId === uid) {
-        await db.recursiveDelete(db.doc(`workspaces/${orgId}`));
-        await db.doc(`billing/${orgId}`).delete();
-      }
+    // 4. The personal organisation and its billing record, but only if this
+    //    user owns it. A shared org they merely belonged to is left alone —
+    //    step 3 removed their membership and the org belongs to someone else.
+    if (a.ownedOrgId) {
+      await db.recursiveDelete(db.doc(`workspaces/${a.ownedOrgId}`));
+      await db.doc(`billing/${a.ownedOrgId}`).delete();
     }
 
-    // 7. The user subtree: the Beat index, connector records, the profile.
+    // 5. The user subtree: the Beat index, connector records, the profile.
     await db.recursiveDelete(db.doc(`users/${uid}`));
 
     log(FN, "tore down account footprint", {
       uid,
       beatsDeleted: a.beatsToDelete.length,
       beatsLeft: a.beatsToLeave.length,
-      workspaceMemberships: wsMembers.size,
-      invites,
-      mcpCodes: codes.size,
-      mcpRefreshTokens: refresh.size,
+      otherDocs: a.refs.length,
+      ownedOrg: a.ownedOrgId,
     });
 
-    // 8. The identity, last. Everything above is idempotent, so if this throws
+    // 6. The identity, last. Everything above is idempotent, so if this throws
     //    the user can sign in and retry; the reverse order would strand the
     //    data with nobody able to reach it.
     await getAuth().deleteUser(uid);
@@ -219,12 +228,11 @@ export const deleteAccount = onCall(async (request) => {
     return { deleted: true, beatsDeleted: a.beatsToDelete.length, beatsLeft: a.beatsToLeave.length };
   } catch (err) {
     logError(FN, "account deletion failed", err, { uid });
-    throw new HttpsError("internal", "Couldn't finish deleting your account. Nothing further was removed.");
+    // Deliberately does NOT claim nothing was removed. By this point the plan
+    // has begun, and an earlier version of this message said "nothing further
+    // was removed" while Beats had in fact already been deleted.
+    throw new HttpsError("internal", "partial");
   }
 });
 
-/** The audit, exposed for the integration test. It is the half that decides
- * what gets destroyed, and the half a unit test can reach without an Auth
- * emulator — `deleteAccount` itself ends in `getAuth().deleteUser`, which the
- * test harness (`--only firestore,functions`) has no emulator for. */
 export const auditAccountForTest = audit;
