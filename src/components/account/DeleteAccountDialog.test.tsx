@@ -19,6 +19,13 @@ vi.mock("@/services/firestore/account", () => ({
 }));
 vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, functions: {}, googleProvider: {} }));
 
+const reauth = vi.fn();
+const needsPassword = vi.fn(() => false);
+vi.mock("@/stores/authStore", () => ({
+  useAuthStore: (sel: (s: unknown) => unknown) =>
+    sel({ reauthenticate: (p?: string) => reauth(p), needsPasswordToReauth: needsPassword }),
+}));
+
 const { DeleteAccountDialog } = await import("./DeleteAccountDialog");
 
 const EMAIL = "me@example.com";
@@ -32,7 +39,10 @@ function open(p: Partial<DeletionPreview> = {}) {
 /** The delete button is the last one in the footer. */
 const deleteButton = () => screen.getByRole("button", { name: /Delete my account/i });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  needsPassword.mockReturnValue(false);
+});
 
 describe("before it will delete anything", () => {
   it("waits for the typed address to match", async () => {
@@ -85,13 +95,50 @@ describe("what it tells you will happen", () => {
 });
 
 describe("when the server refuses", () => {
-  it("asks for a fresh sign-in rather than reporting a failure", async () => {
+  /** Gets as far as the server refusing for a stale session. */
+  async function reachReauth() {
     open();
     del.mockResolvedValue({ ok: false, reason: "reauth-required" });
     await waitFor(() => expect(deleteButton()).toBeDisabled());
     fireEvent.change(screen.getByPlaceholderText(EMAIL), { target: { value: EMAIL } });
     fireEvent.click(deleteButton());
-    expect(await screen.findByText(/sign in again/i)).toBeTruthy();
+    return screen.findByRole("button", { name: /Sign in again and delete/i });
+  }
+
+  it("offers a way through the gate instead of sending the user away", async () => {
+    // Signing out and back in would close this dialog and lose everything the
+    // person just read and confirmed, so the proof happens here.
+    expect(await reachReauth()).toBeTruthy();
+  });
+
+  it("retries the deletion itself once identity is proved", async () => {
+    const button = await reachReauth();
+    reauth.mockResolvedValue(true);
+    del.mockResolvedValue({ ok: false, reason: "failed" }); // stop before the redirect
+    fireEvent.click(button);
+    await waitFor(() => expect(reauth).toHaveBeenCalledTimes(1));
+    // Twice: the original attempt, then the retry the user never had to ask for.
+    await waitFor(() => expect(del).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not retry when the proof fails", async () => {
+    const button = await reachReauth();
+    reauth.mockResolvedValue(false);
+    fireEvent.click(button);
+    expect(await screen.findByText(/didn't work/i)).toBeTruthy();
+    expect(del).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks password accounts for a password, and waits for one", async () => {
+    needsPassword.mockReturnValue(true);
+    const button = await reachReauth();
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText(/password/i), { target: { value: "hunter2" } });
+    expect(button).not.toBeDisabled();
+    reauth.mockResolvedValue(true);
+    del.mockResolvedValue({ ok: false, reason: "failed" });
+    fireEvent.click(button);
+    await waitFor(() => expect(reauth).toHaveBeenCalledWith("hunter2"));
   });
 
   it("names the Beats it discovered late, which the preview had not", async () => {

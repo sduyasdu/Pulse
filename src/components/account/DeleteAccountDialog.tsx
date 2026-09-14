@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { Spinner } from "@/components/shared/Spinner";
 import { useT } from "@/i18n";
+import { useAuthStore } from "@/stores/authStore";
 import { previewAccountDeletion, deleteAccount, type DeletionPreview, type DeletionBlocker } from "@/services/firestore/account";
 
 /**
@@ -26,6 +27,14 @@ export function DeleteAccountDialog({ email, onClose }: { email: string; onClose
   /** Set when the server refuses because ownership must move first. Overrides
    * the preview's own list, since it is the fresher of the two. */
   const [blockers, setBlockers] = useState<DeletionBlocker[] | null>(null);
+  /** The server wants a fresher sign-in. Handled here rather than by sending
+   * the user away: signing out and back in would close this dialog and lose
+   * everything they just read and confirmed. */
+  const [needsReauth, setNeedsReauth] = useState(false);
+  const [password, setPassword] = useState("");
+  const [reauthFailed, setReauthFailed] = useState(false);
+  const reauthenticate = useAuthStore((s) => s.reauthenticate);
+  const needsPassword = useAuthStore((s) => s.needsPasswordToReauth)();
 
   useEffect(() => {
     let live = true;
@@ -44,6 +53,7 @@ export function DeleteAccountDialog({ email, onClose }: { email: string; onClose
   const run = async () => {
     setBusy(true);
     setError(null);
+    setReauthFailed(false);
     const result = await deleteAccount();
     if (result.ok) {
       // The account is gone, so there is nothing to sign out of and no state
@@ -55,10 +65,26 @@ export function DeleteAccountDialog({ email, onClose }: { email: string; onClose
     setBusy(false);
     if (result.reason === "sole-owner-beats") setBlockers(result.blockers);
     else if (result.reason === "active-subscription") setPreview((p) => (p ? { ...p, canDelete: false } : p));
-    else if (result.reason === "reauth-required") setError(t("del.reauth"));
+    else if (result.reason === "reauth-required") setNeedsReauth(true);
     // "partial" means the teardown began and stopped. Retrying is safe — every
     // step is idempotent — and saying so matters more than an apology.
     else setError(result.reason === "partial" ? t("del.partial") : t("del.failed"));
+  };
+
+  /** Prove identity, then go straight back to deleting — the person already
+   * confirmed; making them press the red button twice adds nothing. */
+  const proveAndRetry = async () => {
+    setBusy(true);
+    setReauthFailed(false);
+    const ok = await reauthenticate(needsPassword ? password : undefined);
+    if (!ok) {
+      setBusy(false);
+      setReauthFailed(true);
+      return;
+    }
+    setNeedsReauth(false);
+    setPassword("");
+    await run();
   };
 
   return (
@@ -127,7 +153,36 @@ export function DeleteAccountDialog({ email, onClose }: { email: string; onClose
               </div>
             )}
 
-            {!blocked && (
+            {needsReauth && (
+              <div className="mt-4 rounded-xl border p-3" style={{ borderColor: "#F0A875", background: "#FFF7F1" }}>
+                <div className="text-sm font-semibold" style={{ color: "#9A3412" }}>{t("del.reauthTitle")}</div>
+                <p className="mt-1 text-xs leading-relaxed" style={{ color: "#9A3412" }}>{t("del.reauth")}</p>
+                {needsPassword && (
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t("del.password")}
+                    className="mt-2 w-full rounded-lg border px-2.5 py-2 text-sm"
+                    style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", outline: "none" }}
+                  />
+                )}
+                {reauthFailed && (
+                  <p className="mt-2 text-xs font-medium" style={{ color: "#8C2F22" }}>{t("del.reauthFailed")}</p>
+                )}
+                <button
+                  onClick={() => void proveAndRetry()}
+                  disabled={busy || (needsPassword && password.length === 0)}
+                  className="hoverable no-press mt-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:cursor-default disabled:opacity-50"
+                  style={{ background: "#EE7240", color: "#FFFFFF" }}
+                >
+                  {busy ? t("del.deleting") : t("del.reauthCta")}
+                </button>
+              </div>
+            )}
+
+            {!blocked && !needsReauth && (
               <label className="mt-4 block">
                 <span className="text-xs font-medium" style={{ color: "#334155" }}>{t("del.confirm")}</span>
                 <input
@@ -161,7 +216,7 @@ export function DeleteAccountDialog({ email, onClose }: { email: string; onClose
           </button>
           <button
             onClick={() => void run()}
-            disabled={busy || blocked || !confirmed || preview === null}
+            disabled={busy || blocked || needsReauth || !confirmed || preview === null}
             className="hoverable no-press rounded-lg px-3 py-2 text-sm font-semibold disabled:cursor-default disabled:opacity-50"
             style={{ background: "#DC2626", color: "#FFFFFF" }}
           >

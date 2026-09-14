@@ -2,6 +2,9 @@ import { create } from "zustand";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  EmailAuthProvider,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -34,6 +37,13 @@ interface AuthState {
   init: () => () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  /** Proves the person at the keyboard is still the account holder, for an
+   * action gated on a fresh sign-in. Password accounts need the password;
+   * Google accounts re-open the popup. Returns false rather than throwing,
+   * because "wrong password" and "popup dismissed" are both ordinary answers. */
+  reauthenticate: (password?: string) => Promise<boolean>;
+  /** Whether reauthentication will need a password typed in. */
+  needsPasswordToReauth: () => boolean;
   registerWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
   /** Save the current user's profile (name / avatar / language) and update local
    * state. `language: null` clears the override. */
@@ -99,6 +109,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err) {
       set({ error: (err as Error).message });
       throw err;
+    }
+  },
+
+  needsPasswordToReauth: () => !!auth.currentUser?.providerData.some((p) => p.providerId === "password"),
+
+  reauthenticate: async (password) => {
+    const user = auth.currentUser;
+    if (!user) return false;
+    try {
+      if (get().needsPasswordToReauth()) {
+        if (!password || !user.email) return false;
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+      } else {
+        await reauthenticateWithPopup(user, googleProvider);
+      }
+      // Reauthenticating refreshes the session, but a token already minted keeps
+      // its old `auth_time` — and `auth_time` is exactly what the server checks.
+      // Without this force-refresh the retry presents the same stale token and
+      // is refused again, which reads as the button doing nothing.
+      await user.getIdToken(true);
+      return true;
+    } catch {
+      return false;
     }
   },
 
