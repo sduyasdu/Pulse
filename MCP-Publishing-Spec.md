@@ -1,8 +1,10 @@
 # MCP Publishing — getting Beats' connector into the assistant directories
 
 Status: **Researched 2026-08-18; revised 2026-09-12 for the Pulse→Beats rename.
-MP1–MP6 and MP8 decided; MP7 **published 2026-09-15** with presentation
-corrections pending; MP9 open; MP10 decided and now the gating item. Nothing is
+MP1–MP6, MP8 and MP10 decided (MP10 **shipped 2026-09-15** — the connector is
+on beats.yasdu.com); MP7 **published 2026-09-15**, with presentation corrections
+pending and its retention claim confirmed; MP9 is now the only open item, and
+gates every surface; MP11 adds the official MCP registry as a fourth. Nothing is
 listed anywhere yet — `/.well-known/openai-apps` returns 404, so no submission
 has been completed on any surface.** · Owner: product + eng ·
 Related: `MCP-Spec.md` (the server this publishes — MC1–MC28),
@@ -20,7 +22,7 @@ programmes change faster than this file will; **re-read the source docs before
 submitting** rather than trusting the summary below. Every claim here carries its
 source.
 
-## 1. The three surfaces, and how different they are
+## 1. The four surfaces, and how different they are
 
 | | Claude Connectors Directory | ChatGPT (apps as plugins) | Google Gemini |
 | --- | --- | --- | --- |
@@ -35,6 +37,26 @@ source.
 Sources: [Claude submission docs](https://claude.com/docs/connectors/building/submission),
 [OpenAI app submission guidelines](https://developers.openai.com/apps-sdk/app-submission-guidelines),
 [Tallyfy on Gemini routes](https://tallyfy.com/how-to-list-mcp-server-google-gemini/).
+
+### 1.1 The official MCP Registry — a fourth surface, and a different kind
+
+Added 2026-09-15. The three above are **vendor directories**: review queues,
+each with its own bar. `registry.modelcontextprotocol.io` is not one — it is the
+protocol's own registry, community-run under the MCP Registry Working Group,
+holding metadata any client can consume. Several vendor catalogues source from
+it, so it sits upstream of the others rather than competing with them.
+
+| | Official MCP Registry |
+| --- | --- |
+| **Self-serve?** | Yes — `mcp-publisher` CLI, no review queue |
+| **Gate** | Namespace ownership: GitHub OAuth, GitHub OIDC, or a DNS/HTTP challenge |
+| **Manifest** | `server.json` at the repo root — `$schema`, `name`, `version`, `remotes` |
+| **Privacy policy** | Not required |
+| **Status** | **Preview.** API frozen at v0.1 since October 2025, and the project still warns data resets may occur |
+
+Sources: [the registry itself](https://github.com/modelcontextprotocol/registry),
+[remote-server schema](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/remote-servers.mdx).
+The same warning at the top of this file applies: re-read before submitting.
 
 The asymmetry worth internalising: **Claude and ChatGPT are review queues you
 can enter today; Google is not a queue at all.** For Gemini the deliverable is
@@ -209,3 +231,34 @@ visible to every prospective customer rather than to a handful of early users.
 — an issuer is an opaque identifier, not branding — but it means the domain a
 customer grants access to never matches the product they think they are
 granting it to. That is a consent-clarity problem, not an aesthetic one.
+
+
+---
+
+## 6. MP11 — publish to the official registry under a DNS-verified namespace
+
+**Decided 2026-09-15.** `server.json` is written and sits at the repo root,
+declaring `com.yasdu/beats`, `streamable-http` at `https://beats.yasdu.com/mcp`,
+and version 0.8.0.
+
+**The namespace is the decision.** Two are available:
+
+- `io.github.sduyasdu/beats`, proven by signing in as that GitHub user.
+- `com.yasdu/beats`, proven by a DNS or HTTP challenge on `yasdu.com`.
+
+Take the second. We already control that DNS — `beats.yasdu.com` was created
+from it — and the reverse-domain form names the product rather than a personal
+GitHub handle. A registry entry is the first thing a client sees, and
+`io.github.sduyasdu/...` reads as somebody's side project.
+
+*Rejected: publishing before MP9.* The registry asks less than Claude's
+directory does and would accept the entry today, but the demo account and
+listing copy serve every surface, and a thin entry is what gets seen first.
+
+*Accepted risk: it is still preview.* Data resets are possible, so the entry may
+need republishing. `server.json` is committed, so that costs one command.
+
+**`mcpOrigin.test.ts` holds it to the running server** — the published version,
+endpoint and transport must match `SERVER_INFO`, `ISSUER`, and the code that
+negotiates `text/event-stream`. Nothing imports `server.json`, so without that
+test it could drift silently and describe a server that no longer exists.

@@ -16,6 +16,10 @@ import { describe, expect, it } from "vitest";
  */
 const server = readFileSync("functions/src/mcpServer.ts", "utf8");
 const client = readFileSync("src/components/account/ConnectedAssistantsDialog.tsx", "utf8");
+const registry = JSON.parse(readFileSync("server.json", "utf8")) as {
+  version: string;
+  remotes: { type: string; url: string }[];
+};
 
 const hostOf = (url: string) => new URL(url).host;
 
@@ -46,5 +50,40 @@ describe("one origin, named in one place", () => {
       const m = new RegExp(`^const ${line} = \`([^\`]+)\`;$`, "m").exec(server);
       expect(m?.[1], line).toMatch(/^\$\{ISSUER\}/);
     }
+  });
+});
+
+/**
+ * What the registry advertises must match what the server is.
+ *
+ * `server.json` is published to the official MCP registry, where it becomes the
+ * description clients discover before they ever reach the server. A version or
+ * a URL that disagrees with the running code tells a client one thing and the
+ * server another, and nothing in either package would notice — the file is not
+ * imported by anything.
+ */
+describe("the registry entry describes the running server", () => {
+  const info = /const SERVER_INFO = \{ name: "[^"]+", title: "[^"]+", version: "([^"]+)" \}/.exec(server);
+  const issuer = /^const ISSUER = "([^"]+)";$/m.exec(server)?.[1];
+
+  it("finds the server's own declarations", () => {
+    expect(info?.[1], "SERVER_INFO version").toBeDefined();
+    expect(issuer, "ISSUER").toBeDefined();
+  });
+
+  it("publishes the version the server reports", () => {
+    expect(registry.version).toBe(info![1]);
+  });
+
+  it("points at the endpoint on the issuer's host", () => {
+    expect(registry.remotes[0].url).toBe(`${issuer}/mcp`);
+  });
+
+  it("declares streamable-http, which is what the server implements", () => {
+    // It negotiates `text/event-stream` on the POST endpoint. Declaring the
+    // deprecated standalone `sse` transport would describe a server that does
+    // not exist here.
+    expect(registry.remotes[0].type).toBe("streamable-http");
+    expect(server).toMatch(/text\/event-stream/);
   });
 });
