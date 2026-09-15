@@ -156,10 +156,16 @@ Two items, and only one of them is engineering.
    HTML page and is written for whoever maintains yasdu.com rather than for this
    repo.
 
-   **One published claim still needs confirming against infrastructure:** server
-   logs are stated as retained 30 days. `MCP-Privacy-Disclosure.md` §3 warned
-   against publishing that number unchecked — Google's `_Default` bucket is 30
-   days *unless changed*. Confirm the project's actual setting.
+   **Confirmed 2026-09-15:** the 30-day server-log retention the policy
+   publishes matches the project's actual Cloud Logging setting. That was the
+   last unverified claim in it; `MCP-Privacy-Disclosure.md` §3 had specifically
+   warned against publishing the number unchecked.
+
+   Worth knowing for a future revision: Cloud Logging has two buckets, and only
+   one is settable. `_Default` is the 30 days above; `_Required` holds Admin
+   Activity audit logs for **400 days and cannot be shortened**. Those are
+   operator actions rather than customer content, so the policy's flat "server
+   logs — 30 days" is defensible, but it is not the whole picture.
 
 2. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
    categories, docs URL, support contact, and a **test account with realistic
