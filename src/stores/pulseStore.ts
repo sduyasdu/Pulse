@@ -20,6 +20,8 @@ import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
 import { capsOf } from "@/domain/permissions";
 import { useAuthStore } from "@/stores/authStore";
+import { rejectAttachmentUrl } from "@/domain/attachments";
+import type { TranslationKey } from "@/i18n";
 
 /** Options accepted by the recording mutations. Pass { record: false } for
  * intermediate/streamed writes (canvas drags, bulk layout ops) that record a
@@ -47,6 +49,11 @@ interface PulseStoreState {
    * `[]`, so the canvas drew an empty Pulse and said nothing was wrong. Distinct
    * from `notFound`, which is a real answer about a Pulse that isn't there. */
   contentError: string | null;
+  /** The last write that failed, for the UI to surface. Reads have
+   * `contentError`; writes had nothing, so a refused or oversized write
+   * disappeared silently and the change simply never appeared. */
+  writeError: { key: TranslationKey; ts: number } | null;
+  clearWriteError: () => void;
 
   load: (pulseId: string) => () => void;
   roleOf: (uid: string) => PulseRole | null;
@@ -135,6 +142,31 @@ function reconcileCostScopes(get: () => PulseStoreState) {
   }
 }
 
+/**
+ * Runs a write and surfaces its failure.
+ *
+ * Every mutation here awaited its write and did nothing with a rejection, so a
+ * refusal — lost access, an oversized document, a dropped connection — produced
+ * an unhandled rejection and a change that silently never appeared. The same
+ * fault the read paths were swept for (CLAUDE.md, "a swallowed onSnapshot error
+ * looks exactly like an empty collection"), on the other side of the wire.
+ *
+ * Returns false when the write failed, so a caller that can stop does, rather
+ * than recording an undo entry for something that never happened.
+ */
+async function write(
+  set: (partial: { writeError: { key: TranslationKey; ts: number } | null }) => void,
+  op: () => Promise<unknown>,
+): Promise<boolean> {
+  try {
+    await op();
+    return true;
+  } catch {
+    set({ writeError: { key: "write.failed", ts: Date.now() } });
+    return false;
+  }
+}
+
 export const usePulseStore = create<PulseStoreState>((set, get) => ({
   pulseId: null,
   pulse: null,
@@ -147,6 +179,9 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
   loading: true,
   notFound: false,
   contentError: null,
+  writeError: null,
+
+  clearWriteError: () => set({ writeError: null }),
 
   load: (pulseId) => {
     set({ pulseId, loading: true, notFound: false, contentError: null, epics: [], features: [], resources: [], costs: [], rates: [], members: [] });
@@ -356,7 +391,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       y1: y0 + 130,
       ...(span ? { manualMinX: span.minX, manualMaxX: span.maxX } : {}),
     };
-    await createEpic(pulseId, epic);
+    await write(set, () => createEpic(pulseId, epic));
     recordSingle("Add epic", pulseId, createOp("epic", id, asDoc(epic)));
     return id;
   },
@@ -365,7 +400,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, epics } = get();
     if (!pulseId) return;
     const before = epics.find((e) => e.id === epicId);
-    await updateEpic(pulseId, epicId, patch);
+    if (!(await write(set, () => updateEpic(pulseId, epicId, patch)))) return;
     if (opts?.record !== false && before) recordSingle("Edit epic", pulseId, patchOp("epic", epicId, asDoc(before), patch));
   },
 
@@ -402,7 +437,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       ai: false,
       ...patch,
     };
-    await createFeature(pulseId, feature);
+    await write(set, () => createFeature(pulseId, feature));
     recordSingle("Add task", pulseId, createOp("feature", id, asDoc(feature)));
     return id;
   },
@@ -411,7 +446,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, features } = get();
     if (!pulseId) return;
     const before = features.find((f) => f.id === featureId);
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     if (opts?.record !== false && before) recordSingle("Edit task", pulseId, patchOp("feature", featureId, asDoc(before), patch));
   },
 
@@ -428,7 +463,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const nowDone = status === "done";
     if (nowDone && !wasDone) patch.finishedAt = toDateInputValue(todayIndex());
     else if (!nowDone && wasDone) patch.finishedAt = null;
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Change status", pulseId, patchOp("feature", featureId, asDoc(before), patch));
   },
 
@@ -462,7 +497,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     // original. Subtask/attachment ids stay — they only need to be unique
     // within their own feature doc.
     const dup: Feature = { ...src, id, title: `${src.title} (copy)`, y: src.y + 36 };
-    await createFeature(pulseId, dup);
+    await write(set, () => createFeature(pulseId, dup));
     recordSingle("Duplicate task", pulseId, createOp("feature", id, asDoc(dup)));
     return id;
   },
@@ -490,7 +525,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
         patch = { epicId, y: ny };
       }
     }
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     if (before) recordSingle("Move task to epic", pulseId, patchOp("feature", featureId, asDoc(before), patch));
   },
 
@@ -499,7 +534,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (!pulseId) throw new Error("no pulse loaded");
     const id = newResourceId(pulseId);
     const resource: Resource = { id, initials: makeInitials(name, resources), name: name.trim(), capacity: 100, type };
-    await createResource(pulseId, resource);
+    await write(set, () => createResource(pulseId, resource));
     recordSingle("Add resource", pulseId, createOp("resource", id, asDoc(resource)));
     return resource;
   },
@@ -508,7 +543,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, resources } = get();
     if (!pulseId) return;
     const before = resources.find((r) => r.id === resourceId);
-    await updateResource(pulseId, resourceId, patch);
+    if (!(await write(set, () => updateResource(pulseId, resourceId, patch)))) return;
     if (before) recordSingle("Edit resource", pulseId, patchOp("resource", resourceId, asDoc(before), patch));
   },
 
@@ -552,7 +587,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     // Copy name/type/capacity, mint fresh de-duplicated initials, and a new id.
     // linkedUid is deliberately NOT copied — an account link is 1:1.
     const resource: Resource = { id, initials: makeInitials(name, resources), name, capacity: src.capacity, type: src.type };
-    await createResource(pulseId, resource);
+    await write(set, () => createResource(pulseId, resource));
     recordSingle("Duplicate resource", pulseId, createOp("resource", id, asDoc(resource)));
     return resource;
   },
@@ -565,7 +600,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       resources: [...(feature.resources || []), resourceId],
       alloc: { ...(feature.alloc || {}), [resourceId]: 100 },
     };
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Assign resource", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
@@ -582,7 +617,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     // leader was set, which Firestore rejects outright — taking the whole
     // write down with it.
     if (feature.lead === resourceId) patch.lead = null;
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Unassign resource", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
@@ -591,7 +626,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) return;
     const patch: Partial<Feature> = { alloc: { ...(feature.alloc || {}), [resourceId]: pct } };
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Change allocation", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
@@ -602,7 +637,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const id = `st-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const subtask: Subtask = { id, title: "New subtask", status: "planned", resources: [], createdAt: toDateInputValue(todayIndex()) };
     const patch: Partial<Feature> = { collapsed: false, children: [...(feature.children || []), subtask] };
-    await updateFeature(pulseId, featureId, patch);
+    // Reports rather than returns: the signature owes the caller an id, and the
+    // caller uses it to focus the new row. A failed write leaves nothing to
+    // focus, which is harmless — the toast is what carries the news.
+    await write(set, () => updateFeature(pulseId, featureId, patch));
     recordSingle("Add subtask", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
     return id;
   },
@@ -614,7 +652,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const featurePatch: Partial<Feature> = {
       children: (feature.children || []).map((c) => (c.id === subtaskId ? { ...c, ...patch } : c)),
     };
-    await updateFeature(pulseId, featureId, featurePatch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, featurePatch)))) return;
     recordSingle("Edit subtask", pulseId, patchOp("feature", featureId, asDoc(feature), featurePatch));
   },
 
@@ -623,7 +661,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) return;
     const patch: Partial<Feature> = { children: (feature.children || []).filter((c) => c.id !== subtaskId) };
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Remove subtask", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
@@ -637,7 +675,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       return { ...c, resources: has ? c.resources.filter((r) => r !== resourceId) : [...(c.resources || []), resourceId] };
     });
     const patch: Partial<Feature> = { children };
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Edit subtask assignees", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
@@ -649,6 +687,12 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (!raw) return;
     const isData = /^data:/i.test(raw);
     const finalUrl = isData ? raw : /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    // Checked once the scheme is settled, because that is the string stored.
+    const rejection = rejectAttachmentUrl(finalUrl);
+    if (rejection) {
+      set({ writeError: { key: `attach.${rejection}` as TranslationKey, ts: Date.now() } });
+      return;
+    }
     const attachment: Attachment = {
       id: `at-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       title: (title || raw).trim().slice(0, 120),
@@ -656,7 +700,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       isData,
     };
     const patch: Partial<Feature> = { attachments: [...(feature.attachments || []), attachment] };
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Add attachment", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 
@@ -665,7 +709,7 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) return;
     const patch: Partial<Feature> = { attachments: (feature.attachments || []).filter((a) => a.id !== attachmentId) };
-    await updateFeature(pulseId, featureId, patch);
+    if (!(await write(set, () => updateFeature(pulseId, featureId, patch)))) return;
     recordSingle("Remove attachment", pulseId, patchOp("feature", featureId, asDoc(feature), patch));
   },
 

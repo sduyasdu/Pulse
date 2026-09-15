@@ -90,6 +90,8 @@ export function PulsePage() {
   const canUndo = useUndoStore((s) => s.past.length > 0);
   const canRedo = useUndoStore((s) => s.future.length > 0);
   const toast = useUndoStore((s) => s.toast);
+  const writeError = usePulseStore((s) => s.writeError);
+  const clearWriteError = usePulseStore((s) => s.clearWriteError);
 
   useEffect(() => {
     if (!pulseId) return;
@@ -103,6 +105,8 @@ export function PulsePage() {
     return () => resetUndo(null);
   }, [pulseId, resetUndo]);
 
+  // A failed write is dismissed by hand, not on a timer: it is the only sign
+  // the change did not happen, and it must outlast a glance away.
   // Auto-dismiss the undo/redo toast.
   useEffect(() => {
     if (!toast) return;
@@ -787,6 +791,19 @@ export function PulsePage() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg> {t("panel.assignmentByResource")}
           </button>
         ))}
+
+        {writeError && (
+          <div
+            role="alert"
+            style={{ position: "fixed", left: "50%", bottom: 24, transform: "translateX(-50%)", zIndex: 201, background: "#FDECEA", color: "#8C2F22", border: "1px solid #F3C7C1", padding: "10px 14px", borderRadius: 8, fontSize: 12, maxWidth: 420, boxShadow: "0 8px 24px rgba(0,0,0,0.2)", display: "flex", alignItems: "flex-start", gap: 8 }}
+          >
+            <Icon name="warning" size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span style={{ flex: 1 }}>{t(writeError.key)}</span>
+            <button onClick={clearWriteError} className="no-press" aria-label={t("common.close")} style={{ color: "#8C2F22" }}>
+              <Icon name="close" size={13} />
+            </button>
+          </div>
+        )}
 
         {toast && (
           <div
