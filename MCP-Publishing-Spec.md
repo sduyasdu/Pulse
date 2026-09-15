@@ -1,9 +1,10 @@
 # MCP Publishing — getting Beats' connector into the assistant directories
 
 Status: **Researched 2026-08-18; revised 2026-09-12 for the Pulse→Beats rename.
-MP1–MP6 and MP8 decided; MP7 and MP9 open, MP10 decided and now the gating
-item. Nothing is listed anywhere yet — `/.well-known/openai-apps` returns 404,
-so no submission has been completed on any surface.** · Owner: product + eng ·
+MP1–MP6 and MP8 decided; MP7 **published 2026-09-15** with presentation
+corrections pending; MP9 open; MP10 decided and now the gating item. Nothing is
+listed anywhere yet — `/.well-known/openai-apps` returns 404, so no submission
+has been completed on any surface.** · Owner: product + eng ·
 Related: `MCP-Spec.md` (the server this publishes — MC1–MC28),
 `Plans-Spec.md` (MC10's entitlement gate), `About-Spec.md` (the legal entity a
 privacy policy must name)
@@ -52,7 +53,7 @@ documentation a customer's own Cloud admin follows, not a submission.
    Hosting's `ignore: ["**/.*"]` silently drops dot-directories from the deploy,
    which is why OAuth discovery is already served from a function (MCP-Spec §8).
    → MP4.
-4. **No privacy policy at all.** → MP7 (open).
+4. **No privacy policy at all.** → MP7, published 2026-09-15.
 5. **No rate limiting** (MC11), and both vendors review against security
    standards. → MP8, since built as MC29.
 
@@ -123,27 +124,43 @@ documentation a customer's own Cloud admin follows, not a submission.
 
 Two items, and only one of them is engineering.
 
-1. **MP7 — The privacy policy. Drafted 2026-09-14, awaiting legal review and
-   publication.** `Privacy-Policy.md` covers collection, use, storage,
-   third-party sharing, retention, rights and contact, with §4 devoted to the
-   connector — that an assistant reads with the user's own credentials and sees
-   nothing more, that the data reaches the vendor's systems and is theirs from
-   then on, and that one person's consent can expose colleagues' names, emails
-   and comments. Its facts come from `MCP-Privacy-Disclosure.md` and the code.
+1. **MP7 — The privacy policy. PUBLISHED 2026-09-15; corrections pending.**
+   Live at `www.yasdu.com/privacy`, as §4 "Beats" of a Yasdu-wide policy that
+   also covers the website (§2) and Y Tools (§3). It carries everything MP7
+   required: collection, use, storage, third-party sharing, retention, rights
+   and contact (`privacy@yasdu.com`, 10-day response), with a section on the
+   connector that states the two disclosures that matter — an assistant sees
+   exactly what the user sees and nothing more, and one person's consent can
+   expose colleagues' names, emails and comments. The claims verified against
+   the code survived intact, including "within one hour" for revocation rather
+   than "immediately".
 
-   **What exists today does not close this.** `www.yasdu.com/privacy` serves a
-   PDF dated 24/11/2023, and the page describes it as Y Tools' policy — it
-   predates the connector and names a different product, so it cannot make the
-   MCP-specific statement both directories require.
+   **Substantively satisfied; not yet presentable.** Three defects, none of them
+   in the text:
 
-   Blocking items inside the draft, all marked **[CONFIRM]**: the privacy
-   contact address, the registered postal address, Cloud Logging retention (do
-   not publish a number without checking the project's actual setting), the
-   cross-border transfer mechanism, and the legal review itself.
+   - The document reached publication with 19 mis-decoded characters — every
+     em-dash as `‚` or `‚Äî`, `§` as `¬ß` — from a Mac-Roman decoding step in its
+     conversion.
+   - Two sections were both numbered 4.2.5, the retention section had lost its
+     heading marker, and four Beats-wide sections (sharing, storage location,
+     rights, security) were nested under "AI assistant connections", so they
+     read as applying only to AI connections.
+   - The HTML page around the PDF was never updated: its meta description still
+     announces it as Y Tools' policy, and the file is still named
+     `Privacy Policy v2 24112023.pdf` — a 2023 date on a 2026 document.
 
-   The engineering dependency this once carried is **closed**: SF15 shipped, so
-   the policy describes a self-serve control rather than promising a manual
-   procedure nobody had written.
+   The first two are repaired in `Privacy Policy — Yasdu (corrected).md`
+   (word-level diff: 41 changed runs, all characters or numbering, no
+   substantive edit). The third is the subject of
+   `Yasdu-Site-Privacy-Page-Spec.md`, which specifies the policy as a bilingual
+   HTML page and is written for whoever maintains yasdu.com rather than for this
+   repo.
+
+   **One published claim still needs confirming against infrastructure:** server
+   logs are stated as retained 30 days. `MCP-Privacy-Disclosure.md` §3 warned
+   against publishing that number unchecked — Google's `_Default` bucket is 30
+   days *unless changed*. Confirm the project's actual setting.
+
 2. **MP9 — Listing assets.** Icon, tagline (55 chars), description (2,000),
    categories, docs URL, support contact, and a **test account with realistic
    sample data** a reviewer can use end to end. The demo account is the item most
