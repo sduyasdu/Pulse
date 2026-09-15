@@ -26,13 +26,13 @@ import type { McpConnection } from "@/types";
  * The address a customer pastes into their AI app.
  *
  * Hardcoded to the canonical host rather than built from `window.location.origin`,
- * because the OAuth discovery documents name `https://pulse.yasdu.com` as the
+ * because the OAuth discovery documents name `https://beats.yasdu.com` as the
  * issuer. Handing someone a connector URL on a different origin than the issuer
  * is the mixed-origin arrangement that already broke client registration once —
  * and it would break it for the customer, in their app, where the error is
  * unreadable. One origin, stated in one place.
  */
-const MCP_URL = "https://pulse.yasdu.com/mcp";
+const MCP_URL = "https://beats.yasdu.com/mcp";
 export function ConnectedAssistantsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const lang = useI18nStore((s) => s.lang);

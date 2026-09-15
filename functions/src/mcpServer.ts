@@ -1024,7 +1024,7 @@ async function recordToolsVersion(uid: string, connectionId: string): Promise<vo
 export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res) => {
   // Discovery: point an unauthenticated client at where to get a token, in the
   // header OAuth clients look for. Without this they cannot start the flow.
-  const authenticateHeader = `Bearer resource_metadata="https://pulse.yasdu.com/.well-known/oauth-protected-resource"`;
+  const authenticateHeader = `Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource"`;
 
   if (req.method === "GET") {
     // Some clients probe with GET before POSTing. Answer plainly rather than
@@ -1193,7 +1193,22 @@ export const mcp = onRequest({ invoker: "public", cors: true }, async (req, res)
 // client sees a single authorization server and a customer sees only the
 // product's own domain. An issuer whose token endpoint lives somewhere else is
 // an arrangement some clients reject rather than follow.
-const ISSUER = "https://pulse.yasdu.com";
+/**
+ * The one origin this connector speaks from.
+ *
+ * Moved off `pulse.yasdu.com` on 2026-09-15, with the product. Everything below
+ * derives from it, and so does the 401 challenge in `mcp` — the challenge used
+ * to repeat the host as a literal, which is two places to change and one to
+ * forget.
+ *
+ * Existing connections survive the move. An access token is a Firebase ID token
+ * verified by `verifyIdToken`, whose issuer is Google's, and a refresh token is
+ * opaque bytes looked up by SHA-256 hash — neither references this value. And
+ * `pulse.yasdu.com` still serves every endpoint, being the same Hosting site, so
+ * a client holding cached URLs keeps working. What changes is only what
+ * discovery advertises.
+ */
+const ISSUER = "https://beats.yasdu.com";
 const MCP_URL = `${ISSUER}/mcp`;
 const TOKEN_URL = `${ISSUER}/oauth/token`;
 const REGISTER_URL = `${ISSUER}/oauth/register`;
