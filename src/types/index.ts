@@ -268,10 +268,27 @@ export interface Cycle {
   statuses: StatusDef[];
 }
 
+/**
+ * What a status *means*, independent of what a cycle calls it.
+ *
+ * A cycle names its own stages — "Triage", "In review", "Executing" — which is
+ * the point of cycles. But anything that summarises across cycles (the roadmap
+ * report's four buckets, any future rollup) has to know whether "Triage" is
+ * work not started or work underway, and cannot be expected to guess from the
+ * word. So each stage declares it.
+ *
+ * `done` is deliberately absent: it is not a qualification but the terminal
+ * status itself (Cycles-Spec CY5), hard-coded and present in every cycle.
+ */
+export type StatusQualification = "planned" | "stalled" | "ongoing";
+
 export interface StatusDef {
   id: string;
   label: string;
   color: string;
+  /** Which of the three qualifications this stage counts as. Absent on statuses
+   * that predate cycles; `qualificationOf` resolves those. */
+  qualifies?: StatusQualification;
 }
 
 /** Graph Effort scale (spec §4) — user-adjustable per Pulse. */

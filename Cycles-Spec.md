@@ -297,6 +297,50 @@ customer's data.
 identity for every existing Beat. It is the default selection in CY4 for the
 same reason.
 
+## 7.0 What a stage *means*
+
+**CY16 — Every stage carries one of three qualifications; Done is the fourth and
+is not one of them.**
+
+```ts
+type StatusQualification = "planned" | "stalled" | "ongoing";   // 01, 02, 03
+// done is fourth, and is the terminal status itself — not a qualification.
+```
+
+A cycle names its own stages, which is the point of cycles: "Triage", "In
+review", "Executing". But anything summarising *across* cycles has to know
+whether "Triage" is work not started or work underway, and cannot be expected to
+infer it from the word. So each stage declares it, once, where the cycle is
+defined — instead of every consumer guessing.
+
+**This is what §8 question 4 was really asking**, and it was overstated there.
+Nothing inside Beats buckets tasks this way: the board renders one column per
+status, the dashboard card counts tasks not statuses, and the connector's only
+status arithmetic is the subtask `done` count at `functions/src/mcpServer.ts:315`
+— terminality, which was never ambiguous. The one consumer that needs it is the
+plugin's roadmap report, which collapses statuses into Completed / Ongoing /
+Stalled / Planned and, per its own Step 3, *"ask[s] the user how to bucket them
+rather than guessing"* when the vocabulary does not map. With several cycles it
+would ask on every report. Qualifications are what stop it asking.
+
+`qualificationOf(statusId, statuses)` resolves in four steps:
+
+1. The terminal status is always `done`, and that is not overridable.
+2. An explicit `qualifies` wins.
+3. A **built-in id keeps the meaning it has always had** — `planned` → planned,
+   `in-progress` → ongoing, `blocked` → stalled.
+4. Otherwise infer from position: first stage `planned`, anything else
+   `ongoing`.
+
+**Step 3 exists because the prototype caught its absence.** With only steps 2
+and 4, the board rendered Standard's "Blocked" column as ONGOING — because
+that Beat's statuses carry no `qualifies`, which is exactly the state CY11
+leaves every existing Beat in, since migration writes nothing. Without the
+built-in map, every Beat in the product would have silently reported its
+stalled work as underway from the day cycles shipped. A custom stage meaning
+"stalled" still cannot be inferred and must say so, which is why the editor
+asks.
+
 ## 7.1 Board layout across sections
 
 **CY14 — Uniform columns, left-aligned; Done sits in the longest cycle's
@@ -420,7 +464,7 @@ change CY2a exists to forbid.
 
    The canvas and mobile list remain unaffected: they render a status per task,
    not columns.
-4. **Reporting across mixed cycles.** "How many tasks are done" is unambiguous
-   (terminality). "How many are in progress" is not, when one cycle's second
-   status is "In progress" and another's is "In review". Needs a definition
-   before the reports are trusted.
+4. ~~**Reporting across mixed cycles.**~~ **Answered by CY16.** Every stage
+   declares whether it counts as planned, stalled or ongoing, so a summary never
+   has to infer meaning from a label. Terminality already made "how many are
+   done" unambiguous; this does the same for the rest.

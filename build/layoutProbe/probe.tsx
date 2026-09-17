@@ -26,7 +26,7 @@ import { LoginPage } from "@/routes/LoginPage";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { buildCycleBoard } from "@/domain/cycleBoard";
-import { statusMetaOf } from "@/domain/constants";
+import { statusMetaOf, qualificationOf } from "@/domain/constants";
 import type { Cycle, Epic } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { todayIndex } from "@/domain/dateUtils";
@@ -213,17 +213,17 @@ const PROTO_CYCLES: Cycle[] = [
     { id: "blocked", label: "Blocked", color: "#E5484D" }, PROTO_DONE] },
   { id: "rev", name: "Design review", statuses: [
     { id: "planned", label: "Planned", color: "#64748B" },
-    { id: "in-review", label: "In review", color: "#6366F1" }, PROTO_DONE] },
+    { id: "in-review", label: "In review", color: "#6366F1", qualifies: "ongoing" }, PROTO_DONE] },
   { id: "sup", name: "Support", statuses: [
-    { id: "triage", label: "Triage", color: "#EC4899" },
-    { id: "in-progress", label: "Working", color: "#F5A524" }, PROTO_DONE] },
+    { id: "triage", label: "Triage", color: "#EC4899", qualifies: "planned" },
+    { id: "in-progress", label: "Working", color: "#F5A524", qualifies: "ongoing" }, PROTO_DONE] },
   { id: "res", name: "Research", statuses: [
     { id: "planned", label: "Proposed", color: "#64748B" },
     { id: "in-progress", label: "Running", color: "#0EA5E9" }, PROTO_DONE] },
   { id: "ops", name: "Operations", statuses: [
     { id: "planned", label: "Queued", color: "#64748B" },
     { id: "in-progress", label: "Executing", color: "#22C55E" },
-    { id: "blocked", label: "Waiting", color: "#E5484D" }, PROTO_DONE] },
+    { id: "blocked", label: "Waiting", color: "#E5484D", qualifies: "stalled" }, PROTO_DONE] },
 ];
 const PROTO_EPICS: Epic[] = [
   { id: "e1", name: "Billing", color: "#8B5CF6", y0: 0, y1: 100 } as Epic,
@@ -298,6 +298,16 @@ function CycleBoardScene() {
                       <span style={{ width: 8, height: 8, borderRadius: 4, background: meta.border, flexShrink: 0 }} />
                       <span style={{ fontSize: 11, fontWeight: 600, color: "#334155" }}>{col.label}</span>
                       <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{col.count}</span>
+                      <div style={{ flex: 1 }} />
+                      {/* What this stage counts as when something summarises
+                          across cycles. The label is the cycle's; this is the
+                          meaning underneath it. */}
+                      {!terminal && (
+                        <span className="mono" style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.04em",
+                          padding: "1px 4px", borderRadius: 3, background: "#F1F5F9", color: "#94A3B8" }}>
+                          {qualificationOf(col.status, PROTO_CYCLES.find((c) => c.id === section.cycleId)?.statuses ?? [])}
+                        </span>
+                      )}
                     </div>
                     {col.groups.map((g) => (
                       <div key={String(g.epicId)} style={{ marginBottom: 6 }}>

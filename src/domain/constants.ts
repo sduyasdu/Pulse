@@ -1,4 +1,4 @@
-import type { FeatureStatus, StatusDef } from "@/types";
+import type { FeatureStatus, StatusDef, StatusQualification } from "@/types";
 
 // Canvas layout constants — ported 1:1 from the prototype.
 export const BASE_DAY_WIDTH = 26; // px per day at 100% in DAY view
@@ -34,11 +34,63 @@ export const DONE_STATUS_ID = "done";
 
 // The columns a Pulse gets until it customises its statuses (Pulse.statuses).
 export const DEFAULT_STATUSES: StatusDef[] = [
-  { id: "planned", label: "Planned", color: "#64748B" },
-  { id: "in-progress", label: "In progress", color: "#F5A524" },
-  { id: "blocked", label: "Blocked", color: "#E5484D" },
+  { id: "planned", label: "Planned", color: "#64748B", qualifies: "planned" },
+  { id: "in-progress", label: "In progress", color: "#F5A524", qualifies: "ongoing" },
+  { id: "blocked", label: "Blocked", color: "#E5484D", qualifies: "stalled" },
   { id: DONE_STATUS_ID, label: "Done", color: "#12A594" },
 ];
+
+/**
+ * The qualifications a cycle stage may carry, in reporting order. `done` is
+ * fourth and implicit — it is the terminal status, not a qualification
+ * (Cycles-Spec CY5/CY16).
+ */
+export const STATUS_QUALIFICATIONS = [
+  { id: "planned", order: 1, label: "Planned" },
+  { id: "stalled", order: 2, label: "Stalled" },
+  { id: "ongoing", order: 3, label: "Ongoing" },
+] as const;
+
+/** What the statuses that shipped before cycles have always meant. Keyed by the
+ * ids in `DEFAULT_STATUSES`, so a Beat that never customised anything resolves
+ * correctly with no data written (Cycles-Spec CY11). */
+const BUILT_IN_QUALIFICATION: Record<string, StatusQualification> = {
+  planned: "planned",
+  "in-progress": "ongoing",
+  blocked: "stalled",
+};
+
+/** Sort key for a resolved qualification, `done` included. */
+export const QUALIFICATION_ORDER: Record<string, number> = { planned: 1, stalled: 2, ongoing: 3, done: 4 };
+
+/**
+ * What a status counts as, for anything summarising across cycles.
+ *
+ * Resolved in three steps, because a cycle author should not have to qualify
+ * every stage for the common cases to work:
+ *
+ *  1. The terminal status is always `done`. Not overridable.
+ *  2. An explicit `qualifies` wins.
+ *  3. A built-in id keeps the meaning it has always had. This is what makes
+ *     CY11's migration correct: every Beat that predates cycles has statuses
+ *     with no `qualifies`, and without this step its `blocked` tasks would
+ *     resolve to `ongoing` — silently reporting stalled work as underway.
+ *     Found by looking at the prototype, where "Blocked" rendered as ONGOING.
+ *  4. Otherwise infer from position: the first stage is work not yet started,
+ *     so `planned`; anything else is work underway, so `ongoing`. A *custom*
+ *     stage meaning "stalled" cannot be inferred and must say so — which is why
+ *     the editor asks.
+ */
+export function qualificationOf(statusId: FeatureStatus, statuses: StatusDef[]): string {
+  if (statusId === DONE_STATUS_ID) return "done";
+  const i = statuses.findIndex((s) => s.id === statusId);
+  if (i < 0) return "ongoing"; // orphaned status (CY7): it is not done, and it is not nothing
+  const def = statuses[i];
+  if (def.qualifies) return def.qualifies;
+  const builtIn = BUILT_IN_QUALIFICATION[statusId];
+  if (builtIn) return builtIn;
+  return i === 0 ? "planned" : "ongoing";
+}
 
 // Colour palette offered when creating a custom status.
 export const STATUS_COLORS = ["#64748B", "#F5A524", "#E5484D", "#12A594", "#6366F1", "#EC4899", "#0EA5E9", "#8B5CF6", "#22C55E", "#0F766E"];
