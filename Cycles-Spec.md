@@ -92,6 +92,21 @@ task.cycleId  =  epic.cycleId  ??  pulse.defaultCycleId
 `moveFeatureToEpic` (`src/stores/pulseStore.ts:505`) does **not** touch
 `cycleId`. A task carries its workflow with it.
 
+**CY2a — A cycle never changes on its own. It changes when someone changes it.**
+Stated as a rule because it is the property the whole design protects: no drag,
+no epic edit, no template update, and no bulk operation rewrites a task's cycle
+without the person doing it having chosen that specific outcome.
+
+**CY2b — A task's cycle is user-changeable, unless the task is done.** From the
+task's own detail panel, alongside its status. Gated on the task not holding the
+terminal status, for the same reason D6 locks a done task's other fields: its
+workflow is part of the record of how it was completed, and `finishedAt` is
+already stamped. Reopening the task (moving it off `done`) makes the cycle
+editable again.
+
+Changing the cycle keeps the current status if the new cycle defines it, and
+otherwise orphans it per §4 — the user is shown which, before confirming.
+
 *Rejected: resolving the cycle dynamically from the task's current epic.* It is
 less data and needs no migration, and it is wrong: dragging a task between
 epic bands on the canvas would silently change its workflow, and a task in
@@ -104,6 +119,9 @@ already have their own. Silently rewriting them would orphan statuses (§4); not
 offering at all makes a mistake at epic-creation time unfixable. So: a checkbox,
 unchecked, saying how many tasks it would move and how many statuses would be
 remapped.
+
+**Done tasks are excluded from that bulk apply**, per CY2b — the count shown
+says so. A completed task's workflow is history.
 
 **CY4 — A Beat is asked for its cycle at creation, defaulting to the org's
 first.** `CreatePulseDialog` asks only for a name today
@@ -123,38 +141,36 @@ With one status list that works. With several it does not: a support cycle whose
 terminal status is `resolved`, or a design cycle ending in `shipped`, would never
 lock, never stamp `finishedAt`, and never count as complete in a report.
 
-**CY5 — "Terminal" becomes a property of the status, not a magic id.**
+**CY5 — `Done` stays a reserved, hard-coded status, last in every cycle.**
+*(Decided by the product owner 2026-09-17, reversing this spec's first
+recommendation. The earlier draft proposed a `terminal: true` flag; the
+reasoning and its cost are kept below because the trade-off is real and someone
+will revisit it.)*
 
-```ts
-// Before: the identity test is a string compare against a constant.
-const locked = feature.status === DONE_STATUS_ID;
+Every cycle ends with the same built-in `done` status. Cycles differ only in the
+statuses **before** it. `done` cannot be removed, reordered out of last place, or
+duplicated, exactly as `Kanban-Spec.md` D14 already requires — that rule simply
+now applies per cycle rather than per Beat.
 
-// After: it is a question about the task's own cycle.
-const locked = isTerminal(feature, cyclesOf(pulse));
-```
+**What this buys:** the 30 call sites comparing `feature.status` against the
+literal `"done"` keep working, unchanged. `DONE_STATUS_ID` stays meaningful.
+`finishedAt`, the edit lock, the strike-through, the de-emphasised final column,
+the MCP subtask count at `functions/src/mcpServer.ts:312` and the plugin's
+completion bucket all keep their current implementation. This removes what was
+the largest and quietest-breaking work item in the spec.
 
-Every cycle **must** have exactly one `terminal: true` status, enforced in the
-editor and on write. The id may be anything; `done` stops being privileged and
-becomes just the id the default cycles happen to use.
+**What it costs, stated once so it is not rediscovered as a bug:** a cycle
+cannot have a differently-*identified* terminal status. A support workflow
+ending in "Resolved" or a design workflow ending in "Shipped" must store the id
+`done` and relabel it. D14 already permits relabelling a built-in, so the board
+will read "Shipped" — but the stored id remains `done`, and the MCP connector
+publishes ids alongside labels, so an assistant asked about that task reports
+`done`. That is the accepted cost. If it ever bites, the `terminal` flag is the
+way out and this section is the argument for it.
 
-This is the largest work item in the spec and the one that can break shipped
-behaviour quietly — a missed call site does not error, it just stops locking a
-completed task. It therefore ships with a test that enumerates the call sites,
-in the shape of `subscriptionErrors.test.ts`: drive a task to terminal in a
-cycle whose terminal id is **not** `"done"`, and assert the lock, the
-`finishedAt` stamp, the strike-through and the completion count all fire.
-
-*Rejected: requiring every cycle's terminal status to keep the id `done`.* It
-needs no refactor and no migration, and it makes the label a lie — the board
-would show a column called "Shipped" whose stored id is `done`, and the MCP
-connector (§6) publishes ids alongside labels, so an assistant would report
-`done` for a task the customer sees as "Shipped". A reserved id is a shortcut
-that leaks.
-
-**CY6 — A non-terminal status may not be the last in the order.** The terminal
-status is always last. This is already true of `done` and the board relies on
-it; making it a rule rather than an accident keeps the "de-emphasise the final
-column" behaviour meaningful.
+**CY6 — Done is always last; a cycle is defined by the statuses before it.**
+The editor appends `done` to every cycle and refuses to move it. A cycle with
+one status is `Planned → Done`; the minimum is therefore two.
 
 ## 4. When the statuses under a task change
 
@@ -291,11 +307,39 @@ same reason.
    no. Should the manager offer an explicit "save to organisation" for admins, so
    a refinement made in a Beat is not retyped? Likely yes, as a deliberate
    action, never automatic.
-3. **Per-cycle board columns on the Board view.** With several cycles in one
-   Beat, does the board show a union of columns, or group by cycle, or filter to
-   one? This is a genuine UX question and the spec does not settle it — it should
-   be prototyped before the board work is scheduled. The canvas and mobile list
-   are unaffected because they render a status per task, not columns.
+3. **Per-cycle board columns. ✅ DECIDED — group by cycle. Prototyped
+   2026-09-17.** Three arrangements were possible: a **union** of every cycle's
+   columns, a **filter** to one cycle at a time, or **grouping** into one band
+   per cycle. Grouping is the only one where every column means exactly one
+   thing and no task is hidden — a union puts "In progress" beside "In review"
+   as though a task could be in either.
+
+   `src/domain/cycleBoard.ts` builds it; `cycleBoard.test.ts` pins it; the probe
+   scene `cycleBoard` renders it and `.probe-shots/cycleBoard-en-*.png` is what
+   it looks like with three cycles, two epics and ten tasks.
+
+   **The rule that matters most is when it does *not* group.** A Beat with one
+   cycle in use renders exactly as today — no section headers, no visual change
+   — and a Beat that *defines* five cycles but uses one gets no headers either.
+   Grouping appears only when there is something to group.
+
+   **Three things the picture showed that the prose had not:**
+
+   - **The terminal column does not line up.** Done is column 4 in Standard and
+     column 3 in the other two, so the eye cannot scan completion down the page.
+     Since CY5/CY6 make Done always last, the fix is available: pin the terminal
+     column to a fixed offset across sections, or pad shorter cycles. Worth
+     doing — it is the one column every cycle shares.
+   - **Whitespace grows with cycle count.** A three-status cycle uses half the
+     width a four-status one does, and the remainder is empty. Tolerable at
+     three cycles; it is the argument against encouraging many.
+   - **Vertical cost.** Three cycles fill the fold at 900px. Five would mean
+     scrolling to see the board at all, which weakens "what is the state of this
+     Beat at a glance". Collapsible sections, defaulting to open, are the
+     obvious answer and are not yet designed.
+
+   The canvas and mobile list remain unaffected: they render a status per task,
+   not columns.
 4. **Reporting across mixed cycles.** "How many tasks are done" is unambiguous
    (terminality). "How many are in progress" is not, when one cycle's second
    status is "In progress" and another's is "In review". Needs a definition

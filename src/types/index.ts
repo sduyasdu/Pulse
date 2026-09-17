@@ -260,6 +260,14 @@ export interface Pulse {
 
 /** One Kanban/status column. `id` is what Feature.status / Subtask.status
  * reference; `color` drives the badge/column tint (bg/text derived). */
+/** A named workflow: an ordered status list ending in the reserved `done`
+ * (Cycles-Spec CY5/CY6). PROTOTYPE — not yet written by the app. */
+export interface Cycle {
+  id: string;
+  name: string;
+  statuses: StatusDef[];
+}
+
 export interface StatusDef {
   id: string;
   label: string;
@@ -547,6 +555,10 @@ export interface Subtask {
 }
 
 export interface Feature {
+  /** The workflow this task follows, stamped at creation and changed only by a
+   * deliberate act (Cycles-Spec CY2/CY2a). Absent on tasks predating cycles,
+   * which resolve to the Beat's default. PROTOTYPE. */
+  cycleId?: string;
   id: string;
   title: string;
   x: number; // start day, integer offset from epoch

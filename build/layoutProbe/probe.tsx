@@ -25,6 +25,9 @@ import { PulseCard } from "@/components/dashboard/PulseCard";
 import { LoginPage } from "@/routes/LoginPage";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { buildCycleBoard } from "@/domain/cycleBoard";
+import { statusMetaOf } from "@/domain/constants";
+import type { Cycle, Epic } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
 import { todayIndex } from "@/domain/dateUtils";
 import type { Feature, Resource } from "@/types";
@@ -193,6 +196,94 @@ function TeamScene() {
   );
 }
 
+
+/**
+ * PROTOTYPE — the board grouped by cycle (Cycles-Spec §8 q3).
+ *
+ * Renders `buildCycleBoard` output in the board's visual language, so the open
+ * question can be looked at rather than argued about. Deliberately not wired
+ * into KanbanView: the point is to see whether the arrangement reads, before
+ * anyone pays for the integration.
+ */
+const PROTO_DONE = { id: "done", label: "Done", color: "#12A594" };
+const PROTO_CYCLES: Cycle[] = [
+  { id: "std", name: "Standard", statuses: [
+    { id: "planned", label: "Planned", color: "#64748B" },
+    { id: "in-progress", label: "In progress", color: "#F5A524" },
+    { id: "blocked", label: "Blocked", color: "#E5484D" }, PROTO_DONE] },
+  { id: "rev", name: "Design review", statuses: [
+    { id: "planned", label: "Planned", color: "#64748B" },
+    { id: "in-review", label: "In review", color: "#6366F1" }, PROTO_DONE] },
+  { id: "sup", name: "Support", statuses: [
+    { id: "triage", label: "Triage", color: "#EC4899" },
+    { id: "in-progress", label: "Working", color: "#F5A524" }, PROTO_DONE] },
+];
+const PROTO_EPICS: Epic[] = [
+  { id: "e1", name: "Billing", color: "#8B5CF6", y0: 0, y1: 100 } as Epic,
+  { id: "e2", name: "Onboarding", color: "#0EA5E9", y0: 0, y1: 100 } as Epic,
+];
+const protoTask = (id: string, title: string, status: string, cycleId: string, epicId: string, x = 0): Feature =>
+  ({ id, title, status, cycleId, epicId, x, y: 0, duration: 4, work: 1, resources: [], ai: false }) as Feature;
+
+const PROTO_TASKS: Feature[] = [
+  protoTask("t1", "Migrate the rates model", "in-progress", "std", "e1", 1),
+  protoTask("t2", "Invoice PDF layout", "planned", "std", "e1", 2),
+  protoTask("t3", "Dunning emails", "blocked", "std", "e1", 3),
+  protoTask("t4", "Seat counting", "done", "std", "e1", 0),
+  protoTask("t5", "Welcome flow copy", "planned", "std", "e2", 4),
+  protoTask("t6", "Empty-state illustrations", "in-review", "rev", "e2", 1),
+  protoTask("t7", "Pricing page hero", "in-review", "rev", "e1", 2),
+  protoTask("t8", "Icon set audit", "planned", "rev", "e2", 3),
+  protoTask("t9", "Export fails on Safari", "triage", "sup", "e1", 1),
+  protoTask("t10", "Slow board on 500 tasks", "in-progress", "sup", "e2", 2),
+];
+
+function CycleBoardScene() {
+  const board = buildCycleBoard(PROTO_TASKS, PROTO_EPICS, PROTO_CYCLES, false);
+  return (
+    <div style={{ background: "#FDFCF8", minHeight: "100vh", padding: 16 }}>
+      {board.sections.map((section) => (
+        <div key={section.cycleId} style={{ marginBottom: 20 }}>
+          {board.grouped && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 2px 8px" }}>
+              <span className="font-display" style={{ fontSize: 13, fontWeight: 700, color: "#1F2330" }}>{section.name}</span>
+              <span className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>{section.count} tasks</span>
+              <div style={{ flex: 1, height: 1, background: "#E2DFD9" }} />
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            {section.columns.map((col) => {
+              const meta = statusMetaOf(col.status, PROTO_CYCLES.find((c) => c.id === section.cycleId)?.statuses);
+              const terminal = col.status === "done";
+              return (
+                <div key={col.status} style={{ width: 190, flexShrink: 0, borderRadius: 10, border: "1px solid #E2DFD9",
+                  background: terminal ? "#FAFAF8" : "#FFFFFF", opacity: terminal ? 0.75 : 1, padding: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: meta.border, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#334155" }}>{col.label}</span>
+                    <span className="mono" style={{ fontSize: 9, color: "#94A3B8" }}>{col.count}</span>
+                  </div>
+                  {col.groups.map((g) => (
+                    <div key={String(g.epicId)} style={{ marginBottom: 6 }}>
+                      <div className="mono" style={{ fontSize: 9, color: "#94A3B8", padding: "2px 0",
+                        borderLeft: "2px solid " + (g.color ?? "#CBD5E1"), paddingLeft: 5 }}>{g.name}</div>
+                      {g.tasks.map((t) => (
+                        <div key={t.id} style={{ marginTop: 4, padding: "5px 7px", borderRadius: 6, background: meta.bg,
+                          border: "1px solid " + meta.border + "44", fontSize: 11, color: "#1F2330",
+                          textDecoration: terminal ? "line-through" : "none" }}>{t.title}</div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * The notifications bell, open, with an alert and a message.
  *
@@ -228,7 +319,7 @@ function LoginScene() {
   return <LoginPage />;
 }
 
-const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene };
+const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {
