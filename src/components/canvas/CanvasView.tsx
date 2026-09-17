@@ -12,6 +12,7 @@ import { resolveOverlaps } from "@/domain/overlap";
 import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter } from "@/domain/filterFocus";
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
+import { matchesCycleFilter } from "@/domain/cycleBoard";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusesOf, statusMetaOf, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
@@ -122,6 +123,12 @@ interface CanvasViewProps {
   featureQuery: string;
   featureStatusFilter: Set<string>;
   epicFilter: Set<string>;
+  /** Cycles-Spec CY13. Empty = no filter, like every other filter here. */
+  cycleFilter: Set<string>;
+  /** What a task with no `cycleId` counts as (CY11) — every task created before
+   * cycles shipped has none, so without this the filter hides most of an
+   * existing Beat the first time it is used. */
+  defaultCycleId: string;
   /** When true and a filter is active, non-matching tasks are hidden and the
    * matching ones are compacted (view-only); when false, non-matching tasks are
    * just dimmed in place. */
@@ -151,7 +158,7 @@ interface CanvasViewProps {
 type DragKind = "move" | "resize-left" | "resize-right" | "resize-effort";
 
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function CanvasView(
-  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, compactFilter, myResourceIds, alwaysShowIds, alwaysShowEpicIds, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
+  { graph, density, scale, viewZoom, setViewZoom, offsetX, setOffsetX, epicsShrunk, showDelays, selectedId, onSelect, filterResource, featureQuery, featureStatusFilter, epicFilter, cycleFilter, defaultCycleId, compactFilter, myResourceIds, alwaysShowIds, alwaysShowEpicIds, referenceDay, canEdit, canEditFeature, onTimelineBoundsChange },
   ref,
 ) {
   const coarse = useCoarsePointer();
@@ -279,7 +286,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
   // finished months ago rather than to the part of it in flight.
   useEffect(() => {
     const q = featureQuery.trim().toLowerCase();
-    const active = !!q || featureStatusFilter.size > 0 || epicFilter.size > 0;
+    const active = !!q || featureStatusFilter.size > 0 || epicFilter.size > 0 || cycleFilter.size > 0;
     const wasActive = filterWasActive.current;
     filterWasActive.current = active;
 
@@ -307,7 +314,8 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         const matchesQuery = !q || (box.title || "").toLowerCase().includes(q) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(q));
         const matchesStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
         const matchesEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
-        return matchesRes && matchesQuery && matchesStatus && matchesEpic;
+        const matchesCycle = matchesCycleFilter(box, cycleFilter, defaultCycleId);
+        return matchesRes && matchesQuery && matchesStatus && matchesEpic && matchesCycle;
       });
       // Read through the ref rather than `latestViewRef`, which is assigned
       // during render ABOVE where the bands are computed and so cannot carry
@@ -323,7 +331,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       setOffsetX(margin / vz - dw * focus.day);
     }, FILTER_JUMP_MS);
     return () => clearTimeout(handle);
-  }, [featureQuery, featureStatusFilter, epicFilter, setOffsetX]);
+  }, [featureQuery, featureStatusFilter, epicFilter, cycleFilter, defaultCycleId, setOffsetX]);
 
   const weekends = useMemo(() => {
     if (density !== "day") return [];
@@ -340,7 +348,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
    * Extracted because this predicate now decides visibility in three places —
    * the boxes, their plan ghosts, and the autoscroll bounds — and three copies
    * of it is how they end up disagreeing. */
-  const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || !!filterResource || !!myResourceIds;
+  const filterActive = !!qLower || featureStatusFilter.size > 0 || epicFilter.size > 0 || cycleFilter.size > 0 || !!filterResource || !!myResourceIds;
   const matchOf = useCallback(
     (box: Feature) => {
       if (alwaysShowIds?.has(box.id)) return true;
@@ -348,10 +356,11 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       const mQuery = !qLower || (box.title || "").toLowerCase().includes(qLower) || (box.children || []).some((c) => (c.title || "").toLowerCase().includes(qLower));
       const mStatus = featureStatusFilter.size === 0 || featureStatusFilter.has(box.status);
       const mEpic = epicFilter.size === 0 || (box.epicId != null && epicFilter.has(box.epicId));
+      const mCycle = matchesCycleFilter(box, cycleFilter, defaultCycleId);
       const mMine = !myResourceIds || (box.resources || []).some((r) => myResourceIds.includes(r)) || (box.children || []).some((c) => (c.resources || []).some((r) => myResourceIds.includes(r)));
-      return mRes && mQuery && mStatus && mEpic && mMine;
+      return mRes && mQuery && mStatus && mEpic && mCycle && mMine;
     },
-    [filterResource, qLower, featureStatusFilter, epicFilter, myResourceIds, alwaysShowIds],
+    [filterResource, qLower, featureStatusFilter, epicFilter, cycleFilter, defaultCycleId, myResourceIds, alwaysShowIds],
   );
 
   // "Hide + compact" filter mode: keep only matching tasks and repack them

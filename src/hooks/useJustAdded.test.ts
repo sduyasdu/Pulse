@@ -3,7 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { filterSignatureOf, useJustAdded } from "./useJustAdded";
 
 const sig = (over: Partial<Parameters<typeof filterSignatureOf>[0]> = {}) =>
-  filterSignatureOf({ query: "", statuses: new Set(), epics: new Set(), resource: null, mineOnly: false, ...over });
+  filterSignatureOf({ query: "", statuses: new Set(), epics: new Set(), cycles: new Set(), resource: null, mineOnly: false, ...over });
 
 const ids = (s: ReadonlySet<string>) => [...s].sort();
 
@@ -110,6 +110,7 @@ describe("keeping just-added tasks visible", () => {
 describe("filterSignatureOf", () => {
   it("is unchanged when the same statuses arrive in a different order", () => {
     expect(sig({ statuses: new Set(["a", "b"]) })).toBe(sig({ statuses: new Set(["b", "a"]) }));
+    expect(sig({ cycles: new Set(["a", "b"]) })).toBe(sig({ cycles: new Set(["b", "a"]) }));
   });
 
   it("changes when any one filter changes", () => {
@@ -117,6 +118,7 @@ describe("filterSignatureOf", () => {
     expect(sig({ query: "x" })).not.toBe(base);
     expect(sig({ statuses: new Set(["done"]) })).not.toBe(base);
     expect(sig({ epics: new Set(["e1"]) })).not.toBe(base);
+    expect(sig({ cycles: new Set(["rev"]) })).not.toBe(base);
     expect(sig({ resource: "r1" })).not.toBe(base);
     expect(sig({ mineOnly: true })).not.toBe(base);
   });
@@ -129,5 +131,11 @@ describe("filterSignatureOf", () => {
   // them would leave a stale exemption standing.
   it("does not confuse a query with a resource id", () => {
     expect(sig({ query: "r1" })).not.toBe(sig({ resource: "r1" }));
+  });
+
+  // An epic id and a cycle id are both opaque strings in adjacent slots, so
+  // this is the collision the delimiter is actually load-bearing for.
+  it("does not confuse an epic with a cycle of the same id", () => {
+    expect(sig({ epics: new Set(["x"]) })).not.toBe(sig({ cycles: new Set(["x"]) }));
   });
 });

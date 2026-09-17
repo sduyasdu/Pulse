@@ -59,9 +59,23 @@ export function buildCycleBoard(
   epics: Epic[],
   cycles: Cycle[],
   includeEmptyEpics = true,
+  /**
+   * Where a task with no `cycleId` belongs (CY11).
+   *
+   * This must be the Beat's `defaultCycleId`, not `cycles[0]`: `cycleOfTask`
+   * resolves an unstamped task through `defaultCycleId`, so a Beat whose
+   * default is not the first cycle in the list would group its legacy tasks in
+   * one section while rendering their statuses from another. Every task created
+   * before cycles shipped is unstamped, so that is not a corner case — it is
+   * every existing Beat, the moment someone makes a second cycle the default.
+   *
+   * Defaulted rather than required so the many call sites that have exactly one
+   * cycle need not thread it; with one cycle the two agree by definition.
+   */
+  defaultCycleId?: string,
 ): CycleBoard {
   const known = new Map(cycles.map((c) => [c.id, c]));
-  const fallback = cycles[0];
+  const fallback = (defaultCycleId ? cycles.find((c) => c.id === defaultCycleId) : undefined) ?? cycles[0];
   if (!fallback) return { grouped: false, sections: [], slots: 0 };
 
   // Which cycles actually have tasks. A Beat may define five and use two; five

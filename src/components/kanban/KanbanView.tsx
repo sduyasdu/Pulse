@@ -22,6 +22,10 @@ interface KanbanViewProps {
   featureQuery: string;
   featureStatusFilter: Set<string>;
   epicFilter: Set<string>;
+  /** CY13. Owned by PulsePage and shared with the canvas — the chips below are
+   * one of its two controls, not a board-local filter. */
+  cycleFilter: Set<string>;
+  setCycleFilter: (v: Set<string>) => void;
   filterResource: string | null;
   /** Exempt from the filters — every task created since the filter last
    * changed (see PulsePage). The board picks up the column's status and epic on
@@ -36,7 +40,7 @@ interface KanbanViewProps {
   myResourceIds: string[] | null;
 }
 
-export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
+export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, cycleFilter, setCycleFilter, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
   const t = useT();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
@@ -95,12 +99,11 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const filtered = !!q || epicFilter.size > 0 || !!filterResource || !!myResourceIds || datePeriod !== "all";
   const cycles = useMemo(() => cyclesOf(pulse), [pulse]);
   const board = useMemo(
-    () => buildCycleBoard(visibleFeatures, epics, cycles, !filtered),
-    [visibleFeatures, epics, cycles, filtered],
+    () => buildCycleBoard(visibleFeatures, epics, cycles, !filtered, pulse?.defaultCycleId),
+    [visibleFeatures, epics, cycles, filtered, pulse?.defaultCycleId],
   );
   // Chips list only the cycles the board is showing (CY15) — a chip for a cycle
   // with nothing in it filters to an empty board.
-  const [cycleFilter, setCycleFilter] = useState<Set<string>>(new Set());
   const sections = cycleFilter.size === 0 ? board.sections : board.sections.filter((x) => cycleFilter.has(x.cycleId));
 
   const addTask = async (status: FeatureStatus, epicId: string | null = null, cycleId?: string) => {
@@ -170,11 +173,11 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
           {board.sections.map((sec) => {
             const on = cycleFilter.has(sec.cycleId);
             return (
-              <button key={sec.cycleId} onClick={() => setCycleFilter((f) => {
-                const next = new Set(f);
+              <button key={sec.cycleId} onClick={() => {
+                const next = new Set(cycleFilter);
                 if (next.has(sec.cycleId)) next.delete(sec.cycleId); else next.add(sec.cycleId);
-                return next;
-              })}
+                setCycleFilter(next);
+              }}
                 className="hoverable no-press rounded-full px-2.5 py-1 text-[11px] whitespace-nowrap"
                 style={{ border: "1px solid " + (on ? "#EE7240" : "#E2DFD9"), background: on ? "#FFF7F1" : "#FFFFFF",
                   color: on ? "#D85A28" : "#64748B", fontWeight: on ? 600 : 400 }}>

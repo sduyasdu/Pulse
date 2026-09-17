@@ -248,3 +248,40 @@ describe("placing a section's columns in the grid (CY14)", () => {
     expect(placeColumns(board.sections[0].columns, 0).map((p) => p.slot)).toEqual([1, 2, 1]);
   });
 });
+
+describe("where an unstamped task lands (CY11)", () => {
+  // Every task created before cycles shipped has no `cycleId`, so this is the
+  // shape of every existing Beat — not an edge case.
+  const legacy = task("old", "planned", undefined);
+
+  it("follows the Beat's default, not the first cycle in the list", () => {
+    // The Beat's default is Review, which is *second*. `cycleOfTask` resolves
+    // this task's statuses through `defaultCycleId`, so the board must group it
+    // the same way — otherwise the card sits in Standard's section while its
+    // status is read from Review's list.
+    const board = buildCycleBoard([legacy], epics, [standard, review], true, "rev");
+    expect(board.sections.map((x) => x.cycleId)).toEqual(["rev"]);
+  });
+
+  it("falls back to the first cycle when the Beat names no default", () => {
+    const board = buildCycleBoard([legacy], epics, [standard, review]);
+    expect(board.sections.map((x) => x.cycleId)).toEqual(["std"]);
+  });
+
+  it("falls back to the first cycle when the named default is gone", () => {
+    // A default pointing at a deleted cycle would otherwise leave the board
+    // with no fallback at all and drop every unstamped task.
+    const board = buildCycleBoard([legacy], epics, [standard, review], true, "deleted");
+    expect(board.sections.map((x) => x.cycleId)).toEqual(["std"]);
+    expect(board.sections[0].count).toBe(1);
+  });
+
+  it("groups unstamped tasks with ones explicitly stamped to the default", () => {
+    // They resolve to the same cycle, so two sections for one workflow would be
+    // a split that exists only in the data, not in the user's model.
+    const board = buildCycleBoard([legacy, task("new", "planned", "rev")], epics, [standard, review], true, "rev");
+    expect(board.sections).toHaveLength(1);
+    expect(board.sections[0].count).toBe(2);
+    expect(board.grouped).toBe(false);
+  });
+});

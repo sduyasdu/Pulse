@@ -45,6 +45,13 @@ interface ToolbarProps {
   setFeatureStatusFilter: (v: Set<string>) => void;
   epicFilter: Set<string>;
   setEpicFilter: (v: Set<string>) => void;
+  /** Cycles-Spec CY13. Shared with the board, like every other filter here —
+   * a filter that reset itself when you switched view would be the surprise. */
+  cycleFilter: Set<string>;
+  setCycleFilter: (v: Set<string>) => void;
+  /** Empty or single-entry when the Beat has one workflow; the control hides
+   * itself then, so the majority of Beats see no new toolbar item. */
+  cycleOptions: Option[];
   compactFilter: boolean;
   onToggleCompactFilter: () => void;
   myPulse: boolean;
@@ -103,6 +110,9 @@ export function Toolbar({
   setFeatureStatusFilter,
   epicFilter,
   setEpicFilter,
+  cycleFilter,
+  setCycleFilter,
+  cycleOptions,
   compactFilter,
   onToggleCompactFilter,
   myPulse,
@@ -379,12 +389,28 @@ export function Toolbar({
             selected={epicFilter}
             onChange={setEpicFilter}
           />
-          {(featureQuery || featureStatusFilter.size > 0 || epicFilter.size > 0) && (
+          {/* CY13: only once the Beat has more than one workflow. One cycle
+              means every task matches, so the control could only ever filter
+              to everything or to nothing. */}
+          {cycleOptions.length > 1 && (
+            <MultiSelectFilter
+              label={t("cycle.title")}
+              dark
+              options={cycleOptions}
+              selected={cycleFilter}
+              onChange={setCycleFilter}
+            />
+          )}
+          {/* The cycle filter joins this condition AND the handler. A filter
+              the clear button neither reveals itself for nor clears is one the
+              user cannot get out of from here. */}
+          {(featureQuery || featureStatusFilter.size > 0 || epicFilter.size > 0 || cycleFilter.size > 0) && (
             <button
               onClick={() => {
                 setFeatureQuery("");
                 setFeatureStatusFilter(new Set());
                 setEpicFilter(new Set());
+                setCycleFilter(new Set());
               }}
               title={t("toolbar.clearFeatureFilter")}
             >

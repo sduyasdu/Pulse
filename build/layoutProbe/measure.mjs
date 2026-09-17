@@ -407,7 +407,7 @@ const rows = [];
 for (const scene of SCENES) {
   for (const lang of LANGS) {
     for (const name of NAMES) {
-      for (const width of WIDTHS) {
+      for (const width of widthsFor(scene)) {
         const m = await at(width, async () => {
           await evaluate(`window.__probe.show(${JSON.stringify(scene)}, ${JSON.stringify(lang)}, ${JSON.stringify(NAME_VALUES[name])})`);
           // One frame for React to commit and Chrome to lay out.
@@ -424,6 +424,15 @@ for (const scene of SCENES) {
           console.error("Every measurement would be against the wrong window; refusing to report.");
           process.exit(2);
         }
+        // A scene that throws during render leaves an empty body, and an empty
+        // body fits every window. That is the probe's own version of the bug it
+        // exists to catch, and `build/` is not type-checked — so a props change
+        // in `src` can silently empty a scene with nothing anywhere going red.
+        if (!m.rendered) {
+          console.error(`\nscene FAILED to render: ${scene} / ${lang} / ${name} at ${width}px.`);
+          console.error("An empty scene fits every window; refusing to report a pass for it.");
+          process.exit(2);
+        }
         rows.push({ scene, lang, name, width, ...m });
       }
     }
@@ -434,7 +443,7 @@ chrome.kill();
 server.close();
 
 console.log("\nIs the document wider than the window?");
-console.log("(· = fits; a number is pixels of page beyond the right edge)");
+console.log("(· = fits; a number is pixels of page beyond the right edge; ? = never measured)");
 let failures = 0;
 for (const scene of SCENES) {
   const ws = widthsFor(scene);
@@ -444,8 +453,14 @@ for (const scene of SCENES) {
     for (const name of NAMES) {
       const cells = ws.map((w) => {
         const r = rows.find((x) => x.scene === scene && x.lang === lang && x.name === name && x.width === w);
-        if (r && r.documentOverflow > 0) failures++;
-        return (r && r.documentOverflow > 0 ? String(r.documentOverflow) : "·").padStart(6);
+        // "?" not "·". This column printed "·" for four phone widths of the
+        // login scene for as long as SCENE_WIDTHS has existed, because the
+        // measuring loop iterated WIDTHS while this one iterates widthsFor() —
+        // so the widths that most needed checking reported a pass that had
+        // never been taken.
+        if (!r) { failures++; return "?".padStart(6); }
+        if (r.documentOverflow > 0) failures++;
+        return (r.documentOverflow > 0 ? String(r.documentOverflow) : "·").padStart(6);
       });
       console.log(`  ${scene.padEnd(9)}  ${lang.padEnd(4)}  ${name.padEnd(8)}  ${cells.join("")}`);
     }

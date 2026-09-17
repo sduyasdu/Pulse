@@ -61,6 +61,10 @@ export function filterSignatureOf(parts: {
   query: string;
   statuses: Set<string>;
   epics: Set<string>;
+  /** Cycles-Spec CY13. A filter left out of this signature still hides tasks,
+   * but stops clearing the just-added exemption — so creating a task, filtering
+   * it away and creating another would leave the first one stranded on screen. */
+  cycles: Set<string>;
   resource: string | null;
   mineOnly: boolean;
 }): string {
@@ -68,6 +72,7 @@ export function filterSignatureOf(parts: {
     parts.query.trim(),
     [...parts.statuses].sort().join(","),
     [...parts.epics].sort().join(","),
+    [...parts.cycles].sort().join(","),
     parts.resource ?? "",
     parts.mineOnly ? "mine" : "",
   ].join("|");

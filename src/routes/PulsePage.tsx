@@ -12,7 +12,7 @@ import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout, newEpicSpan } from "@/domain/layout";
 import { overLimitCount } from "@/domain/assignments";
-import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, type Density } from "@/domain/constants";
+import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, cyclesOf, cycleOfTask, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { useJustAdded, filterSignatureOf } from "@/hooks/useJustAdded";
 import { loadPulseView, savePulseView } from "@/domain/pulseView";
@@ -67,6 +67,10 @@ export function PulsePage() {
   const isMobile = useIsMobile();
   const coarsePointer = useCoarsePointer();
   const statuses = statusesOf(pulse);
+  const cycles = cyclesOf(pulse);
+  // What an unstamped task counts as (CY11). Resolved once here so the canvas
+  // and the board agree — `cycles[0]` is not it when the Beat names a default.
+  const defaultCycleId = cycleOfTask(null, pulse).id;
 
   // Pin the app to the actual visible height (px) rather than 100vh/100dvh,
   // which on iPad Safari can mismatch as the address bar shifts and leave a
@@ -297,11 +301,14 @@ export function PulsePage() {
   // Empty set = no filter ("all"). Multi-select, so a set of chosen values.
   const [featureStatusFilter, setFeatureStatusFilter] = useState<Set<string>>(new Set());
   const [epicFilter, setEpicFilter] = useState<Set<string>>(new Set());
+  // CY13. Lives here rather than in either view, because every other filter
+  // does: switching between the canvas and the board keeps what you asked for.
+  const [cycleFilter, setCycleFilter] = useState<Set<string>>(new Set());
   const [compactFilter, setCompactFilter] = useState(true);
 
   // A task you just created stays visible even when the filters exclude it —
   // see the hook for why, and for when the exemption ends.
-  const filterSignature = filterSignatureOf({ query: featureQuery, statuses: featureStatusFilter, epics: epicFilter, resource: filterResource, mineOnly: myTasksOnly });
+  const filterSignature = filterSignatureOf({ query: featureQuery, statuses: featureStatusFilter, epics: epicFilter, cycles: cycleFilter, resource: filterResource, mineOnly: myTasksOnly });
   const { justAddedIds, markAdded } = useJustAdded(filterSignature);
   // Epics get their own exemption on the same terms. A new epic is empty, so
   // under "hide + compact" it has no visible features and is dropped from the
@@ -639,6 +646,9 @@ export function PulsePage() {
         canMyPulse={myResourceIds.length > 0}
         epicOptions={epics.map((e) => ({ id: e.id, name: e.name || t("pulse.untitledEpic"), color: e.color }))}
         statusOptions={statuses.map((s) => ({ id: s.id, name: s.label, color: statusMetaOf(s.id, statuses).border }))}
+        cycleFilter={cycleFilter}
+        setCycleFilter={setCycleFilter}
+        cycleOptions={cycles.map((c) => ({ id: c.id, name: c.name }))}
         showDelays={showDelays}
         setShowDelays={setShowDelays}
         epicsShrunk={epicsShrunk}
@@ -723,6 +733,8 @@ export function PulsePage() {
               featureQuery={featureQuery}
               featureStatusFilter={featureStatusFilter}
               epicFilter={epicFilter}
+              cycleFilter={cycleFilter}
+              setCycleFilter={setCycleFilter}
               filterResource={filterResource}
               myResourceIds={myResourceFilter}
               alwaysShowIds={justAddedIds}
@@ -746,6 +758,8 @@ export function PulsePage() {
               featureQuery={featureQuery}
               featureStatusFilter={featureStatusFilter}
               epicFilter={epicFilter}
+              cycleFilter={cycleFilter}
+              defaultCycleId={defaultCycleId}
               compactFilter={compactFilter}
               myResourceIds={myResourceFilter}
               alwaysShowIds={justAddedIds}

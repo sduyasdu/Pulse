@@ -98,6 +98,12 @@ function ToolbarScene({ pulseName }: { pulseName: string }) {
       myPulse={false}
       onToggleMyPulse={noop}
       canMyPulse
+      cycleFilter={new Set()}
+      setCycleFilter={noop}
+      // Two cycles, so the CY13 control actually renders and gets measured: it
+      // hides itself on a single-cycle Beat, and a control the probe cannot see
+      // is a control the probe cannot clear.
+      cycleOptions={[{ id: "std", name: "Standard" }, { id: "rev", name: "Design review" }]}
       epicOptions={[{ id: "e1", name: "Platform foundations", color: "#8B5CF6" }]}
       statusOptions={[{ id: "s1", name: "Planned", color: "#8B5CF6" }]}
       showDelays={false}
@@ -374,6 +380,13 @@ interface Measurement {
    * width it asked for — a viewport override that silently fails would make
    * every number below a measurement of the wrong thing. */
   clientWidth: number;
+  /** Did the scene put anything on the page?
+   *
+   * An empty document fits every window, so a scene that threw during render
+   * measures as a clean pass — the probe's own version of the bug it exists to
+   * catch. `build/` is outside the type-checked project, so a required prop
+   * added in `src` empties a scene here with nothing going red anywhere. */
+  rendered: boolean;
   documentOverflow: number;
   offenders: { tag: string; cls: string; right: number; text: string; path: string }[];
 }
@@ -410,8 +423,13 @@ function measure(): Measurement {
       path: chain.join(" > ").slice(0, 150),
     });
   }
+  const root = document.getElementById("root");
   return {
     clientWidth: limit,
+    // Deliberately a low bar — "the scene drew something" — rather than an
+    // assertion about what. Anything tighter would be a second copy of each
+    // scene's expected output, maintained in the driver.
+    rendered: (root?.querySelectorAll("*").length ?? 0) > 5,
     documentOverflow: Math.round(document.documentElement.scrollWidth - limit),
     // Widest first, not first-in-document. Taking them in DOM order reported
     // elements a few pixels over while the one setting the page's real width
