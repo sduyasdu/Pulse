@@ -219,7 +219,7 @@ reference ID that means nothing to you. Log, at minimum:
   200.
 - **Say when a scan was bounded.** If a read came back exactly full, there was
   probably more behind it — and silence reads as completeness. "No blocked tasks
-  in this Pulse" and "no blocked tasks among the 200 I looked at" must not be the
+  in this Beats" and "no blocked tasks among the 200 I looked at" must not be the
   same response. Pagination is the complete fix; a `coverage` note is the honest
   minimum and ships in an hour.
 - **Fewer, task-shaped tools beat one per table.** "What is this person's load
@@ -348,3 +348,36 @@ docs before submitting rather than trusting your own summary.
 15. If you intend to publish: every tool annotated with a title and hints, a
     published privacy policy, domain verification served from code, and a demo
     account with real data.
+
+## Your tool names are a published contract, and some consumers cannot re-read it
+
+Renaming an MCP tool looks safe. Clients call `tools/list`, the server declares
+`listChanged`, and everything re-syncs — so the rename "costs a refresh, not a
+reconnection". That is true **of clients**.
+
+It is not true of everything downstream. This project renamed `list_pulses` →
+`list_beats` and `get_pulse` → `get_beat`, and silently broke all three skills in
+its own plugin repository, because a skill names tools **in prose**:
+
+```md
+1. `beats:get_beat` with the chosen `beatId` — gives you every task with…
+```
+
+Prose does not re-list. Nor do saved prompts, a customer's automation, docs, or
+anything else that wrote the name down. And the plugin lived in a separate
+repository that does not update itself, so nothing in the main project's tests,
+types or build could have noticed.
+
+**Before renaming anything on a published surface, enumerate who wrote it
+down.** For a tool name that is: your own skills and plugins, the listing copy
+in any directory, example prompts, support articles, and any customer
+integration you know of. The rename is cheap; finding the consumers afterwards
+is not.
+
+The same reasoning is why a connector's **OAuth issuer** is worth checking
+separately rather than assuming: it is an identifier clients store, and whether
+changing it invalidates anything depends on how your tokens are actually
+verified. In this project it turned out not to — access tokens were Firebase ID
+tokens verified against Google's issuer, refresh tokens were opaque hashes — but
+that was established by reading the verification path, not by reasoning about
+what "issuer" usually means.

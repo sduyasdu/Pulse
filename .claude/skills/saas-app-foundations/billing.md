@@ -88,7 +88,7 @@ pricing) and render those.
 
 Stronger: **resolve the displayed price and the charged price through the same
 code path**, so they cannot disagree by construction rather than by discipline.
-In Pulse, display and checkout had separate lookups whose rules differed
+In Beats, display and checkout had separate lookups whose rules differed
 slightly, and one advertised a price the other refused to sell.
 
 ## 3.7 Payment-provider realities that are not obvious

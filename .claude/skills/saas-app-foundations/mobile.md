@@ -10,7 +10,7 @@ diverge immediately and converting between them is a rewrite.
 - **A distinct mobile view** — right when the interactions genuinely differ. A
   drag-and-drop canvas is not a small phone screen; it is a list.
 
-Pulse chose a separate `MobilePulseView` for the app shell (phones get a list and
+Beats chose a separate `MobilePulseView` for the app shell (phones get a list and
 a board; desktop gets the canvas) while **sharing every detail component** —
 forms, panels and dialogs are the same code in both. That is the balance worth
 copying: **shared components, different shells.** If you find yourself
@@ -41,7 +41,7 @@ styled on hover can *stick* after a tap.
 - Never write an ungated bare `:hover` rule.
 
 Keep this as its own always-on checklist; it is the single easiest thing to get
-wrong repeatedly. (Pulse has a dedicated `hover-effects` skill for exactly this.)
+wrong repeatedly. (Beats has a dedicated `hover-effects` skill for exactly this.)
 
 ## 5.4 Viewport, safe areas, and the address bar
 

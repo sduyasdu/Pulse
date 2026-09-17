@@ -111,7 +111,7 @@ line of prompt you could not see.
 
 ## 1.5 Know which check validates which thing
 
-Write the matrix down. In Pulse:
+Write the matrix down. In Beats:
 
 | Check | Validates | Silent about |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ Write the matrix down. In Pulse:
 
 Two traps:
 
-- **Rules are invisible to every normal check.** Two real bugs in Pulse were
+- **Rules are invisible to every normal check.** Two real bugs in Beats were
   green in `tsc`, unit tests and the build, and caught only by the emulator
   suite. If you touch rules, run the rules tests — and test the **allow** side,
   not just the deny side. Over-broad denial is the failure mode that breaks
@@ -219,7 +219,7 @@ nothing and you get **a button with no content, no width, and nothing to click**
 It looks like a layout bug, and it is easy to reintroduce every time someone
 reaches for a glyph the set doesn't have yet.
 
-This happened three times in Pulse. Choose one of:
+This happened three times in Beats. Choose one of:
 
 - **Type the names** — generate a union type from the map's keys, so a wrong name
   fails at `tsc`. Cheapest fix, and the one to prefer.
@@ -230,3 +230,51 @@ This happened three times in Pulse. Choose one of:
 Whichever you pick, when you need a glyph the set lacks, **extract it from the
 upstream package in `node_modules`** rather than drawing one. And never
 approximate a third party's brand mark this way — see `product-kickoff` §4.5.
+
+## Two failures that no test in your suite can catch
+
+Both cost a working feature in production after a green suite, and both
+generalise past Firestore.
+
+### The emulator does not enforce indexes
+
+A `collectionGroup` query needs an index declared. The Firestore **emulator does
+not require one**, so every unit and integration test passes, and the first real
+call is the test:
+
+```
+9 FAILED_PRECONDITION: The query requires a COLLECTION_GROUP_ASC index
+for collection workspaceMembers and field uid
+```
+
+There is no way to write a test for this in the emulator. What you can do is
+treat **every new cross-collection query as a deploy-time risk**: declare the
+index in the same commit, and exercise the path against the real project before
+calling it done. The same applies to any managed datastore whose local
+substitute is more permissive than production — which is most of them.
+
+### Reads that can fail must happen before the first destructive write
+
+The query above was issued in the *middle* of an account-deletion teardown. By
+the time it failed, the user's owned projects had already been deleted. The
+error handler then reported "nothing further was removed", which was untrue, and
+the account was left half-deleted with no way to finish or undo.
+
+The bug was not the missing index. It was the **order**:
+
+```
+audit()      ← every read, every query, everything that can refuse
+  ↓ nothing destroyed yet; a failure here costs nothing
+execute()    ← writes only, each idempotent
+```
+
+Resolve the whole plan first — including the reads you only need in order to
+know *what* to delete — and reaching the first write means the only remaining
+failures are write failures, which retry cleanly. Two further rules fall out of
+it:
+
+- **Show the plan before doing it.** The same audit drives the confirmation
+  screen, so what the user is told cannot differ from what happens.
+- **Never claim more than you know.** A partial failure must say some data is
+  already gone and that retrying is safe. "Nothing was removed" is a sentence
+  you can only write if you have proved it.

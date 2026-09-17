@@ -48,14 +48,14 @@ const post = () => {
 };
 ```
 
-This broke a build in Pulse and three near-identical cases were sitting
+This broke a build in Beats and three near-identical cases were sitting
 one keystroke away from the same failure. Name locals `body`, `trimmed`,
 anything but `t`.
 
 ## 2.5 What does *not* get translated
 
 Decide once and write it down: product names, brand terms, and domain nouns you
-have chosen to keep in one language. In Pulse: *Pulse, Epic, Kanban, AI* stay as
+have chosen to keep in one language. In Beats: *Beats, Epic, Kanban, AI* stay as
 they are in all six languages. Also **legal entity names in copyright notices** —
 a registered company name is a proper noun, and a notice that reads differently
 per language is six different notices.

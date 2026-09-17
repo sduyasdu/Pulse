@@ -59,8 +59,7 @@ uniformly.
 
 If the app is called *Pulse* and a project inside it is also *"a Pulse"*, the
 name is now in the data model, the type names, the collection paths, the URLs
-and every string. Renaming later touched **3,449 occurrences across 140 files**
-in this project — a week of work, most of it structural and risky.
+and every string.
 
 If the product is *Pulse* and the thing inside it is a *Board*, renaming the
 product is a day of strings and images.
@@ -69,6 +68,27 @@ Neither is wrong. Sharing the name is often the better product — it is
 memorable and it makes the app feel like one idea. Just make it a **decision**,
 with the cost understood, rather than something that happens because the first
 type was called `Pulse`.
+
+**This project then did exactly that rename**, from *Pulse* to *Beats*, with
+*"a Pulse"* becoming *"a Beat"*. What it actually cost, across six commits:
+roughly **144 files** — brand assets, six locale dictionaries, six help
+documents, 24 specs, the MCP tool surface, and a separate plugin repository that
+had to be fixed too.
+
+The part worth learning from is what it did **not** touch. §2.2's escape hatch
+was in place, so the internal name never moved:
+
+| Still named `pulse` | Occurrences left alone |
+| --- | --- |
+| `pulseId` | 885 |
+| `"pulses"` collection | 80 |
+| `pulseMembers` | 56 |
+| `myPulses` | 38 |
+
+Over a thousand identifiers, every Firestore path, and the project id itself
+stayed put, because nobody ever sees them. The rename was a week of *copy*, not
+a migration. Without that seam the same job is a data migration with downtime,
+and the reason to build it on day one is that it costs nothing then.
 
 ### 2.2 Build the escape hatch anyway
 

@@ -95,7 +95,7 @@ it is much harder to remove a shared-undo assumption later than to add scope now
   closed tabs, and clean it up server-side when membership ends (§4.3).
 - **Mentions need a target model.** Decide what can be @-mentioned — people,
   or the domain objects people care about — and store mentions **structurally**
-  (kind + id + label) rather than parsing text later. In Pulse you mention a
+  (kind + id + label) rather than parsing text later. In Beats you mention a
   *resource*, which means "mentions me" resolves to "mentions a resource linked
   to my account" — a definition worth writing down, because filters and
   notifications both depend on it.

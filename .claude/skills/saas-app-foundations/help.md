@@ -7,7 +7,7 @@ building the feature, not as a documentation project that happens later.
 
 ## 6.1 Explanation is for everyone — check the gate it lands in
 
-Help nearly shipped inside an editors-only conditional in Pulse, which would have
+Help nearly shipped inside an editors-only conditional in Beats, which would have
 hidden it from viewers: the newest arrivals, who need it most. Anything
 explanatory sits **outside** the permission gate.
 
@@ -100,6 +100,6 @@ have forgotten is on*. They need different sentences and different exits.
 ## 6.7 Mobile needs its own entry point
 
 Whatever anchors help on desktop — a toolbar, a sidebar — may not exist on
-mobile. Decide where it lives there (Pulse put it in the header beside comments
+mobile. Decide where it lives there (Beats put it in the header beside comments
 and notifications) and give it the same content, presented full-screen rather
 than as a drawer (`mobile.md` §5.1: shared components, different shells).
