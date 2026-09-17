@@ -12,7 +12,7 @@ import { useIsMobile, useCoarsePointer } from "@/hooks/useIsMobile";
 import { MobilePulseView } from "@/components/mobile/MobilePulseView";
 import { compactLayout, newEpicSpan } from "@/domain/layout";
 import { overLimitCount } from "@/domain/assignments";
-import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, statusesOf, cyclesOf, cycleOfTask, type Density } from "@/domain/constants";
+import { BASE_DAY_WIDTH, DENSITY_DAY_PX, statusMetaOf, allStatusesOf, cyclesOf, cycleOfTask, type Density } from "@/domain/constants";
 import { isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { useJustAdded, filterSignatureOf } from "@/hooks/useJustAdded";
 import { loadPulseView, savePulseView } from "@/domain/pulseView";
@@ -66,7 +66,8 @@ export function PulsePage() {
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const isMobile = useIsMobile();
   const coarsePointer = useCoarsePointer();
-  const statuses = statusesOf(pulse);
+  // Beat-wide vocabulary, for the toolbar filter only — see allStatusesOf.
+  const statuses = allStatusesOf(pulse);
   const cycles = cyclesOf(pulse);
   // What an unstamped task counts as (CY11). Resolved once here so the canvas
   // and the board agree — `cycles[0]` is not it when the Beat names a default.

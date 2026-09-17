@@ -377,15 +377,18 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const { pulseId, pulse } = get();
     if (!pulseId) return;
     if (!(await write(set, () => updateCycles(pulseId, cycles, defaultCycleId)))) return;
-    // COMPATIBILITY SHIM, remove when the read paths move to the task's own
-    // cycle. Ten components still resolve statuses through `statusesOf`, which
-    // reads `pulse.statuses` — so a Beat that saves cycles and leaves that field
-    // behind would render the old vocabulary on the canvas, in the task form and
-    // in the mobile list while the board showed the new one. Mirroring the
-    // default cycle's stages into it keeps every unmigrated reader correct.
-    // Delete this once `statusesForTask` is what those call sites use.
-    const def = cycles.find((c) => c.id === defaultCycleId) ?? cycles[0];
-    if (def) await write(set, () => updatePulseStatuses(pulseId, def.statuses));
+    // The compatibility shim that stood here — mirroring the default cycle's
+    // stages back into the flat `pulse.statuses` — is gone. Every reader now
+    // resolves through the task's own cycle (`statusesForTask`), the filter
+    // dropdowns through `allStatusesOf`, and the MCP server through
+    // `statusLabelsOf`, so the mirror was write-only: it could only ever hold
+    // ONE cycle's stages, which is a partial truth for any Beat that has two.
+    //
+    // `pulse.statuses` is still read, in exactly one place: `cyclesOf` builds
+    // the implicit single cycle for a Beat that predates this feature (CY11).
+    // That path never sees a Beat with `cycles`, so the value left behind here
+    // is stale but unreachable — and leaving it is what keeps such a Beat's
+    // customised stages intact if it never saves cycles at all.
     if (pulse) recordSingle("Edit cycles", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { cycles, defaultCycleId }));
   },
 

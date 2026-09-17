@@ -4,7 +4,7 @@ import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildCycleBoard, canDropInSection, placeColumns } from "@/domain/cycleBoard";
 import type { StatusColumn } from "@/domain/kanban";
-import { hexA, statusesOf, statusMetaOf, cyclesOf } from "@/domain/constants";
+import { hexA, statusMetaOf, cyclesOf } from "@/domain/constants";
 import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
@@ -53,14 +53,25 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const patchEpic = usePulseStore((s) => s.patchEpic);
   const duplicateFeature = usePulseStore((s) => s.duplicateFeature);
   const removeFeature = usePulseStore((s) => s.removeFeature);
-  const setStatuses = usePulseStore((s) => s.setStatuses);
+  const setCycles = usePulseStore((s) => s.setCycles);
   const graph = graphConfigOf(pulse);
-  const statuses = statusesOf(pulse);
 
-  const renameStatus = (id: string, label: string) => {
+  /**
+   * Rename a column, in the cycle that column belongs to.
+   *
+   * It used to write `pulse.statuses` through `setStatuses`, which is the
+   * Beat's single legacy list. Once a Beat has more than one cycle that is not
+   * where any column's label lives, so renaming a column in the second band
+   * wrote somewhere nothing reads and the label snapped back — an edit that
+   * silently did nothing.
+   */
+  const renameStatus = (cycleId: string, id: string, label: string) => {
     const trimmed = label.trim();
     if (!trimmed) return;
-    void setStatuses(statuses.map((s) => (s.id === id ? { ...s, label: trimmed } : s)));
+    const next = cycles.map((c) =>
+      c.id === cycleId ? { ...c, statuses: c.statuses.map((s) => (s.id === id ? { ...s, label: trimmed } : s)) } : c,
+    );
+    void setCycles(next, pulse?.defaultCycleId ?? next[0]?.id ?? "");
   };
 
   const renameEpic = (id: string, name: string) => {
@@ -193,7 +204,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
       <div className="flex-1 overflow-auto">
         <div className="p-3" style={{ minWidth: "min-content" }}>
           {sections.map((section) => {
-            const secStatuses = cycles.find((c) => c.id === section.cycleId)?.statuses ?? statuses;
+            const secStatuses = cycles.find((c) => c.id === section.cycleId)?.statuses ?? cycles[0]?.statuses ?? [];
             const cols = featureStatusFilter.size === 0
               ? section.columns
               : section.columns.filter((c) => featureStatusFilter.has(c.status));
@@ -223,7 +234,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                         graph={graph}
                         statuses={secStatuses}
                         resById={resById}
-                        onRenameStatus={renameStatus}
+                        onRenameStatus={(id, label) => renameStatus(section.cycleId, id, label)}
                         onRenameEpic={renameEpic}
                         dragOver={dragOverCol === section.cycleId + col.status}
                         dragOverGroup={dragOverGroup}

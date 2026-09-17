@@ -77,7 +77,7 @@ assert((await liveConnection(db, UID, "alive")).scope === "read", "revocation: s
 // claim to speak.
 // ---------------------------------------------------------------------------
 
-const { decode, decodeFields, clampLimit, SUPPORTED_PROTOCOLS, TOOLS, stripHtml, subtaskTitleMatches } = await import("../lib/mcpServer.js");
+const { decode, decodeFields, clampLimit, SUPPORTED_PROTOCOLS, TOOLS, stripHtml, subtaskTitleMatches, statusLabelsOf } = await import("../lib/mcpServer.js");
 
 // Firestore REST type tags. Getting integerValue wrong is the sharp one: it
 // arrives as a STRING, so a missed Number() turns 3 into "3" and every
@@ -335,6 +335,48 @@ assert(!TOOLS.some((t) => t.name === "get_costs"), "parked: get_costs is not adv
 assert(TOOLS.length === 9, "parked: get_costs out, get_resource_usage in — nine advertised");
 assert(TOOLS.some((t) => t.name === "get_resource_usage"), "usage: the where-is-this-person tool is advertised");
 assert(TOOLS.every((t) => t.annotations?.readOnlyHint === true), "parked: every advertised tool is still annotated (MP1)");
+
+// ---------------------------------------------------------------------------
+// Status labels across cycles (Cycles-Spec CY11)
+//
+// The flat `statuses` field tracks the Beat's DEFAULT cycle only. Reading just
+// that reports a raw id — "in-review" — as the status of every task in every
+// other cycle, and an assistant reads that out as though it were a label.
+// ---------------------------------------------------------------------------
+console.log("\nStatus labels across cycles");
+{
+  const twoCycles = {
+    statuses: [{ id: "planned", label: "Planned" }, { id: "done", label: "Done" }],
+    cycles: [
+      { id: "std", name: "Standard", statuses: [{ id: "planned", label: "Planned" }, { id: "done", label: "Done" }] },
+      { id: "rev", name: "Review", statuses: [{ id: "in-review", label: "In review" }, { id: "done", label: "Done" }] },
+    ],
+  };
+  const m = statusLabelsOf(twoCycles);
+  assert(m.get("in-review") === "In review", "cycles: a non-default cycle's stage resolves to its label");
+  assert(m.get("planned") === "Planned", "cycles: the default cycle's stages still resolve");
+  assert(m.size === 3, "cycles: Done is shared by both cycles and appears once");
+
+  // A Beat that predates cycles has the flat list and nothing else.
+  const legacy = statusLabelsOf({ statuses: [{ id: "a", label: "Alpha" }] });
+  assert(legacy.get("a") === "Alpha" && legacy.size === 1, "legacy: the flat list is still read when there are no cycles");
+
+  // A Beat that customised its stages and dropped "blocked" must not have it
+  // reappear from the built-in fallback.
+  assert(!legacy.has("blocked"), "legacy: built-ins do not leak back into a customised Beat");
+
+  // Nothing defined at all — a Beat that has never been customised.
+  const bare = statusLabelsOf({});
+  assert(bare.get("in-progress") === "In progress" && bare.size === 4, "bare: the built-in four are the last resort");
+  assert(statusLabelsOf(null).size === 4, "bare: a missing document does not throw");
+
+  // A cycle's label wins over the flat field, which may be a stale mirror.
+  const stale = statusLabelsOf({
+    statuses: [{ id: "planned", label: "OLD" }],
+    cycles: [{ id: "std", statuses: [{ id: "planned", label: "Backlog" }] }],
+  });
+  assert(stale.get("planned") === "Backlog", "precedence: the cycle's label beats the flat mirror");
+}
 
 console.log(failed ? `\n${failed} assertion(s) FAILED` : "\nAll MCP assertions passed");
 process.exit(failed ? 1 : 0);

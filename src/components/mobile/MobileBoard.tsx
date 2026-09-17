@@ -3,7 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, Resource } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard } from "@/domain/kanban";
-import { statusesOf, statusMetaOf, hexA } from "@/domain/constants";
+import { allStatusesOf, statusesForTask, statusMetaOf, hexA } from "@/domain/constants";
 import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { staffingColor } from "@/domain/graphEffort";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
@@ -26,7 +26,12 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
   const pulse = usePulseStore((s) => s.pulse);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const graph = graphConfigOf(pulse);
-  const statuses = statusesOf(pulse);
+  // Every cycle's stages, not just the default's. `buildBoard` keeps only the
+  // features whose status appears in the list it is given, so with the Beat's
+  // list a task in any other cycle landed in NO column — gone from the mobile
+  // board entirely, with no empty state to say so. CY7's rule is that work is
+  // shown awkwardly rather than hidden.
+  const statuses = allStatusesOf(pulse);
   const byId = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
 
   const [query, setQuery] = useState("");
@@ -148,7 +153,10 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
                           className="mono text-xs flex-1 rounded px-1.5 py-1"
                           style={{ border: "1px solid #E2DFD9", color: "#334155", background: "#FFFFFF" }}
                         >
-                          {statuses.map((s) => (
+                          {/* This task's own cycle — the picker WRITES what it
+                              offers, so it must not offer another cycle's
+                              stage. Only the columns above span the Beat. */}
+                          {statusesForTask(f, pulse).map((s) => (
                             <option key={s.id} value={s.id}>{s.label}</option>
                           ))}
                         </select>

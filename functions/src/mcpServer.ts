@@ -326,18 +326,51 @@ async function loadLookups(caller: Caller, beatId: string): Promise<Lookups> {
     listAsUser(caller, `pulses/${beatId}/resources`, MAX_LIMIT),
     getAsUser(caller, `pulses/${beatId}`),
   ]);
-  const statuses = (beat?.statuses as { id: string; label: string }[] | undefined) ?? [];
   return {
     epics: new Map(epics.map((e) => [String(e.id), String(e.name ?? "Untitled epic")])),
     resources: new Map(
       resources.map((r) => [String(r.id), { name: String(r.name || r.initials || r.id), capacity: Number(r.capacity ?? 100) }]),
     ),
-    statuses: new Map(
-      statuses.length
-        ? statuses.map((st) => [st.id, st.label])
-        : [["planned", "Planned"], ["in-progress", "In progress"], ["blocked", "Blocked"], ["done", "Done"]],
-    ),
+    statuses: statusLabelsOf(beat),
   };
+}
+
+const BUILT_IN_STATUS_LABELS: [string, string][] = [
+  ["planned", "Planned"],
+  ["in-progress", "In progress"],
+  ["blocked", "Blocked"],
+  ["done", "Done"],
+];
+
+/**
+ * Status id → human label, across every cycle the Beat defines
+ * (Cycles-Spec CY11).
+ *
+ * A Beat with cycles keeps the flat `statuses` field in step with its
+ * **default** cycle only. Reading that field alone therefore reports a raw id
+ * — "in-review", "qa" — as the status of every task in every other cycle, in
+ * an answer an assistant will read out as though it were a label.
+ *
+ * Order is cycles first, then the flat list, then the built-ins, deduped by id
+ * with the first definition winning. Cycles first because that is where a
+ * current label lives; the flat list second because a Beat that predates
+ * cycles has nothing else; the built-ins last because a Beat that has never
+ * been customised has neither.
+ *
+ * Exported for test: this is a pure function over a document, and the
+ * alternative is asserting on it through a live tool call.
+ */
+export function statusLabelsOf(beat: Record<string, unknown> | null | undefined): Map<string, string> {
+  const cycles = (beat?.cycles as { statuses?: { id: string; label: string }[] }[] | undefined) ?? [];
+  const flat = (beat?.statuses as { id: string; label: string }[] | undefined) ?? [];
+  const out = new Map<string, string>();
+  for (const st of [...cycles.flatMap((c) => c?.statuses ?? []), ...flat]) {
+    if (st && typeof st.id === "string" && !out.has(st.id)) out.set(st.id, String(st.label ?? st.id));
+  }
+  // Only when the Beat defines nothing at all. A Beat that customised its
+  // stages and dropped one must not have the built-in silently reappear.
+  if (out.size === 0) for (const [id, label] of BUILT_IN_STATUS_LABELS) out.set(id, label);
+  return out;
 }
 
 // ---------------------------------------------------------------------------

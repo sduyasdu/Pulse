@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cyclesOf, cycleOfTask, statusesForTask, initialStatusOf, IMPLICIT_CYCLE_ID, DEFAULT_STATUSES } from "./constants";
+import { cyclesOf, cycleOfTask, statusesForTask, initialStatusOf, statusMetaInCycle, IMPLICIT_CYCLE_ID, DEFAULT_STATUSES } from "./constants";
 import type { Cycle, StatusDef } from "@/types";
 
 /**
@@ -91,5 +91,39 @@ describe("where a new task starts", () => {
 
   it("degrades rather than throwing on an empty cycle", () => {
     expect(initialStatusOf({ id: "x", name: "X", statuses: [] })).toBe("planned");
+  });
+});
+
+describe("resolving a status in its owner's cycle", () => {
+  // Review's own stage. Not in Standard's list, and not a built-in.
+  const pulse = { cycles: [std, rev], defaultCycleId: "std" };
+
+  it("reads a stage from the task's own cycle, not the Beat's", () => {
+    // The bug this replaces: resolved against the Beat's list, "r" is in no
+    // cycle the lookup can see, so it fell through to grey-with-a-raw-id — a
+    // chip that looks deliberate and says nothing.
+    expect(statusMetaInCycle("r", { cycleId: "rev" }, pulse).label).toBe("R");
+    expect(statusMetaInCycle("r", { cycleId: "std" }, pulse).label).toBe("r");
+  });
+
+  it("resolves a subtask through its parent, not through the default", () => {
+    // A subtask has a status but no cycleId. Passing it as its own owner would
+    // resolve it against the Beat default — the very bug being removed — so the
+    // parent is what gets passed.
+    const parent = { cycleId: "rev" };
+    expect(statusMetaInCycle("r", parent, pulse).label).toBe("R");
+  });
+
+  it("falls back to the Beat's default for an unstamped task", () => {
+    const beatDefaultsToReview = { cycles: [std, rev], defaultCycleId: "rev" };
+    expect(statusMetaInCycle("r", {}, beatDefaultsToReview).label).toBe("R");
+    expect(statusMetaInCycle("r", {}, pulse).label).toBe("r");
+  });
+
+  it("still honours a renamed built-in", () => {
+    // `statusMetaOf` keeps the hand-tuned palette for built-ins but takes the
+    // label from the list. Routing through a cycle must not lose that.
+    const renamed: Cycle = { id: "c", name: "C", statuses: [{ id: "planned", label: "Backlog", color: "#64748B" }] };
+    expect(statusMetaInCycle("planned", { cycleId: "c" }, { cycles: [renamed], defaultCycleId: "c" }).label).toBe("Backlog");
   });
 });

@@ -12,7 +12,7 @@ import type { Cycle, StatusDef, StatusQualification } from "@/types";
 /**
  * The Beat's workflows (Cycles-Spec CY8).
  *
- * One level up from `StatusEditorDialog`, and deliberately the same shape: a
+ * One level up from the status editor it replaces, and deliberately the same shape: a
  * list you add to, rename and reorder, with `Done` reserved and immovable
  * (CY5/CY6). What is new is that there are several lists, one is the default
  * (CY4), and deleting one can be refused (CY17).

@@ -147,7 +147,7 @@ describe("moving a task between epics", () => {
   });
 });
 
-describe("saving cycles keeps unmigrated readers correct", () => {
+describe("saving cycles", () => {
   const STD = { id: "std", name: "Standard", statuses: [{ id: "p", label: "P", color: "#000" }, { id: "done", label: "D", color: "#000" }] };
   const REV = { id: "rev", name: "Review", statuses: [{ id: "r", label: "R", color: "#000" }, { id: "done", label: "D", color: "#000" }] };
 
@@ -164,17 +164,27 @@ describe("saving cycles keeps unmigrated readers correct", () => {
     expect(updateCycles).toHaveBeenCalledWith("p1", [STD, REV], "rev");
   });
 
-  it("mirrors the default cycle's stages into pulse.statuses", async () => {
-    // The compatibility shim. Ten components still resolve statuses through
-    // `statusesOf`, which reads `pulse.statuses` — without this, a Beat that
-    // saves cycles renders the OLD vocabulary on the canvas and in the task
-    // form while the board shows the new one. Delete this test with the shim.
+  it("does not mirror anything back into pulse.statuses", async () => {
+    // This used to write the default cycle's stages into the flat field, so
+    // that readers still going through `statusesOf` saw the new vocabulary.
+    // Every reader now resolves through the task's own cycle, and the mirror
+    // could only ever hold ONE cycle's stages — a partial truth for any Beat
+    // with two, and a second write that could fail on its own.
+    //
+    // If this goes red because the mirror came back, the question to ask is
+    // which reader needed it: that reader is the bug.
     await usePulseStore.getState().setCycles([STD, REV], "rev");
-    expect(updatePulseStatuses).toHaveBeenCalledWith("p1", REV.statuses);
+    expect(updatePulseStatuses).not.toHaveBeenCalled();
   });
 
-  it("mirrors the first cycle when the default names none of them", async () => {
-    await usePulseStore.getState().setCycles([STD, REV], "gone");
-    expect(updatePulseStatuses).toHaveBeenCalledWith("p1", STD.statuses);
+  it("leaves a legacy Beat's flat statuses untouched", async () => {
+    // `cyclesOf` builds the implicit cycle for a Beat that predates this
+    // feature out of `pulse.statuses` (CY11). Overwriting that field on the
+    // first save is what would make the feature non-revertable, and there is
+    // no reason to touch it at all.
+    usePulseStore.setState({ pulseId: "p1", pulse: { id: "p1", statuses: [{ id: "custom", label: "Custom", color: "#000" }] } as never });
+    await usePulseStore.getState().setCycles([STD], "std");
+    expect(updatePulseStatuses).not.toHaveBeenCalled();
+    expect(usePulseStore.getState().pulse?.statuses).toEqual([{ id: "custom", label: "Custom", color: "#000" }]);
   });
 });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Epic, Feature, Resource } from "@/types";
-import { hexA, statusesOf, statusMetaOf } from "@/domain/constants";
+import { hexA, statusMetaInCycle } from "@/domain/constants";
 import { usePulseStore } from "@/stores/pulseStore";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
@@ -21,7 +21,7 @@ const fmt = (day: number) => dateForDay(day).toLocaleDateString("en-US", { month
 export function MobileTaskList({ features, epics, resources, onSelect, myResourceIds }: MobileTaskListProps) {
   const t = useT();
   const byId = Object.fromEntries(resources.map((r) => [r.id, r]));
-  const statuses = statusesOf(usePulseStore((s) => s.pulse));
+  const pulse = usePulseStore((s) => s.pulse);
   const [query, setQuery] = useState("");
   const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
 
@@ -97,7 +97,7 @@ export function MobileTaskList({ features, epics, resources, onSelect, myResourc
             </div>
             <div className="flex flex-col gap-1.5">
               {g.items.map((f) => {
-                const meta = statusMetaOf(f.status, statuses);
+                const meta = statusMetaInCycle(f.status, f, pulse);
                 return (
                   <button
                     key={f.id}

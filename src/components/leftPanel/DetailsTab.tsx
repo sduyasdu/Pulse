@@ -15,7 +15,7 @@ import {
   theoreticalElapsed,
 } from "@/domain/graphEffort";
 import { dayIndexFromDateInputValue, fmtDate, toDateInputValue, todayIndex } from "@/domain/dateUtils";
-import { LABEL_COLORS, colorForName, statusesOf, statusMetaOf } from "@/domain/constants";
+import { LABEL_COLORS, colorForName, statusesForTask, statusMetaOf } from "@/domain/constants";
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { Comments } from "@/components/comments/Comments";
@@ -76,7 +76,12 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   const epics = usePulseStore((s) => s.epics);
   const resources = usePulseStore((s) => s.resources);
   const pulse = usePulseStore((s) => s.pulse);
-  const statuses = statusesOf(pulse);
+  // This task's own cycle, not the Beat's list (CY11). It feeds the status
+  // picker, so getting it wrong does not merely mislabel — it offers a stage
+  // the task's workflow does not contain, and writes it when chosen.
+  // Subtasks have no cycle of their own and follow their parent, which is this
+  // same list.
+  const statuses = statusesForTask(feature, pulse);
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);

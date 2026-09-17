@@ -177,6 +177,54 @@ export function statusMetaOf(id: FeatureStatus, statuses?: StatusDef[]): StatusM
   return { border: color, bg: hexA(color, 0.14), text: "#334155", label: def?.label || id };
 }
 
+/**
+ * A status id resolved in the vocabulary of the cycle that owns it
+ * (Cycles-Spec CY11).
+ *
+ * Replaces `statusMetaOf(x.status, statusesOf(pulse))`, which resolved every
+ * task against the *Beat's* status list. That is right only while a Beat has
+ * one cycle: with two, a task in Review rendered its stage against Standard's
+ * list, found nothing, and fell through to the grey "unknown status" branch —
+ * a correct-looking grey chip labelled with a raw id.
+ *
+ * `owner` is the task whose cycle governs, which is not always the thing being
+ * rendered: a subtask has a `status` but no `cycleId` of its own, and follows
+ * its parent's cycle. Passing the subtask as its own owner would resolve it
+ * against the Beat default and reintroduce exactly the bug this removes.
+ */
+/**
+ * Every stage any cycle in the Beat defines, in cycle order, deduped by id
+ * (Cycles-Spec CY11).
+ *
+ * For the Beat-wide *filter* dropdowns only, which are a different question
+ * from "what may this task be set to": a filter offering only the default
+ * cycle's stages cannot express "show me everything in review", so the work in
+ * every other cycle becomes unreachable through it. Never use this to populate
+ * a status picker — that is `statusesForTask`, and offering a task a stage from
+ * another cycle's list is how a task ends up in a status its workflow does not
+ * contain.
+ *
+ * Deduped by id because cycles share `done`, and every cycle that was cloned
+ * from another shares more than that.
+ */
+export function allStatusesOf(
+  pulse: { cycles?: Cycle[]; statuses?: StatusDef[] } | null | undefined,
+): StatusDef[] {
+  const seen = new Map<string, StatusDef>();
+  for (const cycle of cyclesOf(pulse)) {
+    for (const s of cycle.statuses) if (!seen.has(s.id)) seen.set(s.id, s);
+  }
+  return [...seen.values()];
+}
+
+export function statusMetaInCycle(
+  status: FeatureStatus,
+  owner: { cycleId?: string } | null | undefined,
+  pulse: { cycles?: Cycle[]; statuses?: StatusDef[]; defaultCycleId?: string } | null | undefined,
+): StatusMeta {
+  return statusMetaOf(status, statusesForTask(owner, pulse));
+}
+
 export const AVATAR_COLORS = ["#6366F1", "#EC4899", "#14B8A6", "#F59E0B", "#8B5CF6", "#0EA5E9"];
 
 export function colorForName(name: string): string {

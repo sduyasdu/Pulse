@@ -4,7 +4,7 @@ import { setActivitySink } from "@/stores/undoStore";
 import { useAuthStore } from "@/stores/authStore";
 import { usePulseStore } from "@/stores/pulseStore";
 import { logActivity, newActivityId } from "@/services/firestore/activity";
-import { statusesOf } from "./constants";
+import { allStatusesOf } from "./constants";
 import { fmtMoney } from "./costs";
 
 // Translates an undo-engine command (Undo-Spec DocOp) into one durable activity
@@ -64,7 +64,10 @@ function entityNameOf(kind: DocKind, id: string, op: DocOp): string {
 function displayValue(key: string, value: unknown): string | null {
   if (value == null || value === "") return null;
   const { pulse, resources, epics } = usePulseStore.getState();
-  if (key === "status") return statusesOf(pulse).find((s) => s.id === value)?.label ?? String(value);
+  // Every cycle's stages: the feed records what a status id was called, and the
+  // entry carries no task to resolve it through. The Beat's own list would miss
+  // any stage belonging to another cycle and fall back to printing a raw id.
+  if (key === "status") return allStatusesOf(pulse).find((s) => s.id === value)?.label ?? String(value);
   if (key === "lead") return resources.find((r) => r.id === value)?.name ?? String(value);
   if (key === "epicId") return epics.find((e) => e.id === value)?.name ?? String(value);
   if (typeof value === "object") return null; // skip arrays/maps (resources[], alloc)

@@ -10,6 +10,10 @@ export interface AssignmentRow {
   start: number;
   duration: number;
   status: Feature["status"];
+  /** The task's cycle, carried so the row can resolve its own status label and
+   * colour (CY11). Projecting it away meant every row rendered its stage
+   * against the Beat's default vocabulary. */
+  cycleId?: string;
   pct: number;
 }
 
@@ -20,7 +24,7 @@ export function assignmentsFor(features: Feature[], resourceId: string): Assignm
   const rows: AssignmentRow[] = [];
   features.forEach((f) => {
     if ((f.resources || []).includes(resourceId)) {
-      rows.push({ title: f.title, start: f.x, duration: f.duration, status: f.status, pct: allocOf(f.alloc, resourceId) });
+      rows.push({ title: f.title, start: f.x, duration: f.duration, status: f.status, cycleId: f.cycleId, pct: allocOf(f.alloc, resourceId) });
     }
   });
   return rows;
