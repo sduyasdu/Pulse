@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCycleBoard, matchesCycleFilter } from "./cycleBoard";
+import { buildCycleBoard, matchesCycleFilter, sectionOfTask, canDropInSection, placeColumns } from "./cycleBoard";
 import type { Cycle, Epic, Feature } from "@/types";
 
 /**
@@ -139,5 +139,112 @@ describe("filtering the canvas by cycle", () => {
 describe("degenerate input", () => {
   it("returns nothing rather than throwing when a Beat defines no cycles", () => {
     expect(buildCycleBoard([task("a", "planned")], epics, [])).toEqual({ grouped: false, sections: [], slots: 0 });
+  });
+});
+
+describe("dragging a card between sections", () => {
+  const mixed = [task("a", "planned", "std"), task("c", "in-review", "rev")];
+  const board = buildCycleBoard(mixed, epics, [standard, review]);
+
+  it("knows which section a card is in", () => {
+    expect(sectionOfTask(board, "a")?.cycleId).toBe("std");
+    expect(sectionOfTask(board, "c")?.cycleId).toBe("rev");
+    expect(sectionOfTask(board, "nope")).toBeNull();
+  });
+
+  it("refuses a drop into another cycle's section", () => {
+    // CY2a: a drag is a scheduling gesture. Letting it land here would change
+    // the task's workflow silently, which is the one thing the design forbids.
+    expect(canDropInSection(board, "a", "rev")).toBe(false);
+    expect(canDropInSection(board, "c", "std")).toBe(false);
+  });
+
+  it("allows a drop within the card's own section", () => {
+    expect(canDropInSection(board, "a", "std")).toBe(true);
+  });
+
+  it("does not interfere with the single-cycle board", () => {
+    // The board the overwhelming majority of Beats see. Every drop targets the
+    // one section the card is already in, so the guard answers true — which is
+    // why an explicit `!grouped` short-circuit would be unreachable.
+    const single = buildCycleBoard([task("a", "planned", "std")], epics, [standard, review]);
+    expect(single.grouped).toBe(false);
+    expect(canDropInSection(single, "a", single.sections[0].cycleId)).toBe(true);
+  });
+
+  it("allows a card the board cannot place", () => {
+    // Filtered out, or arrived mid-drag. Refusing on the strength of not
+    // finding the card is worse than permitting the drop.
+    expect(canDropInSection(board, "unknown", "rev")).toBe(true);
+  });
+});
+
+describe("placing a section's columns in the grid (CY14)", () => {
+  // A five-slot board: the widest cycle has four stages plus Done.
+  const long: Cycle = {
+    id: "long",
+    name: "Long",
+    statuses: [
+      { id: "planned", label: "Planned", color: "#64748B" },
+      { id: "spec", label: "Spec", color: "#64748B" },
+      { id: "build", label: "Build", color: "#F5A524" },
+      { id: "in-review", label: "In review", color: "#6366F1" },
+      DONE,
+    ],
+  };
+  const board = buildCycleBoard(
+    [task("a", "planned", "std"), task("b", "planned", "long")],
+    epics,
+    [standard, long],
+  );
+
+  const slotOf = (cycleId: string, status: string) => {
+    const section = board.sections.find((x) => x.cycleId === cycleId)!;
+    return placeColumns(section.columns, board.slots).find((p) => p.col.status === status)!.slot;
+  };
+
+  it("aligns Done across sections of different lengths", () => {
+    // The whole point of CY14. The short cycle has three columns and the long
+    // one five; Done must sit in the same grid column in both, or the eye has
+    // no shared reference down the page.
+    expect(board.slots).toBe(5);
+    expect(slotOf("std", "done")).toBe(5);
+    expect(slotOf("long", "done")).toBe(5);
+  });
+
+  it("packs the shorter cycle's stages left, leaving the gap visible", () => {
+    // Not stretched to fill: the gap says this cycle is shorter, which is true
+    // and worth seeing.
+    expect(slotOf("std", "planned")).toBe(1);
+    expect(slotOf("std", "in-progress")).toBe(2);
+    // ...and nothing of the short cycle occupies slots 3 or 4.
+    const std = board.sections.find((x) => x.cycleId === "std")!;
+    const slots = placeColumns(std.columns, board.slots).map((p) => p.slot);
+    expect(slots).toEqual([1, 2, 5]);
+  });
+
+  it("does not let a hidden stage shift Done", () => {
+    // The status filter hides "Spec". The stages after it close up, but Done
+    // stays in the last slot — otherwise filtering one cycle's stage would
+    // knock its Done column out of line with every other section's.
+    const long_ = board.sections.find((x) => x.cycleId === "long")!;
+    const visible = long_.columns.filter((c) => c.status !== "spec");
+    expect(placeColumns(visible, board.slots).map((p) => p.slot)).toEqual([1, 2, 3, 5]);
+  });
+
+  it("does not leave a hole where a hidden Done was", () => {
+    // Done filtered out entirely: the remaining stages still pack from 1, and
+    // no slot is reserved for a column that is not being drawn.
+    const std = board.sections.find((x) => x.cycleId === "std")!;
+    const visible = std.columns.filter((c) => c.status !== "done");
+    expect(placeColumns(visible, board.slots).map((p) => p.slot)).toEqual([1, 2]);
+  });
+
+  it("never emits grid column 0", () => {
+    // An empty board reports slots 0, and `gridColumn: 0` is invalid CSS — the
+    // browser drops the rule and the column lands wherever auto-placement puts
+    // it. Done collides with the first stage here, which is acceptable only
+    // because a board with no sections has no columns to draw.
+    expect(placeColumns(board.sections[0].columns, 0).map((p) => p.slot)).toEqual([1, 2, 1]);
   });
 });

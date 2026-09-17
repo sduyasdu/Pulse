@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
-import { buildBoard, type StatusColumn } from "@/domain/kanban";
-import { hexA, statusesOf, statusMetaOf } from "@/domain/constants";
+import { buildCycleBoard, canDropInSection, placeColumns } from "@/domain/cycleBoard";
+import type { StatusColumn } from "@/domain/kanban";
+import { hexA, statusesOf, statusMetaOf, cyclesOf } from "@/domain/constants";
 import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
 import { assignedEffort, estimateEffort, staffingColor } from "@/domain/graphEffort";
@@ -94,11 +95,21 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   // When a filter narrows the tasks, don't resurrect the hidden epics as empty
   // bands — only show the epics that actually have matching tasks.
   const filtered = !!q || epicFilter.size > 0 || !!filterResource || !!myResourceIds || datePeriod !== "all";
-  const columns = useMemo(() => buildBoard(visibleFeatures, epics, statuses, !filtered), [visibleFeatures, epics, statuses, filtered]);
-  const shownColumns = featureStatusFilter.size === 0 ? columns : columns.filter((c) => featureStatusFilter.has(c.status));
+  const cycles = useMemo(() => cyclesOf(pulse), [pulse]);
+  const board = useMemo(
+    () => buildCycleBoard(visibleFeatures, epics, cycles, !filtered),
+    [visibleFeatures, epics, cycles, filtered],
+  );
+  // Chips list only the cycles the board is showing (CY15) — a chip for a cycle
+  // with nothing in it filters to an empty board.
+  const [cycleFilter, setCycleFilter] = useState<Set<string>>(new Set());
+  const sections = cycleFilter.size === 0 ? board.sections : board.sections.filter((x) => cycleFilter.has(x.cycleId));
 
-  const addTask = async (status: FeatureStatus, epicId: string | null = null) => {
-    const id = await addFeature({ x: todayIndex(), y: 20, status, epicId });
+  const addTask = async (status: FeatureStatus, epicId: string | null = null, cycleId?: string) => {
+    // The column's own cycle, not the epic's. Creating a task in the Review
+    // section's "In review" column with the Beat's default cycle would orphan
+    // its status the moment it existed.
+    const id = await addFeature({ x: todayIndex(), y: 20, status, epicId, ...(cycleId ? { cycleId } : {}) });
     if (!id) return;
     onTaskCreated?.(id);
     onSelect(id);
@@ -118,7 +129,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   //    is accommodated under its own epic band in the new column);
   //  - within the same column, onto another epic band → change the epic, keep
   //    the status.
-  const handleDrop = (status: FeatureStatus, epicId: string | null | undefined, e: React.DragEvent) => {
+  const handleDrop = (status: FeatureStatus, epicId: string | null | undefined, e: React.DragEvent, cycleId?: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverCol(null);
@@ -128,6 +139,10 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
     if (!id) return;
     const f = features.find((x) => x.id === id);
     if (!f || !canEditFeature(f)) return;
+    // Refused rather than handled: dropping a card into another cycle's section
+    // would change its workflow, and a drag is not how a cycle changes (CY2a).
+    // Changing it is a deliberate act on the task itself (CY2b).
+    if (cycleId && !canDropInSection(board, id, cycleId)) return;
     if (f.status !== status) {
       void setFeatureStatus(id, status);
     } else if (epicId !== undefined && (f.epicId ?? null) !== epicId) {
@@ -156,35 +171,85 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
 
       {editCycles && <CycleEditorDialog onClose={() => setEditCycles(false)} />}
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="flex gap-3 p-3 h-full" style={{ minWidth: "min-content" }}>
-          {shownColumns.map((col) => (
-            <Column
-              key={col.status}
-              col={col}
-              canEdit={canEdit}
-              canEditFeature={canEditFeature}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              graph={graph}
-              statuses={statuses}
-              resById={resById}
-              onRenameStatus={renameStatus}
-              onRenameEpic={renameEpic}
-              dragOver={dragOverCol === col.status}
-              dragOverGroup={dragOverGroup}
-              setDragOverGroup={setDragOverGroup}
-              sameColumnDrag={draggingStatus === col.status}
-              onDuplicate={duplicate}
-              onDelete={del}
-              onDragStartTask={setDraggingStatus}
-              onDragEndTask={() => { setDraggingStatus(null); setDragOverCol(null); setDragOverGroup(null); }}
-              onDragEnterCol={() => setDragOverCol(col.status)}
-              onDragLeaveCol={() => { setDragOverCol((s) => (s === col.status ? null : s)); setDragOverGroup(null); }}
-              onDrop={(epicId, e) => handleDrop(col.status, epicId, e)}
-              onAddTask={(epicId) => void addTask(col.status, epicId)}
-            />
-          ))}
+      {/* The cycle filter sits above the board and outside the scrolling
+          region (CY15), so it stays visible while what it filters moves. */}
+      {board.grouped && (
+        <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: "1px solid #F1F5F9" }}>
+          <span className="mono text-[10px] uppercase" style={{ color: "#94A3B8" }}>{t("cycle.title")}</span>
+          {board.sections.map((sec) => {
+            const on = cycleFilter.has(sec.cycleId);
+            return (
+              <button key={sec.cycleId} onClick={() => setCycleFilter((f) => {
+                const next = new Set(f);
+                if (next.has(sec.cycleId)) next.delete(sec.cycleId); else next.add(sec.cycleId);
+                return next;
+              })}
+                className="hoverable no-press rounded-full px-2.5 py-1 text-[11px] whitespace-nowrap"
+                style={{ border: "1px solid " + (on ? "#EE7240" : "#E2DFD9"), background: on ? "#FFF7F1" : "#FFFFFF",
+                  color: on ? "#D85A28" : "#64748B", fontWeight: on ? 600 : 400 }}>
+                {sec.name} <span className="mono text-[9px]" style={{ opacity: 0.7 }}>{sec.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sections run below and the region scrolls (CY15). The board is not
+          shrunk to fit them: a section is legible at one size. */}
+      <div className="flex-1 overflow-auto">
+        <div className="p-3" style={{ minWidth: "min-content" }}>
+          {sections.map((section) => {
+            const secStatuses = cycles.find((c) => c.id === section.cycleId)?.statuses ?? statuses;
+            const cols = featureStatusFilter.size === 0
+              ? section.columns
+              : section.columns.filter((c) => featureStatusFilter.has(c.status));
+            return (
+              <div key={section.cycleId} style={{ marginBottom: 18 }}>
+                {board.grouped && (
+                  <div className="flex items-center gap-2 pb-1.5" style={{ paddingTop: 2 }}>
+                    <span className="font-display text-[13px] font-bold" style={{ color: "#1F2330" }}>{section.name}</span>
+                    <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>
+                      {t(section.count === 1 ? "card.taskOne" : "card.taskOther", { n: section.count })}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: "#E2DFD9" }} />
+                  </div>
+                )}
+                {/* CY14: uniform columns packed left, the terminal column in the
+                    widest cycle's last slot — so Done lines up across sections
+                    and a shorter cycle shows the gap it has. */}
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.slots}, 260px)`, gap: 12, alignItems: "start" }}>
+                  {placeColumns(cols, board.slots).map(({ col, slot }) => (
+                    <div key={col.status} style={{ gridColumn: slot }}>
+                      <Column
+                        col={col}
+                        canEdit={canEdit}
+                        canEditFeature={canEditFeature}
+                        selectedId={selectedId}
+                        onSelect={onSelect}
+                        graph={graph}
+                        statuses={secStatuses}
+                        resById={resById}
+                        onRenameStatus={renameStatus}
+                        onRenameEpic={renameEpic}
+                        dragOver={dragOverCol === section.cycleId + col.status}
+                        dragOverGroup={dragOverGroup}
+                        setDragOverGroup={setDragOverGroup}
+                        sameColumnDrag={draggingStatus === col.status}
+                        onDuplicate={duplicate}
+                        onDelete={del}
+                        onDragStartTask={setDraggingStatus}
+                        onDragEndTask={() => { setDraggingStatus(null); setDragOverCol(null); setDragOverGroup(null); }}
+                        onDragEnterCol={() => setDragOverCol(section.cycleId + col.status)}
+                        onDragLeaveCol={() => { setDragOverCol((x) => (x === section.cycleId + col.status ? null : x)); setDragOverGroup(null); }}
+                        onDrop={(epicId, e) => handleDrop(col.status, epicId, e, section.cycleId)}
+                        onAddTask={(epicId) => void addTask(col.status, epicId, section.cycleId)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

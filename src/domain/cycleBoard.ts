@@ -1,5 +1,6 @@
 import type { Cycle, Epic, Feature } from "@/types";
 import { buildBoard, type StatusColumn } from "./kanban";
+import { DONE_STATUS_ID } from "./constants";
 
 /**
  * The board, grouped by cycle (Cycles-Spec §8, open question 3 — prototype).
@@ -122,4 +123,74 @@ export function matchesCycleFilter(
 ): boolean {
   if (filter.size === 0) return true;
   return filter.has(task.cycleId ?? defaultCycleId);
+}
+
+/**
+ * Which section a task is currently drawn in, or null if the board has none.
+ *
+ * Exists so the board can refuse a drop that crosses sections. Dragging a card
+ * from one cycle's row into another's would change the task's workflow, and
+ * CY2a says a cycle never changes on its own — a drag is a scheduling gesture,
+ * and changing a cycle is a deliberate act on the task itself (CY2b).
+ */
+export function sectionOfTask(board: CycleBoard, taskId: string): CycleSection | null {
+  for (const section of board.sections) {
+    for (const col of section.columns) {
+      for (const group of col.groups) {
+        if (group.tasks.some((t) => t.id === taskId)) return section;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * May this task be dropped into this section?
+ *
+ * A task the board cannot place — filtered out, or arrived mid-drag — is
+ * allowed: refusing a drop on the strength of not finding the card is worse
+ * than permitting one.
+ *
+ * There is deliberately no `if (!board.grouped) return true` short-circuit. It
+ * reads like a sensible guard and is unreachable: an ungrouped board has one
+ * section, the caller passes that section's own id, so the comparison below
+ * already answers true. A mutation removing it changed no test result, which is
+ * the tell for a branch that cannot be exercised rather than one that is
+ * under-tested.
+ */
+export function canDropInSection(board: CycleBoard, taskId: string, targetCycleId: string): boolean {
+  const home = sectionOfTask(board, taskId);
+  return home === null || home.cycleId === targetCycleId;
+}
+/**
+ * Where each visible column sits in the section's grid (Cycles-Spec CY14).
+ *
+ * Every column is the same width and packed to the left; the terminal column is
+ * pinned to the widest cycle's last slot. So Done lines up down the page across
+ * sections, and a cycle with fewer stages shows the gap it has rather than
+ * stretching to fill it — the gap is information: that cycle is shorter.
+ *
+ * `slots` comes from the board, not from this section, which is the whole point:
+ * a section placing Done by its own length would put it wherever that section
+ * happened to end, and nothing would align.
+ *
+ * Takes the columns *after* the status filter has run, so hiding a stage closes
+ * the gap on the left while Done stays where it was.
+ */
+export function placeColumns(
+  columns: StatusColumn[],
+  slots: number,
+): { col: StatusColumn; slot: number }[] {
+  // A running counter rather than the array index. With Done always last the
+  // two agree — a mutation swapping them fails nothing — so this is a claim
+  // about robustness, not a behaviour: it stays correct if a terminal column
+  // ever appears anywhere but the end.
+  let next = 1;
+  return columns.map((col) => ({
+    col,
+    // Clamped because CSS grid has no column 0, and a board with no sections
+    // reports slots 0. Two columns would then collide in slot 1; that board has
+    // no columns to collide.
+    slot: col.status === DONE_STATUS_ID ? Math.max(slots, 1) : next++,
+  }));
 }
