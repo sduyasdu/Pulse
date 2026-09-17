@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * asserting the success path did NOT run.
  */
 const updateFeature = vi.fn();
+const createFeature = vi.fn();
 vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, googleProvider: {}, functions: {} }));
 vi.mock("@/services/firestore/pulses", () => ({
   subscribePulse: () => () => {}, updatePulse: vi.fn(), renamePulse: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock("@/services/firestore/resources", () => ({
 }));
 vi.mock("@/services/firestore/features", () => ({
   subscribeFeatures: () => () => {},
-  createFeature: vi.fn(), deleteFeature: vi.fn(), newFeatureId: () => "f1",
+  createFeature: (...a: unknown[]) => createFeature(...a), deleteFeature: vi.fn(), newFeatureId: () => "f1",
   updateFeature: (...a: unknown[]) => updateFeature(...a),
 }));
 vi.mock("@/services/firestore/memberships", () => ({ subscribeMembers: () => () => {} }));
@@ -88,5 +89,56 @@ describe("the attachment cap", () => {
     await usePulseStore.getState().addAttachment("f1", "Doc", "example.com/spec");
     expect(updateFeature).toHaveBeenCalledTimes(1);
     expect(usePulseStore.getState().writeError).toBeNull();
+  });
+});
+
+describe("a task's cycle is stamped at creation", () => {
+  const STD = { id: "std", name: "Standard", statuses: [{ id: "planned", label: "P", color: "#000" }, { id: "done", label: "D", color: "#000" }] };
+  const SUP = { id: "sup", name: "Support", statuses: [{ id: "triage", label: "T", color: "#000" }, { id: "done", label: "D", color: "#000" }] };
+
+  beforeEach(() => {
+    usePulseStore.setState({
+      pulseId: "p1",
+      pulse: { id: "p1", cycles: [STD, SUP], defaultCycleId: "std" } as never,
+      epics: [{ id: "e1", name: "Design", cycleId: "sup" } as never, { id: "e2", name: "Build" } as never],
+      features: [],
+    });
+  });
+
+  it("takes the Beat's default when the task has no epic", () => {
+    void usePulseStore.getState().addFeature({ x: 0, y: 0 });
+    expect(createFeature.mock.calls[0][1]).toMatchObject({ cycleId: "std", status: "planned" });
+  });
+
+  it("takes the epic's cycle when created inside one", () => {
+    // CY2: inheritance happens here, once.
+    void usePulseStore.getState().addFeature({ x: 0, y: 0, epicId: "e1" });
+    expect(createFeature.mock.calls[0][1]).toMatchObject({ cycleId: "sup", status: "triage" });
+  });
+
+  it("starts in its own cycle's first stage, not the literal 'planned'", () => {
+    void usePulseStore.getState().addFeature({ x: 0, y: 0, epicId: "e1" });
+    expect(createFeature.mock.calls[0][1].status).toBe("triage");
+  });
+
+  it("falls back to the Beat default for an epic that names no cycle", () => {
+    void usePulseStore.getState().addFeature({ x: 0, y: 0, epicId: "e2" });
+    expect(createFeature.mock.calls[0][1]).toMatchObject({ cycleId: "std" });
+  });
+});
+
+describe("moving a task between epics", () => {
+  it("never touches its cycle", async () => {
+    // CY2a — the property the whole design protects. A drag is a scheduling
+    // gesture; it must not silently change a task's workflow.
+    usePulseStore.setState({
+      pulseId: "p1",
+      pulse: { id: "p1" } as never,
+      epics: [{ id: "e1", name: "A", cycleId: "sup" } as never],
+      features: [{ ...FEATURE, cycleId: "std", epicId: null } as never],
+    });
+    await usePulseStore.getState().moveFeatureToEpic("f1", "e1");
+    const patch = updateFeature.mock.calls.at(-1)?.[2] ?? {};
+    expect(Object.keys(patch)).not.toContain("cycleId");
   });
 });

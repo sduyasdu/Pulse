@@ -1,4 +1,4 @@
-import type { FeatureStatus, StatusDef, StatusQualification } from "@/types";
+import type { Cycle, FeatureStatus, StatusDef, StatusQualification } from "@/types";
 
 // Canvas layout constants — ported 1:1 from the prototype.
 export const BASE_DAY_WIDTH = 26; // px per day at 100% in DAY view
@@ -94,6 +94,61 @@ export function qualificationOf(statusId: FeatureStatus, statuses: StatusDef[]):
 
 // Colour palette offered when creating a custom status.
 export const STATUS_COLORS = ["#64748B", "#F5A524", "#E5484D", "#12A594", "#6366F1", "#EC4899", "#0EA5E9", "#8B5CF6", "#22C55E", "#0F766E"];
+
+/** The id of the single cycle computed for a Beat that has none. Written out
+ * only when someone first edits cycles there (Cycles-Spec CY11). */
+export const IMPLICIT_CYCLE_ID = "default";
+
+/**
+ * The Beat's workflows, resolved (Cycles-Spec CY11).
+ *
+ * A Beat that predates cycles has none, and is **not migrated in the database**
+ * — its single cycle is computed from whatever `statusesOf` already resolves, so
+ * a Beat that never customised statuses gets the built-in four and one that did
+ * gets what it customised. The feature can therefore ship, and be reverted,
+ * without having written to a customer's data.
+ *
+ * Mirrors what `statusesOf` does for statuses, deliberately: the same instinct,
+ * one level up.
+ */
+export function cyclesOf(pulse: { cycles?: Cycle[]; statuses?: StatusDef[] } | null | undefined): Cycle[] {
+  if (pulse?.cycles && pulse.cycles.length) return pulse.cycles;
+  return [{ id: IMPLICIT_CYCLE_ID, name: "Standard", statuses: statusesOf(pulse) }];
+}
+
+/**
+ * The cycle a task follows.
+ *
+ * Resolution is deliberately narrow: the task's own stamp, then the Beat's
+ * default, then the first cycle. It never consults the task's epic — CY2
+ * stamps at creation precisely so that moving a task between epics cannot
+ * change its workflow.
+ */
+export function cycleOfTask(
+  task: { cycleId?: string } | null | undefined,
+  pulse: { cycles?: Cycle[]; statuses?: StatusDef[]; defaultCycleId?: string } | null | undefined,
+): Cycle {
+  const cycles = cyclesOf(pulse);
+  const byId = task?.cycleId ? cycles.find((c) => c.id === task.cycleId) : undefined;
+  if (byId) return byId;
+  const fallback = pulse?.defaultCycleId ? cycles.find((c) => c.id === pulse.defaultCycleId) : undefined;
+  return fallback ?? cycles[0];
+}
+
+/** The statuses a task may hold — its cycle's, not the Beat's whole vocabulary. */
+export function statusesForTask(
+  task: { cycleId?: string } | null | undefined,
+  pulse: { cycles?: Cycle[]; statuses?: StatusDef[]; defaultCycleId?: string } | null | undefined,
+): StatusDef[] {
+  return cycleOfTask(task, pulse).statuses;
+}
+
+/** The status a newly created task starts in: the first stage of its cycle.
+ * Replaces the hardcoded `"planned"`, which is only correct for the built-in
+ * cycle (Cycles-Spec §6). */
+export function initialStatusOf(cycle: Cycle): FeatureStatus {
+  return cycle.statuses[0]?.id ?? "planned";
+}
 
 /** The effective, ordered status list for a Pulse (defaults when unset). */
 export function statusesOf(pulse: { statuses?: StatusDef[] } | null | undefined): StatusDef[] {

@@ -21,6 +21,7 @@ import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
 import { capsOf } from "@/domain/permissions";
 import { useAuthStore } from "@/stores/authStore";
 import { rejectAttachmentUrl } from "@/domain/attachments";
+import { cycleOfTask, initialStatusOf } from "@/domain/constants";
 import type { TranslationKey } from "@/i18n";
 
 /** Options accepted by the recording mutations. Pass { record: false } for
@@ -421,9 +422,15 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
   },
 
   addFeature: async (patch) => {
-    const { pulseId } = get();
+    const { pulseId, pulse, epics } = get();
     if (!pulseId) throw new Error("no pulse loaded");
     const id = newFeatureId(pulseId);
+    // Cycles-Spec CY2: the workflow is stamped here, from the epic the task is
+    // being created in, and never recomputed. Resolving it later from the
+    // task's *current* epic would mean a drag across epic bands silently
+    // changed its workflow.
+    const epic = patch.epicId ? epics.find((e) => e.id === patch.epicId) : undefined;
+    const cycle = cycleOfTask({ cycleId: epic?.cycleId ?? pulse?.defaultCycleId }, pulse);
     const feature: Feature = {
       id,
       title: "New task",
@@ -432,7 +439,10 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
       // draw it, so its height is something the planner sets rather than
       // something they have to undo.
       work: 1,
-      status: "planned",
+      // The first stage of its own cycle, not the literal "planned" — which is
+      // only the right answer for the built-in one.
+      status: initialStatusOf(cycle),
+      cycleId: cycle.id,
       resources: [],
       ai: false,
       ...patch,
@@ -502,6 +512,9 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     return id;
   },
 
+  // Moves the task between epic bands. Deliberately does NOT touch `cycleId`
+  // (Cycles-Spec CY2a): a drag is a scheduling gesture, and a task carries its
+  // workflow with it.
   moveFeatureToEpic: async (featureId, epicId) => {
     const { pulseId, features, epics } = get();
     if (!pulseId) return;
@@ -635,7 +648,15 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     const feature = features.find((f) => f.id === featureId);
     if (!pulseId || !feature) throw new Error("feature not found");
     const id = `st-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const subtask: Subtask = { id, title: "New subtask", status: "planned", resources: [], createdAt: toDateInputValue(todayIndex()) };
+    // CY10: a subtask inherits its parent's cycle and is not separately
+    // assignable, so it starts in that cycle's first stage.
+    const subtask: Subtask = {
+      id,
+      title: "New subtask",
+      status: initialStatusOf(cycleOfTask(feature, get().pulse)),
+      resources: [],
+      createdAt: toDateInputValue(todayIndex()),
+    };
     const patch: Partial<Feature> = { collapsed: false, children: [...(feature.children || []), subtask] };
     // Reports rather than returns: the signature owes the caller an id, and the
     // caller uses it to focus the new row. A failed write leaves nothing to

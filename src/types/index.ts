@@ -32,6 +32,10 @@ export interface Workspace {
    * "Backend" and "backend" were two roles with nothing to reconcile them.
    * A roster entry's `type` is chosen from here. */
   resourceRoles?: string[];
+  /** Cycle templates for the organisation (Cycles-Spec CY1). Copied into a Beat
+   * when chosen; never read at render time, and never written back to from a
+   * Beat (CY1a). */
+  cycles?: Cycle[];
   /** Org/legal identity for billing (Plans-Spec §1.1/§7). A Workspace *is* the
    * billing Organization (PL6), so these live here. Set when the org subscribes;
    * absent = never subscribed (Free). `country` is ISO 3166-1 alpha-2. */
@@ -238,6 +242,13 @@ export interface Pulse {
    * the prototype's Nubceo-flavored starter list isn't shipped as a
    * default (spec §9/§11: no domain-specific sample data in the real app). */
   resourceTypes: string[];
+  /** The Beat's workflows (Cycles-Spec CY1). Unset = one cycle computed from
+   * `statuses`, written only when someone first edits — `cyclesOf` resolves it,
+   * so no Beat is migrated in the database (CY11). */
+  cycles?: Cycle[];
+  /** Which of `cycles` new tasks inherit when their epic names none (CY2/CY4).
+   * Unset = the first. */
+  defaultCycleId?: string;
   /** User-managed, ordered Kanban statuses. Unset/empty = the built-in four
    * (DEFAULT_STATUSES). "done" is a reserved terminal status: always present,
    * can't be removed or reordered out of last position, and moving a task into
@@ -261,7 +272,7 @@ export interface Pulse {
 /** One Kanban/status column. `id` is what Feature.status / Subtask.status
  * reference; `color` drives the badge/column tint (bg/text derived). */
 /** A named workflow: an ordered status list ending in the reserved `done`
- * (Cycles-Spec CY5/CY6). PROTOTYPE — not yet written by the app. */
+ * (Cycles-Spec CY5/CY6). */
 export interface Cycle {
   id: string;
   name: string;
@@ -539,6 +550,10 @@ export interface Epic {
   id: string;
   name: string;
   color: string;
+  /** The cycle stamped onto tasks created in this epic (Cycles-Spec CY2).
+   * Absent = the Beat's default. Changing it never touches existing tasks
+   * unless the user asks (CY3). */
+  cycleId?: string;
   y0: number;
   y1: number;
   // Nullable rather than `| undefined` — Firestore's updateDoc() rejects
@@ -574,7 +589,8 @@ export interface Subtask {
 export interface Feature {
   /** The workflow this task follows, stamped at creation and changed only by a
    * deliberate act (Cycles-Spec CY2/CY2a). Absent on tasks predating cycles,
-   * which resolve to the Beat's default. PROTOTYPE. */
+   * which resolve to the Beat's default. Never rewritten by a move between
+   * epics. */
   cycleId?: string;
   id: string;
   title: string;
