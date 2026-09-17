@@ -11,7 +11,7 @@ import { confirmAt } from "@/stores/confirmStore";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { useT } from "@/i18n";
-import { StatusEditorDialog } from "./StatusEditorDialog";
+import { CycleEditorDialog } from "./CycleEditorDialog";
 
 interface KanbanViewProps {
   selectedId: string | null;
@@ -68,7 +68,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
   const [draggingStatus, setDraggingStatus] = useState<FeatureStatus | null>(null);
-  const [editStatuses, setEditStatuses] = useState(false);
+  const [editCycles, setEditCycles] = useState(false);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
@@ -144,8 +144,8 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
         <div className="flex-1" />
         {canEdit && (
           <>
-            <button onClick={() => setEditStatuses(true)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              <Icon name="settings" size={13} /> {t("kanban.statuses")}
+            <button onClick={() => setEditCycles(true)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
+              <Icon name="settings" size={13} /> {t("cycle.title")}
             </button>
             <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
               <Icon name="view_agenda" size={13} /> {t("toolbar.addEpic")}
@@ -154,7 +154,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
         )}
       </div>
 
-      {editStatuses && <StatusEditorDialog onClose={() => setEditStatuses(false)} />}
+      {editCycles && <CycleEditorDialog onClose={() => setEditCycles(false)} />}
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex gap-3 p-3 h-full" style={{ minWidth: "min-content" }}>

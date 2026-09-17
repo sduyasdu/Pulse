@@ -16,9 +16,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const updateFeature = vi.fn();
 const createFeature = vi.fn();
 vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, googleProvider: {}, functions: {} }));
+const updateCycles = vi.fn();
+const updatePulseStatuses = vi.fn();
 vi.mock("@/services/firestore/pulses", () => ({
   subscribePulse: () => () => {}, updatePulse: vi.fn(), renamePulse: vi.fn(),
   updateGraphConfig: vi.fn(), updateResourceTypes: vi.fn(), updateStatuses: vi.fn(),
+  updateCycles: (...a: unknown[]) => updateCycles(...a),
+  updatePulseStatuses: (...a: unknown[]) => updatePulseStatuses(...a),
 }));
 vi.mock("@/services/firestore/epics", () => ({
   subscribeEpics: () => () => {}, createEpic: vi.fn(), updateEpic: vi.fn(),
@@ -140,5 +144,37 @@ describe("moving a task between epics", () => {
     await usePulseStore.getState().moveFeatureToEpic("f1", "e1");
     const patch = updateFeature.mock.calls.at(-1)?.[2] ?? {};
     expect(Object.keys(patch)).not.toContain("cycleId");
+  });
+});
+
+describe("saving cycles keeps unmigrated readers correct", () => {
+  const STD = { id: "std", name: "Standard", statuses: [{ id: "p", label: "P", color: "#000" }, { id: "done", label: "D", color: "#000" }] };
+  const REV = { id: "rev", name: "Review", statuses: [{ id: "r", label: "R", color: "#000" }, { id: "done", label: "D", color: "#000" }] };
+
+  beforeEach(() => {
+    updateCycles.mockResolvedValue(undefined);
+    updatePulseStatuses.mockResolvedValue(undefined);
+    usePulseStore.setState({ pulseId: "p1", pulse: { id: "p1" } as never });
+  });
+
+  it("writes the cycles and the default together", () => {
+    // A default naming a cycle not in the list is the one state cycleOfTask
+    // cannot resolve, so they are never written apart.
+    void usePulseStore.getState().setCycles([STD, REV], "rev");
+    expect(updateCycles).toHaveBeenCalledWith("p1", [STD, REV], "rev");
+  });
+
+  it("mirrors the default cycle's stages into pulse.statuses", async () => {
+    // The compatibility shim. Ten components still resolve statuses through
+    // `statusesOf`, which reads `pulse.statuses` — without this, a Beat that
+    // saves cycles renders the OLD vocabulary on the canvas and in the task
+    // form while the board shows the new one. Delete this test with the shim.
+    await usePulseStore.getState().setCycles([STD, REV], "rev");
+    expect(updatePulseStatuses).toHaveBeenCalledWith("p1", REV.statuses);
+  });
+
+  it("mirrors the first cycle when the default names none of them", async () => {
+    await usePulseStore.getState().setCycles([STD, REV], "gone");
+    expect(updatePulseStatuses).toHaveBeenCalledWith("p1", STD.statuses);
   });
 });

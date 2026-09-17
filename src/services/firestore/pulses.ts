@@ -16,7 +16,7 @@ import {
 import { emailKey } from "./emailKey";
 import { db } from "@/lib/firebase";
 import { forgetPulseView } from "@/domain/pulseView";
-import type { Feature, MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef, Subtask } from "@/types";
+import type { Cycle, Feature, MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { stripUndefined } from "./patch";
 import { fetchResources, newResourceId, createResource } from "./resources";
@@ -274,6 +274,13 @@ export async function renamePulse(pulseId: string, name: string): Promise<void> 
 
 export async function updateGraphConfig(pulseId: string, graphConfig: Pulse["graphConfig"]): Promise<void> {
   await updateDoc(doc(db, "pulses", pulseId), { graphConfig, updatedAt: Date.now() });
+}
+
+/** The Beat's workflows and which one new tasks inherit (Cycles-Spec CY1/CY4).
+ * Written together because a default naming a cycle that is not in the list is
+ * the one state `cycleOfTask` cannot resolve. */
+export async function updateCycles(pulseId: string, cycles: Cycle[], defaultCycleId: string): Promise<void> {
+  await updateDoc(doc(db, "pulses", pulseId), { cycles, defaultCycleId, updatedAt: Date.now() });
 }
 
 export async function updateResourceTypes(pulseId: string, resourceTypes: string[]): Promise<void> {

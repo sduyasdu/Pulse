@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Attachment, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, ReadScope, Resource, ResourceRate, StatusDef, Subtask } from "@/types";
+import type { Attachment, Cycle, CostEntry, Epic, Feature, Pulse, PulseMember, PulseRole, ReadScope, Resource, ResourceRate, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
 import { subscribeCosts, createCost, updateCost, deleteCost, newCostId } from "@/services/firestore/costs";
 import { subscribeRates, setResourceRate, deleteResourceRate } from "@/services/firestore/rates";
@@ -14,7 +14,7 @@ import {
   newResourceId,
   makeInitials,
 } from "@/services/firestore/resources";
-import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes, updatePulseStatuses } from "@/services/firestore/pulses";
+import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes, updatePulseStatuses, updateCycles } from "@/services/firestore/pulses";
 import { subscribePulseMembers } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
@@ -63,6 +63,9 @@ interface PulseStoreState {
   setGraphConfig: (stepPx: number, workPerStep: number) => Promise<void>;
   setResourceTypes: (types: string[]) => Promise<void>;
   setStatuses: (statuses: StatusDef[]) => Promise<void>;
+  /** Replaces the Beat's workflows. Writes the default alongside, because a
+   * default naming a cycle not in the list is unresolvable (Cycles-Spec CY4). */
+  setCycles: (cycles: Cycle[], defaultCycleId: string) => Promise<void>;
 
   addEpic: (y0: number, span?: { minX: number; maxX: number }) => Promise<string>;
   patchEpic: (epicId: string, patch: Partial<Epic>, opts?: MutateOpts) => Promise<void>;
@@ -368,6 +371,22 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (!pulseId) return;
     await updatePulseStatuses(pulseId, statuses);
     if (pulse) recordSingle("Edit statuses", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { statuses }));
+  },
+
+  setCycles: async (cycles, defaultCycleId) => {
+    const { pulseId, pulse } = get();
+    if (!pulseId) return;
+    if (!(await write(set, () => updateCycles(pulseId, cycles, defaultCycleId)))) return;
+    // COMPATIBILITY SHIM, remove when the read paths move to the task's own
+    // cycle. Ten components still resolve statuses through `statusesOf`, which
+    // reads `pulse.statuses` — so a Beat that saves cycles and leaves that field
+    // behind would render the old vocabulary on the canvas, in the task form and
+    // in the mobile list while the board showed the new one. Mirroring the
+    // default cycle's stages into it keeps every unmigrated reader correct.
+    // Delete this once `statusesForTask` is what those call sites use.
+    const def = cycles.find((c) => c.id === defaultCycleId) ?? cycles[0];
+    if (def) await write(set, () => updatePulseStatuses(pulseId, def.statuses));
+    if (pulse) recordSingle("Edit cycles", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { cycles, defaultCycleId }));
   },
 
   addEpic: async (y0, span) => {
