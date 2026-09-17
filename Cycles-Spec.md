@@ -297,6 +297,50 @@ customer's data.
 identity for every existing Beat. It is the default selection in CY4 for the
 same reason.
 
+## 7.1 Board layout across sections
+
+**CY14 — The terminal column is pinned right; the rest divide what is left.**
+
+Every section is the same total width. The terminal column takes a fixed width
+at the end, and the non-terminal columns share the remainder equally, however
+many of them there are.
+
+Two things fall out of that, and both were problems in the first render:
+
+- **Done lands on the same x in every section**, so completion can be scanned
+  down the page. This is only possible because CY5 makes Done universal — with
+  a per-cycle terminal id there would be no column every section shares.
+- **A short cycle fills its row** instead of trailing into blank space. A
+  three-status cycle next to a five-status one no longer looks unfinished.
+
+The cost, visible in the current shot: with few non-terminal columns they get
+*wide* — a two-column cycle gives each half the board, which is generous for a
+card holding a short title. `CycleBoard.slots` (the widest section's column
+count) is exposed so a maximum can be imposed later if that reads badly at
+scale; it is deliberately not imposed now, because "distribute evenly to cover
+the blank space" is the behaviour asked for and a cap would partly undo it.
+
+## 7.2 Filtering the canvas by cycle
+
+**CY13 — The canvas gains an optional cycle filter, off by default.**
+
+`matchesCycleFilter` (`src/domain/cycleBoard.ts`) mirrors the canvas's existing
+filters exactly — a `Set<string>` where **empty means no filter, not "match
+nothing"** (`CanvasView.tsx:308-309`). It joins `featureStatusFilter`,
+`epicFilter`, `filterResource` and the query in `PulsePage.tsx:295-304`, and
+must be added to `filterSignatureOf` so a cycle filter participates in the same
+scroll-restore behaviour as the others.
+
+**A task with no `cycleId` counts as the Beat's default.** Every task created
+before cycles ship has none, so any other reading would make the filter hide
+most of an existing Beat the first time it is used.
+
+*Rejected: filtering the canvas by cycle implicitly whenever the board is
+grouped.* The two views answer different questions — the board asks "what state
+is everything in", the canvas asks "when does it happen" — and a filter that
+turns itself on because another view is grouped is exactly the kind of silent
+change CY2a exists to forbid.
+
 ## 8. Open questions
 
 1. **Deleting a cycle that tasks still use.** CY7 covers an orphaned *status*.
@@ -323,18 +367,15 @@ same reason.
    — and a Beat that *defines* five cycles but uses one gets no headers either.
    Grouping appears only when there is something to group.
 
-   **Three things the picture showed that the prose had not:**
+   The first render showed two problems, both now fixed (CY14), and left one
+   open:
 
-   - **The terminal column does not line up.** Done is column 4 in Standard and
-     column 3 in the other two, so the eye cannot scan completion down the page.
-     Since CY5/CY6 make Done always last, the fix is available: pin the terminal
-     column to a fixed offset across sections, or pad shorter cycles. Worth
-     doing — it is the one column every cycle shares.
-   - **Whitespace grows with cycle count.** A three-status cycle uses half the
-     width a four-status one does, and the remainder is empty. Tolerable at
-     three cycles; it is the argument against encouraging many.
-   - **Vertical cost.** Three cycles fill the fold at 900px. Five would mean
-     scrolling to see the board at all, which weakens "what is the state of this
+   - ~~The terminal column does not line up.~~ **Fixed.** Done is pinned to the
+     right edge of every section.
+   - ~~Whitespace grows with cycle count.~~ **Fixed.** Shorter cycles stretch to
+     fill.
+   - **Vertical cost remains.** Three cycles fill the fold at 900px. Five would
+     mean scrolling to see the board at all, which weakens "the state of this
      Beat at a glance". Collapsible sections, defaulting to open, are the
      obvious answer and are not yet designed.
 

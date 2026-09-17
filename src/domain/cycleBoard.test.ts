@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCycleBoard } from "./cycleBoard";
+import { buildCycleBoard, matchesCycleFilter } from "./cycleBoard";
 import type { Cycle, Epic, Feature } from "@/types";
 
 /**
@@ -88,8 +88,56 @@ describe("a task pointing at a cycle the Beat no longer has", () => {
   });
 });
 
+describe("the widest section sets the layout", () => {
+  it("reports the widest section's column count", () => {
+    // Standard has 3 statuses, Review has 3 — both counting Done.
+    const b = buildCycleBoard([task("a", "planned", "std"), task("c", "in-review", "rev")], epics, [standard, review]);
+    expect(b.slots).toBe(3);
+  });
+
+  it("counts the widest, not the first", () => {
+    const wide: Cycle = { id: "wide", name: "Wide", statuses: [
+      { id: "a", label: "A", color: "#000" }, { id: "b", label: "B", color: "#000" },
+      { id: "c", label: "C", color: "#000" }, DONE] };
+    // `review` is first in the list and narrower; the wider one must win.
+    const b = buildCycleBoard([task("x", "planned", "rev"), task("y", "a", "wide")], epics, [review, wide]);
+    expect(b.slots).toBe(4);
+  });
+
+  it("is zero when there is nothing to lay out", () => {
+    expect(buildCycleBoard([], epics, []).slots).toBe(0);
+  });
+});
+
+describe("filtering the canvas by cycle", () => {
+  it("an empty filter means no filter, not nothing", () => {
+    // The canvas's other filters read `size === 0 || has(x)`; this must match,
+    // or turning a filter on and off again would empty the canvas.
+    expect(matchesCycleFilter({ cycleId: "std" }, new Set(), "std")).toBe(true);
+  });
+
+  it("keeps tasks in a selected cycle and drops the rest", () => {
+    const f = new Set(["rev"]);
+    expect(matchesCycleFilter({ cycleId: "rev" }, f, "std")).toBe(true);
+    expect(matchesCycleFilter({ cycleId: "std" }, f, "std")).toBe(false);
+  });
+
+  it("treats a task with no cycle as the Beat's default", () => {
+    // Every task created before cycles shipped has no cycleId. Filtering to the
+    // default cycle must include them, or the filter hides most of the Beat.
+    expect(matchesCycleFilter({}, new Set(["std"]), "std")).toBe(true);
+    expect(matchesCycleFilter({}, new Set(["rev"]), "std")).toBe(false);
+  });
+
+  it("accepts several cycles at once", () => {
+    const f = new Set(["std", "rev"]);
+    expect(matchesCycleFilter({ cycleId: "std" }, f, "std")).toBe(true);
+    expect(matchesCycleFilter({ cycleId: "sup" }, f, "std")).toBe(false);
+  });
+});
+
 describe("degenerate input", () => {
   it("returns nothing rather than throwing when a Beat defines no cycles", () => {
-    expect(buildCycleBoard([task("a", "planned")], epics, [])).toEqual({ grouped: false, sections: [] });
+    expect(buildCycleBoard([task("a", "planned")], epics, [])).toEqual({ grouped: false, sections: [], slots: 0 });
   });
 });

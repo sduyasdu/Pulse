@@ -240,6 +240,11 @@ const PROTO_TASKS: Feature[] = [
 
 function CycleBoardScene() {
   const board = buildCycleBoard(PROTO_TASKS, PROTO_EPICS, PROTO_CYCLES, false);
+  // Terminal pinned right, the rest sharing what is left. Every section is the
+  // same total width, so Done lands on the same x in all of them and the eye
+  // can scan completion down the page — while a short cycle stretches to fill
+  // instead of trailing off into blank space.
+  const TERMINAL_W = 200;
   return (
     <div style={{ background: "#FDFCF8", minHeight: "100vh", padding: 16 }}>
       {board.sections.map((section) => (
@@ -256,7 +261,11 @@ function CycleBoardScene() {
               const meta = statusMetaOf(col.status, PROTO_CYCLES.find((c) => c.id === section.cycleId)?.statuses);
               const terminal = col.status === "done";
               return (
-                <div key={col.status} style={{ width: 190, flexShrink: 0, borderRadius: 10, border: "1px solid #E2DFD9",
+                <div key={col.status} style={{
+                  // The one fixed width on the row is the terminal column; the
+                  // others divide the remainder equally, however many there are.
+                  ...(terminal ? { width: TERMINAL_W, flexShrink: 0 } : { flex: "1 1 0", minWidth: 150 }),
+                  borderRadius: 10, border: "1px solid #E2DFD9",
                   background: terminal ? "#FAFAF8" : "#FFFFFF", opacity: terminal ? 0.75 : 1, padding: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 4, background: meta.border, flexShrink: 0 }} />
@@ -280,6 +289,19 @@ function CycleBoardScene() {
           </div>
         </div>
       ))}
+
+      {/* The canvas's optional cycle filter (CY13), shown in the board's own
+          language. It is a MultiSelectFilter on the canvas itself. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 12, borderTop: "1px dashed #E2DFD9" }}>
+        <span className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>CANVAS FILTER</span>
+        {PROTO_CYCLES.map((c, i) => (
+          <span key={c.id} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999,
+            border: "1px solid " + (i === 1 ? "#EE7240" : "#E2DFD9"),
+            background: i === 1 ? "#FFF7F1" : "#FFFFFF", color: i === 1 ? "#D85A28" : "#64748B",
+            fontWeight: i === 1 ? 600 : 400 }}>{c.name}</span>
+        ))}
+        <span className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>— off by default; empty means all</span>
+      </div>
     </div>
   );
 }

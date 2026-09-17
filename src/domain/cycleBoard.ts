@@ -31,6 +31,16 @@ export interface CycleBoard {
    * section headers, no visual change for the overwhelming majority of Beats. */
   grouped: boolean;
   sections: CycleSection[];
+  /** Columns in the widest section, terminal included.
+   *
+   * The terminal column is pinned to the right edge of every section and the
+   * rest share what is left, so Done lines up down the page and no section
+   * trails off into blank space. The renderer achieves that with flex — a
+   * fixed-width terminal column last, the others `flex: 1` — so this number is
+   * not needed to align anything. It is here because a section with one
+   * non-terminal column would otherwise stretch it across the whole board, and
+   * a sensible maximum needs to know what "whole board" means. */
+  slots: number;
 }
 
 /**
@@ -51,7 +61,7 @@ export function buildCycleBoard(
 ): CycleBoard {
   const known = new Map(cycles.map((c) => [c.id, c]));
   const fallback = cycles[0];
-  if (!fallback) return { grouped: false, sections: [] };
+  if (!fallback) return { grouped: false, sections: [], slots: 0 };
 
   // Which cycles actually have tasks. A Beat may define five and use two; five
   // section headers for two used workflows is noise.
@@ -84,6 +94,8 @@ export function buildCycleBoard(
     };
   });
 
+  const slots = sections.reduce((m, sec) => Math.max(m, sec.columns.length), 0);
+
   if (orphans.length) {
     sections.push({
       cycleId: ORPHAN_SECTION,
@@ -92,5 +104,22 @@ export function buildCycleBoard(
       columns: buildBoard(orphans, epics, fallback.statuses, false),
     });
   }
-  return { grouped, sections };
+  return { grouped, sections, slots: Math.max(slots, sections.reduce((m, sec) => Math.max(m, sec.columns.length), 0)) };
+}
+
+/**
+ * Does this task pass a cycle filter? (Cycles-Spec CY13.)
+ *
+ * Mirrors the canvas's other filters exactly — `size === 0` means "no filter",
+ * not "match nothing" (`CanvasView.tsx:308-309`). A task with no `cycleId`
+ * counts as the Beat's default, because that is what it resolves to everywhere
+ * else; filtering it out would hide every task created before cycles shipped.
+ */
+export function matchesCycleFilter(
+  task: { cycleId?: string },
+  filter: Set<string>,
+  defaultCycleId: string,
+): boolean {
+  if (filter.size === 0) return true;
+  return filter.has(task.cycleId ?? defaultCycleId);
 }
