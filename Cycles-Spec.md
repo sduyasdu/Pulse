@@ -1,7 +1,12 @@
 # Beats — Cycles (workflow processes) Specification
 
-Status: **Draft for sign-off (CY1–CY12).** Extends `Kanban-Spec.md` D14, which
-shipped per-Beat custom statuses. · Owner: product + eng ·
+Status: **Decided (CY1–CY17); no open questions. Not implemented.** The board
+arrangement is prototyped — `src/domain/cycleBoard.ts` and the probe's
+`cycleBoard` scene — and the domain pieces that the decisions turn on exist with
+tests behind them (`cycleBoard.ts`, `cycleDeletion.ts`, `qualificationOf`).
+Nothing writes cycle data, `KanbanView` still renders one status list, and the
+gear is still in the board header. Extends `Kanban-Spec.md` D14, which shipped
+per-Beat custom statuses. · Owner: product + eng ·
 Related: `Kanban-Spec.md` (§12 statuses, D6 the terminal lock),
 `Resource-Master-Spec.md` (RM15 — the copy-not-reference precedent this follows),
 `Permissions-Spec.md` (who may edit org-level config), `MCP-Spec.md` (the
@@ -62,6 +67,31 @@ This follows RM15 exactly, and for the same three reasons the roster does:
 - **Reads.** `Pulse.cycles` is already inside the document the canvas
   subscribes to. A reference would mean a cross-collection read on a path the
   rules scope per Beat — the same problem `myPulses` exists to solve.
+
+**CY1a — Nothing flows back. A Beat-level edit never reaches the organisation,
+not even by invitation.**
+
+The copy is one-directional. A cycle refined inside a Beat stays there, and an
+admin who wants that refinement org-wide retypes it in the org manager.
+
+The tempting middle ground — an explicit "save to organisation" for admins,
+never automatic — was considered and rejected. It sounds free because it is
+opt-in, and it is not:
+
+- **It reintroduces the permission problem CY1 exists to avoid**, one step
+  removed. The button has to be hidden from Beat editors who are not workspace
+  admins, so most people see a cycle manager with a control they cannot use, and
+  the admins who can use it are editing org config from inside a Beat — the
+  context least likely to make them think about the other nineteen Beats it
+  affects.
+- **It makes the template a moving target.** The value of CY1 is that a Beat's
+  columns are stable: nothing an admin does elsewhere changes them. That holds
+  only while the template is edited in one place, deliberately, by someone
+  looking at the org.
+- **Retyping is cheap and rare.** A cycle is three or four stages. Refining one
+  in a Beat and then wanting it everywhere is not a frequent event, and when it
+  happens, doing it in the org manager is the moment to think about whether
+  every Beat should get it.
 
 *Rejected: live references with copy-on-write.* It gets the "update once,
 applies everywhere" property, at the cost of a Beat's columns changing under
@@ -466,13 +496,17 @@ change CY2a exists to forbid.
 
 ## 8. Open questions
 
+**None remain.** All four are answered below, kept rather than deleted because
+the reasoning is the record — a question closed without its argument is one that
+gets reopened.
+
 1. ~~**Deleting a cycle that tasks still use.**~~ **Answered by CY17:** refuse,
    and name what is holding it.
 
-2. **Does a Beat-level cycle edit propagate back to the org template?** CY1 says
-   no. Should the manager offer an explicit "save to organisation" for admins, so
-   a refinement made in a Beat is not retyped? Likely yes, as a deliberate
-   action, never automatic.
+2. ~~**Does a Beat-level cycle edit propagate back to the org template?**~~
+   **Answered by CY1a: no, and not by invitation either.** The "save to
+   organisation" button this question proposed was rejected — see CY1a for why
+   an opt-in version is not free.
 3. **Per-cycle board columns. ✅ DECIDED — group by cycle. Prototyped
    2026-09-17.** Three arrangements were possible: a **union** of every cycle's
    columns, a **filter** to one cycle at a time, or **grouping** into one band
