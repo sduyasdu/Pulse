@@ -299,26 +299,41 @@ same reason.
 
 ## 7.1 Board layout across sections
 
-**CY14 — The terminal column is pinned right; the rest divide what is left.**
+**CY14 — Uniform columns, left-aligned; Done sits in the longest cycle's
+terminal slot.**
 
-Every section is the same total width. The terminal column takes a fixed width
-at the end, and the non-terminal columns share the remainder equally, however
-many of them there are.
+Every column is the same fixed width in every section, packed from the left. The
+terminal column is not placed after its own section's columns — it is placed in
+the **last slot of the widest cycle**, so Done lands on the same x everywhere and
+a shorter cycle shows the gap it actually has.
 
-Two things fall out of that, and both were problems in the first render:
+```
+Standard       [Planned][In progress][Blocked][Done]
+Design review  [Planned][In review]           [Done]
+Support        [Triage] [Working]             [Done]
+```
 
-- **Done lands on the same x in every section**, so completion can be scanned
-  down the page. This is only possible because CY5 makes Done universal — with
-  a per-cycle terminal id there would be no column every section shares.
-- **A short cycle fills its row** instead of trailing into blank space. A
-  three-status cycle next to a five-status one no longer looks unfinished.
+Three properties follow, and all three were problems in earlier attempts:
 
-The cost, visible in the current shot: with few non-terminal columns they get
-*wide* — a two-column cycle gives each half the board, which is generous for a
-card holding a short title. `CycleBoard.slots` (the widest section's column
-count) is exposed so a maximum can be imposed later if that reads badly at
-scale; it is deliberately not imposed now, because "distribute evenly to cover
-the blank space" is the behaviour asked for and a cap would partly undo it.
+- **Done is scannable down the page.** Only possible because CY5 keeps Done
+  universal — with a per-cycle terminal id there is no column every section
+  shares and nothing to align to. The decision made for its cheapness turns out
+  to carry the layout.
+- **A card is the same size wherever it is.** The eye reads down a column
+  instead of re-measuring each section.
+- **The gap is information.** It says this cycle is shorter, which is true and
+  worth seeing. An earlier version stretched shorter cycles to fill that space;
+  it removed the blank area and, with it, the fact.
+
+`CycleBoard.slots` — the widest section's column count — is what makes this
+work, and is the reason it is on the interface rather than computed in the
+renderer. The grid is `slots` columns wide in every section however few a given
+cycle fills, and the terminal column is placed at `slots`.
+
+*Rejected: distributing shorter cycles' columns to fill the row.* Built and
+looked at first. It leaves no blank space, and it makes a two-column cycle give
+each column half the board — cards far wider than their content, and a different
+card size in every section.
 
 ## 7.2 Filtering the canvas by cycle
 
@@ -372,8 +387,8 @@ change CY2a exists to forbid.
 
    - ~~The terminal column does not line up.~~ **Fixed.** Done is pinned to the
      right edge of every section.
-   - ~~Whitespace grows with cycle count.~~ **Fixed.** Shorter cycles stretch to
-     fill.
+   - ~~Whitespace grows with cycle count.~~ **Addressed.** Columns are uniform
+     and left-aligned; the remaining gap before Done is deliberate (CY14).
    - **Vertical cost remains.** Three cycles fill the fold at 900px. Five would
      mean scrolling to see the board at all, which weakens "the state of this
      Beat at a glance". Collapsible sections, defaulting to open, are the

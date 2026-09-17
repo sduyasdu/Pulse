@@ -240,11 +240,15 @@ const PROTO_TASKS: Feature[] = [
 
 function CycleBoardScene() {
   const board = buildCycleBoard(PROTO_TASKS, PROTO_EPICS, PROTO_CYCLES, false);
-  // Terminal pinned right, the rest sharing what is left. Every section is the
-  // same total width, so Done lands on the same x in all of them and the eye
-  // can scan completion down the page — while a short cycle stretches to fill
-  // instead of trailing off into blank space.
-  const TERMINAL_W = 200;
+  // Every column the same width, left-aligned — so a card is the same size
+  // wherever it is, and the eye reads down a column rather than re-measuring
+  // each section. The terminal column is placed in the LAST slot of the widest
+  // cycle, not after that section's own columns, so Done lines up across
+  // sections and a shorter cycle simply shows the gap it actually has.
+  //
+  // `board.slots` is what makes this possible: the grid is that many columns
+  // wide in every section, however few of them a given cycle fills.
+  const COL_W = 210;
   return (
     <div style={{ background: "#FDFCF8", minHeight: "100vh", padding: 16 }}>
       {board.sections.map((section) => (
@@ -256,15 +260,15 @@ function CycleBoardScene() {
               <div style={{ flex: 1, height: 1, background: "#E2DFD9" }} />
             </div>
           )}
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            {section.columns.map((col) => {
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.slots}, ${COL_W}px)`, gap: 10, alignItems: "start" }}>
+            {section.columns.map((col, i) => {
               const meta = statusMetaOf(col.status, PROTO_CYCLES.find((c) => c.id === section.cycleId)?.statuses);
               const terminal = col.status === "done";
               return (
                 <div key={col.status} style={{
-                  // The one fixed width on the row is the terminal column; the
-                  // others divide the remainder equally, however many there are.
-                  ...(terminal ? { width: TERMINAL_W, flexShrink: 0 } : { flex: "1 1 0", minWidth: 150 }),
+                  // Non-terminal columns fall where they are, left to right.
+                  // Done jumps to the final slot, leaving the gap visible.
+                  gridColumn: terminal ? board.slots : i + 1,
                   borderRadius: 10, border: "1px solid #E2DFD9",
                   background: terminal ? "#FAFAF8" : "#FFFFFF", opacity: terminal ? 0.75 : 1, padding: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -290,8 +294,7 @@ function CycleBoardScene() {
         </div>
       ))}
 
-      {/* The canvas's optional cycle filter (CY13), shown in the board's own
-          language. It is a MultiSelectFilter on the canvas itself. */}
+      {/* The canvas's optional cycle filter (CY13), off by default. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 12, borderTop: "1px dashed #E2DFD9" }}>
         <span className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>CANVAS FILTER</span>
         {PROTO_CYCLES.map((c, i) => (
