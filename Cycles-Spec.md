@@ -335,6 +335,22 @@ looked at first. It leaves no blank space, and it makes a two-column cycle give
 each column half the board — cards far wider than their content, and a different
 card size in every section.
 
+**CY15 — Sections run below and the board scrolls; the filter stays put.**
+
+Five cycles do not fit a laptop viewport. The board does not shrink to make them
+fit — a section is legible at one size, and three sections squeezed to two-thirds
+are three sections nobody can read. They run below, and the region scrolls.
+
+The cycle filter is **outside** that scrolling region, pinned above it. That is
+the whole reason it moved to the top: a filter that scrolls away from the thing
+it filters is a control you have to hunt for at exactly the moment you want it.
+
+*Rejected: collapsible sections defaulting to open.* Still a reasonable addition
+later, and it does not conflict with this. But it is not a substitute: with every
+section open — which is the default, and the state that matters — the board is
+exactly as tall, so scrolling is needed either way. Collapsing is a convenience
+on top of scrolling, not an alternative to it.
+
 ## 7.2 Filtering the canvas by cycle
 
 **CY13 — The canvas gains an optional cycle filter, off by default.**
@@ -349,6 +365,15 @@ scroll-restore behaviour as the others.
 **A task with no `cycleId` counts as the Beat's default.** Every task created
 before cycles ship has none, so any other reading would make the filter hide
 most of an existing Beat the first time it is used.
+
+**The filter sits above the board, and lists only the cycles the board is
+showing.** Its chips are built from `board.sections`, not from every cycle the
+Beat defines — a chip for a cycle with nothing in it filters to an empty board,
+which is a dead end offered as a control. Each chip carries its task count, so
+the row doubles as the summary of what is in the Beat.
+
+Placing it above rather than below matters once the board scrolls (CY15): the
+filter must stay visible while what it filters moves.
 
 *Rejected: filtering the canvas by cycle implicitly whenever the board is
 grouped.* The two views answer different questions — the board asks "what state
@@ -389,10 +414,9 @@ change CY2a exists to forbid.
      right edge of every section.
    - ~~Whitespace grows with cycle count.~~ **Addressed.** Columns are uniform
      and left-aligned; the remaining gap before Done is deliberate (CY14).
-   - **Vertical cost remains.** Three cycles fill the fold at 900px. Five would
-     mean scrolling to see the board at all, which weakens "the state of this
-     Beat at a glance". Collapsible sections, defaulting to open, are the
-     obvious answer and are not yet designed.
+   - ~~Vertical cost.~~ **Resolved (CY15): the sections scroll.** Five cycles do
+     not fit an 800px viewport and are not made to — they run below and the
+     board scrolls, with the cycle filter fixed above it.
 
    The canvas and mobile list remain unaffected: they render a status per task,
    not columns.

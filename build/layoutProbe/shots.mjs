@@ -22,7 +22,7 @@ const SHOTS = [
   // The wordmark split: the toolbar sits inside one Beat and must read
   // "Beat"; the dashboard spans all of them and must read "Beats". Nothing
   // else in the suite renders both words, and the difference is one letter.
-  ["cycleBoard", "en", 1280, 900],
+  ["cycleBoard", "en", 1280, 800],
   ["cycleBoard", "en", 1000, 900],
   ["toolbar", "en", 1280, 200],
   ["dashboard", "en", 1280, 400],
