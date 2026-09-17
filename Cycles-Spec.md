@@ -341,6 +341,45 @@ stalled work as underway from the day cycles shipped. A custom stage meaning
 "stalled" still cannot be inferred and must say so, which is why the editor
 asks.
 
+## 7.05 Deleting a cycle
+
+**CY17 — A cycle in use cannot be deleted. The refusal names what is holding
+it.**
+
+The person clears the obstacles — reassigning tasks to another cycle, or
+deleting them — and then the cycle goes. This mirrors CY7's rule for deleting a
+*status*, and the reasoning is the same: silently rewriting or dropping work to
+make a configuration change succeed is the one outcome nobody wants.
+
+`cycleDeletionBlockers` (`src/domain/cycleDeletion.ts`) enumerates three kinds,
+because they need **different actions** and a refusal that does not distinguish
+them sends people at controls that will refuse:
+
+| Blocker | How it is cleared |
+| --- | --- |
+| Tasks using the cycle | Reassign them (CY2b), or delete them |
+| **Tasks that are done** | **Cannot be reassigned** — reopen, or delete |
+| Epics defaulting to it | Point the epic at another cycle |
+| It is the Beat's default | Choose another default first |
+
+**The done-task row is the one worth designing for.** CY2b forbids changing a
+completed task's cycle — its workflow is part of the record of how it was
+completed. So a dialog that says "reassign these 12 tasks" is wrong when four of
+them are done: that control will refuse. They are listed separately, with their
+own two ways out.
+
+**Epics block even with no tasks.** An epic pointing at a deleted cycle would
+stamp the next task created in it with a cycle that does not exist — an orphan
+manufactured after the fact, rather than inherited from history.
+
+**The Beat's default is never deletable.** A Beat always has one, and new tasks
+resolve through it (CY2). Removing it leaves nothing to inherit.
+
+**Tasks with no `cycleId` count against the default.** They resolve to it
+everywhere else (CY11), so deleting the default without counting them would
+orphan every task created before cycles shipped — which, on the day this ships,
+is all of them.
+
 ## 7.1 Board layout across sections
 
 **CY14 — Uniform columns, left-aligned; Done sits in the longest cycle's
@@ -427,10 +466,9 @@ change CY2a exists to forbid.
 
 ## 8. Open questions
 
-1. **Deleting a cycle that tasks still use.** CY7 covers an orphaned *status*.
-   A deleted *cycle* is worse — the task has no workflow at all. Proposal: refuse
-   the delete while tasks reference it, listing them, exactly as the status
-   delete does. Needs confirming against how often people will want to clean up.
+1. ~~**Deleting a cycle that tasks still use.**~~ **Answered by CY17:** refuse,
+   and name what is holding it.
+
 2. **Does a Beat-level cycle edit propagate back to the org template?** CY1 says
    no. Should the manager offer an explicit "save to organisation" for admins, so
    a refinement made in a Beat is not retyped? Likely yes, as a deliberate
