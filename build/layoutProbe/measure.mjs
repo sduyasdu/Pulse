@@ -34,7 +34,19 @@ const WIDTHS = [768, 900, 1024, 1152, 1280, 1440, 1512, 1680, 1920, 2560];
 const NARROW = [360, 390, 414, 600];
 const SCENE_WIDTHS = { login: [...NARROW, ...WIDTHS] };
 const widthsFor = (scene) => SCENE_WIDTHS[scene] ?? WIDTHS;
-const LANGS = ["en", "de"]; // English, plus the longest labels
+/**
+ * All six, not "English plus the longest".
+ *
+ * German was picked as the worst case once and the pair has been carried ever
+ * since, but the toolbar overflow that prompted this probe was
+ * language-dependent in ways nobody predicted — the widest label is not a fixed
+ * property of a language, it is a property of whichever string happens to be
+ * long in whichever row a control lands in. Cycles-Spec CY9 requires a full
+ * sweep before any control is added to the first row for exactly that reason.
+ * Six languages is a few seconds; guessing which two matter is how the
+ * regression got in.
+ */
+const LANGS = ["en", "de", "fr", "es", "it", "pt"];
 const NAMES = ["short", "typical", "long", "unbroken"];
 const NAME_VALUES = {
   short: "Roadmap",

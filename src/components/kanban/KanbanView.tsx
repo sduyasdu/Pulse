@@ -12,7 +12,6 @@ import { confirmAt } from "@/stores/confirmStore";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { useT } from "@/i18n";
-import { CycleEditorDialog } from "./CycleEditorDialog";
 
 interface KanbanViewProps {
   selectedId: string | null;
@@ -69,7 +68,6 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   const [dragOverCol, setDragOverCol] = useState<FeatureStatus | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
   const [draggingStatus, setDraggingStatus] = useState<FeatureStatus | null>(null);
-  const [editCycles, setEditCycles] = useState(false);
   const [datePeriod, setDatePeriod] = useState<DatePeriod>("all");
 
   // Query / epic / resource narrow the cards shown; status filter hides whole
@@ -158,18 +156,11 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
         <DatePeriodFilter value={datePeriod} onChange={setDatePeriod} />
         <div className="flex-1" />
         {canEdit && (
-          <>
-            <button onClick={() => setEditCycles(true)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              <Icon name="settings" size={13} /> {t("cycle.title")}
-            </button>
-            <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
-              <Icon name="view_agenda" size={13} /> {t("toolbar.addEpic")}
-            </button>
-          </>
+          <button onClick={() => void addEpic(20)} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: "#F4F2EC", color: "#334155", border: "1px solid #E2DFD9" }}>
+            <Icon name="view_agenda" size={13} /> {t("toolbar.addEpic")}
+          </button>
         )}
       </div>
-
-      {editCycles && <CycleEditorDialog onClose={() => setEditCycles(false)} />}
 
       {/* The cycle filter sits above the board and outside the scrolling
           region (CY15), so it stays visible while what it filters moves. */}

@@ -11,6 +11,7 @@ import { SharePulseButton } from "@/components/shared/SharePulseButton";
 import { Icon } from "@/components/shared/Icon";
 import { BeatsLockup } from "@/components/shared/Logo";
 import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
+import { CycleEditorDialog } from "@/components/shared/CycleEditorDialog";
 
 interface ToolbarProps {
   pulseName: string;
@@ -126,6 +127,7 @@ export function Toolbar({
 }: ToolbarProps) {
   const t = useT();
   const [showGraphSettings, setShowGraphSettings] = useState(false);
+  const [editCycles, setEditCycles] = useState(false);
   const [name, onNameChange] = useDebouncedText(pulseName, onRenamePulse, 600);
   const densityLabel: Record<Density, string> = {
     day: t("toolbar.densityDay"),
@@ -241,6 +243,18 @@ export function Toolbar({
         >
           <Icon name="help" size={14} />
         </button>
+        {/* CY9: cycles govern the canvas, the board, the mobile list and the
+            reports, so the control sits with the other Beat-wide settings
+            rather than in the board header where it started — from there it was
+            reachable only from one of the four views it governs.
+            A distinct glyph, not a second `settings` gear: two identical gears
+            side by side say nothing about which is which. */}
+        {canEdit && (
+          <button onClick={() => setEditCycles(true)} title={t("cycle.manageTitle")} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ flexShrink: 0, background: "#1B3A63", color: "#EE7240", border: "1px solid #24406B", whiteSpace: "nowrap" }}>
+            <Icon name="conversion_path" size={13} /> {t("cycle.title")}
+          </button>
+        )}
+        {editCycles && <CycleEditorDialog onClose={() => setEditCycles(false)} />}
         {canEdit && (
           <div className="relative" style={{ flexShrink: 0 }}>
             <button onClick={() => setShowGraphSettings((v) => !v)} title={t("toolbar.effortScaleTitle")} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold" style={{ background: showGraphSettings ? "#EE7240" : "#1B3A63", color: showGraphSettings ? "#0A1428" : "#EE7240", border: "1px solid " + (showGraphSettings ? "#EE7240" : "#24406B"), whiteSpace: "nowrap" }}>

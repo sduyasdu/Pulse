@@ -119,6 +119,7 @@ export const fr: Dict = {
 
   // kanban board
   "cycle.title": "Cycles",
+  "cycle.manageTitle": "Gérer les cycles et les étapes de ce Beat",
   "cycle.intro": "Un cycle est l'ensemble des \u00e9tapes que le travail traverse. Tout cycle se termine par Done.",
   "cycle.add": "Ajouter un cycle",
   "cycle.name": "Nom du cycle",

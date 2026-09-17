@@ -123,6 +123,7 @@ export const en = {
 
   // ── kanban board ────────────────────────────────────────────────────────────
   "cycle.title": "Cycles",
+  "cycle.manageTitle": "Manage this Beat's cycles and stages",
   "cycle.intro": "A cycle is a set of stages work moves through. Every cycle ends in Done.",
   "cycle.add": "Add a cycle",
   "cycle.name": "Cycle name",
