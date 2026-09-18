@@ -13,6 +13,7 @@ import { FILTER_LEFT_MARGIN_PX, alignForCompaction, focusForSpan, spanOfFilter }
 import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } from "@/domain/dateUtils";
 import { buildTimeline } from "@/domain/timeline";
 import { matchesCycleFilter } from "@/domain/cycleBoard";
+import { stickyLabelShift, stickyLabelWidth } from "@/domain/stickyLabel";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusMetaInCycle, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
@@ -82,6 +83,19 @@ export const TODAY_LEFT_FRACTION = 1 / 4;
  * its right. `clientWidth` is measured on the scroller, which already excludes
  * the 320px left panel — so this tracks the panel being collapsed, and every
  * window size, without being told about either. */
+/**
+ * Room a travelling label needs before it stops (see `stickyLabelShift`).
+ *
+ * Covers the staffing dot, the gap and enough of the name to be worth reading.
+ * Deliberately generous: stopping slightly early leaves the name legible on the
+ * way out, where stopping late crushes it against the box's right edge.
+ */
+const STICKY_LABEL_RESERVE_PX = 120;
+
+/** Room kept clear at the box's right edge for the pin / attachment / AI / done
+ * icons, so a travelling name never runs under them. */
+const STICKY_LABEL_ICON_ROOM_PX = 56;
+
 export function todayMarginFor(containerWidth: number): number {
   return containerWidth > 0 ? Math.round(containerWidth * TODAY_LEFT_FRACTION) : TODAY_LEFT_MARGIN_PX;
 }
@@ -1257,6 +1271,10 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
               const meta = statusMetaInCycle(box.status, box, pulse);
               const left = xForDay(box.x);
               const width = Math.max(box.duration * dayWidth, 34);
+              // Slide the name along the box when the box starts off the left,
+              // so a long task says which task it is instead of filling the
+              // screen anonymously. Zero for every box whose start is visible.
+              const labelShift = stickyLabelShift(left, width, 0, STICKY_LABEL_RESERVE_PX);
               const top = box.y;
               const hasChildren = Array.isArray(box.children) && box.children.length > 0;
               const expanded = hasChildren && !box.collapsed && !epicsShrunk;
@@ -1378,7 +1396,30 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   {unassigned && <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.18) 0 6px, transparent 6px 12px)", pointerEvents: "none" }} />}
                   {box.labelColor && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, background: box.labelColor, pointerEvents: "none" }} />}
                   <div className="flex items-center justify-between px-2" style={{ height: 28, borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
-                    <div className="flex items-center gap-1 overflow-hidden">
+                    {/* The whole cluster travels, not just the text: the
+                        staffing dot and the expand arrow identify and operate
+                        THIS task, and leaving them at the box's start would
+                        strand them off screen beside a name that is not.
+
+                        No CSS transition, and no `will-change`. The shift is
+                        already a continuous function of the pan, so the name
+                        tracks the viewport edge exactly and appears to hold
+                        still while the box slides under it — easing it would
+                        make it trail the edge, which reads as lag rather than
+                        polish. `will-change` would be worse than useless:
+                        `displayFeatures` is not viewport-culled, so on a Beat
+                        panned to its right-hand end EVERY earlier box has a
+                        shift and would be promoted to its own compositor layer;
+                        and it buys nothing anyway, because the transform value
+                        changes on each React render, so the element repaints
+                        whether or not it has a layer. */}
+                    <div
+                      className="flex items-center gap-1 overflow-hidden"
+                      style={labelShift > 0 ? {
+                        transform: `translateX(${labelShift}px)`,
+                        maxWidth: stickyLabelWidth(width, labelShift, STICKY_LABEL_ICON_ROOM_PX),
+                      } : undefined}
+                    >
                       {hasChildren && (
                         <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => toggleCollapsed(box, e)} className="flex-shrink-0 flex items-center justify-center" title={expanded ? t("canvas.collapseSubtasks") : t("canvas.expandSubtasks")} style={{ width: 22, height: 22, borderRadius: 5, background: hexA(meta.border, 0.15), marginRight: 2 }}>
                           <Icon name={expanded ? "keyboard_arrow_down" : "chevron_right"} size={19} style={{ color: meta.border }} />

@@ -22,6 +22,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { PulseCard } from "@/components/dashboard/PulseCard";
+import { CanvasView } from "@/components/canvas/CanvasView";
 import { LoginPage } from "@/routes/LoginPage";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -402,7 +403,70 @@ function LoginScene() {
   return <LoginPage />;
 }
 
-const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene };
+
+/**
+ * The real `CanvasView`, panned so a long task starts off the left.
+ *
+ * Deliberately the real component and not a replica of its markup. The thing
+ * under test is whether a `translateX` inside a box that sets
+ * `overflow: hidden`, inside a `scale()` wrapper, actually puts the name where
+ * the arithmetic says — and a copy of the markup would answer that about the
+ * copy. The unit tests already cover the arithmetic.
+ *
+ * `window.__pan` drives the offset from the driver, so one page load can walk
+ * the box across the viewport rather than reloading per position.
+ */
+function StickyLabelScene() {
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    seeded.current = true;
+    usePulseStore.setState({
+      pulse: { id: "p1", name: "Q3", workspaceId: "w1", resourceTypes: [] } as never,
+      resources: [],
+      epics: [{ id: "e1", name: "Platform", color: "#8B5CF6", y0: 0, y1: 400 } as Epic],
+      features: [
+        // Long enough to span the viewport several times over at any density,
+        // so every probed offset still has box on screen.
+        { id: "t1", title: "PROBE-LABEL", x: 0, duration: 400, y: 40, work: 4, status: "planned", resources: [], epicId: "e1" } as unknown as Feature,
+      ],
+      members: [],
+      rates: [],
+    });
+  }
+  const [offsetX, setOffsetX] = useState(0);
+  const [viewZoom, setViewZoom] = useState(1);
+  (window as unknown as { __pan?: (n: number) => void }).__pan = setOffsetX;
+  return (
+    <div style={{ display: "flex", height: "100vh", background: "#F4F2EC" }}>
+      <CanvasView
+        graph={{ stepPx: 24, workPerStep: 1 }}
+        density="week"
+        scale={1}
+        viewZoom={viewZoom}
+        setViewZoom={setViewZoom}
+        offsetX={offsetX}
+        setOffsetX={setOffsetX}
+        epicsShrunk={false}
+        showDelays={false}
+        selectedId={null}
+        onSelect={noop}
+        filterResource={null}
+        featureQuery=""
+        featureStatusFilter={new Set()}
+        epicFilter={new Set()}
+        cycleFilter={new Set()}
+        defaultCycleId="default"
+        compactFilter={false}
+        myResourceIds={null}
+        referenceDay={todayIndex()}
+        canEdit
+        canEditFeature={() => true}
+      />
+    </div>
+  );
+}
+
+const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {
