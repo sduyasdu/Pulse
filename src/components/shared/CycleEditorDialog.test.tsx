@@ -10,11 +10,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * with a reason rather than a shrug (CY17).
  */
 const setCycles = vi.fn();
+const setFeatureStatus = vi.fn();
 const state = {
   pulse: null as unknown,
   features: [] as unknown[],
   epics: [] as unknown[],
   setCycles: (...a: unknown[]) => setCycles(...a),
+  setFeatureStatus: (...a: unknown[]) => setFeatureStatus(...a),
 };
 vi.mock("@/stores/pulseStore", () => ({
   usePulseStore: (sel: (s: unknown) => unknown) => sel(state),
@@ -28,6 +30,7 @@ const task = (id: string, cycleId: string, status = "planned") => ({ id, title: 
 beforeEach(() => {
   vi.clearAllMocks();
   setCycles.mockResolvedValue(undefined);
+  setFeatureStatus.mockResolvedValue(undefined);
   state.pulse = { id: "p1" };
   state.features = [];
   state.epics = [];
@@ -99,5 +102,91 @@ describe("deleting a cycle in use", () => {
     ], defaultCycleId: "std" };
     render(<CycleEditorDialog onClose={() => {}} />);
     expect(await screen.findByText(/this Beat's default/)).toBeTruthy();
+  });
+});
+
+describe("deleting a stage tasks are sitting in (CY7)", () => {
+  const twoStage = {
+    id: "p1",
+    defaultCycleId: "std",
+    cycles: [{
+      id: "std",
+      name: "Standard",
+      statuses: [
+        { id: "planned", label: "Planned", color: "#64748B" },
+        { id: "blocked", label: "Blocked", color: "#E5484D" },
+        { id: "done", label: "Done", color: "#12A594" },
+      ],
+    }],
+  };
+
+  const removeBlocked = () => {
+    // The × buttons are in stage order: Planned, then Blocked.
+    const removes = screen.getAllByLabelText("Remove");
+    fireEvent.click(removes[1]);
+  };
+
+  it("asks where the tasks go instead of deleting the stage", async () => {
+    state.pulse = twoStage;
+    state.features = [task("t1", "std", "blocked"), task("t2", "std", "blocked")];
+    render(<CycleEditorDialog onClose={() => {}} />);
+    removeBlocked();
+
+    // Named and counted, not "are you sure?".
+    expect(screen.getByText(/2 tasks are in/)).toBeTruthy();
+    // And the stage is still there — nothing was removed on the strength of
+    // the click alone.
+    expect(screen.getByDisplayValue("Blocked")).toBeTruthy();
+  });
+
+  it("deletes a stage nothing is sitting in without asking", () => {
+    state.pulse = twoStage;
+    state.features = [task("t1", "std", "planned")];
+    render(<CycleEditorDialog onClose={() => {}} />);
+    removeBlocked();
+    expect(screen.queryByText(/tasks are in/)).toBeNull();
+    expect(screen.queryByDisplayValue("Blocked")).toBeNull();
+  });
+
+  it("counts only this cycle's tasks", () => {
+    // Another cycle's "blocked" is a different stage that happens to share an
+    // id, and must not hold this deletion up.
+    state.pulse = {
+      ...twoStage,
+      cycles: [...twoStage.cycles, { id: "rev", name: "Review", statuses: [{ id: "blocked", label: "Blocked", color: "#000" }, { id: "done", label: "Done", color: "#000" }] }],
+    };
+    state.features = [task("t1", "rev", "blocked")];
+    render(<CycleEditorDialog onClose={() => {}} />);
+    removeBlocked();
+    expect(screen.queryByText(/tasks are in/)).toBeNull();
+  });
+
+  it("moves the tasks before writing the cycles", async () => {
+    state.pulse = twoStage;
+    state.features = [task("t1", "std", "blocked")];
+    render(<CycleEditorDialog onClose={() => {}} />);
+    removeBlocked();
+
+    fireEvent.change(screen.getByLabelText("Move them to…"), { target: { value: "planned" } });
+    fireEvent.click(screen.getByText("Move and delete"));
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(setCycles).toHaveBeenCalled());
+    expect(setFeatureStatus).toHaveBeenCalledWith("t1", "planned");
+    // Order matters: the other way round leaves the task holding a stage that
+    // no longer exists, permanently if the second write fails.
+    expect(setFeatureStatus.mock.invocationCallOrder[0]).toBeLessThan(setCycles.mock.invocationCallOrder[0]);
+  });
+
+  it("writes nothing if the dialog is cancelled after a remap is chosen", () => {
+    state.pulse = twoStage;
+    state.features = [task("t1", "std", "blocked")];
+    render(<CycleEditorDialog onClose={() => {}} />);
+    removeBlocked();
+    fireEvent.change(screen.getByLabelText("Move them to…"), { target: { value: "planned" } });
+    fireEvent.click(screen.getByText("Move and delete"));
+    // No Save. The remap is a decision recorded in the dialog, not a write.
+    expect(setFeatureStatus).not.toHaveBeenCalled();
+    expect(setCycles).not.toHaveBeenCalled();
   });
 });

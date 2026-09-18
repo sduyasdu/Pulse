@@ -66,3 +66,29 @@ export function cycleDeletionBlockers(
     deletable: !isBeatDefault && using.length === 0 && boundEpics.length === 0,
   };
 }
+
+/**
+ * Which tasks a stage deletion would strand (Cycles-Spec CY7).
+ *
+ * CY7 forbids deleting a status tasks still hold "without first asking what to
+ * remap them to" — so this returns the tasks, not a boolean. The caller has to
+ * name them to ask the question.
+ *
+ * Scoped to the cycle: the same status id can exist in two cycles (every cycle
+ * has `done`, and a cloned cycle shares more), and deleting Standard's
+ * "Blocked" must not count the tasks sitting in Review's.
+ *
+ * A task with no `cycleId` counts as the Beat's default, as everywhere else —
+ * otherwise deleting a stage from the default cycle would report zero tasks
+ * while stranding every task that predates cycles.
+ */
+export function tasksHoldingStage(
+  cycleId: string,
+  statusId: string,
+  features: Feature[],
+  defaultCycleId: string,
+): Feature[] {
+  return features.filter(
+    (f) => (f.cycleId ?? defaultCycleId) === cycleId && f.status === statusId,
+  );
+}

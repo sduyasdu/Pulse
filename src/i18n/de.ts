@@ -120,6 +120,13 @@ export const de: Dict = {
   // kanban board
   "cycle.title": "Zyklen",
   "cycle.manageTitle": "Zyklen und Phasen dieses Beats verwalten",
+  "cycle.unmapped": "Nicht zugeordnet",
+  "cycle.unmappedHint": "Diese Aufgaben haben eine Phase, die dieser Zyklus nicht mehr definiert. Öffne eine, um eine aktuelle Phase zu wählen.",
+  "cycle.lockedWhenDone": "Eine erledigte Aufgabe behält den Zyklus, in dem sie abgeschlossen wurde. Öffne sie erneut, um ihn zu ändern.",
+  "cycle.changeOrphans": "{status} ist keine Phase von {cycle}. Die Aufgabe behält sie und erscheint als nicht zugeordnet, bis du eine neue wählst.",
+  "cycle.stageInUse": "{n} Aufgaben sind in „{stage}“. Wähle, wohin sie gehen, bevor du sie löschst.",
+  "cycle.remapTo": "Verschieben nach…",
+  "cycle.remapAndDelete": "Verschieben und löschen",
   "cycle.intro": "Ein Zyklus ist die Abfolge von Stufen, die Arbeit durchl\u00e4uft. Jeder Zyklus endet mit Done.",
   "cycle.add": "Zyklus hinzuf\u00fcgen",
   "cycle.name": "Name des Zyklus",

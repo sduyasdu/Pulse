@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { useT, type TranslationKey } from "@/i18n";
 import { usePulseStore } from "@/stores/pulseStore";
@@ -6,7 +6,7 @@ import {
   cyclesOf, statusMetaOf, STATUS_COLORS, DONE_STATUS_ID,
   STATUS_QUALIFICATIONS, qualificationOf,
 } from "@/domain/constants";
-import { cycleDeletionBlockers } from "@/domain/cycleDeletion";
+import { cycleDeletionBlockers, tasksHoldingStage } from "@/domain/cycleDeletion";
 import type { Cycle, StatusDef, StatusQualification } from "@/types";
 
 /**
@@ -28,12 +28,35 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
   const features = usePulseStore((s) => s.features);
   const epics = usePulseStore((s) => s.epics);
   const setCycles = usePulseStore((s) => s.setCycles);
+  const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
 
   const initial = useMemo(() => cyclesOf(pulse), [pulse]);
   const [list, setList] = useState<Cycle[]>(() => initial.map((c) => ({ ...c, statuses: c.statuses.map((s) => ({ ...s })) })));
   const [defaultId, setDefaultId] = useState(pulse?.defaultCycleId ?? initial[0]?.id ?? "");
   const [openId, setOpenId] = useState<string | null>(initial[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
+  /**
+   * CY7: a stage tasks still hold is not removed until the user says where
+   * those tasks go. `pendingStage` is the one being asked about; `remaps` are
+   * the answers, applied on Save with everything else — nothing here writes
+   * before then, and a remap written eagerly would survive a Cancel.
+   */
+  const [pendingStage, setPendingStage] = useState<{ cycleId: string; statusId: string } | null>(null);
+  const [remaps, setRemaps] = useState<{ cycleId: string; from: string; to: string }[]>([]);
+
+  const removeStage = (cycleId: string, statusId: string) => {
+    if (tasksHoldingStage(cycleId, statusId, features, defaultId).length > 0) {
+      setPendingStage({ cycleId, statusId });
+      return;
+    }
+    patch(cycleId, (x) => ({ ...x, statuses: x.statuses.filter((st) => st.id !== statusId) }));
+  };
+
+  const confirmRemoveStage = (cycleId: string, statusId: string, to: string) => {
+    setRemaps((r) => [...r, { cycleId, from: statusId, to }]);
+    patch(cycleId, (x) => ({ ...x, statuses: x.statuses.filter((st) => st.id !== statusId) }));
+    setPendingStage(null);
+  };
 
   const patch = (id: string, fn: (c: Cycle) => Cycle) =>
     setList((l) => l.map((c) => (c.id === id ? fn(c) : c)));
@@ -77,6 +100,14 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
       const done = kept.find((s) => s.id === DONE_STATUS_ID) ?? { id: DONE_STATUS_ID, label: "Done", color: "#12A594" };
       return { ...c, statuses: [...kept.filter((s) => s.id !== DONE_STATUS_ID), done] };
     });
+    // Remaps BEFORE the cycle write. The other order leaves every affected task
+    // holding a stage that no longer exists for as long as the two writes take,
+    // and permanently if the second one fails.
+    for (const r of remaps) {
+      for (const f of tasksHoldingStage(r.cycleId, r.from, features, defaultId)) {
+        await setFeatureStatus(f.id, r.to);
+      }
+    }
     await setCycles(cleaned, cleaned.some((c) => c.id === defaultId) ? defaultId : cleaned[0].id);
     setBusy(false);
     onClose();
@@ -101,7 +132,11 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
               onMakeDefault={() => setDefaultId(c.id)}
               onRename={(name) => patch(c.id, (x) => ({ ...x, name }))}
               onStage={(sid, next) => patch(c.id, (x) => ({ ...x, statuses: x.statuses.map((s) => (s.id === sid ? { ...s, ...next } : s)) }))}
-              onRemoveStage={(sid) => patch(c.id, (x) => ({ ...x, statuses: x.statuses.filter((s) => s.id !== sid) }))}
+              onRemoveStage={(sid) => removeStage(c.id, sid)}
+              pendingStage={pendingStage?.cycleId === c.id ? pendingStage.statusId : null}
+              pendingCount={pendingStage?.cycleId === c.id ? tasksHoldingStage(c.id, pendingStage.statusId, features, defaultId).length : 0}
+              onCancelRemoveStage={() => setPendingStage(null)}
+              onConfirmRemoveStage={(to) => pendingStage && confirmRemoveStage(c.id, pendingStage.statusId, to)}
               onAddStage={() => addStage(c.id)}
               onDelete={() => setList((l) => l.filter((x) => x.id !== c.id))}
               blockers={cycleDeletionBlockers(c.id, features, epics, defaultId)}
@@ -133,15 +168,25 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
 
 function CycleRow({
   cycle, open, isDefault, onToggle, onMakeDefault, onRename, onStage, onRemoveStage, onAddStage, onDelete, blockers, t,
+  pendingStage, pendingCount, onCancelRemoveStage, onConfirmRemoveStage,
 }: {
   cycle: Cycle; open: boolean; isDefault: boolean;
   onToggle: () => void; onMakeDefault: () => void; onRename: (n: string) => void;
   onStage: (id: string, next: Partial<StatusDef>) => void;
   onRemoveStage: (id: string) => void; onAddStage: () => void; onDelete: () => void;
+  /** CY7. The stage this row is asking about, if any. */
+  pendingStage: string | null;
+  pendingCount: number;
+  onCancelRemoveStage: () => void;
+  onConfirmRemoveStage: (to: string) => void;
   blockers: ReturnType<typeof cycleDeletionBlockers>;
   t: (k: TranslationKey, p?: Record<string, string | number>) => string;
 }) {
   const stages = cycle.statuses.filter((s) => s.id !== DONE_STATUS_ID);
+  // Reset per stage being asked about: a target chosen for one deletion must
+  // not be silently pre-applied to the next.
+  const [remapTo, setRemapTo] = useState("");
+  useEffect(() => { setRemapTo(""); }, [pendingStage]);
   return (
     <div className="rounded-xl border" style={{ borderColor: open ? "#EE7240" : "#E2DFD9", background: open ? "#FFF7F1" : "#FFFFFF" }}>
       <div className="flex items-center gap-2 px-3 py-2">
@@ -186,6 +231,39 @@ function CycleRow({
                 </button>
               </div>
             ))}
+            {/* CY7: a stage tasks still hold is not deleted on the strength of
+                "are you sure?" — the question is where those tasks go, and it
+                is asked with the count and the options in front of the user.
+                Nothing is written until Save, so cancelling here costs
+                nothing. */}
+            {pendingStage && (
+              <div className="rounded border px-2 py-2" style={{ borderColor: "#E9B949", background: "#FFFBEB" }}>
+                <div className="text-[11px]" style={{ color: "#8A6100" }}>
+                  {t("cycle.stageInUse", { n: pendingCount, stage: statusMetaOf(pendingStage, cycle.statuses).label })}
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <select value={remapTo} aria-label={t("cycle.remapTo")}
+                    onChange={(e) => setRemapTo(e.target.value)}
+                    className="min-w-0 flex-1 rounded border px-1.5 py-1 text-xs"
+                    style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+                    <option value="" disabled>{t("cycle.remapTo")}</option>
+                    {cycle.statuses.filter((st) => st.id !== pendingStage).map((st) => (
+                      <option key={st.id} value={st.id}>{statusMetaOf(st.id, cycle.statuses).label}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!remapTo}
+                    onClick={() => onConfirmRemoveStage(remapTo)}
+                    className="hoverable no-press rounded border px-2 py-1 text-[11px] font-semibold"
+                    style={{ borderColor: "#E9B949", color: remapTo ? "#8A6100" : "#C4B08A" }}>
+                    {t("cycle.remapAndDelete")}
+                  </button>
+                  <button onClick={onCancelRemoveStage} className="no-press text-[11px]" style={{ color: "#64748B" }}>
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Done is shown but not editable — it is the one stage every cycle
                 shares, and the lock, finishedAt and every completion count hang
                 off it (CY5). */}

@@ -1,5 +1,5 @@
-import type { Cycle, Epic, Feature } from "@/types";
-import { buildBoard, type StatusColumn } from "./kanban";
+import type { Cycle, Epic, Feature, StatusDef } from "@/types";
+import { buildBoard, groupByEpic, usedEpicsOf, type StatusColumn } from "./kanban";
 import { DONE_STATUS_ID } from "./constants";
 
 /**
@@ -42,6 +42,18 @@ export interface CycleBoard {
    * non-terminal column would otherwise stretch it across the whole board, and
    * a sensible maximum needs to know what "whole board" means. */
   slots: number;
+  /**
+   * Columns the grid must actually have room for: `slots`, plus one when any
+   * section carries a CY7 "Unmapped" column.
+   *
+   * Distinct from `slots` because they answer different questions. `slots` is
+   * where Done goes — the width of the longest *workflow* — and must not move
+   * because one task somewhere is orphaned. `gridSlots` is how many tracks to
+   * draw. Sizing the grid from `slots` leaves the Unmapped column outside the
+   * declared tracks, where the browser implicitly adds one at content width
+   * instead of the 260px every other column has.
+   */
+  gridSlots: number;
 }
 
 /**
@@ -53,6 +65,27 @@ export interface CycleBoard {
  * renders somewhere.
  */
 const ORPHAN_SECTION = "__orphan__";
+
+/**
+ * The trailing column holding tasks whose *status* their cycle no longer
+ * defines (Cycles-Spec CY7).
+ *
+ * `buildBoard` buckets by iterating the status list, so a task holding a stage
+ * that has been deleted — or that belonged to the cycle the task was moved out
+ * of — matches no column and is simply absent from its own board. Not greyed,
+ * not flagged: gone, with no empty state to say so.
+ *
+ * CY7's rule is that an orphan is preserved, shown and flagged, never silently
+ * rewritten: the task keeps the id so its history and any report that counted
+ * it stay true, and the board shows it somewhere the user can resolve it.
+ */
+export const UNMAPPED_STATUS_ID = "__unmapped__";
+
+/** Tasks in `features` whose status is not a stage of `statuses`. */
+function unmappedIn(features: Feature[], statuses: StatusDef[]): Feature[] {
+  const known = new Set(statuses.map((s) => s.id));
+  return features.filter((f) => !known.has(f.status));
+}
 
 export function buildCycleBoard(
   features: Feature[],
@@ -76,7 +109,7 @@ export function buildCycleBoard(
 ): CycleBoard {
   const known = new Map(cycles.map((c) => [c.id, c]));
   const fallback = (defaultCycleId ? cycles.find((c) => c.id === defaultCycleId) : undefined) ?? cycles[0];
-  if (!fallback) return { grouped: false, sections: [], slots: 0 };
+  if (!fallback) return { grouped: false, sections: [], slots: 0, gridSlots: 0 };
 
   // Which cycles actually have tasks. A Beat may define five and use two; five
   // section headers for two used workflows is noise.
@@ -101,15 +134,29 @@ export function buildCycleBoard(
   // rather than to `byCycle`, which splits them.
   const sections: CycleSection[] = (used.length ? used : [fallback]).map((c) => {
     const inCycle = grouped ? (byCycle.get(c.id) ?? []) : features;
-    return {
-      cycleId: c.id,
-      name: c.name,
-      count: inCycle.length,
-      columns: buildBoard(inCycle, epics, c.statuses, includeEmptyEpics),
-    };
+    const orphaned = unmappedIn(inCycle, c.statuses);
+    const columns = buildBoard(inCycle, epics, c.statuses, includeEmptyEpics);
+    // Appended, so it sits after Done — an orphan is not a stage of the
+    // workflow and must not be read as one. Built with `includeEmptyEpics`
+    // false: an empty epic band inside "Unmapped" would suggest the epic has
+    // unmapped work.
+    if (orphaned.length) {
+      columns.push({
+        status: UNMAPPED_STATUS_ID,
+        label: "Unmapped",
+        count: orphaned.length,
+        groups: groupByEpic(orphaned, epics, false, usedEpicsOf(inCycle)),
+      });
+    }
+    return { cycleId: c.id, name: c.name, count: inCycle.length, columns };
   });
 
-  const slots = sections.reduce((m, sec) => Math.max(m, sec.columns.length), 0);
+  // Stage columns only. CY7's trailing "Unmapped" column is not a stage of any
+  // workflow: counting it here would widen the board by one and pull every
+  // *other* section's Done column out of line, so one orphaned task in one
+  // cycle would visibly move the whole page.
+  const stageCount = (sec: CycleSection) => sec.columns.filter((c) => c.status !== UNMAPPED_STATUS_ID).length;
+  const slots = sections.reduce((m, sec) => Math.max(m, stageCount(sec)), 0);
 
   if (orphans.length) {
     sections.push({
@@ -119,7 +166,9 @@ export function buildCycleBoard(
       columns: buildBoard(orphans, epics, fallback.statuses, false),
     });
   }
-  return { grouped, sections, slots: Math.max(slots, sections.reduce((m, sec) => Math.max(m, sec.columns.length), 0)) };
+  const finalSlots = Math.max(slots, sections.reduce((m, sec) => Math.max(m, stageCount(sec)), 0));
+  const anyUnmapped = sections.some((sec) => sec.columns.some((c) => c.status === UNMAPPED_STATUS_ID));
+  return { grouped, sections, slots: finalSlots, gridSlots: finalSlots + (anyUnmapped ? 1 : 0) };
 }
 
 /**
@@ -205,6 +254,50 @@ export function placeColumns(
     // Clamped because CSS grid has no column 0, and a board with no sections
     // reports slots 0. Two columns would then collide in slot 1; that board has
     // no columns to collide.
-    slot: col.status === DONE_STATUS_ID ? Math.max(slots, 1) : next++,
+    slot:
+      col.status === DONE_STATUS_ID ? Math.max(slots, 1)
+      // Past Done, not among the stages. An orphan is not a stage the work
+      // moves through, and a column sitting between "In progress" and "Done"
+      // reads as exactly that.
+      : col.status === UNMAPPED_STATUS_ID ? Math.max(slots, 1) + 1
+      : next++,
   }));
+}
+
+/**
+ * What happens to a task's status if it moves to another cycle
+ * (Cycles-Spec CY2b).
+ *
+ * CY2b requires the user be shown *which* before confirming, so this answers
+ * the question rather than the caller inferring it from a status list.
+ *
+ * `blocked` is separate from "it would orphan" because they are different
+ * answers: one is a refusal, the other a consequence to accept. A done task's
+ * cycle is part of the record of how it was completed, and `finishedAt` is
+ * already stamped — the way past it is to reopen the task, which the caller
+ * should say rather than greying a control with no explanation.
+ */
+export interface CycleChangeEffect {
+  /** The task is done; CY2b forbids the change outright. */
+  blocked: boolean;
+  /** The new cycle defines the task's current status, so nothing else moves. */
+  keepsStatus: boolean;
+  /** The status the task would be left holding, unmapped, if it moved. */
+  orphanedStatus: string | null;
+}
+
+export function cycleChangeEffect(
+  task: { status: string; cycleId?: string },
+  target: Cycle,
+  doneStatusId: string,
+): CycleChangeEffect {
+  const blocked = task.status === doneStatusId;
+  const keepsStatus = target.statuses.some((s) => s.id === task.status);
+  return {
+    blocked,
+    keepsStatus,
+    // Null when blocked: there is no consequence to describe for a change that
+    // cannot happen, and offering one invites a UI that warns and then refuses.
+    orphanedStatus: blocked || keepsStatus ? null : task.status,
+  };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCycleBoard, matchesCycleFilter, sectionOfTask, canDropInSection, placeColumns } from "./cycleBoard";
+import { buildCycleBoard, matchesCycleFilter, sectionOfTask, canDropInSection, placeColumns, cycleChangeEffect, UNMAPPED_STATUS_ID } from "./cycleBoard";
 import type { Cycle, Epic, Feature } from "@/types";
 
 /**
@@ -138,7 +138,7 @@ describe("filtering the canvas by cycle", () => {
 
 describe("degenerate input", () => {
   it("returns nothing rather than throwing when a Beat defines no cycles", () => {
-    expect(buildCycleBoard([task("a", "planned")], epics, [])).toEqual({ grouped: false, sections: [], slots: 0 });
+    expect(buildCycleBoard([task("a", "planned")], epics, [])).toEqual({ grouped: false, sections: [], slots: 0, gridSlots: 0 });
   });
 });
 
@@ -283,5 +283,123 @@ describe("where an unstamped task lands (CY11)", () => {
     expect(board.sections).toHaveLength(1);
     expect(board.sections[0].count).toBe(2);
     expect(board.grouped).toBe(false);
+  });
+});
+
+describe("a task holding a status its cycle no longer defines (CY7)", () => {
+  // "qa" is in neither cycle — the stage was deleted from the cycle editor, or
+  // the task was moved to a cycle that never had it.
+  const orphan = task("orphan", "qa", "std");
+  const normal = task("ok", "planned", "std");
+
+  it("shows it rather than dropping it", () => {
+    // The bug: `buildBoard` buckets by iterating the status list, so a task
+    // matching no stage was simply absent from its own board. Not greyed, not
+    // flagged — gone, with no empty state to say so.
+    const board = buildCycleBoard([orphan, normal], epics, [standard]);
+    const ids = board.sections[0].columns.flatMap((c) => c.groups.flatMap((g) => g.tasks.map((t) => t.id)));
+    expect(ids).toContain("orphan");
+  });
+
+  it("puts it in a trailing column, after Done", () => {
+    // An orphan is not a stage of the workflow and must not read as one, so it
+    // sits past the terminal column rather than among the stages.
+    const board = buildCycleBoard([orphan, normal], epics, [standard]);
+    const cols = board.sections[0].columns;
+    expect(cols[cols.length - 1].status).toBe(UNMAPPED_STATUS_ID);
+    expect(cols[cols.length - 1].count).toBe(1);
+  });
+
+  it("keeps the task's own status id", () => {
+    // CY7: preserved, never silently rewritten. Its history and any report
+    // that already counted it stay true.
+    const board = buildCycleBoard([orphan], epics, [standard]);
+    const col = board.sections[0].columns.find((c) => c.status === UNMAPPED_STATUS_ID)!;
+    expect(col.groups[0].tasks[0].status).toBe("qa");
+  });
+
+  it("adds no column when nothing is orphaned", () => {
+    // The column must not appear on the ordinary board, which is every board.
+    const board = buildCycleBoard([normal], epics, [standard]);
+    expect(board.sections[0].columns.some((c) => c.status === UNMAPPED_STATUS_ID)).toBe(false);
+  });
+
+  it("orphans per cycle, not per Beat", () => {
+    // "in-review" is a real stage of Review and an orphan in Standard. A
+    // Beat-wide notion of "unknown status" would call it orphaned in both.
+    const board = buildCycleBoard(
+      [task("a", "in-review", "rev"), task("b", "in-review", "std"), task("c", "planned", "std")],
+      epics,
+      [standard, review],
+    );
+    const std = board.sections.find((x) => x.cycleId === "std")!;
+    const rev = board.sections.find((x) => x.cycleId === "rev")!;
+    expect(std.columns.find((c) => c.status === UNMAPPED_STATUS_ID)?.count).toBe(1);
+    expect(rev.columns.some((c) => c.status === UNMAPPED_STATUS_ID)).toBe(false);
+  });
+
+  it("widens the grid without moving Done", () => {
+    // The two numbers answer different questions: `slots` is where Done goes
+    // (the longest workflow), `gridSlots` is how many tracks to draw. Sizing
+    // the grid from `slots` would leave the Unmapped column outside the
+    // declared tracks, where the browser adds an implicit one at content width
+    // rather than the 260px every other column has.
+    const clean = buildCycleBoard([normal], epics, [standard]);
+    const withOrphan = buildCycleBoard([orphan, normal], epics, [standard]);
+    expect(withOrphan.slots).toBe(clean.slots);
+    expect(withOrphan.gridSlots).toBe(clean.gridSlots + 1);
+    expect(clean.gridSlots).toBe(clean.slots);
+  });
+
+  it("does not let the extra column push Done out of line", () => {
+    // `slots` is computed from the section column counts, so an Unmapped
+    // column in one section would otherwise widen the board and move every
+    // other section's Done.
+    const board = buildCycleBoard([orphan, normal], epics, [standard]);
+    const done = placeColumns(board.sections[0].columns, board.slots).find((x) => x.col.status === "done")!;
+    const unmapped = placeColumns(board.sections[0].columns, board.slots).find((x) => x.col.status === UNMAPPED_STATUS_ID)!;
+    expect(unmapped.slot).toBeGreaterThan(done.slot);
+  });
+});
+
+describe("moving a task to another cycle (CY2b)", () => {
+  it("keeps the status when the new cycle defines it", () => {
+    // Both cycles have "planned", so nothing moves but the stamp.
+    const e = cycleChangeEffect({ status: "planned", cycleId: "std" }, review, "done");
+    expect(e).toEqual({ blocked: false, keepsStatus: true, orphanedStatus: null });
+  });
+
+  it("reports the status that would be orphaned", () => {
+    // "in-progress" is Standard's; Review has no such stage. CY2b requires the
+    // user be shown WHICH status before confirming, not merely that something
+    // will happen.
+    const e = cycleChangeEffect({ status: "in-progress", cycleId: "std" }, review, "done");
+    expect(e.keepsStatus).toBe(false);
+    expect(e.orphanedStatus).toBe("in-progress");
+  });
+
+  it("refuses a done task", () => {
+    // Its workflow is part of the record of how it was completed, and
+    // `finishedAt` is already stamped.
+    const e = cycleChangeEffect({ status: "done", cycleId: "std" }, review, "done");
+    expect(e.blocked).toBe(true);
+  });
+
+  it("describes no consequence for a change it refuses", () => {
+    // A cycle without Done at all: the task's status would orphan if it moved.
+    // It cannot move, so saying so would invite a dialog that warns and then
+    // refuses.
+    const noDone: Cycle = { id: "nd", name: "No done", statuses: [{ id: "x", label: "X", color: "#000" }] };
+    const e = cycleChangeEffect({ status: "done", cycleId: "std" }, noDone, "done");
+    expect(e.blocked).toBe(true);
+    expect(e.orphanedStatus).toBeNull();
+  });
+
+  it("treats an already-orphaned status as orphaned by the move too", () => {
+    // A task sitting in the Unmapped column keeps sitting there unless the new
+    // cycle happens to define its stage.
+    expect(cycleChangeEffect({ status: "qa", cycleId: "std" }, review, "done").orphanedStatus).toBe("qa");
+    const withQa: Cycle = { id: "q", name: "Q", statuses: [{ id: "qa", label: "QA", color: "#000" }] };
+    expect(cycleChangeEffect({ status: "qa", cycleId: "std" }, withQa, "done").keepsStatus).toBe(true);
   });
 });

@@ -120,6 +120,13 @@ export const pt: Dict = {
   // kanban board
   "cycle.title": "Ciclos",
   "cycle.manageTitle": "Gerir os ciclos e as etapas deste Beat",
+  "cycle.unmapped": "Sem correspondência",
+  "cycle.unmappedHint": "Estas tarefas têm uma etapa que este ciclo já não define. Abre uma para escolher uma etapa atual.",
+  "cycle.lockedWhenDone": "Uma tarefa concluída mantém o ciclo em que foi concluída. Reabre-a para mudar.",
+  "cycle.changeOrphans": "{status} não é uma etapa de {cycle}. A tarefa mantém-na e aparecerá sem correspondência até escolheres outra.",
+  "cycle.stageInUse": "{n} tarefas estão em «{stage}». Escolhe para onde vão antes de a eliminares.",
+  "cycle.remapTo": "Mover para…",
+  "cycle.remapAndDelete": "Mover e eliminar",
   "cycle.intro": "Um ciclo \u00e9 o conjunto de etapas pelas quais o trabalho passa. Todo ciclo termina em Done.",
   "cycle.add": "Adicionar um ciclo",
   "cycle.name": "Nome do ciclo",

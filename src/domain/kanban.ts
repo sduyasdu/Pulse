@@ -19,6 +19,42 @@ function byStart(a: Feature, b: Feature): number {
 }
 
 /**
+ * One column's worth of tasks, banded by epic.
+ *
+ * Split out of `buildBoard` so a column that is not a status — CY7's
+ * "Unmapped" — can be built the same way. Routing that through `buildBoard`
+ * with a synthetic status looks like it works and returns nothing: `buildBoard`
+ * buckets by matching `f.status`, and an orphan's status is precisely the one
+ * that matches no stage.
+ *
+ * `usedEpics` is computed across the WHOLE board, not this column, so
+ * "brand new epic" means new to the board rather than absent from one column.
+ */
+export function groupByEpic(
+  inCol: Feature[],
+  epics: Epic[],
+  includeEmptyEpics: boolean,
+  usedEpics: ReadonlySet<string>,
+): EpicGroup[] {
+  const epicIds = new Set(epics.map((e) => e.id));
+  const groups: EpicGroup[] = [];
+  for (const ep of epics) {
+    const tasks = inCol.filter((f) => f.epicId === ep.id).sort(byStart);
+    if (tasks.length || (includeEmptyEpics && !usedEpics.has(ep.id))) {
+      groups.push({ epicId: ep.id, name: ep.name || "Untitled epic", color: ep.color, tasks });
+    }
+  }
+  const loose = inCol.filter((f) => !f.epicId || !epicIds.has(f.epicId)).sort(byStart);
+  if (loose.length) groups.push({ epicId: null, name: "No epic", color: null, tasks: loose });
+  return groups;
+}
+
+/** Every epic that has a task anywhere in `features`. */
+export function usedEpicsOf(features: Feature[]): Set<string> {
+  return new Set(features.map((f) => f.epicId).filter((id): id is string => !!id));
+}
+
+/**
  * Bucket features into one column per status (in the given `statuses` order, so
  * whatever order the Pulse defines — "done" last by convention). Each column's
  * tasks are grouped by epic and sorted by start date (Feature.x ascending, title
@@ -33,19 +69,14 @@ function byStart(a: Feature, b: Feature): number {
  * so hidden epics don't reappear as empty bands.
  */
 export function buildBoard(features: Feature[], epics: Epic[], statuses: StatusDef[], includeEmptyEpics = true): StatusColumn[] {
-  const epicIds = new Set(epics.map((e) => e.id));
-  const usedEpics = new Set(features.map((f) => f.epicId).filter((id): id is string => !!id));
+  const usedEpics = usedEpicsOf(features);
   return statuses.map((sd) => {
     const inCol = features.filter((f) => f.status === sd.id);
-    const groups: EpicGroup[] = [];
-    for (const ep of epics) {
-      const tasks = inCol.filter((f) => f.epicId === ep.id).sort(byStart);
-      if (tasks.length || (includeEmptyEpics && !usedEpics.has(ep.id))) {
-        groups.push({ epicId: ep.id, name: ep.name || "Untitled epic", color: ep.color, tasks });
-      }
-    }
-    const loose = inCol.filter((f) => !f.epicId || !epicIds.has(f.epicId)).sort(byStart);
-    if (loose.length) groups.push({ epicId: null, name: "No epic", color: null, tasks: loose });
-    return { status: sd.id, label: sd.label, count: inCol.length, groups };
+    return {
+      status: sd.id,
+      label: sd.label,
+      count: inCol.length,
+      groups: groupByEpic(inCol, epics, includeEmptyEpics, usedEpics),
+    };
   });
 }

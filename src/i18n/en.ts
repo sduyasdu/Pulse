@@ -124,6 +124,13 @@ export const en = {
   // ── kanban board ────────────────────────────────────────────────────────────
   "cycle.title": "Cycles",
   "cycle.manageTitle": "Manage this Beat's cycles and stages",
+  "cycle.unmapped": "Unmapped",
+  "cycle.unmappedHint": "These tasks hold a stage this cycle no longer defines. Open one to pick a current stage.",
+  "cycle.lockedWhenDone": "A done task keeps the cycle it was completed in. Reopen it to change.",
+  "cycle.changeOrphans": "{status} isn't a stage of {cycle}. The task keeps it and shows as unmapped until you pick a new one.",
+  "cycle.stageInUse": "{n} tasks are in “{stage}”. Choose where they go before deleting it.",
+  "cycle.remapTo": "Move them to…",
+  "cycle.remapAndDelete": "Move and delete",
   "cycle.intro": "A cycle is a set of stages work moves through. Every cycle ends in Done.",
   "cycle.add": "Add a cycle",
   "cycle.name": "Cycle name",

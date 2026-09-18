@@ -120,6 +120,13 @@ export const it: Dict = {
   // kanban board
   "cycle.title": "Cicli",
   "cycle.manageTitle": "Gestisci i cicli e le fasi di questo Beat",
+  "cycle.unmapped": "Non mappato",
+  "cycle.unmappedHint": "Queste attività hanno una fase che questo ciclo non definisce più. Aprine una per scegliere una fase attuale.",
+  "cycle.lockedWhenDone": "Un'attività completata mantiene il ciclo in cui è stata completata. Riaprila per cambiarlo.",
+  "cycle.changeOrphans": "{status} non è una fase di {cycle}. L'attività la mantiene e apparirà non mappata finché non ne scegli una nuova.",
+  "cycle.stageInUse": "{n} attività sono in «{stage}». Scegli dove vanno prima di eliminarla.",
+  "cycle.remapTo": "Spostale in…",
+  "cycle.remapAndDelete": "Sposta ed elimina",
   "cycle.intro": "Un ciclo \u00e8 l'insieme di fasi che il lavoro attraversa. Ogni ciclo finisce con Done.",
   "cycle.add": "Aggiungi un ciclo",
   "cycle.name": "Nome del ciclo",

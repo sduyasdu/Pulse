@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cycleDeletionBlockers } from "./cycleDeletion";
+import { cycleDeletionBlockers, tasksHoldingStage } from "./cycleDeletion";
 import type { Epic, Feature } from "@/types";
 
 /**
@@ -79,5 +79,38 @@ describe("naming things that have no name", () => {
     const b = cycleDeletionBlockers("rev", [anon], [{ ...epic("e", "rev"), name: "" } as Epic], "std");
     expect(b.reassignable[0].title).toBe("Untitled task");
     expect(b.epics[0].name).toBe("Untitled epic");
+  });
+});
+
+describe("deleting a stage from a cycle (CY7)", () => {
+  const all = [
+    task("a", "std", "blocked"),
+    task("b", "std", "planned"),
+    task("c", "rev", "blocked"),
+    task("legacy", undefined, "blocked"),
+  ];
+
+  it("names the tasks rather than merely counting them", () => {
+    // CY7 forbids deleting a stage tasks hold "without first asking what to
+    // remap them to", and you cannot ask that without naming them.
+    const held = tasksHoldingStage("std", "blocked", all, "std");
+    expect(held.map((f) => f.id).sort()).toEqual(["a", "legacy"]);
+  });
+
+  it("does not count another cycle's tasks in the same-named stage", () => {
+    // Every cycle has `done`, and a cloned cycle shares more than that, so a
+    // Beat-wide count would refuse deletions it has no reason to.
+    expect(tasksHoldingStage("rev", "blocked", all, "std").map((f) => f.id)).toEqual(["c"]);
+  });
+
+  it("counts unstamped tasks against the Beat's default", () => {
+    // Otherwise deleting a stage from the default cycle reports zero while
+    // stranding every task that predates cycles — which is all of them.
+    expect(tasksHoldingStage("std", "blocked", all, "std").some((f) => f.id === "legacy")).toBe(true);
+    expect(tasksHoldingStage("std", "blocked", all, "rev").some((f) => f.id === "legacy")).toBe(false);
+  });
+
+  it("is empty for a stage nothing holds", () => {
+    expect(tasksHoldingStage("std", "in-progress", all, "std")).toEqual([]);
   });
 });

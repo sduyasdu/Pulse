@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
-import { buildCycleBoard, canDropInSection, placeColumns } from "@/domain/cycleBoard";
+import { buildCycleBoard, canDropInSection, placeColumns, UNMAPPED_STATUS_ID } from "@/domain/cycleBoard";
 import type { StatusColumn } from "@/domain/kanban";
 import { hexA, statusMetaOf, cyclesOf } from "@/domain/constants";
 import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
@@ -155,6 +155,11 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
     // would change its workflow, and a drag is not how a cycle changes (CY2a).
     // Changing it is a deliberate act on the task itself (CY2b).
     if (cycleId && !canDropInSection(board, id, cycleId)) return;
+    // CY7's "Unmapped" column is a report of tasks holding a stage their cycle
+    // no longer defines — not a stage itself. Accepting a drop here would write
+    // the sentinel id as a real status, inventing exactly the broken state the
+    // column exists to surface.
+    if (status === UNMAPPED_STATUS_ID) return;
     if (f.status !== status) {
       void setFeatureStatus(id, status);
     } else if (epicId !== undefined && (f.epicId ?? null) !== epicId) {
@@ -222,7 +227,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                 {/* CY14: uniform columns packed left, the terminal column in the
                     widest cycle's last slot — so Done lines up across sections
                     and a shorter cycle shows the gap it has. */}
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.slots}, 260px)`, gap: 12, alignItems: "start" }}>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.gridSlots}, 260px)`, gap: 12, alignItems: "start" }}>
                   {placeColumns(cols, board.slots).map(({ col, slot }) => (
                     <div key={col.status} style={{ gridColumn: slot }}>
                       <Column
@@ -309,12 +314,20 @@ function Column({
   onAddTask: (epicId: string | null) => void;
 }) {
   const t = useT();
-  const meta = statusMetaOf(col.status, statuses);
+  /** CY7. Not a stage: no rename (there is nothing to rename), no "add task"
+   * (a task cannot be created into it), and grey rather than a status colour,
+   * because a colour would read as a stage of the workflow. */
+  const unmapped = col.status === UNMAPPED_STATUS_ID;
+  const meta = unmapped
+    ? { border: "#94A3B8", bg: "#F1F5F9", text: "#475569", label: t("cycle.unmapped") }
+    : statusMetaOf(col.status, statuses);
   const [labelDraft, onLabelChange] = useDebouncedText(meta.label, (v) => onRenameStatus(col.status, v));
   return (
     <div
       className="flex flex-col rounded-xl"
-      style={{ width: 280, flexShrink: 0, background: dragOver ? "#FFF4EC" : "#F4F2EC", border: `1px solid ${dragOver ? "#EE7240" : "#E2DFD9"}` }}
+      style={{ width: 280, flexShrink: 0,
+        background: unmapped ? "#F8FAFC" : dragOver ? "#FFF4EC" : "#F4F2EC",
+        border: `1px ${unmapped ? "dashed" : "solid"} ${!unmapped && dragOver ? "#EE7240" : "#E2DFD9"}` }}
       onDragOver={(e) => e.preventDefault()}
       onDragEnter={onDragEnterCol}
       onDragLeave={onDragLeaveCol}
@@ -322,7 +335,7 @@ function Column({
     >
       <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0">
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: meta.border, flexShrink: 0 }} />
-        {canEdit ? (
+        {canEdit && !unmapped ? (
           <input
             value={labelDraft}
             onChange={(e) => onLabelChange(e.target.value)}
@@ -331,7 +344,7 @@ function Column({
             style={{ border: "none", outline: "none", color: "#1F2330", minWidth: 0 }}
           />
         ) : (
-          <span className="text-xs font-semibold flex-1 truncate" style={{ color: "#1F2330" }}>{meta.label}</span>
+          <span className="text-xs font-semibold flex-1 truncate" style={{ color: unmapped ? "#64748B" : "#1F2330" }} title={unmapped ? t("cycle.unmappedHint") : undefined}>{meta.label}</span>
         )}
         <span className="mono text-xs flex-shrink-0" style={{ color: "#94A3B8" }}>{col.count}</span>
       </div>
@@ -359,7 +372,7 @@ function Column({
               >
                 <EpicBandName epicId={g.epicId} name={g.name} canEdit={canEdit} onRename={onRenameEpic} />
                 <span className="mono text-xs flex-shrink-0" style={{ color: "#64748B", marginLeft: "auto" }}>{g.tasks.length}</span>
-                {canEdit && (
+                {canEdit && !unmapped && (
                   <button onClick={(e) => { e.stopPropagation(); onAddTask(g.epicId); }} title={t("kanban.addTaskToEpic")} className="no-press" style={{ color: "#475569", fontSize: 14, lineHeight: 1, flexShrink: 0 }}><Icon name="add" size={16} /></button>
                 )}
               </div>
@@ -373,10 +386,15 @@ function Column({
         })}
       </div>
 
-      {canEdit && (
+      {canEdit && !unmapped && (
         <button onClick={() => onAddTask(null)} className="mono text-xs px-3 py-2 text-left flex-shrink-0" style={{ color: "#78859A", borderTop: "1px solid #E2DFD9" }}>
           {t("kanban.addTask")}
         </button>
+      )}
+      {unmapped && (
+        <div className="mono px-3 py-2 flex-shrink-0" style={{ fontSize: 10, color: "#94A3B8", borderTop: "1px dashed #E2DFD9" }}>
+          {t("cycle.unmappedHint")}
+        </div>
       )}
     </div>
   );

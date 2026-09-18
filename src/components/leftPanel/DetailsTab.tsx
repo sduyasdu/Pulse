@@ -15,7 +15,8 @@ import {
   theoreticalElapsed,
 } from "@/domain/graphEffort";
 import { dayIndexFromDateInputValue, fmtDate, toDateInputValue, todayIndex } from "@/domain/dateUtils";
-import { LABEL_COLORS, colorForName, statusesForTask, statusMetaOf } from "@/domain/constants";
+import { LABEL_COLORS, colorForName, statusesForTask, statusMetaOf, cyclesOf, cycleOfTask, DONE_STATUS_ID } from "@/domain/constants";
+import { cycleChangeEffect } from "@/domain/cycleBoard";
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { Comments } from "@/components/comments/Comments";
@@ -94,6 +95,34 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   const removeSubtask = usePulseStore((s) => s.removeSubtask);
   const addAttachment = usePulseStore((s) => s.addAttachment);
   const removeAttachment = usePulseStore((s) => s.removeAttachment);
+
+  const cycles = cyclesOf(pulse);
+  /**
+   * CY2b: a done task's cycle does not change. Its workflow is part of the
+   * record of how it was completed and `finishedAt` is already stamped.
+   *
+   * Deliberately NOT the `locked`/`canEdit` pair above: that one is also false
+   * for a viewer, and this control needs to say *why* it is unavailable rather
+   * than merely being grey. Reopening the task makes it editable again.
+   */
+  const cycleLocked = feature.status === DONE_STATUS_ID;
+
+  const changeCycle = async (targetId: string, anchor: { clientX: number; clientY: number }) => {
+    const target = cycles.find((c) => c.id === targetId);
+    if (!target) return;
+    const effect = cycleChangeEffect(feature, target, DONE_STATUS_ID);
+    if (effect.blocked) return;
+    // CY2b: the user is shown WHICH status would be orphaned before
+    // confirming — never "are you sure?" over an unnamed consequence.
+    if (effect.orphanedStatus) {
+      const label = statusMetaOf(effect.orphanedStatus, statuses).label;
+      const ok = await confirmAt(anchor, {
+        message: t("cycle.changeOrphans", { status: label, cycle: target.name }),
+      });
+      if (!ok) return;
+    }
+    void patchFeature(feature.id, { cycleId: targetId });
+  };
 
   const [expandedSubs, setExpandedSubs] = useState<Record<string, boolean>>({});
   const [title, onTitleChange] = useDebouncedText(feature.title, (v) => void patchFeature(feature.id, { title: v }));
@@ -274,6 +303,34 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
             onChange={(id) => void setFeatureStatus(feature.id, id as Feature["status"])}
           />
         </div>
+        {/* CY2b — the task's cycle, alongside its status, because that is the
+            pair the question is about. Only once the Beat has more than one:
+            with one workflow there is nothing to choose between. */}
+        {cycles.length > 1 && (
+          <div className="mt-2">
+            <span className="mono text-xs" style={{ color: "#64748B" }}>{t("cycle.title")}</span>
+            <select
+              value={cycleOfTask(feature, pulse).id}
+              disabled={!canEditProp || cycleLocked}
+              title={cycleLocked ? t("cycle.lockedWhenDone") : undefined}
+              onChange={(e) => {
+                // Read synchronously: the confirm below awaits, and the anchor
+                // must be the control's position at the moment of the change.
+                const r = e.currentTarget.getBoundingClientRect();
+                void changeCycle(e.target.value, { clientX: r.left, clientY: r.bottom });
+              }}
+              className="mt-1 text-sm border rounded px-2 py-1.5 w-full"
+              style={{ borderColor: "#E2DFD9", background: !canEditProp || cycleLocked ? "#F8FAFC" : "#FFFFFF", color: "#334155" }}
+            >
+              {cycles.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {cycleLocked && (
+              <div className="mono text-xs mt-1" style={{ color: "#78859A" }}>{t("cycle.lockedWhenDone")}</div>
+            )}
+          </div>
+        )}
         {(feature.status === "done" || feature.finishedAt) && (
           <div className="flex items-center gap-1.5 mt-1.5">
             <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>{t("details.finished")}</span>
