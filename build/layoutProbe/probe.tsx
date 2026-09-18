@@ -512,6 +512,10 @@ function KanbanScene() {
       resources: [], members: [], rates: [],
     });
   }
+  // Driven from the driver so one page load can show both states.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  (window as unknown as { __collapse?: (id: string) => void }).__collapse = (id) =>
+    setCollapsed((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   return (
     <div style={{ display: "flex", height: "100vh", background: "#FDFCF8" }}>
       <KanbanView
@@ -524,6 +528,12 @@ function KanbanScene() {
         epicFilter={new Set()}
         cycleFilter={new Set()}
         setCycleFilter={noop}
+        collapsedCycles={collapsed}
+        toggleCycleCollapsed={(id) => setCollapsed((c) => {
+          const n = new Set(c);
+          if (n.has(id)) n.delete(id); else n.add(id);
+          return n;
+        })}
         filterResource={null}
         myResourceIds={null}
       />
@@ -531,7 +541,7 @@ function KanbanScene() {
   );
 }
 
-const SCENES = { kanban: KanbanScene, toolbar: ToolbarScene, toolbarFilter: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
+const SCENES = { kanban: KanbanScene, kanbanCollapsed: KanbanScene, toolbar: ToolbarScene, toolbarFilter: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {

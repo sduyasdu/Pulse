@@ -26,6 +26,12 @@ interface KanbanViewProps {
    * one of its two controls, not a board-local filter. */
   cycleFilter: Set<string>;
   setCycleFilter: (v: Set<string>) => void;
+  /** Cycles collapsed to their header. Owned by PulsePage so it survives a
+   * switch to the canvas and back, and is written to the per-device saved
+   * view — this is a preference about looking, not a fact about the Beat, so
+   * it must not reach other people's screens. */
+  collapsedCycles: Set<string>;
+  toggleCycleCollapsed: (cycleId: string) => void;
   filterResource: string | null;
   /** Exempt from the filters — every task created since the filter last
    * changed (see PulsePage). The board picks up the column's status and epic on
@@ -52,7 +58,7 @@ interface KanbanViewProps {
 const COLUMN_W = 248;
 const COLUMN_GAP = 14;
 
-export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, cycleFilter, setCycleFilter, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
+export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, cycleFilter, setCycleFilter, collapsedCycles, toggleCycleCollapsed, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
   const t = useT();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
@@ -225,20 +231,43 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
             const cols = featureStatusFilter.size === 0
               ? section.columns
               : section.columns.filter((c) => featureStatusFilter.has(c.status));
+            const collapsed = collapsedCycles.has(section.cycleId);
             return (
-              <div key={section.cycleId} style={{ marginBottom: 18 }}>
+              // A collapsed section keeps a margin, but a smaller one: several
+              // collapsed cycles should read as a compact list of headers, not
+              // as a column of gaps.
+              <div key={section.cycleId} style={{ marginBottom: collapsed ? 6 : 18 }}>
                 {board.grouped && (
-                  <div className="flex items-center gap-2 pb-1.5" style={{ paddingTop: 2 }}>
+                  // The whole header toggles, not a separate control. The name
+                  // and the count are what a collapsed section shows, so they
+                  // are also the biggest thing to aim at — and the row already
+                  // spans the board, which makes it the easiest target here.
+                  //
+                  // `hoverable--row` rather than the global button scale: a
+                  // full-width row that grows 12% on hover jumps the layout.
+                  <button
+                    onClick={() => toggleCycleCollapsed(section.cycleId)}
+                    aria-expanded={!collapsed}
+                    title={collapsed ? t("cycle.expandSection") : t("cycle.collapseSection")}
+                    className="hoverable--row flex items-center gap-2 pb-1.5 w-full rounded"
+                    style={{ paddingTop: 2 }}
+                  >
+                    <Icon name={collapsed ? "chevron_right" : "keyboard_arrow_down"} size={16} style={{ color: "#94A3B8", flexShrink: 0 }} />
                     <span className="font-display text-[13px] font-bold" style={{ color: "#1F2330" }}>{section.name}</span>
                     <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>
                       {t(section.count === 1 ? "card.taskOne" : "card.taskOther", { n: section.count })}
                     </span>
                     <div style={{ flex: 1, height: 1, background: "#E2DFD9" }} />
-                  </div>
+                  </button>
                 )}
                 {/* CY14: uniform columns packed left, the terminal column in the
                     widest cycle's last slot — so Done lines up across sections
-                    and a shorter cycle shows the gap it has. */}
+                    and a shorter cycle shows the gap it has.
+
+                    Unmounted when collapsed rather than hidden: the columns
+                    carry drop targets, and a hidden section that still accepts
+                    a card is a card dropped somewhere nobody can see. */}
+                {!collapsed && (
                 <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.gridSlots}, ${COLUMN_W}px)`, gap: COLUMN_GAP, alignItems: "start" }}>
                   {placeColumns(cols, board.slots).map(({ col, slot }) => (
                     <div key={col.status} style={{ gridColumn: slot }}>
@@ -269,6 +298,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             );
           })}

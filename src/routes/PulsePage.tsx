@@ -303,6 +303,18 @@ export function PulsePage() {
   // CY13. Lives here rather than in either view, because every other filter
   // does: switching between the canvas and the board keeps what you asked for.
   const [cycleFilter, setCycleFilter] = useState<Set<string>>(new Set());
+  // Which cycles are collapsed to their header on the board. Here rather than
+  // in KanbanView because the board unmounts on every switch to the canvas,
+  // and a section that re-opened itself each time you glanced at the roadmap
+  // would not be worth collapsing.
+  const [collapsedCycles, setCollapsedCycles] = useState<Set<string>>(new Set());
+  const toggleCycleCollapsed = useCallback((cycleId: string) => {
+    setCollapsedCycles((cur) => {
+      const next = new Set(cur);
+      if (next.has(cycleId)) next.delete(cycleId); else next.add(cycleId);
+      return next;
+    });
+  }, []);
   const [compactFilter, setCompactFilter] = useState(true);
 
   // A task you just created stays visible even when the filters exclude it —
@@ -406,6 +418,7 @@ export function PulsePage() {
     setDensity(saved.density);
     setViewZoom(saved.viewZoom);
     setOffsetX(saved.offsetX);
+    setCollapsedCycles(new Set(saved.collapsedCycles ?? []));
     const raf = requestAnimationFrame(() => canvasRef.current?.restoreScrollTop(saved.scrollTop));
     return () => cancelAnimationFrame(raf);
   }, [pulseId, canvasReady, scale]);
@@ -427,8 +440,8 @@ export function PulsePage() {
   // one, and making it one would re-render the canvas on every wheel event.
   // The cost is that a purely vertical scroll is only saved on the way out,
   // which is exactly when it was asked to be.
-  const viewRef = useRef({ offsetX, viewZoom, density });
-  viewRef.current = { offsetX, viewZoom, density };
+  const viewRef = useRef({ offsetX, viewZoom, density, collapsedCycles: [] as string[] });
+  viewRef.current = { offsetX, viewZoom, density, collapsedCycles: [...collapsedCycles] };
 
   const writeView = useCallback(() => {
     if (!pulseId) return;
@@ -440,7 +453,10 @@ export function PulsePage() {
   useEffect(() => {
     const timer = setTimeout(writeView, 400);
     return () => clearTimeout(timer);
-  }, [writeView, offsetX, viewZoom, density]);
+    // `collapsedCycles` is in here too. Without it a collapse is only written
+    // on the way out, so collapsing a cycle and then closing the tab — rather
+    // than navigating away, which is what runs the unmount cleanup — loses it.
+  }, [writeView, offsetX, viewZoom, density, collapsedCycles]);
 
   // And once on the way out, keyed on pulseId alone so its cleanup runs only
   // when the Pulse is actually being left. This is the write that catches the
@@ -733,6 +749,8 @@ export function PulsePage() {
               epicFilter={epicFilter}
               cycleFilter={cycleFilter}
               setCycleFilter={setCycleFilter}
+              collapsedCycles={collapsedCycles}
+              toggleCycleCollapsed={toggleCycleCollapsed}
               filterResource={filterResource}
               myResourceIds={myResourceFilter}
               alwaysShowIds={justAddedIds}

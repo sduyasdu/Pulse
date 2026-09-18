@@ -16,6 +16,20 @@ export interface SavedPulseView {
   scrollTop: number;
   density: Density;
   viewZoom: number;
+  /**
+   * Cycles collapsed to their header on the board, by cycle id.
+   *
+   * **Optional, and it has to stay that way.** `isValidView` is an all-or-
+   * nothing gate: every entry already in someone's storage was written without
+   * this field, so requiring it would fail them all and quietly throw away the
+   * viewport of every user who has ever opened a Beat. Absent means "nothing
+   * collapsed", which is also what a first-time reader should see.
+   *
+   * Ids of cycles that no longer exist are harmless — they match nothing — and
+   * are left alone rather than swept, because pruning them would need the
+   * Beat's cycles at a point where this module only has storage.
+   */
+  collapsedCycles?: string[];
   /** For pruning; also lets a stale entry be recognised later if that ever
    * matters. */
   at: number;
@@ -46,7 +60,12 @@ export function isValidView(v: unknown): v is SavedPulseView {
     typeof o.scrollTop === "number" && Number.isFinite(o.scrollTop) && o.scrollTop >= 0 &&
     typeof o.viewZoom === "number" && Number.isFinite(o.viewZoom) && o.viewZoom > 0 && o.viewZoom <= 8 &&
     typeof o.density === "string" && DENSITIES.includes(o.density as Density) &&
-    typeof o.at === "number" && Number.isFinite(o.at)
+    typeof o.at === "number" && Number.isFinite(o.at) &&
+    // Optional: absent is valid and means nothing is collapsed. Present and
+    // malformed is not — a non-array here would reach `new Set(...)` and throw
+    // on the render that restores it.
+    (o.collapsedCycles === undefined ||
+      (Array.isArray(o.collapsedCycles) && o.collapsedCycles.every((c) => typeof c === "string")))
   );
 }
 

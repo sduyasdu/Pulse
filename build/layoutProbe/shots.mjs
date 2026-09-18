@@ -23,6 +23,7 @@ const SHOTS = [
   // "Beat"; the dashboard spans all of them and must read "Beats". Nothing
   // else in the suite renders both words, and the difference is one letter.
   ["kanban", "en", 1280, 800],
+  ["kanbanCollapsed", "en", 1280, 500],
   ["cycleBoard", "en", 1280, 800],
   ["cycleBoard", "en", 1000, 900],
   ["toolbar", "en", 1280, 200],
@@ -114,6 +115,11 @@ for (const [scene, lang, width, height] of SHOTS) {
   // no static render reaches. Click the first one.
   // The grouped status filter's shape is only visible with the menu open, and
   // no static render opens it.
+  if (scene === "kanbanCollapsed") {
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    await evaluate(`window.__collapse("std")`);
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+  }
   if (scene === "toolbarFilter") {
     await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
     await evaluate(`[...document.querySelectorAll("button")].find((b) => /statuses/i.test(b.textContent))?.click()`);

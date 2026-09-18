@@ -116,3 +116,37 @@ describe("pruning", () => {
     expect(stored.p79).toBeTruthy();
   });
 });
+
+describe("collapsed cycles in a saved view", () => {
+  const base = { offsetX: 0, scrollTop: 0, density: "week", viewZoom: 1, at: 1 };
+
+  it("accepts an entry written before the field existed", () => {
+    // The one that matters. `isValidView` is all-or-nothing, so requiring this
+    // field would fail every entry already in storage and throw away the
+    // viewport of everyone who has ever opened a Beat.
+    expect(isValidView(base)).toBe(true);
+  });
+
+  it("accepts a list of ids", () => {
+    expect(isValidView({ ...base, collapsedCycles: ["std", "rev"] })).toBe(true);
+    expect(isValidView({ ...base, collapsedCycles: [] })).toBe(true);
+  });
+
+  it("rejects a malformed one rather than coercing it", () => {
+    // These reach `new Set(...)` on the render that restores them. A string
+    // would silently become a set of characters; a number would throw.
+    expect(isValidView({ ...base, collapsedCycles: "std" })).toBe(false);
+    expect(isValidView({ ...base, collapsedCycles: [1, 2] })).toBe(false);
+    expect(isValidView({ ...base, collapsedCycles: null })).toBe(false);
+  });
+
+  it("survives a save and load round trip", () => {
+    savePulseView("p1", { ...base, collapsedCycles: ["rev"] } as never);
+    expect(loadPulseView("p1")?.collapsedCycles).toEqual(["rev"]);
+  });
+
+  it("keeps a pre-existing entry through pruning", () => {
+    const kept = pruneViews({ p1: base, p2: { ...base, collapsedCycles: ["x"] } });
+    expect(Object.keys(kept).sort()).toEqual(["p1", "p2"]);
+  });
+});
