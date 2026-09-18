@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Workspace, WorkspaceMember } from "@/types";
+import type { Cycle, Workspace, WorkspaceMember } from "@/types";
 import { emailKey } from "./emailKey";
 
 /**
@@ -123,4 +123,42 @@ export async function syncMyWorkspacePhoto(workspaceId: string, uid: string, pho
  * rename, it is a fork. */
 export async function updateResourceRoles(workspaceId: string, resourceRoles: string[]): Promise<void> {
   await updateDoc(doc(db, "workspaces", workspaceId), { resourceRoles });
+}
+
+/**
+ * The org's cycle templates, once, for the Beat-level "Add from organisation"
+ * (Cycles-Spec CY1).
+ *
+ * A one-shot read, not a subscription: these are templates copied at the moment
+ * they are chosen, so a live view of them would suggest a link that CY1
+ * deliberately does not create.
+ *
+ * **A permission error resolves to an empty list, on purpose.** Beat membership
+ * is independent of workspace membership (RM1), so an invited collaborator
+ * editing a Beat's cycles is very often not a member of the org that owns it
+ * and the rules refuse them this document. For them "your organisation has no
+ * templates" is the truth — there is no organisation they can see. This is the
+ * documented exception to the rule in CLAUDE.md that a refused read must reach
+ * the screen as a fault; it is the same call `rates` makes, where the refusal
+ * *is* the mechanism.
+ */
+export async function getWorkspaceCycles(workspaceId: string): Promise<Cycle[]> {
+  try {
+    const snap = await getDoc(doc(db, "workspaces", workspaceId));
+    return (snap.data()?.cycles as Cycle[] | undefined) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Replace the org's cycle templates (Cycles-Spec CY1). Owner-only by the rules,
+ * which already allow an owner any non-counter field on the workspace doc.
+ *
+ * Unlike `updateResourceRoles` above, this cascades to **nothing**. Org cycles
+ * are templates copied into a Beat at the moment they are chosen (CY1), so a
+ * Beat that took one holds its own copy and renaming the template here must not
+ * relabel a historical task in twenty Beats. That is the whole reason CY1 chose
+ * copy over reference. */
+export async function updateWorkspaceCycles(workspaceId: string, cycles: Cycle[]): Promise<void> {
+  await updateDoc(doc(db, "workspaces", workspaceId), { cycles });
 }

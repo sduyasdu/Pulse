@@ -30,7 +30,21 @@ import { fetchFeatures, newFeatureId, createFeature } from "./features";
  * doc (to check `createdBy`) can't see a same-batch, not-yet-committed
  * write, so batching this together gets denied outright.
  */
-export async function createPulse(uid: string, workspaceId: string, name: string, creatorEmail?: string | null): Promise<string> {
+export async function createPulse(
+  uid: string,
+  workspaceId: string,
+  name: string,
+  creatorEmail?: string | null,
+  /**
+   * The org template the Beat starts from (Cycles-Spec CY4), already copied
+   * with fresh ids by the caller.
+   *
+   * Omitted means "no cycles field" rather than "the built-in four written
+   * out": `cyclesOf` computes the implicit cycle (CY11), so a Beat created
+   * without one behaves identically and carries nothing to migrate back.
+   */
+  cycle?: Cycle | null,
+): Promise<string> {
   const pulseRef = doc(collection(db, "pulses"));
   const pulse: Pulse = {
     id: pulseRef.id,
@@ -41,6 +55,7 @@ export async function createPulse(uid: string, workspaceId: string, name: string
     updatedAt: Date.now(),
     graphConfig: DEFAULT_GRAPH_CONFIG,
     resourceTypes: [],
+    ...(cycle ? { cycles: [cycle], defaultCycleId: cycle.id } : {}),
   };
   await setDoc(pulseRef, pulse);
 

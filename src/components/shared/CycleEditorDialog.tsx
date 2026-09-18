@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { useT, type TranslationKey } from "@/i18n";
 import { usePulseStore } from "@/stores/pulseStore";
+import { getWorkspaceCycles } from "@/services/firestore/workspaces";
+import { copyCycleTemplate } from "@/domain/cycleTemplate";
 import {
   cyclesOf, statusMetaOf, STATUS_COLORS, DONE_STATUS_ID,
   STATUS_QUALIFICATIONS, qualificationOf,
 } from "@/domain/constants";
 import { cycleDeletionBlockers, tasksHoldingStage } from "@/domain/cycleDeletion";
-import type { Cycle, StatusDef, StatusQualification } from "@/types";
+import type { Cycle, Epic, Feature, StatusDef, StatusQualification } from "@/types";
 
 /**
  * The Beat's workflows (Cycles-Spec CY8).
@@ -22,17 +24,96 @@ import type { Cycle, StatusDef, StatusQualification } from "@/types";
  * shows it exactly as it renders today — and closing without saving still
  * writes nothing.
  */
+/**
+ * The Beat's own cycles, from the toolbar (CY8). Reads the loaded Beat and
+ * writes through the store.
+ */
 export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
-  const t = useT();
   const pulse = usePulseStore((s) => s.pulse);
   const features = usePulseStore((s) => s.features);
   const epics = usePulseStore((s) => s.epics);
   const setCycles = usePulseStore((s) => s.setCycles);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
-
   const initial = useMemo(() => cyclesOf(pulse), [pulse]);
+
+  return (
+    <CycleEditor
+      onClose={onClose}
+      initial={initial}
+      initialDefaultId={pulse?.defaultCycleId ?? initial[0]?.id ?? ""}
+      features={features}
+      epics={epics}
+      showDefault
+      onSave={setCycles}
+      onRemapTask={setFeatureStatus}
+      orgWorkspaceId={pulse?.workspaceId ?? null}
+    />
+  );
+}
+
+/**
+ * The organisation's cycle templates, from PeoplePage (CY8). Workspace owners
+ * only — the rules allow an owner any non-counter field on the workspace doc.
+ *
+ * The same editor, with `features` and `epics` empty, which is not a shortcut:
+ * an org template has no tasks, so no cycle is ever in use (CY17) and no stage
+ * deletion can strand anything (CY7). Both guards correctly find nothing rather
+ * than being switched off.
+ *
+ * No default is shown. CY4 takes "the organisation's first cycle", so order is
+ * the only thing that matters here, and a default flag that governs nothing is
+ * a control that lies.
+ */
+export function OrgCycleEditorDialog({
+  cycles,
+  onSave,
+  onClose,
+}: {
+  cycles: Cycle[];
+  onSave: (cycles: Cycle[]) => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <CycleEditor
+      onClose={onClose}
+      initial={cycles}
+      initialDefaultId={cycles[0]?.id ?? ""}
+      features={[]}
+      epics={[]}
+      showDefault={false}
+      onSave={(next) => onSave(next)}
+      onRemapTask={async () => {}}
+      orgWorkspaceId={null}
+    />
+  );
+}
+
+function CycleEditor({
+  onClose,
+  initial,
+  initialDefaultId,
+  features,
+  epics,
+  showDefault,
+  onSave,
+  onRemapTask,
+  orgWorkspaceId,
+}: {
+  onClose: () => void;
+  initial: Cycle[];
+  initialDefaultId: string;
+  features: Feature[];
+  epics: Epic[];
+  showDefault: boolean;
+  onSave: (cycles: Cycle[], defaultCycleId: string) => Promise<void>;
+  onRemapTask: (featureId: string, status: string) => Promise<void>;
+  /** CY1's "Add from organisation". Null at org level — there is nothing above
+   * the organisation to copy from. */
+  orgWorkspaceId: string | null;
+}) {
+  const t = useT();
   const [list, setList] = useState<Cycle[]>(() => initial.map((c) => ({ ...c, statuses: c.statuses.map((s) => ({ ...s })) })));
-  const [defaultId, setDefaultId] = useState(pulse?.defaultCycleId ?? initial[0]?.id ?? "");
+  const [defaultId, setDefaultId] = useState(initialDefaultId);
   const [openId, setOpenId] = useState<string | null>(initial[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
   /**
@@ -105,10 +186,10 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
     // and permanently if the second one fails.
     for (const r of remaps) {
       for (const f of tasksHoldingStage(r.cycleId, r.from, features, defaultId)) {
-        await setFeatureStatus(f.id, r.to);
+        await onRemapTask(f.id, r.to);
       }
     }
-    await setCycles(cleaned, cleaned.some((c) => c.id === defaultId) ? defaultId : cleaned[0].id);
+    await onSave(cleaned, cleaned.some((c) => c.id === defaultId) ? defaultId : cleaned[0].id);
     setBusy(false);
     onClose();
   };
@@ -127,9 +208,9 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
               key={c.id}
               cycle={c}
               open={openId === c.id}
-              isDefault={defaultId === c.id}
+              isDefault={showDefault && defaultId === c.id}
               onToggle={() => setOpenId(openId === c.id ? null : c.id)}
-              onMakeDefault={() => setDefaultId(c.id)}
+              onMakeDefault={showDefault ? () => setDefaultId(c.id) : null}
               onRename={(name) => patch(c.id, (x) => ({ ...x, name }))}
               onStage={(sid, next) => patch(c.id, (x) => ({ ...x, statuses: x.statuses.map((s) => (s.id === sid ? { ...s, ...next } : s)) }))}
               onRemoveStage={(sid) => removeStage(c.id, sid)}
@@ -144,6 +225,15 @@ export function CycleEditorDialog({ onClose }: { onClose: () => void }) {
             />
           ))}
         </div>
+
+        {orgWorkspaceId && (
+          <AddFromOrg
+            workspaceId={orgWorkspaceId}
+            existing={list}
+            onAdd={(c) => setList((l) => [...l, c])}
+            t={t}
+          />
+        )}
 
         <button onClick={addCycle}
           className="hoverable no-press mt-3 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold"
@@ -171,7 +261,10 @@ function CycleRow({
   pendingStage, pendingCount, onCancelRemoveStage, onConfirmRemoveStage,
 }: {
   cycle: Cycle; open: boolean; isDefault: boolean;
-  onToggle: () => void; onMakeDefault: () => void; onRename: (n: string) => void;
+  onToggle: () => void;
+  /** Null at org level: CY4 takes the organisation's FIRST cycle, so order is
+   * the only thing that matters there and a default flag would govern nothing. */
+  onMakeDefault: (() => void) | null; onRename: (n: string) => void;
   onStage: (id: string, next: Partial<StatusDef>) => void;
   onRemoveStage: (id: string) => void; onAddStage: () => void; onDelete: () => void;
   /** CY7. The stage this row is asking about, if any. */
@@ -197,9 +290,10 @@ function CycleRow({
           className="min-w-0 flex-1 rounded px-1 py-0.5 text-sm font-semibold"
           style={{ color: "#1F2330", background: "transparent", border: "1px solid transparent", outline: "none" }} />
         <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>{stages.length + 1}</span>
-        {isDefault ? (
+        {isDefault && (
           <span className="mono rounded px-1.5 py-0.5 text-[9px] uppercase" style={{ background: "#F7E8DA", color: "#D85A28" }}>{t("cycle.default")}</span>
-        ) : (
+        )}
+        {!isDefault && onMakeDefault && (
           <button onClick={onMakeDefault} className="hoverable no-press rounded px-1.5 py-0.5 text-[10px]"
             style={{ border: "1px solid #E2DFD9", color: "#64748B" }}>{t("cycle.makeDefault")}</button>
         )}
@@ -328,6 +422,94 @@ function DeleteControl({
           <li className="text-[11px]" style={{ color: "#8C2F22" }}>{t("cycle.inUseEpics", { n: blockers.epics.length })}</li>
         )}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * "Add from organisation" (Cycles-Spec CY1) — the same gesture and the same
+ * wording as the roster's "from People" (`AddFromRosterDialog`).
+ *
+ * What lands in the Beat is a **copy**, not a reference, and the note says so.
+ * CY1 chose that for three reasons, of which the one a user feels is blast
+ * radius: renaming an org stage must not relabel a historical task in twenty
+ * Beats. CY1a completes it — nothing flows back, so a refinement made here
+ * stays here.
+ *
+ * Ids are regenerated on copy. Keeping the template's would make two Beats'
+ * cycles compare equal by id while being independently editable, and would
+ * collide outright with a cycle already added from the same template.
+ */
+function AddFromOrg({
+  workspaceId,
+  existing,
+  onAdd,
+  t,
+}: {
+  workspaceId: string;
+  existing: Cycle[];
+  onAdd: (c: Cycle) => void;
+  t: ReturnType<typeof useT>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [templates, setTemplates] = useState<Cycle[] | null>(null);
+
+  const load = async () => {
+    setOpen(true);
+    if (templates) return;
+    setTemplates(await getWorkspaceCycles(workspaceId));
+  };
+
+  const copyIn = (tpl: Cycle) => {
+    // Name collisions are left alone: two cycles called "Support" is the user's
+    // business, and silently renaming one to "Support (2)" is a decision they
+    // did not make.
+    onAdd(copyCycleTemplate(tpl));
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => void load()}
+        className="hoverable no-press mt-3 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold"
+        style={{ borderColor: "#E2DFD9", color: "#334155" }}>
+        <Icon name="group" size={13} /> {t("cycle.addFromOrg")}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border px-3 py-2.5" style={{ borderColor: "#E2DFD9", background: "#FBFAF7" }}>
+      <div className="flex items-center gap-2">
+        <span className="mono text-[10px] uppercase" style={{ color: "#94A3B8" }}>{t("cycle.addFromOrg")}</span>
+        <div className="flex-1" />
+        <button onClick={() => setOpen(false)} className="no-press" aria-label={t("common.cancel")}>
+          <Icon name="close" size={13} style={{ color: "#94A3B8" }} />
+        </button>
+      </div>
+      <p className="mt-1 text-[11px]" style={{ color: "#64748B" }}>{t("cycle.addFromOrgNote")}</p>
+      {templates === null && <div className="mono mt-2 text-[11px]" style={{ color: "#94A3B8" }}>…</div>}
+      {templates?.length === 0 && (
+        <div className="mono mt-2 text-[11px]" style={{ color: "#94A3B8" }}>{t("cycle.noOrgTemplates")}</div>
+      )}
+      <div className="mt-2 flex flex-col gap-1">
+        {(templates ?? []).map((tpl) => {
+          // Already taken once. Not disabled — a Beat may legitimately want two
+          // variants of the same workflow — but worth saying.
+          const taken = existing.some((c) => c.name === tpl.name);
+          return (
+            <button key={tpl.id} onClick={() => copyIn(tpl)}
+              className="hoverable--row flex items-center gap-2 rounded px-2 py-1.5 text-left">
+              <Icon name="conversion_path" size={13} style={{ color: "#94A3B8" }} />
+              <span className="text-xs font-semibold" style={{ color: "#1F2330" }}>{tpl.name}</span>
+              <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>
+                {tpl.statuses.map((s) => s.label).join(" › ")}
+              </span>
+              {taken && <span className="mono text-[9px] uppercase" style={{ color: "#B08A2E", marginLeft: "auto" }}>{t("cycle.alreadyAdded")}</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

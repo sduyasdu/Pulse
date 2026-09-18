@@ -8,7 +8,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
 import { subscribeRoster, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf, roleOf, roleSelfHeal, rebuildRosterUsage } from "@/services/firestore/roster";
 import { subscribeTeams, createTeam, renameTeam, deleteTeam, setTeamMembership } from "@/services/firestore/teams";
-import { subscribeWorkspaceMembers, subscribeWorkspace, updateResourceRoles } from "@/services/firestore/workspaces";
+import { subscribeWorkspaceMembers, subscribeWorkspace, updateResourceRoles, updateWorkspaceCycles } from "@/services/firestore/workspaces";
+import { OrgCycleEditorDialog } from "@/components/shared/CycleEditorDialog";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
 import { UsageDialog } from "@/components/people/UsageDialog";
 import { CardMenu } from "@/components/shared/CardMenu";
@@ -81,6 +82,7 @@ export function PeoplePage() {
   }, [workspaceId]);
 
   const roles = useMemo(() => workspace?.resourceRoles ?? [], [workspace]);
+  const [editCycles, setEditCycles] = useState(false);
 
   useEffect(() => {
     if (!uid) return;
@@ -358,7 +360,27 @@ export function PeoplePage() {
               + {t("people.addRole")}
             </button>
             {roles.length === 0 && <span className="text-[10px]" style={{ color: "#CBD5E1" }}>{t("people.noRoles")}</span>}
+
+            {/* CY8: org cycle templates live here, beside the other workspace
+                configuration, and only for someone who can manage it. They are
+                copied into a Beat when chosen (CY1), never read at render
+                time — so nothing on this page depends on them. */}
+            <div style={{ width: 1, height: 16, background: "#E2DFD9", margin: "0 4px" }} />
+            <span className="mono text-[10px] uppercase tracking-wide" style={{ color: "#94A3B8" }}>{t("cycle.title")}</span>
+            <button onClick={() => setEditCycles(true)}
+              className="hoverable mono rounded border px-2 py-0.5 text-[10px] font-semibold"
+              style={{ borderColor: "#E2DFD9", color: "#475569" }}>
+              {t("cycle.manageOrgTemplates", { n: (workspace?.cycles ?? []).length })}
+            </button>
           </div>
+        )}
+
+        {editCycles && (
+          <OrgCycleEditorDialog
+            cycles={workspace?.cycles ?? []}
+            onSave={async (next) => { await updateWorkspaceCycles(workspaceId, next); }}
+            onClose={() => setEditCycles(false)}
+          />
         )}
 
         <SectionHead

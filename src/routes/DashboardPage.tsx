@@ -361,12 +361,13 @@ export function DashboardPage() {
           atLimit={quota.atLimit}
           used={quota.used}
           onClose={() => setCreating(false)}
-          onCreate={async (name) => {
+          workspaceId={userDoc?.personalWorkspaceId ?? null}
+          onCreate={async (name, cycle) => {
             const workspaceId = userDoc?.personalWorkspaceId;
             if (!workspaceId) {
               throw new Error(t("dashboard.workspaceNotReady"));
             }
-            const pulseId = await createPulse(firebaseUser.uid, workspaceId, name, firebaseUser.email);
+            const pulseId = await createPulse(firebaseUser.uid, workspaceId, name, firebaseUser.email, cycle);
             setCreating(false);
             navigate(`/p/${pulseId}`);
           }}
