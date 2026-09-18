@@ -2,6 +2,7 @@ import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase
 import { db } from "@/lib/firebase";
 import type { Cycle, Workspace, WorkspaceMember } from "@/types";
 import { emailKey } from "./emailKey";
+import { DEFAULT_ORG_CYCLES } from "@/domain/constants";
 
 /**
  * Creates a personal workspace for a brand-new user and grants them
@@ -21,6 +22,12 @@ export async function createPersonalWorkspace(uid: string, displayName: string |
     isPersonal: true,
     ownerId: uid,
     createdAt: Date.now(),
+    // CY12. Templates, copied when chosen — nothing reads them at render time,
+    // so seeding them here costs one field and no behaviour. Only NEW
+    // workspaces get them: an existing one has no cycles and `cyclesOf`
+    // computes its single implicit cycle (CY11), which is the whole point of
+    // not migrating.
+    cycles: DEFAULT_ORG_CYCLES,
   };
   await setDoc(workspaceRef, workspace);
 

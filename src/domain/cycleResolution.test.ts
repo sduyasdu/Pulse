@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cyclesOf, cycleOfTask, statusesForTask, initialStatusOf, statusMetaInCycle, IMPLICIT_CYCLE_ID, DEFAULT_STATUSES } from "./constants";
+import { cyclesOf, cycleOfTask, statusesForTask, initialStatusOf, statusMetaInCycle, IMPLICIT_CYCLE_ID, DEFAULT_STATUSES, DEFAULT_ORG_CYCLES, DONE_STATUS_ID } from "./constants";
 import type { Cycle, StatusDef } from "@/types";
 
 /**
@@ -125,5 +125,52 @@ describe("resolving a status in its owner's cycle", () => {
     // label from the list. Routing through a cycle must not lose that.
     const renamed: Cycle = { id: "c", name: "C", statuses: [{ id: "planned", label: "Backlog", color: "#64748B" }] };
     expect(statusMetaInCycle("planned", { cycleId: "c" }, { cycles: [renamed], defaultCycleId: "c" }).label).toBe("Backlog");
+  });
+});
+
+describe("the org cycle templates a new workspace starts with (CY12)", () => {
+  it("leads with Standard", () => {
+    // Load-bearing, not cosmetic. CY4 pre-selects "the organisation's first
+    // cycle" at Beat creation and CY12 says that should be Standard; with no
+    // default flag in the org editor, order is the only place that intent can
+    // live. Reordering this list silently changes what every new Beat starts
+    // with.
+    expect(DEFAULT_ORG_CYCLES[0].name).toBe("Standard");
+  });
+
+  it("makes Standard exactly today's statuses", () => {
+    // This is what makes CY11 an identity: a Beat that never customised its
+    // statuses resolves to this cycle with nothing written. If they drift, an
+    // existing Beat and a new one disagree about what "Standard" means.
+    expect(DEFAULT_ORG_CYCLES[0].statuses).toEqual(DEFAULT_STATUSES);
+  });
+
+  it("offers the three CY12 names", () => {
+    expect(DEFAULT_ORG_CYCLES.map((c) => c.name)).toEqual(["Standard", "Simple", "Review"]);
+  });
+
+  it("ends every cycle in Done", () => {
+    // CY5/CY6: Done is reserved and last in every cycle. A seeded template
+    // that broke this would create Beats whose final stage never locks a task
+    // and never counts as finished.
+    for (const c of DEFAULT_ORG_CYCLES) {
+      expect(c.statuses[c.statuses.length - 1].id).toBe(DONE_STATUS_ID);
+      expect(c.statuses.filter((s) => s.id === DONE_STATUS_ID)).toHaveLength(1);
+    }
+  });
+
+  it("gives every non-terminal stage a qualification", () => {
+    // CY16. Left unset, a stage falls back to position — first is "planned",
+    // the rest "ongoing" — which silently mislabels Review's "In review" and
+    // would have a cross-cycle report call it something nobody chose.
+    for (const c of DEFAULT_ORG_CYCLES) {
+      for (const s of c.statuses.filter((x) => x.id !== DONE_STATUS_ID)) {
+        expect(s.qualifies).toBeTruthy();
+      }
+    }
+  });
+
+  it("gives the three cycles distinct ids", () => {
+    expect(new Set(DEFAULT_ORG_CYCLES.map((c) => c.id)).size).toBe(3);
   });
 });

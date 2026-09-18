@@ -327,6 +327,20 @@ customer's data.
 identity for every existing Beat. It is the default selection in CY4 for the
 same reason.
 
+**CY12a — Standard is stored *first*, and the order is the mechanism.**
+Resolved during implementation, because the table above reads Simple-first
+while the prose makes Standard the CY4 default, and CY4 selects "the
+organisation's first cycle". Those agree only if Standard leads, so
+`DEFAULT_ORG_CYCLES` (`src/domain/constants.ts`) is ordered Standard, Simple,
+Review and the table's order is presentational.
+
+*Rejected: a `default` flag on the org template list.* CY1's org editor
+deliberately has none — it would govern nothing at org level, since a template
+is copied at the moment it is chosen and never consulted again — and a control
+that governs nothing is one that lies. Order is the only place the intent can
+live, which is why `cycleResolution.test.ts` pins it: reordering that list
+silently changes what every new Beat starts with.
+
 ## 7.0 What a stage *means*
 
 **CY16 — Every stage carries one of three qualifications; Done is the fourth and
