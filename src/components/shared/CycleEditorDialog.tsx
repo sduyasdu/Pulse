@@ -407,22 +407,26 @@ function DeleteControl({
       </button>
     );
   }
+  // A mark, not a panel. The reasons still exist and are still translated —
+  // they move into the tooltip and the accessible name rather than being
+  // dropped, so the "why" is one hover away instead of occupying the card.
+  //
+  // The lock is the only thing standing between someone and a Delete button
+  // that isn't there, so it must carry an `aria-label`: an icon with no
+  // accessible name tells a screen reader nothing at all, and the row would
+  // simply appear to be missing its delete control for no stated reason.
+  const reasons = [
+    blockers.isBeatDefault ? t("cycle.inUseDefault") : null,
+    blockers.reassignable.length > 0 ? t("cycle.inUseTasks", { n: blockers.reassignable.length }) : null,
+    blockers.doneTasks.length > 0 ? t("cycle.inUseDone", { n: blockers.doneTasks.length }) : null,
+    blockers.epics.length > 0 ? t("cycle.inUseEpics", { n: blockers.epics.length }) : null,
+  ].filter((x): x is string => !!x);
+  const why = `${t("cycle.inUseTitle")} — ${reasons.join(" ")}`;
+
   return (
-    <div className="rounded-lg border px-2.5 py-1.5" style={{ borderColor: "#F3C7C1", background: "#FDECEA", maxWidth: 420 }}>
-      <div className="text-[11px] font-semibold" style={{ color: "#8C2F22" }}>{t("cycle.inUseTitle")}</div>
-      <ul className="mt-0.5 flex flex-col gap-0.5">
-        {blockers.isBeatDefault && <li className="text-[11px]" style={{ color: "#8C2F22" }}>{t("cycle.inUseDefault")}</li>}
-        {blockers.reassignable.length > 0 && (
-          <li className="text-[11px]" style={{ color: "#8C2F22" }}>{t("cycle.inUseTasks", { n: blockers.reassignable.length })}</li>
-        )}
-        {blockers.doneTasks.length > 0 && (
-          <li className="text-[11px]" style={{ color: "#8C2F22" }}>{t("cycle.inUseDone", { n: blockers.doneTasks.length })}</li>
-        )}
-        {blockers.epics.length > 0 && (
-          <li className="text-[11px]" style={{ color: "#8C2F22" }}>{t("cycle.inUseEpics", { n: blockers.epics.length })}</li>
-        )}
-      </ul>
-    </div>
+    <span title={why} aria-label={why} role="img" className="flex items-center" style={{ color: "#B08A2E" }}>
+      <Icon name="lock" size={13} />
+    </span>
   );
 }
 

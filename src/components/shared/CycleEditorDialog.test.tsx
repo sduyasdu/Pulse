@@ -71,6 +71,15 @@ describe("Done", () => {
 });
 
 describe("deleting a cycle in use", () => {
+  /**
+   * The reasons are no longer on the card — CY17 now shows a lock, and the
+   * reasons live in its accessible name. Queried that way rather than dropped,
+   * because the property under test has not changed: the refusal still has to
+   * say which tasks hold the cycle, and an icon that says nothing to a screen
+   * reader would be the refusal with no reason at all.
+   */
+  const lockText = async () => (await screen.findByRole("img")).getAttribute("aria-label") ?? "";
+
   it("is refused, and says which tasks hold it", async () => {
     state.pulse = { id: "p1", cycles: [
       { id: "std", name: "Standard", statuses: [{ id: "p", label: "P", color: "#000" }, { id: "done", label: "Done", color: "#000" }] },
@@ -79,7 +88,7 @@ describe("deleting a cycle in use", () => {
     state.features = [task("t1", "rev"), task("t2", "rev")];
     render(<CycleEditorDialog onClose={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    expect(await screen.findByText(/2 tasks use it/)).toBeTruthy();
+    expect(await lockText()).toMatch(/2 tasks use it/);
     expect(screen.queryByRole("button", { name: /Delete this cycle/i })).toBeNull();
   });
 
@@ -93,7 +102,26 @@ describe("deleting a cycle in use", () => {
     state.features = [task("t1", "rev", "done")];
     render(<CycleEditorDialog onClose={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    expect(await screen.findByText(/1 of those are done/)).toBeTruthy();
+    expect(await lockText()).toMatch(/1 of those are done/);
+  });
+
+  it("shows a mark, and no text on the card", async () => {
+    // The card carries a lock and nothing else. Without this, restoring the
+    // old panel would leave every other test in this block green — they read
+    // the accessible name, which the panel also had.
+    state.pulse = { id: "p1", cycles: [
+      { id: "std", name: "Standard", statuses: [{ id: "p", label: "P", color: "#000" }, { id: "done", label: "Done", color: "#000" }] },
+      { id: "rev", name: "Review", statuses: [{ id: "r", label: "R", color: "#000" }, { id: "done", label: "Done", color: "#000" }] },
+    ], defaultCycleId: "std" };
+    state.features = [task("t1", "rev"), task("t2", "rev")];
+    render(<CycleEditorDialog onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    expect(await screen.findByRole("img")).toBeTruthy();
+    // `getByText` matches rendered text content, not `aria-label` — so these
+    // being absent is exactly the "no text on the card" the design asks for.
+    expect(screen.queryByText(/2 tasks use it/)).toBeNull();
+    expect(screen.queryByText(/This cycle is in use/)).toBeNull();
   });
 
   it("refuses the Beat's own default even when nothing uses it", async () => {
@@ -101,7 +129,7 @@ describe("deleting a cycle in use", () => {
       { id: "std", name: "Standard", statuses: [{ id: "p", label: "P", color: "#000" }, { id: "done", label: "Done", color: "#000" }] },
     ], defaultCycleId: "std" };
     render(<CycleEditorDialog onClose={() => {}} />);
-    expect(await screen.findByText(/this Beat's default/)).toBeTruthy();
+    expect(await lockText()).toMatch(/this Beat's default/);
   });
 });
 
