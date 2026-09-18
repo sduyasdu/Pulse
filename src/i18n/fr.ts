@@ -131,7 +131,7 @@ export const fr: Dict = {
   "cycle.addFromOrgNote": "Une copie. La modifier ici ne change que ce Beat, jamais le modèle de l'organisation.",
   "cycle.noOrgTemplates": "Votre organisation n'a pas encore de modèles de cycle.",
   "cycle.alreadyAdded": "Ajouté",
-  "cycle.manageOrgTemplates": "Modèles ({n})",
+  "cycle.manageOrgTemplates": "Modèles de flux pour les nouveaux Beats ({n})",
   "cycle.applyToTasks": "Déplacer {n} tâches existantes vers {cycle} ?",
   "cycle.applyDoneExcluded": "{n} terminées sont inchangées.",
   "cycle.applyOrphans": "{n} apparaîtraient non mappées.",

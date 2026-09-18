@@ -131,7 +131,7 @@ export const es: Dict = {
   "cycle.addFromOrgNote": "Una copia. Editarla aquí solo cambia este Beat, nunca la plantilla de la organización.",
   "cycle.noOrgTemplates": "Tu organización todavía no tiene plantillas de ciclo.",
   "cycle.alreadyAdded": "Añadido",
-  "cycle.manageOrgTemplates": "Plantillas ({n})",
+  "cycle.manageOrgTemplates": "Plantillas de flujo para nuevos Beats ({n})",
   "cycle.applyToTasks": "¿Mover {n} tareas existentes a {cycle}?",
   "cycle.applyDoneExcluded": "{n} terminadas no cambian.",
   "cycle.applyOrphans": "{n} aparecerían sin asignar.",

@@ -135,7 +135,7 @@ export const en = {
   "cycle.addFromOrgNote": "A copy. Editing it here changes only this Beat, and never the organisation's template.",
   "cycle.noOrgTemplates": "Your organisation has no cycle templates yet.",
   "cycle.alreadyAdded": "Added",
-  "cycle.manageOrgTemplates": "Templates ({n})",
+  "cycle.manageOrgTemplates": "Workflow templates for new Beats ({n})",
   "cycle.applyToTasks": "Move {n} existing tasks to {cycle}?",
   "cycle.applyDoneExcluded": "{n} done are unchanged.",
   "cycle.applyOrphans": "{n} would show as unmapped.",

@@ -34,6 +34,7 @@ import type { Feature, Resource } from "@/types";
 import { BeatsLockup } from "@/components/shared/Logo";
 import { Icon } from "@/components/shared/Icon";
 import { useI18nStore } from "@/stores/i18nStore";
+import { useT } from "@/i18n";
 import { ensureDict } from "@/i18n/dictionaries";
 import { SUPPORTED_LANGS, type Lang } from "@/i18n/langs";
 import type { MyPulseIndexEntry } from "@/types";
@@ -125,6 +126,7 @@ function ToolbarScene({ pulseName }: { pulseName: string }) {
 
 /** The dashboard, with the same header and grid classes DashboardPage uses. */
 function DashboardScene({ pulseName }: { pulseName: string }) {
+  const t = useT();
   return (
     <div className="min-h-screen bg-yasdu-bg">
       <header className="flex items-center gap-3 border-b px-6 py-3" style={{ borderColor: "#E2DFD9", background: "#123359" }}>
@@ -150,6 +152,34 @@ function DashboardScene({ pulseName }: { pulseName: string }) {
               onDelete={noop}
               onLeave={noop}
             />
+          ))}
+        </div>
+
+        {/* The org-configuration row (CY8). Copied from DashboardPage rather
+            than imported, like the grid above it: the page itself needs a live
+            auth store and a workspace subscription that this harness has no way
+            to provide. The classes are what is under test, so they must match —
+            if the real row's change, this scene stops measuring it and goes on
+            reporting a pass.
+            Long labels on purpose: the German and French names for these are
+            the widest, and a card row that only fits in English is the exact
+            failure the toolbar had. */}
+        <div className="mt-12 flex flex-wrap gap-3">
+          {[t("roster.title"), t("cycle.title")].map((title, i) => (
+            <div
+              key={i}
+              className="hoverable flex min-w-[240px] flex-1 items-center gap-3 rounded-xl border p-4 text-left"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}
+            >
+              <Icon name={i === 0 ? "group" : "conversion_path"} size={20} style={{ color: "#D85A28" }} />
+              <span className="min-w-0 flex-1">
+                <span className="font-display block text-sm font-semibold text-yasdu-fg">{title}</span>
+                <span className="block text-xs" style={{ color: "#94A3B8" }}>
+                  {i === 0 ? t("people.open") : t("cycle.manageOrgTemplates", { n: 3 })}
+                </span>
+              </span>
+              <Icon name="chevron_right" size={18} style={{ color: "#94A3B8" }} />
+            </div>
           ))}
         </div>
       </main>

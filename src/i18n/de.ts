@@ -131,7 +131,7 @@ export const de: Dict = {
   "cycle.addFromOrgNote": "Eine Kopie. Änderungen hier betreffen nur diesen Beat, nie die Vorlage der Organisation.",
   "cycle.noOrgTemplates": "Deine Organisation hat noch keine Zyklusvorlagen.",
   "cycle.alreadyAdded": "Hinzugefügt",
-  "cycle.manageOrgTemplates": "Vorlagen ({n})",
+  "cycle.manageOrgTemplates": "Workflow-Vorlagen für neue Beats ({n})",
   "cycle.applyToTasks": "{n} bestehende Aufgaben zu {cycle} verschieben?",
   "cycle.applyDoneExcluded": "{n} erledigte bleiben unverändert.",
   "cycle.applyOrphans": "{n} würden als nicht zugeordnet erscheinen.",

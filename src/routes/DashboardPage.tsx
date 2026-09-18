@@ -21,7 +21,9 @@ import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
-import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto } from "@/services/firestore/workspaces";
+import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto, subscribeWorkspace, updateWorkspaceCycles, seedOrgCyclesIfAbsent } from "@/services/firestore/workspaces";
+import { OrgCycleEditorDialog } from "@/components/shared/CycleEditorDialog";
+import type { Workspace } from "@/types";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
 import { UnverifiedBanner } from "@/components/dashboard/UnverifiedBanner";
 import { ConnectionStatus } from "@/components/shared/ConnectionStatus";
@@ -45,6 +47,25 @@ export function DashboardPage() {
   // Its own mount rather than reaching into AccountMenu's: the upsell has to be
   // actionable from here, and only one dialog is ever open at a time.
   const [billingOpen, setBillingOpen] = useState(false);
+
+  // The org's cycle templates (CY8). Live rather than one-shot, so the card's
+  // count is right the moment the editor saves.
+  const workspaceId = userDoc?.personalWorkspaceId ?? null;
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [editCycles, setEditCycles] = useState(false);
+  useEffect(() => {
+    if (!workspaceId) return;
+    return subscribeWorkspace(workspaceId, setWorkspace);
+  }, [workspaceId]);
+
+  // CY12 catch-up for orgs that predate the seed, on the same terms as
+  // `roleSelfHeal` and `rebuildRosterUsage`: here rather than in a nightly
+  // pass, because an empty cycle card and a missing picker at Beat creation
+  // read as a broken feature, and being right tomorrow does not help.
+  useEffect(() => {
+    if (!workspaceId) return;
+    void seedOrgCyclesIfAbsent(workspaceId);
+  }, [workspaceId]);
 
   // This list is the only route to every Pulse the user has, and it had no
   // error path at all: a refusal never called back, so `pulses` stayed null and
@@ -333,27 +354,59 @@ export function DashboardPage() {
             )}
           </>
         )}
-        {/* People live on their own screen (Resource-Master-Spec §9). The
-            dashboard points at it rather than embedding it: curating an org's
-            roster is a different job from looking at Pulses, and teams need the
-            room. */}
+        {/* Org-level configuration, side by side below the Beats. Both are
+            "set something up for the whole organisation" rather than "look at a
+            roadmap", which is why they sit together and away from the grid.
+
+            People gets its own screen (Resource-Master-Spec §9) because
+            curating a roster needs the room; cycles are a short list, so they
+            open in place. The row wraps rather than shrinking — two cards side
+            by side at 320px each is unreadable on a phone. */}
         {userDoc?.personalWorkspaceId && (
-          <Link
-            to="/people"
-            className="hoverable mt-12 flex items-center gap-3 rounded-xl border p-4"
-            style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}
-          >
-            <Icon name="group" size={20} style={{ color: "#D85A28" }} />
-            <span className="min-w-0 flex-1">
-              <span className="font-display block text-sm font-semibold text-yasdu-fg">{t("roster.title")}</span>
-              <span className="block text-xs" style={{ color: "#94A3B8" }}>{t("people.open")}</span>
-            </span>
-            <Icon name="chevron_right" size={18} style={{ color: "#94A3B8" }} />
-          </Link>
+          <div className="mt-12 flex flex-wrap gap-3">
+            <Link
+              to="/people"
+              className="hoverable flex min-w-[240px] flex-1 items-center gap-3 rounded-xl border p-4"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}
+            >
+              <Icon name="group" size={20} style={{ color: "#D85A28" }} />
+              <span className="min-w-0 flex-1">
+                <span className="font-display block text-sm font-semibold text-yasdu-fg">{t("roster.title")}</span>
+                <span className="block text-xs" style={{ color: "#94A3B8" }}>{t("people.open")}</span>
+              </span>
+              <Icon name="chevron_right" size={18} style={{ color: "#94A3B8" }} />
+            </Link>
+
+            {/* CY8's org half. A button, not a Link: the editor is a dialog, and
+                sending someone to another screen to edit three short lists
+                would be the heavier gesture. */}
+            <button
+              onClick={() => setEditCycles(true)}
+              className="hoverable flex min-w-[240px] flex-1 items-center gap-3 rounded-xl border p-4 text-left"
+              style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}
+            >
+              <Icon name="conversion_path" size={20} style={{ color: "#D85A28" }} />
+              <span className="min-w-0 flex-1">
+                <span className="font-display block text-sm font-semibold text-yasdu-fg">{t("cycle.title")}</span>
+                <span className="block text-xs" style={{ color: "#94A3B8" }}>
+                  {t("cycle.manageOrgTemplates", { n: (workspace?.cycles ?? []).length })}
+                </span>
+              </span>
+              <Icon name="chevron_right" size={18} style={{ color: "#94A3B8" }} />
+            </button>
+          </div>
         )}
       </main>
 
       {billingOpen && <BillingDialog onClose={() => setBillingOpen(false)} />}
+
+      {editCycles && workspaceId && (
+        <OrgCycleEditorDialog
+          cycles={workspace?.cycles ?? []}
+          onSave={async (next) => { await updateWorkspaceCycles(workspaceId, next); }}
+          onClose={() => setEditCycles(false)}
+        />
+      )}
 
       {creating && (
         <CreatePulseDialog

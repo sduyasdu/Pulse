@@ -158,6 +158,36 @@ export async function getWorkspaceCycles(workspaceId: string): Promise<Cycle[]> 
   }
 }
 
+/**
+ * Give an existing workspace the default cycle templates it never got
+ * (Cycles-Spec CY12).
+ *
+ * `createPersonalWorkspace` seeds them, but only for workspaces created after
+ * that shipped. Every org that existed before has no `cycles` field, so its
+ * cycle card opens empty and CY4's picker at Beat creation hides itself — the
+ * feature looks absent rather than unused.
+ *
+ * Same shape as `roleSelfHeal`: owner-gated by the rules, idempotent, called
+ * when the screen opens, and failure is swallowed because a non-owner or an
+ * offline tab has nothing to do here and nothing to report.
+ *
+ * **Only when the field is absent.** An org that opened the editor and deleted
+ * a template has `cycles: []`, which is a decision — writing the defaults back
+ * over it would undo their edit every time they loaded the dashboard. `[]` and
+ * "never seeded" are different states and this is the one place that
+ * distinction matters, so it is read from the document rather than passed in as
+ * a possibly-defaulted array.
+ */
+export async function seedOrgCyclesIfAbsent(workspaceId: string): Promise<void> {
+  try {
+    const snap = await getDoc(doc(db, "workspaces", workspaceId));
+    if (!snap.exists() || snap.data().cycles !== undefined) return;
+    await updateDoc(doc(db, "workspaces", workspaceId), { cycles: DEFAULT_ORG_CYCLES });
+  } catch {
+    /* not the owner, or offline — nothing to do and nothing to say */
+  }
+}
+
 /** Replace the org's cycle templates (Cycles-Spec CY1). Owner-only by the rules,
  * which already allow an owner any non-counter field on the workspace doc.
  *
