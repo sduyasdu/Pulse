@@ -1,5 +1,5 @@
 import { DONE_STATUS_ID } from "./constants";
-import type { Cycle } from "@/types";
+import type { Cycle, Feature } from "@/types";
 
 /**
  * Copy an organisation cycle template into a Beat (Cycles-Spec CY1).
@@ -29,4 +29,45 @@ export function copyCycleTemplate(tpl: Cycle, stamp = `${Date.now()}-${Math.floo
       id: s.id === DONE_STATUS_ID ? DONE_STATUS_ID : `st-${stamp}-${i}`,
     })),
   };
+}
+
+/**
+ * What applying an epic's new cycle to its existing tasks would do
+ * (Cycles-Spec CY3).
+ *
+ * CY3's offer "defaults to not", and the checkbox has to say *how many* tasks
+ * it would move and *how many* statuses would be remapped — so this returns
+ * both, not a count of "affected".
+ *
+ * **Done tasks are excluded.** CY2b forbids changing a completed task's cycle
+ * at all: its workflow is part of the record of how it was completed. They are
+ * returned separately rather than dropped, because the count shown says so —
+ * "12 tasks (3 done, unchanged)" is honest where "12 tasks" is not.
+ */
+export interface EpicCycleApply {
+  /** Tasks whose cycle would change. */
+  moving: Feature[];
+  /** Tasks in the epic that are done, and therefore will not move. */
+  done: Feature[];
+  /** Of `moving`, those whose current status the target cycle does not define
+   * — they keep the id and show as unmapped (CY7) until someone resolves it. */
+  orphaning: Feature[];
+}
+
+export function epicCycleApply(
+  epicId: string,
+  target: Cycle,
+  features: Feature[],
+  defaultCycleId: string,
+  doneStatusId: string,
+): EpicCycleApply {
+  const known = new Set(target.statuses.map((s) => s.id));
+  const inEpic = features.filter((f) => f.epicId === epicId);
+  const done = inEpic.filter((f) => f.status === doneStatusId);
+  // Already on the target cycle: moving them is a no-op, and counting them
+  // would inflate the number the checkbox shows.
+  const moving = inEpic.filter(
+    (f) => f.status !== doneStatusId && (f.cycleId ?? defaultCycleId) !== target.id,
+  );
+  return { moving, done, orphaning: moving.filter((f) => !known.has(f.status)) };
 }

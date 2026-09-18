@@ -6,6 +6,9 @@ import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { useReorderAnimation } from "@/hooks/useReorderAnimation";
 import { confirmAt } from "@/stores/confirmStore";
 import { useT } from "@/i18n";
+import { cyclesOf, cycleOfTask, DONE_STATUS_ID } from "@/domain/constants";
+import { epicCycleApply } from "@/domain/cycleTemplate";
+import type { Cycle } from "@/types";
 
 interface EpicsTabProps {
   canEdit: boolean;
@@ -89,6 +92,32 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic, select
   const removeEpic = usePulseStore((s) => s.removeEpic);
   const [query, setQuery] = useState("");
   const [paletteFor, setPaletteFor] = useState<string | null>(null);
+  const patchFeature = usePulseStore((s) => s.patchFeature);
+  const cycles = cyclesOf(pulse);
+  const defaultCycleId = cycleOfTask(null, pulse).id;
+  /** CY3: the epic whose cycle has just changed, and what applying it would do.
+   * Held rather than acted on, because the offer defaults to NOT. */
+  const [applyFor, setApplyFor] = useState<{ epicId: string; cycle: Cycle } | null>(null);
+
+  const changeEpicCycle = (epicId: string, cycleId: string) => {
+    const target = cycles.find((c) => c.id === cycleId);
+    if (!target) return;
+    // The epic's own cycle governs FUTURE tasks and changes immediately —
+    // that is the field the user edited. Existing tasks are a separate,
+    // opt-in question (CY3).
+    void patchEpic(epicId, { cycleId });
+    const impact = epicCycleApply(epicId, target, features, defaultCycleId, DONE_STATUS_ID);
+    if (impact.moving.length > 0) setApplyFor({ epicId, cycle: target });
+  };
+
+  const applyToExisting = async () => {
+    if (!applyFor) return;
+    const impact = epicCycleApply(applyFor.epicId, applyFor.cycle, features, defaultCycleId, DONE_STATUS_ID);
+    setApplyFor(null);
+    for (const f of impact.moving) {
+      await patchFeature(f.id, { cycleId: applyFor.cycle.id });
+    }
+  };
 
   // The task count comes from the same band computation the canvas uses, so the
   // number here and the one on the band cannot disagree. Ordered by `y0` — the
@@ -254,6 +283,51 @@ export function EpicsTab({ canEdit, epicFilter, setEpicFilter, onAddEpic, select
                     </button>
                   )}
                 </div>
+
+                {/* CY3. The select changes the epic's own cycle at once — that
+                    is the field being edited, and it governs tasks created
+                    here from now on. Existing tasks are the separate question
+                    below, and it defaults to leaving them alone. */}
+                {canEdit && cycles.length > 1 && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <Icon name="conversion_path" size={12} style={{ color: "#94A3B8", flexShrink: 0 }} />
+                    <select
+                      value={ep.cycleId ?? defaultCycleId}
+                      onChange={(e) => changeEpicCycle(ep.id, e.target.value)}
+                      className="mono min-w-0 flex-1 rounded border px-1 py-0.5 text-[10px]"
+                      style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#475569" }}
+                    >
+                      {cycles.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {applyFor?.epicId === ep.id && (() => {
+                  const impact = epicCycleApply(ep.id, applyFor.cycle, features, defaultCycleId, DONE_STATUS_ID);
+                  return (
+                    <div className="mt-1.5 rounded border px-2 py-1.5" style={{ borderColor: "#E9B949", background: "#FFFBEB" }}>
+                      <div className="text-[10px]" style={{ color: "#8A6100" }}>
+                        {t("cycle.applyToTasks", { n: impact.moving.length, cycle: applyFor.cycle.name })}
+                        {impact.done.length > 0 && ` ${t("cycle.applyDoneExcluded", { n: impact.done.length })}`}
+                        {impact.orphaning.length > 0 && ` ${t("cycle.applyOrphans", { n: impact.orphaning.length })}`}
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <button onClick={() => void applyToExisting()}
+                          className="hoverable no-press rounded border px-1.5 py-0.5 text-[10px] font-semibold"
+                          style={{ borderColor: "#E9B949", color: "#8A6100" }}>
+                          {t("cycle.applyYes")}
+                        </button>
+                        {/* The default. Dismissing changes nothing — the epic's
+                            own cycle is already saved. */}
+                        <button onClick={() => setApplyFor(null)} className="no-press text-[10px]" style={{ color: "#64748B" }}>
+                          {t("cycle.applyNo")}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {paletteFor === ep.id && canEdit && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
