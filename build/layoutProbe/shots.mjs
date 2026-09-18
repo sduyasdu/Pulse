@@ -22,9 +22,11 @@ const SHOTS = [
   // The wordmark split: the toolbar sits inside one Beat and must read
   // "Beat"; the dashboard spans all of them and must read "Beats". Nothing
   // else in the suite renders both words, and the difference is one letter.
+  ["kanban", "en", 1280, 800],
   ["cycleBoard", "en", 1280, 800],
   ["cycleBoard", "en", 1000, 900],
   ["toolbar", "en", 1280, 200],
+  ["toolbarFilter", "en", 1280, 420],
   ["dashboard", "en", 1280, 400],
   ["bell", "en", 700, 620],
   ["team", "en", 1000, 1000],
@@ -110,6 +112,13 @@ for (const [scene, lang, width, height] of SHOTS) {
   await evaluate(`window.__probe.show(${JSON.stringify(scene)}, ${JSON.stringify(lang)}, "Q3 Platform Roadmap")`);
   // The Team panel's interesting state is a row with its settings open, which
   // no static render reaches. Click the first one.
+  // The grouped status filter's shape is only visible with the menu open, and
+  // no static render opens it.
+  if (scene === "toolbarFilter") {
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    await evaluate(`[...document.querySelectorAll("button")].find((b) => /statuses/i.test(b.textContent))?.click()`);
+    await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+  }
   if (scene === "bell") {
     await evaluate(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
     await evaluate(`document.querySelector('[data-bell] button')?.click()`);

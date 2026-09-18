@@ -40,6 +40,18 @@ interface KanbanViewProps {
   myResourceIds: string[] | null;
 }
 
+/**
+ * Column geometry. One definition, used by the grid that lays the columns out
+ * and by nothing else — the column itself is `width: 100%`.
+ *
+ * 248 rather than the old 280: with several cycles stacked the board is read
+ * across as well as down, and narrower columns put more of a cycle on screen at
+ * once. A card needs roughly 220px for a title and its badges, so this keeps a
+ * usable margin over that.
+ */
+const COLUMN_W = 248;
+const COLUMN_GAP = 14;
+
 export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, cycleFilter, setCycleFilter, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
   const t = useT();
   const epics = usePulseStore((s) => s.epics);
@@ -227,7 +239,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                 {/* CY14: uniform columns packed left, the terminal column in the
                     widest cycle's last slot — so Done lines up across sections
                     and a shorter cycle shows the gap it has. */}
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.gridSlots}, 260px)`, gap: 12, alignItems: "start" }}>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.gridSlots}, ${COLUMN_W}px)`, gap: COLUMN_GAP, alignItems: "start" }}>
                   {placeColumns(cols, board.slots).map(({ col, slot }) => (
                     <div key={col.status} style={{ gridColumn: slot }}>
                       <Column
@@ -325,7 +337,12 @@ function Column({
   return (
     <div
       className="flex flex-col rounded-xl"
-      style={{ width: 280, flexShrink: 0,
+      // The grid track owns the width. This used to be a hardcoded 280 beside a
+      // 260px track, so every column overran its cell by 20px, swallowed the
+      // gap and overlapped its neighbour by 8 — the board read as one packed
+      // slab. Two numbers that had to agree, in two places, is the bug; there
+      // is now one, and the column simply fills whatever it is given.
+      style={{ width: "100%",
         background: unmapped ? "#F8FAFC" : dragOver ? "#FFF4EC" : "#F4F2EC",
         border: `1px ${unmapped ? "dashed" : "solid"} ${!unmapped && dragOver ? "#EE7240" : "#E2DFD9"}` }}
       onDragOver={(e) => e.preventDefault()}

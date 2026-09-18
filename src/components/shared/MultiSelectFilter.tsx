@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { useT } from "@/i18n";
+import { groupOptions, toggleGroup } from "@/domain/statusFilterOptions";
 
 export interface Option {
   id: string;
   name: string;
+  /** Optional heading this entry sits under. When no option has one the list
+   * renders flat, which is every caller but the status filter. */
+  group?: string;
   /** Optional swatch (epic colour, status colour). Rendered as a dot before the
    * name in the menu, and on the button when it is the single selection. */
   color?: string;
@@ -85,14 +89,35 @@ export function MultiSelectFilter({
                 <Icon name="close" size={11} /> {t("filter.clear", { count: selected.size })}
               </button>
             )}
-            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+            <div style={{ maxHeight: 260, overflowY: "auto" }}>
               {filtered.length === 0 && <div className="mono text-xs px-2 py-1.5" style={{ color: "#94A3B8" }}>{t("filter.noMatches")}</div>}
-              {filtered.map((o) => (
-                <button key={o.id} onClick={() => toggle(o.id)} className="text-xs w-full text-left px-2 py-1 flex items-center gap-2" style={{ background: selected.has(o.id) ? "#FFF7F1" : undefined }}>
-                  <input type="checkbox" readOnly checked={selected.has(o.id)} style={{ accentColor: "#EE7240", pointerEvents: "none", flexShrink: 0 }} />
-                  {o.color && dot(o.color)}
-                  <span className="truncate" style={{ color: "#334155" }}>{o.name}</span>
-                </button>
+              {groupOptions(filtered).map((bucket, i) => (
+                // An ungrouped bucket after the first gets the rule a heading
+                // would have given it. Without one, Done sits directly under
+                // the last cycle's stages and reads as one of them — the exact
+                // ambiguity the headings are here to remove.
+                <div key={bucket.group ?? `_${i}`} style={!bucket.group && i > 0 ? { borderTop: "1px solid #F1F5F9" } : undefined}>
+                  {/* A heading only where there is one. Clicking it takes the
+                      whole cycle, which is the cycle filter folded in — the
+                      reason there is no longer a separate one. */}
+                  {bucket.group && (
+                    <button
+                      onClick={() => onChange(toggleGroup(selected, bucket.options.map((o) => o.id)))}
+                      className="mono text-[10px] uppercase w-full text-left px-2 py-1 flex items-center gap-1.5"
+                      style={{ color: "#94A3B8", background: "#FBFAF7", borderTop: i > 0 ? "1px solid #F1F5F9" : undefined }}
+                    >
+                      <span className="truncate">{bucket.group}</span>
+                      <span style={{ flex: 1, height: 1, background: "#E2DFD9" }} />
+                    </button>
+                  )}
+                  {bucket.options.map((o) => (
+                    <button key={o.id} onClick={() => toggle(o.id)} className="text-xs w-full text-left px-2 py-1 flex items-center gap-2" style={{ background: selected.has(o.id) ? "#FFF7F1" : undefined, paddingLeft: bucket.group ? 14 : undefined }}>
+                      <input type="checkbox" readOnly checked={selected.has(o.id)} style={{ accentColor: "#EE7240", pointerEvents: "none", flexShrink: 0 }} />
+                      {o.color && dot(o.color)}
+                      <span className="truncate" style={{ color: "#334155" }}>{o.name}</span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

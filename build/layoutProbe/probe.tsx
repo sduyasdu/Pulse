@@ -23,6 +23,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { PulseCard } from "@/components/dashboard/PulseCard";
 import { CanvasView } from "@/components/canvas/CanvasView";
+import { KanbanView } from "@/components/kanban/KanbanView";
 import { LoginPage } from "@/routes/LoginPage";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -102,12 +103,19 @@ function ToolbarScene({ pulseName }: { pulseName: string }) {
       canMyPulse
       cycleFilter={new Set()}
       setCycleFilter={noop}
-      // Two cycles, so the CY13 control actually renders and gets measured: it
-      // hides itself on a single-cycle Beat, and a control the probe cannot see
-      // is a control the probe cannot clear.
-      cycleOptions={[{ id: "std", name: "Standard" }, { id: "rev", name: "Design review" }]}
       epicOptions={[{ id: "e1", name: "Platform foundations", color: "#8B5CF6" }]}
-      statusOptions={[{ id: "s1", name: "Planned", color: "#8B5CF6" }]}
+      // Grouped, as `statusFilterOptions` builds them for a two-cycle Beat:
+      // duplicate labels under headings that tell them apart, Done once and
+      // ungrouped at the end. The duplicates are the point — a flat list here
+      // would show the shape this replaced and prove nothing about the fix.
+      statusOptions={[
+        { id: "s0", name: "Planned", color: "#64748B", group: "Standard" },
+        { id: "s1", name: "In progress", color: "#F5A524", group: "Standard" },
+        { id: "s2", name: "Blocked", color: "#E5484D", group: "Standard" },
+        { id: "r0", name: "Planned", color: "#64748B", group: "Design review" },
+        { id: "r1", name: "In review", color: "#6366F1", group: "Design review" },
+        { id: "done", name: "Done", color: "#12A594" },
+      ]}
       showDelays={false}
       setShowDelays={noop}
       epicsShrunk={false}
@@ -466,7 +474,64 @@ function StickyLabelScene() {
   );
 }
 
-const SCENES = { toolbar: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
+
+/**
+ * The real board, with two cycles in play so it groups (CY14/CY15).
+ *
+ * The column geometry is the thing to look at: the grid track owns the width
+ * and the column fills it, which is a pair that has already drifted once.
+ */
+function KanbanScene() {
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    seeded.current = true;
+    const std: Cycle = { id: "std", name: "Standard", statuses: [
+      { id: "s0", label: "Planned", color: "#64748B" },
+      { id: "s1", label: "In progress", color: "#F5A524" },
+      { id: "s2", label: "Blocked", color: "#E5484D" },
+      { id: "done", label: "Done", color: "#12A594" },
+    ] };
+    const rev: Cycle = { id: "rev", name: "Review", statuses: [
+      { id: "r0", label: "Planned", color: "#64748B" },
+      { id: "r1", label: "In review", color: "#6366F1" },
+      { id: "done", label: "Done", color: "#12A594" },
+    ] };
+    const task = (id: string, title: string, status: string, cycleId: string, x: number): Feature =>
+      ({ id, title, status, cycleId, x, y: 0, duration: 5, work: 2, resources: [], ai: false, epicId: "e1" }) as unknown as Feature;
+    usePulseStore.setState({
+      pulse: { id: "p1", name: "Q3", workspaceId: "w1", cycles: [std, rev], defaultCycleId: "std" } as never,
+      epics: [{ id: "e1", name: "Platform", color: "#8B5CF6", y0: 0, y1: 300 } as Epic],
+      features: [
+        task("a", "Rework the billing webhook", "s0", "std", 0),
+        task("b", "Migrate the roster index", "s1", "std", 2),
+        task("c", "Waiting on legal sign-off", "s2", "std", 4),
+        task("d", "Ship the retention policy", "done", "std", 6),
+        task("e", "Draft the pricing page", "r0", "rev", 1),
+        task("f", "Copy review with design", "r1", "rev", 3),
+      ],
+      resources: [], members: [], rates: [],
+    });
+  }
+  return (
+    <div style={{ display: "flex", height: "100vh", background: "#FDFCF8" }}>
+      <KanbanView
+        selectedId={null}
+        onSelect={noop}
+        canEdit
+        canEditFeature={() => true}
+        featureQuery=""
+        featureStatusFilter={new Set()}
+        epicFilter={new Set()}
+        cycleFilter={new Set()}
+        setCycleFilter={noop}
+        filterResource={null}
+        myResourceIds={null}
+      />
+    </div>
+  );
+}
+
+const SCENES = { kanban: KanbanScene, toolbar: ToolbarScene, toolbarFilter: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {
