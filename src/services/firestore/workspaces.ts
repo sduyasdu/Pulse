@@ -2,7 +2,7 @@ import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase
 import { db } from "@/lib/firebase";
 import type { Cycle, Workspace, WorkspaceMember } from "@/types";
 import { emailKey } from "./emailKey";
-import { DEFAULT_ORG_CYCLES } from "@/domain/constants";
+import { BASELINE_CYCLES, CURRENT_SEED_VERSION, asCycles, cyclesToSeed } from "@/domain/baselineCycles";
 
 /**
  * Creates a personal workspace for a brand-new user and grants them
@@ -23,11 +23,11 @@ export async function createPersonalWorkspace(uid: string, displayName: string |
     ownerId: uid,
     createdAt: Date.now(),
     // CY12. Templates, copied when chosen — nothing reads them at render time,
-    // so seeding them here costs one field and no behaviour. Only NEW
-    // workspaces get them: an existing one has no cycles and `cyclesOf`
-    // computes its single implicit cycle (CY11), which is the whole point of
-    // not migrating.
-    cycles: DEFAULT_ORG_CYCLES,
+    // so seeding them here costs one field and no behaviour. Stamped with the
+    // seed version so `seedOrgCycles` knows this workspace is already current
+    // and never re-offers what it was born with.
+    cycles: asCycles(BASELINE_CYCLES),
+    cyclesSeedVersion: CURRENT_SEED_VERSION,
   };
   await setDoc(workspaceRef, workspace);
 
@@ -159,30 +159,50 @@ export async function getWorkspaceCycles(workspaceId: string): Promise<Cycle[]> 
 }
 
 /**
- * Give an existing workspace the default cycle templates it never got
+ * Offer a workspace any baseline cycle templates it has not seen yet
  * (Cycles-Spec CY12).
  *
- * `createPersonalWorkspace` seeds them, but only for workspaces created after
- * that shipped. Every org that existed before has no `cycles` field, so its
- * cycle card opens empty and CY4's picker at Beat creation hides itself — the
- * feature looks absent rather than unused.
+ * Replaces the earlier "write them if `cycles` is absent" rule, which could
+ * only ever fire once. Every active org has since been seeded and loaded the
+ * dashboard, so `cycles` exists on all of them and a second batch of templates
+ * would have reached nobody.
  *
- * Same shape as `roleSelfHeal`: owner-gated by the rules, idempotent, called
- * when the screen opens, and failure is swallowed because a non-owner or an
- * offline tab has nothing to do here and nothing to report.
+ * **Why a version rather than "add what is missing".** A template belongs to
+ * the org once seeded — it can be renamed, edited or deleted. So an id that is
+ * absent means either *new to this org* or *deleted by this org*, and adding
+ * back whatever is missing resurrects a deletion on every dashboard load,
+ * silently, forever. The version marker is what tells those two apart: it
+ * records what the org has been **offered**, which no amount of editing
+ * changes.
  *
- * **Only when the field is absent.** An org that opened the editor and deleted
- * a template has `cycles: []`, which is a decision — writing the defaults back
- * over it would undo their edit every time they loaded the dashboard. `[]` and
- * "never seeded" are different states and this is the one place that
- * distinction matters, so it is read from the document rather than passed in as
- * a possibly-defaulted array.
+ * Reading the marker:
+ *   - a number        → exactly what it says
+ *   - absent, cycles present → 1, the batch that shipped before versioning
+ *   - absent, no cycles      → 0, never seeded at all
+ *
+ * Same terms as `roleSelfHeal`: owner-gated by the rules, idempotent, run when
+ * the dashboard opens, silent on failure because a non-owner has nothing to do
+ * here and nothing to report.
  */
-export async function seedOrgCyclesIfAbsent(workspaceId: string): Promise<void> {
+export async function seedOrgCycles(workspaceId: string): Promise<void> {
   try {
     const snap = await getDoc(doc(db, "workspaces", workspaceId));
-    if (!snap.exists() || snap.data().cycles !== undefined) return;
-    await updateDoc(doc(db, "workspaces", workspaceId), { cycles: DEFAULT_ORG_CYCLES });
+    if (!snap.exists()) return;
+    const data = snap.data();
+    const existing = data.cycles as Cycle[] | undefined;
+    const seen = typeof data.cyclesSeedVersion === "number"
+      ? data.cyclesSeedVersion
+      : existing === undefined ? 0 : 1;
+    if (seen >= CURRENT_SEED_VERSION) return;
+
+    const add = cyclesToSeed(seen, new Set((existing ?? []).map((c) => c.id)));
+    // The marker is written even when nothing is added — an org that already
+    // holds every template by id is up to date, and leaving the marker behind
+    // would re-read and re-decide this on every single dashboard load.
+    await updateDoc(doc(db, "workspaces", workspaceId), {
+      ...(add.length ? { cycles: [...(existing ?? []), ...add] } : {}),
+      cyclesSeedVersion: CURRENT_SEED_VERSION,
+    });
   } catch {
     /* not the owner, or offline — nothing to do and nothing to say */
   }

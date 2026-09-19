@@ -1,26 +1,39 @@
 import { describe, expect, it } from "vitest";
 import { statusFilterOptions, groupOptions } from "./statusFilterOptions";
 import { copyCycleTemplate } from "./cycleTemplate";
-import { DEFAULT_ORG_CYCLES } from "./constants";
+import { BASELINE_CYCLES } from "./baselineCycles";
 
 /**
  * The defect this exists to fix: a Beat running two cycles listed "Planned"
  * twice, "In progress" twice, identical and unselectable apart, because the
  * flat list deduped by id and every cycle has its own stage ids.
  */
-const std = copyCycleTemplate(DEFAULT_ORG_CYCLES[0], "A"); // Standard
-const rev = copyCycleTemplate(DEFAULT_ORG_CYCLES[2], "B"); // Review
+// Two baseline templates that genuinely collide: both have a "Design" stage
+// and both have "On hold", with different ids in each. That is the real shape
+// of the problem, not a contrived one.
+const std = copyCycleTemplate(BASELINE_CYCLES.find((c) => c.id === "cy-pd-digital")!, "A");
+const rev = copyCycleTemplate(BASELINE_CYCLES.find((c) => c.id === "cy-pd-physical")!, "B");
+const DIGITAL = "Product development (digital)";
+const PHYSICAL = "Product development (physical)";
 
 describe("a Beat with more than one cycle", () => {
   const opts = statusFilterOptions({ cycles: [std, rev] });
 
   it("gives every entry a heading that identifies it", () => {
-    // The whole point. Two stages named "Planned" are fine as long as the list
+    // The whole point. Two stages named "Design" are fine as long as the list
     // says which cycle each belongs to.
-    const planned = opts.filter((o) => o.name === "Planned");
-    expect(planned).toHaveLength(2);
-    expect(planned.map((o) => o.group)).toEqual(["Standard", "Review"]);
-    expect(new Set(planned.map((o) => o.id)).size).toBe(2);
+    const design = opts.filter((o) => o.name === "Design");
+    expect(design).toHaveLength(2);
+    expect(design.map((o) => o.group)).toEqual([DIGITAL, PHYSICAL]);
+    expect(new Set(design.map((o) => o.id)).size).toBe(2);
+  });
+
+  it("separates the stalled stages too", () => {
+    // Every baseline template calls its stalled stage "On hold", so this is
+    // the collision that happens in EVERY multi-cycle Beat, not an edge case.
+    const hold = opts.filter((o) => o.name === "On hold");
+    expect(hold).toHaveLength(2);
+    expect(hold.map((o) => o.group)).toEqual([DIGITAL, PHYSICAL]);
   });
 
   it("lists Done once, ungrouped", () => {
@@ -36,7 +49,7 @@ describe("a Beat with more than one cycle", () => {
   });
 
   it("carries each stage's own colour", () => {
-    expect(opts.find((o) => o.name === "In review")?.color).toBe("#6366F1");
+    expect(opts.find((o) => o.name === "On hold")?.color).toBe("#E5484D");
   });
 });
 
@@ -46,7 +59,7 @@ describe("a Beat with one cycle", () => {
     // and this list must look exactly as it did before cycles existed.
     const opts = statusFilterOptions({ cycles: [std] });
     expect(opts.every((o) => o.group === undefined)).toBe(true);
-    expect(opts.map((o) => o.name)).toEqual(["Planned", "In progress", "Blocked", "Done"]);
+    expect(opts.map((o) => o.name)).toEqual(["Discovery", "Design", "Build", "Test", "On hold", "Done"]);
   });
 
   it("works for a Beat that predates cycles", () => {
@@ -60,7 +73,7 @@ describe("a Beat with one cycle", () => {
 describe("bucketing the list for render", () => {
   it("keeps groups in order and Done at the end", () => {
     const buckets = groupOptions(statusFilterOptions({ cycles: [std, rev] }));
-    expect(buckets.map((b) => b.group)).toEqual(["Standard", "Review", undefined]);
+    expect(buckets.map((b) => b.group)).toEqual([DIGITAL, PHYSICAL, undefined]);
     expect(buckets[2].options.map((o) => o.id)).toEqual(["done"]);
   });
 

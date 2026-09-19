@@ -21,7 +21,7 @@ import { RenamePulseDialog } from "@/components/dashboard/RenamePulseDialog";
 import { DuplicatePulseDialog } from "@/components/dashboard/DuplicatePulseDialog";
 import { InviteDialog } from "@/components/dashboard/InviteDialog";
 import { PulseCard } from "@/components/dashboard/PulseCard";
-import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto, subscribeWorkspace, updateWorkspaceCycles, seedOrgCyclesIfAbsent } from "@/services/firestore/workspaces";
+import { backfillMyWorkspaceEmail, syncMyWorkspacePhoto, subscribeWorkspace, updateWorkspaceCycles, seedOrgCycles } from "@/services/firestore/workspaces";
 import { OrgCycleEditorDialog } from "@/components/shared/CycleEditorDialog";
 import type { Workspace } from "@/types";
 import { PulseQuotaBanner } from "@/components/dashboard/PulseQuotaBanner";
@@ -64,7 +64,7 @@ export function DashboardPage() {
   // read as a broken feature, and being right tomorrow does not help.
   useEffect(() => {
     if (!workspaceId) return;
-    void seedOrgCyclesIfAbsent(workspaceId);
+    void seedOrgCycles(workspaceId);
   }, [workspaceId]);
 
   // This list is the only route to every Pulse the user has, and it had no

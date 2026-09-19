@@ -36,6 +36,11 @@ export interface Workspace {
    * when chosen; never read at render time, and never written back to from a
    * Beat (CY1a). */
   cycles?: Cycle[];
+  /** The highest baseline seed version this workspace has been **offered**
+   * (CY12). Distinct from what it holds: a template it deleted is still one it
+   * has been offered, which is what stops the seeder putting it back. Absent
+   * means 1 where `cycles` exists, 0 where it does not. */
+  cyclesSeedVersion?: number;
   /** Org/legal identity for billing (Plans-Spec §1.1/§7). A Workspace *is* the
    * billing Organization (PL6), so these live here. Set when the org subscribes;
    * absent = never subscribed (Free). `country` is ISO 3166-1 alpha-2. */

@@ -28,6 +28,8 @@ import { LoginPage } from "@/routes/LoginPage";
 import { TeamTab } from "@/components/leftPanel/TeamTab";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { buildCycleBoard } from "@/domain/cycleBoard";
+import { BASELINE_CYCLES } from "@/domain/baselineCycles";
+import { copyCycleTemplate } from "@/domain/cycleTemplate";
 import { statusMetaOf, qualificationOf } from "@/domain/constants";
 import type { Cycle, Epic } from "@/types";
 import { usePulseStore } from "@/stores/pulseStore";
@@ -485,29 +487,22 @@ function KanbanScene() {
   const seeded = useRef(false);
   if (!seeded.current) {
     seeded.current = true;
-    const std: Cycle = { id: "std", name: "Standard", statuses: [
-      { id: "s0", label: "Planned", color: "#64748B" },
-      { id: "s1", label: "In progress", color: "#F5A524" },
-      { id: "s2", label: "Blocked", color: "#E5484D" },
-      { id: "done", label: "Done", color: "#12A594" },
-    ] };
-    const rev: Cycle = { id: "rev", name: "Review", statuses: [
-      { id: "r0", label: "Planned", color: "#64748B" },
-      { id: "r1", label: "In review", color: "#6366F1" },
-      { id: "done", label: "Done", color: "#12A594" },
-    ] };
+    // Real baseline templates, so the board is measured against the widest
+    // thing it will actually be given — six stages — rather than a toy.
+    const std = copyCycleTemplate(BASELINE_CYCLES.find((c) => c.id === "cy-pd-digital")!, "A");
+    const rev = copyCycleTemplate(BASELINE_CYCLES.find((c) => c.id === "cy-marketing-campaign")!, "B");
     const task = (id: string, title: string, status: string, cycleId: string, x: number): Feature =>
       ({ id, title, status, cycleId, x, y: 0, duration: 5, work: 2, resources: [], ai: false, epicId: "e1" }) as unknown as Feature;
     usePulseStore.setState({
-      pulse: { id: "p1", name: "Q3", workspaceId: "w1", cycles: [std, rev], defaultCycleId: "std" } as never,
+      pulse: { id: "p1", name: "Q3", workspaceId: "w1", cycles: [std, rev], defaultCycleId: std.id } as never,
       epics: [{ id: "e1", name: "Platform", color: "#8B5CF6", y0: 0, y1: 300 } as Epic],
       features: [
-        task("a", "Rework the billing webhook", "s0", "std", 0),
-        task("b", "Migrate the roster index", "s1", "std", 2),
-        task("c", "Waiting on legal sign-off", "s2", "std", 4),
-        task("d", "Ship the retention policy", "done", "std", 6),
-        task("e", "Draft the pricing page", "r0", "rev", 1),
-        task("f", "Copy review with design", "r1", "rev", 3),
+        task("a", "Rework the billing webhook", std.statuses[0].id, std.id, 0),
+        task("b", "Migrate the roster index", std.statuses[2].id, std.id, 2),
+        task("c", "Waiting on legal sign-off", std.statuses[4].id, std.id, 4),
+        task("d", "Ship the retention policy", "done", std.id, 6),
+        task("e", "Draft the pricing page", rev.statuses[0].id, rev.id, 1),
+        task("f", "Copy review with design", rev.statuses[3].id, rev.id, 3),
       ],
       resources: [], members: [], rates: [],
     });

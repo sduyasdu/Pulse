@@ -41,43 +41,6 @@ export const DEFAULT_STATUSES: StatusDef[] = [
 ];
 
 /**
- * The cycle templates a new workspace starts with (Cycles-Spec CY12).
- *
- * **Standard is first, and that is load-bearing.** CY4 takes "the
- * organisation's first cycle" as the pre-selection at Beat creation, and CY12
- * says Standard is what should be pre-selected — those agree only if Standard
- * leads. Order carries that meaning because the org editor has no default flag
- * (CY1: a flag governing nothing is a control that lies), so this is the only
- * place the intent can live.
- *
- * Standard is exactly `DEFAULT_STATUSES`. That is what makes CY11 an identity
- * for every existing Beat: a Beat that never customised its statuses resolves
- * to this cycle with nothing written.
- */
-export const DEFAULT_ORG_CYCLES: Cycle[] = [
-  { id: "cy-standard", name: "Standard", statuses: DEFAULT_STATUSES },
-  {
-    id: "cy-simple",
-    name: "Simple",
-    statuses: [
-      { id: "planned", label: "Planned", color: "#64748B", qualifies: "planned" },
-      { id: "in-progress", label: "In progress", color: "#F5A524", qualifies: "ongoing" },
-      { id: DONE_STATUS_ID, label: "Done", color: "#12A594" },
-    ],
-  },
-  {
-    id: "cy-review",
-    name: "Review",
-    statuses: [
-      { id: "planned", label: "Planned", color: "#64748B", qualifies: "planned" },
-      { id: "in-progress", label: "In progress", color: "#F5A524", qualifies: "ongoing" },
-      { id: "in-review", label: "In review", color: "#6366F1", qualifies: "ongoing" },
-      { id: DONE_STATUS_ID, label: "Done", color: "#12A594" },
-    ],
-  },
-];
-
-/**
  * The qualifications a cycle stage may carry, in reporting order. `done` is
  * fourth and implicit — it is the terminal status, not a qualification
  * (Cycles-Spec CY5/CY16).

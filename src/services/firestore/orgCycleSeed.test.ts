@@ -42,8 +42,8 @@ vi.mock("firebase/firestore", () => ({
 }));
 vi.mock("@/lib/firebase", () => ({ db: {}, auth: {}, googleProvider: {}, functions: {} }));
 
-const { seedOrgCyclesIfAbsent } = await import("./workspaces");
-const { DEFAULT_ORG_CYCLES } = await import("@/domain/constants");
+const { seedOrgCycles } = await import("./workspaces");
+const { BASELINE_CYCLES, CURRENT_SEED_VERSION } = await import("@/domain/baselineCycles");
 
 const WS = "workspaces/personal-u1";
 
@@ -54,62 +54,119 @@ beforeEach(() => {
   writes.length = 0;
 });
 
-describe("seeding default cycles onto an existing org", () => {
-  it("writes them when the field has never existed", () => {
-    docs[WS] = { id: "personal-u1", name: "Mine" };
-    return seedOrgCyclesIfAbsent("personal-u1").then(() => {
-      expect(writes).toHaveLength(1);
-      expect(writes[0].value).toEqual({ cycles: DEFAULT_ORG_CYCLES });
-    });
-  });
+const ids = (v: unknown) => ((v as { cycles?: { id: string }[] }).cycles ?? []).map((c) => c.id);
+const v2Only = BASELINE_CYCLES.filter((c) => c.since === 2).map((c) => c.id);
 
-  it("leaves a deliberately emptied list alone", () => {
-    // THE test. `cycles: []` means someone opened the editor and removed them.
-    // This runs on every dashboard load, so writing the defaults back would
-    // undo that edit every time they opened the app.
-    docs[WS] = { id: "personal-u1", cycles: [] };
-    return seedOrgCyclesIfAbsent("personal-u1").then(() => {
-      expect(writes).toEqual([]);
-    });
-  });
-
-  it("does not overwrite templates the org has customised", () => {
-    docs[WS] = { id: "personal-u1", cycles: [{ id: "c1", name: "Ours", statuses: [] }] };
-    return seedOrgCyclesIfAbsent("personal-u1").then(() => {
-      expect(writes).toEqual([]);
-    });
-  });
-
-  it("is idempotent across loads", () => {
-    // It runs on every dashboard mount; the second run must see what the first
-    // wrote and stop.
+describe("an org that has never been seeded", () => {
+  it("is offered every template", () => {
     docs[WS] = { id: "personal-u1" };
-    return seedOrgCyclesIfAbsent("personal-u1")
-      .then(() => { docs[WS] = { ...(docs[WS] as object), cycles: DEFAULT_ORG_CYCLES }; })
-      .then(() => seedOrgCyclesIfAbsent("personal-u1"))
+    return seedOrgCycles("personal-u1").then(() => {
+      expect(ids(writes[0].value)).toEqual(BASELINE_CYCLES.map((c) => c.id));
+      expect((writes[0].value as { cyclesSeedVersion: number }).cyclesSeedVersion).toBe(CURRENT_SEED_VERSION);
+    });
+  });
+});
+
+describe("an org seeded before the version marker existed", () => {
+  // Every active tenant. They hold the first batch and have no marker, so the
+  // marker has to be *inferred* as 1 — the batch that shipped without one.
+  const v1 = { id: "personal-u1", cycles: [{ id: "cy-standard" }, { id: "cy-simple" }, { id: "cy-review" }] };
+
+  it("is offered exactly the templates added since", () => {
+    docs[WS] = v1;
+    return seedOrgCycles("personal-u1").then(() => {
+      const after = ids(writes[0].value);
+      expect(after.slice(0, 3)).toEqual(["cy-standard", "cy-simple", "cy-review"]);
+      expect(after.slice(3)).toEqual(v2Only);
+    });
+  });
+
+  it("does not resurrect a first-batch template it deleted", () => {
+    // The case the inferred marker exists for. This org deleted Standard
+    // before versioning shipped, so it holds only Review and carries no
+    // marker. Reading the absent marker as 0 rather than 1 would treat the
+    // whole first batch as never-offered and put Standard back — the very bug
+    // the marker is here to prevent, on the one batch that predates it.
+    //
+    // The id check alone does not catch this: Standard is absent precisely
+    // because it was deleted.
+    docs[WS] = { id: "personal-u1", cycles: [{ id: "cy-review" }] };
+    return seedOrgCycles("personal-u1").then(() => {
+      expect(ids(writes[0].value)).not.toContain("cy-standard");
+      expect(ids(writes[0].value)).toEqual(["cy-review", ...v2Only]);
+    });
+  });
+
+  it("keeps the templates it already had, including ones no longer seeded", () => {
+    // Simple and Review are out of the baseline set now. An org that has them
+    // keeps them: they are its data, and dropping them from the list it is
+    // offered is not the same as taking them away.
+    docs[WS] = v1;
+    return seedOrgCycles("personal-u1").then(() => {
+      expect(ids(writes[0].value)).toContain("cy-simple");
+      expect(ids(writes[0].value)).toContain("cy-review");
+    });
+  });
+});
+
+describe("an org that has deleted what it was offered", () => {
+  it("does not get it back", () => {
+    // THE test. Templates belong to the org once seeded, so an absent id means
+    // either "new" or "deleted" — and this runs on every dashboard load. Adding
+    // back whatever is missing would undo the deletion each time they opened
+    // the app, silently and forever.
+    docs[WS] = { id: "personal-u1", cycles: [], cyclesSeedVersion: CURRENT_SEED_VERSION };
+    return seedOrgCycles("personal-u1").then(() => expect(writes).toEqual([]));
+  });
+
+  it("is still offered a genuinely newer batch", () => {
+    // Deleted everything from v1, but has not seen v2. The difference between
+    // "deleted" and "never offered" is exactly what the marker records.
+    docs[WS] = { id: "personal-u1", cycles: [], cyclesSeedVersion: 1 };
+    return seedOrgCycles("personal-u1").then(() => {
+      expect(ids(writes[0].value)).toEqual(v2Only);
+    });
+  });
+});
+
+describe("an org that is already current", () => {
+  it("is written to at all only once", () => {
+    // It runs on every dashboard mount; the second run must do nothing.
+    docs[WS] = { id: "personal-u1" };
+    return seedOrgCycles("personal-u1")
+      .then(() => { docs[WS] = { ...(writes[0].value as object), id: "personal-u1" }; })
+      .then(() => seedOrgCycles("personal-u1"))
       .then(() => expect(writes).toHaveLength(1));
   });
 
+  it("records the marker even when it adds nothing", () => {
+    // Holds every template by id but has no marker. Without writing one, this
+    // would re-read and re-decide on every dashboard load forever.
+    docs[WS] = { id: "personal-u1", cycles: BASELINE_CYCLES.map((c) => ({ id: c.id })) };
+    return seedOrgCycles("personal-u1").then(() => {
+      expect(writes).toHaveLength(1);
+      expect(writes[0].value).toEqual({ cyclesSeedVersion: CURRENT_SEED_VERSION });
+    });
+  });
+});
+
+describe("when it cannot write", () => {
   it("writes nothing for a workspace that does not exist", () => {
-    return seedOrgCyclesIfAbsent("personal-nobody").then(() => expect(writes).toEqual([]));
+    return seedOrgCycles("personal-nobody").then(() => expect(writes).toEqual([]));
   });
 
-  it("stays quiet when the rules refuse", () => {
-    // A member who is not the owner. Nothing to do and nothing to report —
-    // the same call `roleSelfHeal` makes.
+  it("stays quiet when the read is refused", () => {
     docs[WS] = { id: "personal-u1" };
     denied.add(WS);
-    return expect(seedOrgCyclesIfAbsent("personal-u1")).resolves.toBeUndefined();
+    return expect(seedOrgCycles("personal-u1")).resolves.toBeUndefined();
   });
 
-  it("does not reject when the write itself is refused", async () => {
-    // The read succeeds and the write is denied — a workspace member who is not
-    // the owner. This runs unattended on every dashboard mount, so an
-    // unhandled rejection here would surface as a console error on a screen
-    // where the user did nothing wrong.
+  it("does not reject when the write is refused", () => {
+    // A member who is not the owner: the read succeeds and the write does not.
+    // This runs unattended on every dashboard mount, so an unhandled rejection
+    // would surface as a console error on a screen where nothing went wrong.
     docs[WS] = { id: "personal-u1" };
     deniedWrites.add(WS);
-    await expect(seedOrgCyclesIfAbsent("personal-u1")).resolves.toBeUndefined();
-    expect(writes).toEqual([]);
+    return expect(seedOrgCycles("personal-u1")).resolves.toBeUndefined();
   });
 });
