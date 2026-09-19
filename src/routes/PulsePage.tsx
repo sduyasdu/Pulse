@@ -308,13 +308,7 @@ export function PulsePage() {
   // and a section that re-opened itself each time you glanced at the roadmap
   // would not be worth collapsing.
   const [collapsedCycles, setCollapsedCycles] = useState<Set<string>>(new Set());
-  const toggleCycleCollapsed = useCallback((cycleId: string) => {
-    setCollapsedCycles((cur) => {
-      const next = new Set(cur);
-      if (next.has(cycleId)) next.delete(cycleId); else next.add(cycleId);
-      return next;
-    });
-  }, []);
+
   const [compactFilter, setCompactFilter] = useState(true);
 
   // A task you just created stays visible even when the filters exclude it —
@@ -750,7 +744,7 @@ export function PulsePage() {
               cycleFilter={cycleFilter}
               setCycleFilter={setCycleFilter}
               collapsedCycles={collapsedCycles}
-              toggleCycleCollapsed={toggleCycleCollapsed}
+              setCollapsedCycles={setCollapsedCycles}
               filterResource={filterResource}
               myResourceIds={myResourceFilter}
               alwaysShowIds={justAddedIds}

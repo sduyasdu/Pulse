@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { statusFilterOptions, groupOptions, toggleGroup } from "./statusFilterOptions";
+import { statusFilterOptions, groupOptions } from "./statusFilterOptions";
 import { copyCycleTemplate } from "./cycleTemplate";
 import { DEFAULT_ORG_CYCLES } from "./constants";
 
@@ -95,25 +95,5 @@ describe("bucketing the list for render", () => {
     ]);
     expect(buckets.map((b) => b.group)).toEqual(["G1", "G2", "G1"]);
     expect(buckets.map((b) => b.options.map((o) => o.id))).toEqual([["a"], ["b"], ["c"]]);
-  });
-});
-
-describe("selecting a heading", () => {
-  it("selects everything under it", () => {
-    expect([...toggleGroup(new Set(), ["a", "b"])].sort()).toEqual(["a", "b"]);
-  });
-
-  it("clears them when they are all already selected", () => {
-    expect([...toggleGroup(new Set(["a", "b"]), ["a", "b"])]).toEqual([]);
-  });
-
-  it("completes a partial selection rather than clearing it", () => {
-    // Half-selected means "I want more of this", not "undo". Clearing here
-    // would throw away a choice the user just made one click ago.
-    expect([...toggleGroup(new Set(["a"]), ["a", "b"])].sort()).toEqual(["a", "b"]);
-  });
-
-  it("leaves other groups alone", () => {
-    expect([...toggleGroup(new Set(["x", "a", "b"]), ["a", "b"])]).toEqual(["x"]);
   });
 });

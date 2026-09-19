@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { useT } from "@/i18n";
-import { groupOptions, toggleGroup } from "@/domain/statusFilterOptions";
+import { groupOptions } from "@/domain/statusFilterOptions";
+import { toggleGroup } from "@/domain/toggleGroup";
 
 export interface Option {
   id: string;

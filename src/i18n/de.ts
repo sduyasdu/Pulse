@@ -134,6 +134,8 @@ export const de: Dict = {
   "cycle.manageOrgTemplates": "Workflow-Vorlagen für neue Beats ({n})",
   "cycle.expandSection": "Spalten dieses Zyklus anzeigen",
   "cycle.collapseSection": "Spalten dieses Zyklus ausblenden",
+  "cycle.collapseAll": "Alle einklappen",
+  "cycle.expandAll": "Alle ausklappen",
   "cycle.applyToTasks": "{n} bestehende Aufgaben zu {cycle} verschieben?",
   "cycle.applyDoneExcluded": "{n} erledigte bleiben unverändert.",
   "cycle.applyOrphans": "{n} würden als nicht zugeordnet erscheinen.",

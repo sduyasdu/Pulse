@@ -138,6 +138,8 @@ export const en = {
   "cycle.manageOrgTemplates": "Workflow templates for new Beats ({n})",
   "cycle.expandSection": "Show this cycle's columns",
   "cycle.collapseSection": "Hide this cycle's columns",
+  "cycle.collapseAll": "Collapse all",
+  "cycle.expandAll": "Expand all",
   "cycle.applyToTasks": "Move {n} existing tasks to {cycle}?",
   "cycle.applyDoneExcluded": "{n} done are unchanged.",
   "cycle.applyOrphans": "{n} would show as unmapped.",

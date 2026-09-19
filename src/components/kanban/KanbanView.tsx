@@ -3,6 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildCycleBoard, canDropInSection, placeColumns, UNMAPPED_STATUS_ID } from "@/domain/cycleBoard";
+import { toggleGroup } from "@/domain/toggleGroup";
 import type { StatusColumn } from "@/domain/kanban";
 import { hexA, statusMetaOf, cyclesOf } from "@/domain/constants";
 import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
@@ -31,7 +32,7 @@ interface KanbanViewProps {
    * view — this is a preference about looking, not a fact about the Beat, so
    * it must not reach other people's screens. */
   collapsedCycles: Set<string>;
-  toggleCycleCollapsed: (cycleId: string) => void;
+  setCollapsedCycles: (v: Set<string>) => void;
   filterResource: string | null;
   /** Exempt from the filters — every task created since the filter last
    * changed (see PulsePage). The board picks up the column's status and epic on
@@ -58,7 +59,7 @@ interface KanbanViewProps {
 const COLUMN_W = 248;
 const COLUMN_GAP = 14;
 
-export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, cycleFilter, setCycleFilter, collapsedCycles, toggleCycleCollapsed, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
+export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, featureQuery, featureStatusFilter, epicFilter, cycleFilter, setCycleFilter, collapsedCycles, setCollapsedCycles, filterResource, myResourceIds, alwaysShowIds, onTaskCreated }: KanbanViewProps) {
   const t = useT();
   const epics = usePulseStore((s) => s.epics);
   const features = usePulseStore((s) => s.features);
@@ -134,6 +135,13 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
   // Chips list only the cycles the board is showing (CY15) — a chip for a cycle
   // with nothing in it filters to an empty board.
   const sections = cycleFilter.size === 0 ? board.sections : board.sections.filter((x) => cycleFilter.has(x.cycleId));
+
+  // Both the per-section header and the bulk control go through `toggleGroup`,
+  // so "shut this one" and "shut them all" cannot drift apart on the awkward
+  // case — a partially collapsed board, where the bulk control must finish the
+  // job rather than undo it.
+  const visibleCycleIds = sections.map((x) => x.cycleId);
+  const allCollapsed = visibleCycleIds.length > 0 && visibleCycleIds.every((id) => collapsedCycles.has(id));
 
   const addTask = async (status: FeatureStatus, epicId: string | null = null, cycleId?: string) => {
     // The column's own cycle, not the epic's. Creating a task in the Review
@@ -219,6 +227,24 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
               </button>
             );
           })}
+          <div className="flex-1" />
+          {/* Sits in the cycles row rather than the board header, because that
+              row renders exactly when the board is grouped — which is exactly
+              when there is anything to collapse. In the header it would need
+              its own visibility rule saying the same thing.
+
+              One button, not two: "expand all" on an already-expanded board is
+              a control that does nothing, and a pair where one half is always
+              inert is worse than a toggle that says which way it goes. */}
+          <button
+            onClick={() => setCollapsedCycles(toggleGroup(collapsedCycles, visibleCycleIds))}
+            title={allCollapsed ? t("cycle.expandAll") : t("cycle.collapseAll")}
+            className="hoverable no-press flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold"
+            style={{ border: "1px solid #E2DFD9", background: "#FFFFFF", color: "#475569", whiteSpace: "nowrap" }}
+          >
+            <Icon name={allCollapsed ? "expand_all" : "collapse_all"} size={12} />
+            {allCollapsed ? t("cycle.expandAll") : t("cycle.collapseAll")}
+          </button>
         </div>
       )}
 
@@ -246,7 +272,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                   // `hoverable--row` rather than the global button scale: a
                   // full-width row that grows 12% on hover jumps the layout.
                   <button
-                    onClick={() => toggleCycleCollapsed(section.cycleId)}
+                    onClick={() => setCollapsedCycles(toggleGroup(collapsedCycles, [section.cycleId]))}
                     aria-expanded={!collapsed}
                     title={collapsed ? t("cycle.expandSection") : t("cycle.collapseSection")}
                     className="hoverable--row flex items-center gap-2 pb-1.5 w-full rounded"

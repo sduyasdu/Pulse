@@ -134,6 +134,8 @@ export const fr: Dict = {
   "cycle.manageOrgTemplates": "Modèles de flux pour les nouveaux Beats ({n})",
   "cycle.expandSection": "Afficher les colonnes de ce cycle",
   "cycle.collapseSection": "Masquer les colonnes de ce cycle",
+  "cycle.collapseAll": "Tout réduire",
+  "cycle.expandAll": "Tout déplier",
   "cycle.applyToTasks": "Déplacer {n} tâches existantes vers {cycle} ?",
   "cycle.applyDoneExcluded": "{n} terminées sont inchangées.",
   "cycle.applyOrphans": "{n} apparaîtraient non mappées.",

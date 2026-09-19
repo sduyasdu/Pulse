@@ -134,6 +134,8 @@ export const es: Dict = {
   "cycle.manageOrgTemplates": "Plantillas de flujo para nuevos Beats ({n})",
   "cycle.expandSection": "Mostrar las columnas de este ciclo",
   "cycle.collapseSection": "Ocultar las columnas de este ciclo",
+  "cycle.collapseAll": "Contraer todo",
+  "cycle.expandAll": "Expandir todo",
   "cycle.applyToTasks": "¿Mover {n} tareas existentes a {cycle}?",
   "cycle.applyDoneExcluded": "{n} terminadas no cambian.",
   "cycle.applyOrphans": "{n} aparecerían sin asignar.",

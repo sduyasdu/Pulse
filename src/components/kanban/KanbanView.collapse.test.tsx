@@ -46,17 +46,17 @@ beforeEach(() => {
   state.resources = [];
 });
 
-const view = (collapsed: Set<string>, toggle = vi.fn()) => {
+const view = (collapsed: Set<string>, setCollapsed = vi.fn(), cycleFilter = new Set<string>()) => {
   render(
     <KanbanView
       selectedId={null} onSelect={vi.fn()} canEdit canEditFeature={() => true}
       featureQuery="" featureStatusFilter={new Set()} epicFilter={new Set()}
-      cycleFilter={new Set()} setCycleFilter={vi.fn()}
-      collapsedCycles={collapsed} toggleCycleCollapsed={toggle}
+      cycleFilter={cycleFilter} setCycleFilter={vi.fn()}
+      collapsedCycles={collapsed} setCollapsedCycles={setCollapsed}
       filterResource={null} myResourceIds={null}
     />,
   );
-  return toggle;
+  return setCollapsed;
 };
 
 /**
@@ -91,9 +91,15 @@ describe("a collapsed cycle", () => {
   });
 
   it("toggles from the header, which is the whole row", () => {
-    const toggle = view(new Set());
+    const set = view(new Set());
     fireEvent.click(header("Standard"));
-    expect(toggle).toHaveBeenCalledWith("std");
+    expect([...set.mock.calls[0][0]]).toEqual(["std"]);
+  });
+
+  it("leaves the other cycle alone when one header is clicked", () => {
+    const set = view(new Set(["rev"]));
+    fireEvent.click(header("Standard"));
+    expect([...set.mock.calls[0][0]].sort()).toEqual(["rev", "std"]);
   });
 
   it("reports its state to assistive tech", () => {
@@ -102,5 +108,50 @@ describe("a collapsed cycle", () => {
     view(new Set(["std"]));
     expect(header("Standard").getAttribute("aria-expanded")).toBe("false");
     expect(header("Review").getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("the collapse-all control", () => {
+  const bulk = () => screen.getByRole("button", { name: /Collapse all|Expand all/ });
+
+  it("collapses every visible cycle", () => {
+    const set = view(new Set());
+    fireEvent.click(bulk());
+    expect([...set.mock.calls[0][0]].sort()).toEqual(["rev", "std"]);
+  });
+
+  it("finishes the job from a partly collapsed board rather than undoing it", () => {
+    // The case a naive toggle gets wrong. One section is already shut, so the
+    // button reads "Collapse all" — and pressing it must shut the other, not
+    // reopen the first.
+    const set = view(new Set(["std"]));
+    expect(bulk().textContent).toMatch(/Collapse all/);
+    fireEvent.click(bulk());
+    expect([...set.mock.calls[0][0]].sort()).toEqual(["rev", "std"]);
+  });
+
+  it("offers to expand once everything is collapsed", () => {
+    const set = view(new Set(["std", "rev"]));
+    expect(bulk().textContent).toMatch(/Expand all/);
+    fireEvent.click(bulk());
+    expect([...set.mock.calls[0][0]]).toEqual([]);
+  });
+
+  it("acts on the cycles the board is showing, not the ones it is hiding", () => {
+    // With the CY15 chips filtered to Review, "collapse all" means the one
+    // section on screen. Reaching for `board.sections` instead would shut
+    // Standard too — a cycle the user cannot see, cannot see collapse, and
+    // would find shut the next time they cleared the filter.
+    const set = view(new Set(), vi.fn(), new Set(["rev"]));
+    fireEvent.click(bulk());
+    expect([...set.mock.calls[0][0]]).toEqual(["rev"]);
+  });
+
+  it("does not appear on a single-cycle board", () => {
+    // It lives in the cycles row, which only exists when the board is grouped —
+    // and an ungrouped board has no section headers to collapse.
+    state.features = [task("a", "s0", "std")];
+    view(new Set());
+    expect(screen.queryByRole("button", { name: /Collapse all|Expand all/ })).toBeNull();
   });
 });

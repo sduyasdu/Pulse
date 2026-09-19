@@ -64,17 +64,3 @@ export function groupOptions(options: FilterOption[]): { group?: string; options
   }
   return out;
 }
-
-/**
- * Selecting a heading selects everything under it; selecting it again clears
- * them — but only the members, leaving any other group's selection alone.
- */
-export function toggleGroup(selected: Set<string>, groupIds: string[]): Set<string> {
-  const next = new Set(selected);
-  const allOn = groupIds.every((id) => next.has(id));
-  for (const id of groupIds) {
-    if (allOn) next.delete(id);
-    else next.add(id);
-  }
-  return next;
-}
