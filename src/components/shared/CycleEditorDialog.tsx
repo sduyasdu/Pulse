@@ -4,6 +4,7 @@ import { useT, type TranslationKey } from "@/i18n";
 import { usePulseStore } from "@/stores/pulseStore";
 import { getWorkspaceCycles } from "@/services/firestore/workspaces";
 import { copyCycleTemplate } from "@/domain/cycleTemplate";
+import { labelOf } from "@/domain/seedLabels";
 import {
   cyclesOf, statusMetaOf, STATUS_COLORS, DONE_STATUS_ID,
   STATUS_QUALIFICATIONS, qualificationOf,
@@ -211,8 +212,19 @@ function CycleEditor({
               isDefault={showDefault && defaultId === c.id}
               onToggle={() => setOpenId(openId === c.id ? null : c.id)}
               onMakeDefault={showDefault ? () => setDefaultId(c.id) : null}
-              onRename={(name) => patch(c.id, (x) => ({ ...x, name }))}
-              onStage={(sid, next) => patch(c.id, (x) => ({ ...x, statuses: x.statuses.map((s) => (s.id === sid ? { ...s, ...next } : s)) }))}
+              // SCT4: typing over a seeded name makes it the customer's, so it
+              // stops being translated — for everyone, in every language.
+              // Keeping the key would make their edit vanish for a colleague
+              // reading in French, which is worse than not translating at all.
+              // Per name, not per cycle: renaming a cycle does not
+              // un-translate its stages, and vice versa.
+              onRename={(name) => patch(c.id, (x) => ({ ...x, name, i18nKey: undefined }))}
+              onStage={(sid, next) => patch(c.id, (x) => ({
+                ...x,
+                statuses: x.statuses.map((s) => (s.id === sid
+                  ? { ...s, ...next, ...("label" in next ? { i18nKey: undefined } : {}) }
+                  : s)),
+              }))}
               onRemoveStage={(sid) => removeStage(c.id, sid)}
               pendingStage={pendingStage?.cycleId === c.id ? pendingStage.statusId : null}
               pendingCount={pendingStage?.cycleId === c.id ? tasksHoldingStage(c.id, pendingStage.statusId, features, defaultId).length : 0}
@@ -286,7 +298,11 @@ function CycleRow({
         <button onClick={onToggle} className="no-press" aria-label={cycle.name}>
           <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={16} style={{ color: "#64748B" }} />
         </button>
-        <input value={cycle.name} onChange={(e) => onRename(e.target.value)}
+        {/* Shows the reader's language while `list` holds the stored English.
+            Editing is therefore adopting what is on screen, which is the whole
+            point — and `onChange` only fires on a real keystroke, so an
+            untouched field never writes and never loses its key. */}
+        <input value={labelOf(cycle, t)} onChange={(e) => onRename(e.target.value)}
           className="min-w-0 flex-1 rounded px-1 py-0.5 text-sm font-semibold"
           style={{ color: "#1F2330", background: "transparent", border: "1px solid transparent", outline: "none" }} />
         <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>{stages.length + 1}</span>
@@ -306,7 +322,7 @@ function CycleRow({
             {stages.map((s) => (
               <div key={s.id} className="flex items-center gap-2">
                 <span style={{ width: 9, height: 9, borderRadius: 5, background: statusMetaOf(s.id, cycle.statuses).border, flexShrink: 0 }} />
-                <input value={s.label} placeholder={t("cycle.stageName")} onChange={(e) => onStage(s.id, { label: e.target.value })}
+                <input value={labelOf(s, t)} placeholder={t("cycle.stageName")} onChange={(e) => onStage(s.id, { label: e.target.value })}
                   className="min-w-0 flex-1 rounded border px-1.5 py-1 text-xs"
                   style={{ borderColor: "#E2DFD9", background: "#FFFFFF", outline: "none" }} />
                 {/* CY16: what this stage counts as when something summarises
@@ -333,7 +349,7 @@ function CycleRow({
             {pendingStage && (
               <div className="rounded border px-2 py-2" style={{ borderColor: "#E9B949", background: "#FFFBEB" }}>
                 <div className="text-[11px]" style={{ color: "#8A6100" }}>
-                  {t("cycle.stageInUse", { n: pendingCount, stage: statusMetaOf(pendingStage, cycle.statuses).label })}
+                  {t("cycle.stageInUse", { n: pendingCount, stage: labelOf(cycle.statuses.find((x) => x.id === pendingStage) ?? { label: pendingStage }, t) })}
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   <select value={remapTo} aria-label={t("cycle.remapTo")}
@@ -342,7 +358,7 @@ function CycleRow({
                     style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
                     <option value="" disabled>{t("cycle.remapTo")}</option>
                     {cycle.statuses.filter((st) => st.id !== pendingStage).map((st) => (
-                      <option key={st.id} value={st.id}>{statusMetaOf(st.id, cycle.statuses).label}</option>
+                      <option key={st.id} value={st.id}>{labelOf(st, t)}</option>
                     ))}
                   </select>
                   <button
@@ -505,9 +521,9 @@ function AddFromOrg({
             <button key={tpl.id} onClick={() => copyIn(tpl)}
               className="hoverable--row flex items-center gap-2 rounded px-2 py-1.5 text-left">
               <Icon name="conversion_path" size={13} style={{ color: "#94A3B8" }} />
-              <span className="text-xs font-semibold" style={{ color: "#1F2330" }}>{tpl.name}</span>
+              <span className="text-xs font-semibold" style={{ color: "#1F2330" }}>{labelOf(tpl, t)}</span>
               <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>
-                {tpl.statuses.map((s) => s.label).join(" › ")}
+                {tpl.statuses.map((s) => labelOf(s, t)).join(" › ")}
               </span>
               {taken && <span className="mono text-[9px] uppercase" style={{ color: "#B08A2E", marginLeft: "auto" }}>{t("cycle.alreadyAdded")}</span>}
             </button>

@@ -3,6 +3,7 @@ import { Icon } from "@/components/shared/Icon";
 import { useT } from "@/i18n";
 import { getWorkspaceCycles } from "@/services/firestore/workspaces";
 import { copyCycleTemplate } from "@/domain/cycleTemplate";
+import { labelOf } from "@/domain/seedLabels";
 import type { Cycle } from "@/types";
 
 interface CreatePulseDialogProps {
@@ -103,7 +104,7 @@ export function CreatePulseDialog({ onClose, onCreate, limit, atLimit, used = 0,
                 style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}
               >
                 {templates.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{labelOf(c, t)}</option>
                 ))}
               </select>
             </label>

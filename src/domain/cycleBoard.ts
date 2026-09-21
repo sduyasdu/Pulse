@@ -21,6 +21,9 @@ import { DONE_STATUS_ID } from "./constants";
 export interface CycleSection {
   cycleId: string;
   name: string;
+  /** Carried from the cycle so the section header and its filter chip can be
+   * shown in the reader's language (Seed-Cycle-Translation SCT7). */
+  i18nKey?: string;
   /** This cycle's own columns, in its own status order. */
   columns: StatusColumn[];
   /** Tasks in this cycle, across every column. Drives the section header. */
@@ -148,7 +151,7 @@ export function buildCycleBoard(
         groups: groupByEpic(orphaned, epics, false, usedEpicsOf(inCycle)),
       });
     }
-    return { cycleId: c.id, name: c.name, count: inCycle.length, columns };
+    return { cycleId: c.id, name: c.name, i18nKey: c.i18nKey, count: inCycle.length, columns };
   });
 
   // Stage columns only. CY7's trailing "Unmapped" column is not a stage of any

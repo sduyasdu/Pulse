@@ -4,6 +4,7 @@ import type { Epic, Feature, Resource } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildBoard } from "@/domain/kanban";
 import { allStatusesOf, statusesForTask, statusMetaOf, hexA } from "@/domain/constants";
+import { translateStatuses } from "@/domain/seedLabels";
 import { dateForDay, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
 import { staffingColor } from "@/domain/graphEffort";
 import { DatePeriodFilter } from "@/components/shared/DatePeriodFilter";
@@ -31,7 +32,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
   // list a task in any other cycle landed in NO column — gone from the mobile
   // board entirely, with no empty state to say so. CY7's rule is that work is
   // shown awkwardly rather than hidden.
-  const statuses = allStatusesOf(pulse);
+  const statuses = translateStatuses(allStatusesOf(pulse), t);
   const byId = useMemo(() => Object.fromEntries(resources.map((r) => [r.id, r])), [resources]);
 
   const [query, setQuery] = useState("");
@@ -156,7 +157,7 @@ export function MobileBoard({ features, epics, resources, canEdit, onSelect, myR
                           {/* This task's own cycle — the picker WRITES what it
                               offers, so it must not offer another cycle's
                               stage. Only the columns above span the Beat. */}
-                          {statusesForTask(f, pulse).map((s) => (
+                          {translateStatuses(statusesForTask(f, pulse), t).map((s) => (
                             <option key={s.id} value={s.id}>{s.label}</option>
                           ))}
                         </select>

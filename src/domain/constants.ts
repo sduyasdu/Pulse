@@ -33,11 +33,22 @@ export const STATUS_META: Record<string, StatusMeta> = {
 export const DONE_STATUS_ID = "done";
 
 // The columns a Pulse gets until it customises its statuses (Pulse.statuses).
+/**
+ * `i18nKey` here, not only on the Standard template, so that a Beat which
+ * predates cycles translates too (Seed-Cycle-Translation SCT3).
+ *
+ * `cyclesOf` builds that Beat's implicit cycle out of this list (CY11). With
+ * keys only on the seeded template, a legacy Beat would show "Planned" while a
+ * brand-new one showed "Planificado" — same product, same word, two answers.
+ *
+ * A Beat that *stored* its own statuses gets no keys and is shown verbatim,
+ * which is right: that list has been through a customer's hands.
+ */
 export const DEFAULT_STATUSES: StatusDef[] = [
-  { id: "planned", label: "Planned", color: "#64748B", qualifies: "planned" },
-  { id: "in-progress", label: "In progress", color: "#F5A524", qualifies: "ongoing" },
-  { id: "blocked", label: "Blocked", color: "#E5484D", qualifies: "stalled" },
-  { id: DONE_STATUS_ID, label: "Done", color: "#12A594" },
+  { id: "planned", label: "Planned", color: "#64748B", qualifies: "planned", i18nKey: "seed.planned" },
+  { id: "in-progress", label: "In progress", color: "#F5A524", qualifies: "ongoing", i18nKey: "seed.in-progress" },
+  { id: "blocked", label: "Blocked", color: "#E5484D", qualifies: "stalled", i18nKey: "seed.blocked" },
+  { id: DONE_STATUS_ID, label: "Done", color: "#12A594", i18nKey: "seed.done" },
 ];
 
 /**
@@ -113,7 +124,7 @@ export const IMPLICIT_CYCLE_ID = "default";
  */
 export function cyclesOf(pulse: { cycles?: Cycle[]; statuses?: StatusDef[] } | null | undefined): Cycle[] {
   if (pulse?.cycles && pulse.cycles.length) return pulse.cycles;
-  return [{ id: IMPLICIT_CYCLE_ID, name: "Standard", statuses: statusesOf(pulse) }];
+  return [{ id: IMPLICIT_CYCLE_ID, name: "Standard", i18nKey: "seed.cy-standard", statuses: statusesOf(pulse) }];
 }
 
 /**

@@ -11,13 +11,17 @@ import { BASELINE_CYCLES } from "./baselineCycles";
 // Two baseline templates that genuinely collide: both have a "Design" stage
 // and both have "On hold", with different ids in each. That is the real shape
 // of the problem, not a contrived one.
+/** English identity: the stored label is what comes back. The translated case
+ * is `seedLabels.test.ts`; here the concern is grouping. */
+const t = ((k: string) => k) as never;
+
 const std = copyCycleTemplate(BASELINE_CYCLES.find((c) => c.id === "cy-pd-digital")!, "A");
 const rev = copyCycleTemplate(BASELINE_CYCLES.find((c) => c.id === "cy-pd-physical")!, "B");
 const DIGITAL = "Product development (digital)";
 const PHYSICAL = "Product development (physical)";
 
 describe("a Beat with more than one cycle", () => {
-  const opts = statusFilterOptions({ cycles: [std, rev] });
+  const opts = statusFilterOptions({ cycles: [std, rev] }, t);
 
   it("gives every entry a heading that identifies it", () => {
     // The whole point. Two stages named "Design" are fine as long as the list
@@ -57,14 +61,14 @@ describe("a Beat with one cycle", () => {
   it("has no headings at all", () => {
     // The overwhelming majority. A heading over the only group says nothing,
     // and this list must look exactly as it did before cycles existed.
-    const opts = statusFilterOptions({ cycles: [std] });
+    const opts = statusFilterOptions({ cycles: [std] }, t);
     expect(opts.every((o) => o.group === undefined)).toBe(true);
     expect(opts.map((o) => o.name)).toEqual(["Discovery", "Design", "Build", "Test", "On hold", "Done"]);
   });
 
   it("works for a Beat that predates cycles", () => {
     // `cyclesOf` computes the implicit single cycle (CY11) — nothing written.
-    const opts = statusFilterOptions({ statuses: [{ id: "a", label: "Backlog", color: "#000" }] });
+    const opts = statusFilterOptions({ statuses: [{ id: "a", label: "Backlog", color: "#000" }] }, t);
     expect(opts.map((o) => o.name)).toEqual(["Backlog"]);
     expect(opts[0].group).toBeUndefined();
   });
@@ -72,7 +76,7 @@ describe("a Beat with one cycle", () => {
 
 describe("bucketing the list for render", () => {
   it("keeps groups in order and Done at the end", () => {
-    const buckets = groupOptions(statusFilterOptions({ cycles: [std, rev] }));
+    const buckets = groupOptions(statusFilterOptions({ cycles: [std, rev] }, t));
     expect(buckets.map((b) => b.group)).toEqual([DIGITAL, PHYSICAL, undefined]);
     expect(buckets[2].options.map((o) => o.id)).toEqual(["done"]);
   });

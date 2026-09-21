@@ -14,6 +14,8 @@ import { businessInSpan, dateForDay, isWeekend as isWeekendDay, todayIndex } fro
 import { buildTimeline } from "@/domain/timeline";
 import { matchesCycleFilter } from "@/domain/cycleBoard";
 import { stickyLabelShift, stickyLabelWidth } from "@/domain/stickyLabel";
+import { labelOf } from "@/domain/seedLabels";
+import { statusesForTask } from "@/domain/constants";
 import { BASE_DAY_WIDTH, CONTENT_MIN_HEIGHT, DENSITY_DAY_PX, colorForName, hexA, statusMetaInCycle, type Density } from "@/domain/constants";
 import { useDebouncedText } from "@/hooks/useDebouncedText";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
@@ -1552,6 +1554,13 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
       {hoverCard && !dimHint && (() => {
         const hb = hoverCard.box;
         const hm = statusMetaInCycle(hb.status, hb, pulse);
+        // The only status NAME the canvas draws — everything else on a box is
+        // colour. Resolved from the task's own cycle so a seeded stage reads in
+        // the viewer's language (SCT7).
+        const hmLabel = labelOf(
+          { ...hm, i18nKey: statusesForTask(hb, pulse).find((s) => s.id === hb.status)?.i18nKey },
+          t,
+        );
         const hEst = estimateEffort(hb, graph);
         const hAssigned = assignedEffort(hb);
         const hCov = Math.round((hAssigned / Math.max(0.1, hEst)) * 100);
@@ -1559,7 +1568,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         return (
           <div className="fixed pointer-events-none rounded-lg" style={{ left: hoverCard.x + 14, top: hoverCard.y + 14, maxWidth: 260, background: "#123359", border: "1px solid #EE7240", padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 100 }}>
             <div className="text-xs font-semibold" style={{ color: "#F7F6F2", marginBottom: 3 }}>{hb.title}</div>
-            <div className="mono" style={{ fontSize: 9, color: hm.border, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>{hm.label}</div>
+            <div className="mono" style={{ fontSize: 9, color: hm.border, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>{hmLabel}</div>
             {/* End is the LAST day of the task, not the day after it: `x + duration`
                 is the exclusive bound, and showing it would read as a task
                 running a day longer than the box drawn on screen. */}

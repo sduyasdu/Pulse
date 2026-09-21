@@ -281,6 +281,9 @@ export interface Pulse {
 export interface Cycle {
   id: string;
   name: string;
+  /** As on `StatusDef`: set only when Beats wrote this name, cleared on edit
+   * (Seed-Cycle-Translation SCT3/SCT4). */
+  i18nKey?: string;
   statuses: StatusDef[];
 }
 
@@ -305,6 +308,15 @@ export interface StatusDef {
   /** Which of the three qualifications this stage counts as. Absent on statuses
    * that predate cycles; `qualificationOf` resolves those. */
   qualifies?: StatusQualification;
+  /**
+   * Set only on strings **Beats supplied** (Seed-Cycle-Translation SCT3), and
+   * the whole basis on which a label may be translated: provenance, not
+   * content. `label` beside it is the English fallback.
+   *
+   * Cleared the moment a human edits the label (SCT4) — their words are then
+   * what the stage is called, in every language.
+   */
+  i18nKey?: string;
 }
 
 /** Graph Effort scale (spec §4) — user-adjustable per Pulse. */

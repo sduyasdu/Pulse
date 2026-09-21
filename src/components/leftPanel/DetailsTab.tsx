@@ -17,6 +17,7 @@ import {
 import { dayIndexFromDateInputValue, fmtDate, toDateInputValue, todayIndex } from "@/domain/dateUtils";
 import { LABEL_COLORS, colorForName, statusesForTask, statusMetaOf, cyclesOf, cycleOfTask, DONE_STATUS_ID } from "@/domain/constants";
 import { cycleChangeEffect } from "@/domain/cycleBoard";
+import { labelOf, translateStatuses } from "@/domain/seedLabels";
 import { Attachments } from "@/components/shared/Attachments";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { Comments } from "@/components/comments/Comments";
@@ -82,7 +83,8 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
   // the task's workflow does not contain, and writes it when chosen.
   // Subtasks have no cycle of their own and follow their parent, which is this
   // same list.
-  const statuses = statusesForTask(feature, pulse);
+  // Display-only (SCT2): the picker writes ids, never labels.
+  const statuses = translateStatuses(statusesForTask(feature, pulse), t);
   const patchFeature = usePulseStore((s) => s.patchFeature);
   const setFeatureStatus = usePulseStore((s) => s.setFeatureStatus);
   const moveFeatureToEpic = usePulseStore((s) => s.moveFeatureToEpic);
@@ -323,7 +325,7 @@ export function DetailsTab({ feature, canEdit: canEditProp, onClose, onDuplicate
               style={{ borderColor: "#E2DFD9", background: !canEditProp || cycleLocked ? "#F8FAFC" : "#FFFFFF", color: "#334155" }}
             >
               {cycles.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{labelOf(c, t)}</option>
               ))}
             </select>
             {cycleLocked && (

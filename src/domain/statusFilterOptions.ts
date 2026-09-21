@@ -1,4 +1,6 @@
 import { DONE_STATUS_ID, cyclesOf } from "./constants";
+import { labelOf, type Nameable } from "./seedLabels";
+import type { TranslationKey } from "@/i18n";
 import type { Cycle, StatusDef } from "@/types";
 
 /** A filter entry. `group` renders as a heading above its members. */
@@ -27,13 +29,18 @@ export interface FilterOption {
  */
 export function statusFilterOptions(
   pulse: { cycles?: Cycle[]; statuses?: StatusDef[] } | null | undefined,
+  t: (key: TranslationKey) => string,
 ): FilterOption[] {
+  // Names resolved here rather than at the dropdown, because the HEADINGS are
+  // cycle names and the entries are stage names — two different things that
+  // both need it, and the dropdown should not have to know which is which.
+  const name = (x: Nameable) => labelOf(x, t);
   const cycles = cyclesOf(pulse);
 
   // One cycle is the overwhelming majority of Beats, and a heading over the
   // only group is noise that says nothing. Flat, exactly as before.
   if (cycles.length <= 1) {
-    return (cycles[0]?.statuses ?? []).map((s) => ({ id: s.id, name: s.label, color: s.color }));
+    return (cycles[0]?.statuses ?? []).map((s) => ({ id: s.id, name: name(s), color: s.color }));
   }
 
   const out: FilterOption[] = [];
@@ -44,12 +51,12 @@ export function statusFilterOptions(
       // same checkbox several times over, so it is held back and emitted once,
       // ungrouped, at the end.
       if (s.id === DONE_STATUS_ID) continue;
-      out.push({ id: s.id, name: s.label, color: s.color, group: cycle.name });
+      out.push({ id: s.id, name: name(s), color: s.color, group: name(cycle) });
     }
   }
 
   const done = cycles.flatMap((c) => c.statuses).find((s) => s.id === DONE_STATUS_ID);
-  if (done) out.push({ id: done.id, name: done.label, color: done.color });
+  if (done) out.push({ id: done.id, name: name(done), color: done.color });
   return out;
 }
 

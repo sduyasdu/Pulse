@@ -218,3 +218,94 @@ describe("deleting a stage tasks are sitting in (CY7)", () => {
     expect(setCycles).not.toHaveBeenCalled();
   });
 });
+
+describe("editing a seeded name (Seed-Cycle-Translation SCT4)", () => {
+  const seeded = {
+    id: "p1",
+    defaultCycleId: "std",
+    cycles: [{
+      id: "std",
+      name: "Standard",
+      i18nKey: "seed.cy-standard",
+      statuses: [
+        { id: "s0", label: "Planned", color: "#64748B", i18nKey: "seed.planned" },
+        { id: "done", label: "Done", color: "#12A594", i18nKey: "seed.done" },
+      ],
+    }],
+  };
+  const savedCycle = () => (setCycles.mock.calls[0][0] as { statuses: { id: string; label: string; qualifies?: string; i18nKey?: string }[]; i18nKey?: string }[])[0];
+  // By placeholder, not by value: the qualification <select> beside it also
+  // displays "Planned", so `getByDisplayValue` finds two.
+  const stageInput = () => screen.getByPlaceholderText("Stage name");
+
+  it("drops the key from the stage that was typed over", async () => {
+    // Their words are now what the stage is called, in every language. Keeping
+    // the key would make this edit invisible to a colleague reading in French —
+    // worse than not translating at all.
+    state.pulse = seeded;
+    render(<CycleEditorDialog onClose={() => {}} />);
+    fireEvent.change(stageInput(), { target: { value: "Backlog" } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(setCycles).toHaveBeenCalled());
+
+    const stage = savedCycle().statuses.find((x) => x.id === "s0")!;
+    expect(stage.i18nKey).toBeUndefined();
+    expect(stage.label).toBe("Backlog");
+  });
+
+  it("leaves the other stages, and the cycle, translatable", async () => {
+    // Per name, not per cycle: renaming one stage must not un-translate its
+    // siblings, and must not un-translate the cycle it sits in.
+    state.pulse = seeded;
+    render(<CycleEditorDialog onClose={() => {}} />);
+    fireEvent.change(stageInput(), { target: { value: "Backlog" } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(setCycles).toHaveBeenCalled());
+
+    expect(savedCycle().i18nKey).toBe("seed.cy-standard");
+    expect(savedCycle().statuses.find((x) => x.id === "done")?.i18nKey).toBe("seed.done");
+  });
+
+  it("drops the cycle's key when the cycle is renamed", async () => {
+    state.pulse = seeded;
+    render(<CycleEditorDialog onClose={() => {}} />);
+    fireEvent.change(screen.getByDisplayValue("Standard"), { target: { value: "Our way" } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(setCycles).toHaveBeenCalled());
+
+    expect(savedCycle().i18nKey).toBeUndefined();
+    // ...and its stages are untouched.
+    expect(savedCycle().statuses.find((x) => x.id === "s0")?.i18nKey).toBe("seed.planned");
+  });
+
+  it("keeps the key when only the qualification changes", async () => {
+    // CY16's dropdown sits right beside the label. Changing how a stage is
+    // counted in reports says nothing about what it is CALLED, so clearing the
+    // key there would un-translate a stage for an unrelated reason — and the
+    // person who did it would have no idea they had.
+    state.pulse = seeded;
+    render(<CycleEditorDialog onClose={() => {}} />);
+    fireEvent.change(screen.getByTitle("How this stage is counted in reports that span cycles."), {
+      target: { value: "stalled" },
+    });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(setCycles).toHaveBeenCalled());
+
+    const stage = savedCycle().statuses.find((x) => x.id === "s0")!;
+    expect(stage.i18nKey).toBe("seed.planned");
+    expect(stage.qualifies).toBe("stalled");
+  });
+
+  it("keeps every key when nothing is edited", async () => {
+    // Opening the dialog and pressing Save must not un-translate a Beat. The
+    // inputs show the reader's language while the state holds English, so a
+    // render that wrote what it displayed would do exactly that.
+    state.pulse = seeded;
+    render(<CycleEditorDialog onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(setCycles).toHaveBeenCalled());
+
+    expect(savedCycle().i18nKey).toBe("seed.cy-standard");
+    expect(savedCycle().statuses.map((x) => x.i18nKey)).toEqual(["seed.planned", "seed.done"]);
+  });
+});

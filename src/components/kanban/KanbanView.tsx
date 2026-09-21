@@ -4,6 +4,7 @@ import type { Feature, FeatureStatus, StatusDef } from "@/types";
 import { usePulseStore, graphConfigOf } from "@/stores/pulseStore";
 import { buildCycleBoard, canDropInSection, placeColumns, UNMAPPED_STATUS_ID } from "@/domain/cycleBoard";
 import { toggleGroup } from "@/domain/toggleGroup";
+import { labelOf, translateStatuses } from "@/domain/seedLabels";
 import type { StatusColumn } from "@/domain/kanban";
 import { hexA, statusMetaOf, cyclesOf } from "@/domain/constants";
 import { fmtDate, todayIndex, taskActiveInPeriod, type DatePeriod } from "@/domain/dateUtils";
@@ -223,7 +224,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                 className="hoverable no-press rounded-full px-2.5 py-1 text-[11px] whitespace-nowrap"
                 style={{ border: "1px solid " + (on ? "#EE7240" : "#E2DFD9"), background: on ? "#FFF7F1" : "#FFFFFF",
                   color: on ? "#D85A28" : "#64748B", fontWeight: on ? 600 : 400 }}>
-                {sec.name} <span className="mono text-[9px]" style={{ opacity: 0.7 }}>{sec.count}</span>
+                {labelOf(sec, t)} <span className="mono text-[9px]" style={{ opacity: 0.7 }}>{sec.count}</span>
               </button>
             );
           })}
@@ -253,7 +254,14 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
       <div className="flex-1 overflow-auto">
         <div className="p-3" style={{ minWidth: "min-content" }}>
           {sections.map((section) => {
-            const secStatuses = cycles.find((c) => c.id === section.cycleId)?.statuses ?? cycles[0]?.statuses ?? [];
+            // Translated for DISPLAY only. `cycles` above stays raw because
+            // `renameStatus` patches from it and writes it back — saving a
+            // translated list would store one reader's language under an
+            // English key (SCT2).
+            const secStatuses = translateStatuses(
+              cycles.find((c) => c.id === section.cycleId)?.statuses ?? cycles[0]?.statuses ?? [],
+              t,
+            );
             const cols = featureStatusFilter.size === 0
               ? section.columns
               : section.columns.filter((c) => featureStatusFilter.has(c.status));
@@ -279,7 +287,7 @@ export function KanbanView({ selectedId, onSelect, canEdit, canEditFeature, feat
                     style={{ paddingTop: 2 }}
                   >
                     <Icon name={collapsed ? "chevron_right" : "keyboard_arrow_down"} size={16} style={{ color: "#94A3B8", flexShrink: 0 }} />
-                    <span className="font-display text-[13px] font-bold" style={{ color: "#1F2330" }}>{section.name}</span>
+                    <span className="font-display text-[13px] font-bold" style={{ color: "#1F2330" }}>{labelOf(section, t)}</span>
                     <span className="mono text-[10px]" style={{ color: "#94A3B8" }}>
                       {t(section.count === 1 ? "card.taskOne" : "card.taskOther", { n: section.count })}
                     </span>

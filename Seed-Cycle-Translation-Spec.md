@@ -188,15 +188,63 @@ what is stored.
    `en` — the same shape as `build/iconNames.test.ts`, and for the same reason:
    a key that resolves to nothing renders as the raw key, with no error.
 
-## 7. Open questions
+## 7. Resolved
 
-- **Should the org cycle editor show the reader's language or the stored one?**
-  Editing a translated label is the one screen where seeing the English matters,
-  since that is what is saved. Leaning towards showing the translation with the
-  stored string as the field's placeholder, but it needs a look at the dialog.
-- **Do the domain names translate well?** "Snagging" and "Mobilisation" are
-  construction terms of art with no clean equivalent in some of the six. Worth
-  a native speaker's eye before step 2 rather than after.
+**SCT12 — A cycle may be half translated, and that is the correct answer.**
+Keys live per name, so a seeded template whose owner renamed two stages shows
+the rest translated and those two verbatim, to every reader. Mixed is not a
+state to smooth over: each name is shown according to who wrote it.
+
+**SCT13 — The editor shows the reader's language; editing is adopting it.**
+The field displays `labelOf(...)` while the dialog's state holds the stored
+English. Typing therefore replaces the translation with the person's own words
+and clears the key (SCT4). An untouched field never fires `onChange`, so
+opening the dialog and pressing Save changes nothing — which is pinned, because
+a render that wrote what it displayed would un-translate a Beat silently.
+
+*Rejected: showing the stored English with the translation as a placeholder.*
+It makes the one screen where a Spanish reader is doing work the only screen
+that speaks English at them.
+
+**SCT14 — Only a name edit clears a key.** Changing a stage's CY16
+qualification sits in the same row and says nothing about what the stage is
+called. Clearing the key there would un-translate a stage for an unrelated
+reason, and the person who did it would have no way of knowing.
+
+**SCT15 — `DEFAULT_STATUSES` carries keys, so Beats that predate cycles
+translate too.** `cyclesOf` builds their implicit cycle out of that list (CY11).
+With keys only on the seeded template, a legacy Beat would show "Planned" while
+a new one showed "Planificado". A Beat that *stored* its own statuses gets no
+keys and stays verbatim, which is right: that list has been through a
+customer's hands.
+
+**SCT16 — The construction glossary.** Supplied rather than machine-translated,
+because these are terms of art:
+
+| | es | fr | it | de | pt |
+| --- | --- | --- | --- | --- | --- |
+| Snagging | Terminaciones | Réserves | Eliminazione dei difetti | Mängelfeststellung | Apontamento de anomalias |
+| Mobilisation | Movilización | Mobilisation du chantier | Cantierizzazione | Baustelleneinrichtung | Mobilização do canteiro |
+
+Four were corrected for spelling and accents as supplied — `movilization` →
+`Movilización`, `mobilization the chantier` → `Mobilisation du chantier`,
+`mängelfestellung` → `Mängelfeststellung`, `mobilizacao do canteiro` →
+`Mobilização do canteiro`. Flagged rather than applied silently: these ship
+into customer data.
+
+Architecture's design stages took the same treatment — "Developed design" and
+"Technical design" are RIBA 3 and 4, and each language has its own established
+pair (*Proyecto básico / Proyecto de ejecución*, *Avant-projet / Projet
+d'exécution*, *Progetto definitivo / Progetto esecutivo*, *Entwurfsplanung /
+Ausführungsplanung*, *Projeto base / Projeto de execução*) rather than a
+literal rendering.
+
+## 8. Still open
+
+- **"Brief" is two different words.** It is a client's requirements document in
+  architecture and a campaign brief in marketing, so they are separate keys and
+  Spanish takes *Programa* for one and *Briefing* for the other. Worth a check
+  by someone who works in each.
 
 ## Decisions
 
@@ -213,3 +261,8 @@ what is stored.
 | SCT9 | Colleagues in one Beat see different words; colour and order are shared |
 | SCT10 | Seeding is English-only and ignores the owner's locale |
 | SCT11 | `seed.` keys are permanent, including for retired templates |
+| SCT12 | A cycle may be half translated; each name follows who wrote it |
+| SCT13 | The editor shows the reader's language; editing adopts it |
+| SCT14 | Only a name edit clears a key, never a qualification change |
+| SCT15 | `DEFAULT_STATUSES` carries keys, so pre-cycles Beats translate too |
+| SCT16 | The construction and RIBA glossaries, supplied not machine-translated |

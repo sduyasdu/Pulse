@@ -19,20 +19,30 @@ export interface BaselineCycle extends Cycle {
 /** Bump when templates are added below, and give them this `since`. */
 export const CURRENT_SEED_VERSION = 2;
 
-/** Four working stages, a stalled one, then Done. */
+/**
+ * Four working stages, a stalled one, then Done.
+ *
+ * Every stage gets `i18nKey: "seed.<id>"`. Keyed on the stage id rather than
+ * the word, because the same English label means different things in different
+ * templates — "Brief" is a client's requirements document in architecture and
+ * a campaign brief in marketing, and Spanish has a different word for each.
+ * Only Done is shared, and only because every cycle literally shares that one
+ * reserved id (CY5).
+ */
 function stages(steps: [string, string][], hold: string): StatusDef[] {
   return [
     ...steps.map(([id, label], i) => ({
       id,
       label,
+      i18nKey: `seed.${id}`,
       color: i === 0 ? "#64748B" : ["#F5A524", "#6366F1", "#0EA5E9"][(i - 1) % 3],
       // First stage is where work waits to begin; the rest are work happening.
       qualifies: (i === 0 ? "planned" : "ongoing") as StatusQualification,
     })),
     // Every template carries one, so a report that asks "what is stuck?" can be
     // answered in any of them rather than only in Standard.
-    { id: hold, label: "On hold", color: "#E5484D", qualifies: "stalled" as StatusQualification },
-    { id: DONE_STATUS_ID, label: "Done", color: "#12A594" },
+    { id: hold, label: "On hold", i18nKey: `seed.${hold}`, color: "#E5484D", qualifies: "stalled" as StatusQualification },
+    { id: DONE_STATUS_ID, label: "Done", i18nKey: "seed.done", color: "#12A594" },
   ];
 }
 
@@ -42,11 +52,22 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
    * organisation's first cycle. It is also exactly `DEFAULT_STATUSES`, which is
    * what makes CY11 an identity for every Beat that predates cycles.
    */
-  { id: "cy-standard", name: "Standard", statuses: DEFAULT_STATUSES, since: 1 },
+  {
+    id: "cy-standard",
+    name: "Standard",
+    i18nKey: "seed.cy-standard",
+    // `DEFAULT_STATUSES` itself, keys and all. CY11 makes it the identity for
+    // every Beat that predates cycles, so any difference here — including one
+    // as small as a translation key — would have a legacy Beat and a new one
+    // disagree about what "Standard" means.
+    statuses: DEFAULT_STATUSES,
+    since: 1,
+  },
 
   {
     id: "cy-pd-digital",
     name: "Product development (digital)",
+    i18nKey: "seed.cy-pd-digital",
     statuses: stages([
       ["pdd-discovery", "Discovery"],
       ["pdd-design", "Design"],
@@ -58,6 +79,7 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
   {
     id: "cy-pd-physical",
     name: "Product development (physical)",
+    i18nKey: "seed.cy-pd-physical",
     statuses: stages([
       ["pdp-concept", "Concept"],
       ["pdp-design", "Design"],
@@ -72,6 +94,7 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
     // product routinely clears one and waits on the other.
     id: "cy-pd-financial",
     name: "Product development (financial)",
+    i18nKey: "seed.cy-pd-financial",
     statuses: stages([
       ["pdf-proposal", "Proposal"],
       ["pdf-modelling", "Modelling"],
@@ -84,6 +107,7 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
     // RIBA stages 1–4, in the words architects already use for them.
     id: "cy-arch-design",
     name: "Architecture (design)",
+    i18nKey: "seed.cy-arch-design",
     statuses: stages([
       ["ad-brief", "Brief"],
       ["ad-concept", "Concept"],
@@ -96,6 +120,7 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
     // RIBA 5–6: the build itself, then closing it out.
     id: "cy-arch-construction",
     name: "Architecture (construction)",
+    i18nKey: "seed.cy-arch-construction",
     statuses: stages([
       ["ac-procurement", "Procurement"],
       ["ac-mobilisation", "Mobilisation"],
@@ -107,6 +132,7 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
   {
     id: "cy-marketing-campaign",
     name: "Marketing campaign",
+    i18nKey: "seed.cy-marketing-campaign",
     statuses: stages([
       ["mc-brief", "Brief"],
       ["mc-creative", "Creative"],
@@ -118,6 +144,7 @@ export const BASELINE_CYCLES: BaselineCycle[] = [
   {
     id: "cy-product-launch",
     name: "Product launch",
+    i18nKey: "seed.cy-product-launch",
     statuses: stages([
       ["pl-plan", "Plan"],
       ["pl-prepare", "Prepare"],

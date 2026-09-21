@@ -5,6 +5,8 @@ import { allocInRange, assignmentsFor, utilizationPct } from "@/domain/assignmen
 import { stackRows } from "@/domain/layout";
 import { buildPeriods, buildTimeline } from "@/domain/timeline";
 import { RES_LABEL_W, clamp, allStatusesOf, statusMetaInCycle, type Density } from "@/domain/constants";
+import { translateStatuses } from "@/domain/seedLabels";
+import { useT } from "@/i18n";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import { fmtDate, todayIndex } from "@/domain/dateUtils";
 import { useCoarsePointer } from "@/hooks/useIsMobile";
@@ -49,7 +51,8 @@ export function AssignmentPanel({ offsetX, dayWidth, viewZoom, density, startDay
   const pulse = usePulseStore((s) => s.pulse);
   // The filter dropdown spans the whole Beat, so it offers every cycle's
   // stages; each bar below still resolves its own against its own cycle.
-  const statuses = allStatusesOf(pulse);
+  const t = useT();
+  const statuses = translateStatuses(allStatusesOf(pulse), t);
   const coarse = useCoarsePointer();
 
   const [assignPeople, setAssignPeople] = useState<Set<string>>(new Set());

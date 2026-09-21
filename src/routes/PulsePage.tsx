@@ -654,7 +654,7 @@ export function PulsePage() {
         onToggleMyPulse={() => setMyTasksOnly((v) => !v)}
         canMyPulse={myResourceIds.length > 0}
         epicOptions={epics.map((e) => ({ id: e.id, name: e.name || t("pulse.untitledEpic"), color: e.color }))}
-        statusOptions={statusFilterOptions(pulse)}
+        statusOptions={statusFilterOptions(pulse, t)}
         cycleFilter={cycleFilter}
         setCycleFilter={setCycleFilter}
         showDelays={showDelays}

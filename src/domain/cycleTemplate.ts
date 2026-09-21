@@ -14,6 +14,12 @@ import type { Cycle, Feature } from "@/types";
  * compare equal by id while being independently editable, and adding the same
  * template twice would collide outright.
  *
+ * **`i18nKey` travels with the copy** (SCT3). A Beat's copy of a seeded
+ * template is still a seeded template, so it is still translated. The spread
+ * below carries it; the test pins it, because a later rewrite that listed
+ * fields explicitly would drop it and every copied Beat would quietly revert
+ * to English.
+ *
  * **Except Done.** CY5 makes it a reserved, hard-coded status: ~30 call sites
  * compare against `DONE_STATUS_ID` to stamp `finishedAt`, lock the task, strike
  * the title and count it complete. A copy that renamed it to `st-…-3` would
