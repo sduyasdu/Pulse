@@ -100,5 +100,23 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     exclude: ["**/node_modules/**", "**/rules/**"],
+    /**
+     * Raised from vitest's 5s default after a run failed 22 tests across nine
+     * component files at once, and the next two runs passed clean. Nothing was
+     * slow: the longest test in a quiet run takes 448ms, so those tests had
+     * overrun their normal time more than tenfold. That is the shape of the
+     * machine being busy — several jsdom workers, a build, or a headless Chrome
+     * from `test:layout` competing for it — not of a test doing too much.
+     *
+     * 15s is roughly 33x the slowest real test, which leaves room for a loaded
+     * machine while still failing a genuinely hung test quickly enough to watch.
+     * If a test ever needs more than this, the test is the problem.
+     *
+     * The alternative — capping worker concurrency — makes every run slower to
+     * fix a fault that appears in maybe one run in ten. This costs nothing when
+     * things are fine.
+     */
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
   },
 });
