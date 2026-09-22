@@ -4,7 +4,8 @@
  * `revealScrollDelta` is unit-tested, but the thing that broke was never the
  * arithmetic — it was that nothing called it after a drag, and that a rect read
  * mid-transition is a position the box is only passing through. Neither is
- * visible without a layout engine and a real 200ms animation.
+ * visible without a layout engine and a real settle animation (its duration
+ * is `--canvas-settle-ms`).
  *
  * So this performs an actual drag in a real headless Chrome and asks, when
  * everything has stopped, whether the task is still on screen.
@@ -123,6 +124,17 @@ const TARGET = "t4-0";
 await evaluate(`(() => { const s = document.querySelector('[data-feature-id="${TARGET}"]'); s && s.scrollIntoView({ block: "center" }); })()`);
 await settle();
 
+// Does the settle transition actually resolve? `var()` inside the `transition`
+// shorthand is legal but easy to get wrong, and a transition that fails to
+// parse is simply absent — the box jumps, and nothing reports anything.
+const css = await evaluate(`(() => {
+  const el = document.querySelector('[data-feature-id="${TARGET}"]');
+  const cs = getComputedStyle(el);
+  return { cls: el.className, dur: cs.transitionDuration, prop: cs.transitionProperty,
+           varValue: getComputedStyle(document.documentElement).getPropertyValue("--canvas-settle-ms").trim() };
+})()`);
+console.log(`  --canvas-settle-ms = "${css.varValue}"; box class "${css.cls}" -> ${css.prop} ${css.dur}`);
+
 const before = await geom(TARGET);
 if (before.missing) { console.error("  ✗ the probe task never rendered"); process.exit(1); }
 console.log(`  before: top ${before.top}, view ${before.viewTop}–${before.viewBottom}, scrollTop ${before.scrollTop}`);
@@ -143,9 +155,13 @@ await drag({ x: midX, y: midY }, { x: midX + 420, y: midY });
 // disappears": it is gone from where you were looking with nothing to follow.
 const trace = await evaluate(`(() => new Promise((done) => {
   const el = document.querySelector('[data-feature-id="${TARGET}"]');
+  // CONTENT coordinates, not viewport: the canvas is scrolling at the same
+  // time, and a viewport-relative trace credits that movement to the box. It
+  // did exactly that — the box was jumping and the trace showed a glide.
+  const scroller = (() => { let n = el.parentElement; while (n) { if (n.scrollHeight > n.clientHeight + 4) return n; n = n.parentElement; } return null; })();
   const tops = []; let n = 0;
   const tick = () => {
-    tops.push(Math.round(el.getBoundingClientRect().top));
+    tops.push(Math.round(el.getBoundingClientRect().top + (scroller ? scroller.scrollTop : 0)));
     if (n++ < 40) requestAnimationFrame(tick); else done(tops);
   };
   requestAnimationFrame(tick);
@@ -176,6 +192,11 @@ const wouldBeTop = after.top + scrolled;
 const wouldBeBottom = after.bottom + scrolled;
 console.log(`  without the follow it would sit at ${wouldBeTop}–${wouldBeBottom}`);
 assert(scrolled !== 0, `the canvas followed the task (scrollTop ${before.scrollTop} -> ${after.scrollTop})`);
+
+// The box has to GLIDE to its new row, not jump there. Measured in content
+// coordinates, so the scroll cannot stand in for it. Two positions would mean
+// one frame at the start and one at the end — a jump.
+assert(distinct.length >= 4, `the task glides to its new row (${distinct.length} distinct positions)`);
 assert(wouldBeBottom > after.viewBottom || wouldBeTop < after.viewTop,
   "and it had to: the task would otherwise have been off screen");
 

@@ -16,6 +16,15 @@
    block) AND registered in @theme so Tailwind utilities (bg-yasdu-*, etc.)
    resolve to the same values. */
 :root {
+  /* How long a task takes to glide to a new row when a drag repacks the layout.
+     One definition because two rules use it — `.canvas-settle` and
+     `.canvas-settle--top` — and a pair of literals is how they drift apart.
+
+     Raised from 200ms. A repack can move a box the height of the viewport, and
+     at 200ms that reads as a jump with a smear rather than as the box going
+     somewhere: too fast to follow with your eye, which is the whole job of
+     animating it at all. */
+  --canvas-settle-ms: 360ms;
   --y-bg: #fdfcf8;
   --y-fg: #1f2330;
   --y-card: #ffffff;
@@ -309,17 +318,32 @@ button:disabled {
    Never applied to the box being dragged: that one must track the pointer
    exactly, and a transition there would feel like lag. See `dragId` in
    CanvasView. */
+/* Every feature box. Carries the dim/undim fade that used to be an INLINE
+   `transition: opacity .15s` — and inline styles replace the whole shorthand,
+   so that one silently cancelled `.canvas-settle` on the very elements the
+   settle exists for. The box jumped to its new row and the class did nothing;
+   the frame trace in `revealOnDrag.check.mjs` was reading the smooth scroll and
+   crediting it to the box.
+
+   Which is why each of these rules restates `opacity` rather than relying on
+   one to inherit it: two classes both setting `transition` do not merge, the
+   last one simply wins. */
+.canvas-box {
+  transition: opacity 0.15s;
+}
+
 .canvas-settle {
   transition:
-    top 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity 0.15s,
+    top var(--canvas-settle-ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    height var(--canvas-settle-ms) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Motion here is decorative — it explains a rearrangement that is equally
    correct without it — so it is the first thing to go. */
 @media (prefers-reduced-motion: reduce) {
   .canvas-settle {
-    transition: none;
+    transition: opacity 0.15s;
   }
 }
 
@@ -376,12 +400,14 @@ button:disabled {
    `top` from the pointer, and transitioning it there would make the box swim
    after the cursor. */
 .canvas-settle--top {
-  transition: top 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition:
+    opacity 0.15s,
+    top var(--canvas-settle-ms) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .canvas-settle--top {
-    transition: none;
+    transition: opacity 0.15s;
   }
 }
 

@@ -50,7 +50,14 @@ const FEATURE_ATTR = "data-feature-id";
 /** Give up looking after this many frames (~half a second). The box has to
  * survive a store update, a render, `markAdded`, and another render before it
  * exists at all. */
-const REVEAL_MAX_FRAMES = 30;
+/** Enough to outlast `--canvas-settle-ms` (360ms ≈ 22 frames) plus the frames
+ * the box takes to exist at all. Bounded so a box that never stops moving
+ * cannot poll forever. */
+const REVEAL_MAX_FRAMES = 45;
+
+/** Two frames' tops within this are the same position. Sub-pixel jitter from
+ * `scale(viewZoom)` means an exact comparison never settles. */
+const SETTLE_EPSILON_PX = 0.5;
 
 /** Read per call rather than cached: the setting can change mid-session, and a
  * reader who turns it on is asking for the next movement to stop, not the one
@@ -747,20 +754,31 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
    * and then `markAdded` has to grant the filter exemption that lets it render
    * at all.
    *
-   * It does NOT wait for `.canvas-settle` to finish, though that was tried:
-   * a rect read mid-transition is in principle a position the box is merely
-   * passing through. In practice React has committed the final `top` before the
-   * first frame runs, so the delta computed then and the delta computed after
-   * the animation are the same — `revealOnDrag.check.mjs` gives identical
-   * results with the wait and without it. It was removed rather than kept as
-   * insurance nothing can demonstrate. If a longer settle is ever introduced,
-   * that check is where it will show up.
+   * **And it may still be moving.** `.canvas-settle` glides the box to its new
+   * row over `--canvas-settle-ms`. Measure on the first frame and the box is
+   * still where it started — which is usually on screen, so the delta comes out
+   * zero and nothing scrolls at all. So this waits for two consecutive frames
+   * to agree on the box's top before measuring.
    *
-   * Polls a handful of frames for the node and gives up quietly: failing to
-   * scroll is a much smaller problem than scrolling somewhere wrong.
+   * This wait was written, then deleted as unprovable — `revealOnDrag.check.mjs`
+   * gave identical results with and without it — and then restored when the
+   * reason came out: an inline `transition: opacity` on the box was cancelling
+   * `.canvas-settle` entirely, so the box was jumping, and there was nothing to
+   * wait for. With the settle actually running, removing this wait fails that
+   * check. Both facts are worth keeping: the wait is required, and a mutation
+   * that proves nothing may be telling you the thing it tests is switched off.
+   *
+   * Waiting for it to *stop* rather than sleeping for the duration keeps that
+   * number in the stylesheet alone. It also falls out correctly under
+   * `prefers-reduced-motion`, where there is no glide and the first pair of
+   * frames already agree.
+   *
+   * Polls a bounded number of frames and gives up quietly: failing to scroll is
+   * a much smaller problem than scrolling somewhere wrong.
    */
   const revealFeature = useCallback((id: string) => {
     let frames = 0;
+    let lastTop: number | null = null;
     const tick = () => {
       const cont = containerRef.current;
       const node = cont?.querySelector<HTMLElement>(`[${FEATURE_ATTR}="${CSS.escape(id)}"]`);
@@ -769,6 +787,12 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
         return;
       }
       const rect = node.getBoundingClientRect();
+      const settled = lastTop !== null && Math.abs(rect.top - lastTop) < SETTLE_EPSILON_PX;
+      if (!settled && frames++ < REVEAL_MAX_FRAMES) {
+        lastTop = rect.top;
+        requestAnimationFrame(tick);
+        return;
+      }
       // Only a rescue: `revealScrollDelta` returns 0 for a box already fully on
       // screen, so this leaves an unmoved reader alone.
       const delta = revealScrollDelta(rect, cont!.getBoundingClientRect());
@@ -1388,11 +1412,14 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                   // the settle on release actually animates instead of jumping.
                   // See `.canvas-settle` and `.canvas-settle--top` in index.css.
                   className={
+                    // `canvas-box` always: it carries the dim/undim fade, which
+                    // used to be an inline style and in that form cancelled the
+                    // settle it sat beside.
                     dragId !== box.id
-                      ? "canvas-settle"
+                      ? "canvas-box canvas-settle"
                       : dragOverlay?.lockY != null
-                        ? "canvas-settle--top"
-                        : undefined
+                        ? "canvas-box canvas-settle--top"
+                        : "canvas-box"
                   }
                   onPointerDown={(e) => startBoxInteraction(box, e)}
                   onContextMenu={(e) => e.preventDefault()}
@@ -1430,7 +1457,6 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
                     touchAction: "none",
                     opacity: matches ? 1 : 0.22,
                     filter: matches ? "none" : "grayscale(0.4)",
-                    transition: "opacity .15s",
                   }}
                 >
                   {filterResource && matches && !unassigned && (
