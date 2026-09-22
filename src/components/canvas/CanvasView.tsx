@@ -52,6 +52,13 @@ const FEATURE_ATTR = "data-feature-id";
  * exists at all. */
 const REVEAL_MAX_FRAMES = 30;
 
+/** Read per call rather than cached: the setting can change mid-session, and a
+ * reader who turns it on is asking for the next movement to stop, not the one
+ * after a reload. */
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 /** How long the filter-driven view jump waits before moving. Long enough that
  * typing a search term doesn't yank the view on every keystroke, and that
  * backspacing a box empty settles into one move rather than a series. */
@@ -719,6 +726,65 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     [fmtDate, graph, patchFeature],
   );
 
+  /**
+   * Scroll a task into view once it has actually been RENDERED.
+   *
+   * The old reveal did the arithmetic itself — `y * viewZoom` against the
+   * scroller — and that is only where the box is when nothing has moved it.
+   * Under "hide + compact" the vertical layout is repacked, and a new task
+   * belongs to no epic, so `compactLayout` puts it after every epic band, at
+   * the very bottom. The reveal therefore scrolled to an empty patch of canvas
+   * near where the reader already was, while the task sat far below the fold —
+   * which is exactly "I added a task and cannot see it".
+   *
+   * Measuring the real node instead of re-deriving the layout is also the
+   * difference between one source of truth and two: the packing rules live in
+   * `compactLayout`, and a second copy here would drift from them.
+   *
+   * It has to wait, for two reasons.
+   *
+   * **The box may not exist yet.** After a create, the store update has to land
+   * and then `markAdded` has to grant the filter exemption that lets it render
+   * at all.
+   *
+   * It does NOT wait for `.canvas-settle` to finish, though that was tried:
+   * a rect read mid-transition is in principle a position the box is merely
+   * passing through. In practice React has committed the final `top` before the
+   * first frame runs, so the delta computed then and the delta computed after
+   * the animation are the same — `revealOnDrag.check.mjs` gives identical
+   * results with the wait and without it. It was removed rather than kept as
+   * insurance nothing can demonstrate. If a longer settle is ever introduced,
+   * that check is where it will show up.
+   *
+   * Polls a handful of frames for the node and gives up quietly: failing to
+   * scroll is a much smaller problem than scrolling somewhere wrong.
+   */
+  const revealFeature = useCallback((id: string) => {
+    let frames = 0;
+    const tick = () => {
+      const cont = containerRef.current;
+      const node = cont?.querySelector<HTMLElement>(`[${FEATURE_ATTR}="${CSS.escape(id)}"]`);
+      if (!node) {
+        if (frames++ < REVEAL_MAX_FRAMES) requestAnimationFrame(tick);
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      // Only a rescue: `revealScrollDelta` returns 0 for a box already fully on
+      // screen, so this leaves an unmoved reader alone.
+      const delta = revealScrollDelta(rect, cont!.getBoundingClientRect());
+      if (delta === 0) return;
+      // Smooth, so the canvas is seen to follow the task rather than cutting to
+      // it — the reader has to keep track of where their work went. Instant
+      // under reduced motion, where a scroll they did not ask for is exactly
+      // the kind of movement that setting exists to stop.
+      cont!.scrollTo({
+        top: cont!.scrollTop + delta,
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+      });
+    };
+    requestAnimationFrame(tick);
+  }, []);
+
   const handleDragUp = useCallback(() => {
     const d = dragRef.current;
     const finalPatch = latestPatchRef.current;
@@ -772,6 +838,29 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
           ),
         ]);
       }
+
+      /**
+       * Follow the task to wherever the repack put it.
+       *
+       * A drag can move a box a long way vertically without the reader asking
+       * for it. Under "hide + compact" the layout is repacked on every change,
+       * and `packLanes` assigns lanes by what overlaps in time — so dragging a
+       * task's dates sideways can drop it into a different lane, in a different
+       * epic band, hundreds of pixels from where the gesture ended. Outside
+       * compact mode the same thing happens to a *resized* box whose new height
+       * no longer fits its row.
+       *
+       * The box does glide there — `.canvas-settle` animates it — but a smooth
+       * exit off the bottom of the viewport is still an exit. Up to now nothing
+       * scrolled after it, so the answer to "where did my task go?" was to go
+       * and look for it.
+       *
+       * `revealFeature` waits for the settle to finish before measuring, and
+       * does nothing at all when the box is already fully visible — which is
+       * the common case, so an ordinary nudge of a task still leaves the canvas
+       * exactly where the reader put it.
+       */
+      revealFeature(d.id);
     }
     dragRef.current = null;
     latestPatchRef.current = null;
@@ -781,7 +870,7 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     setDragOverlay(null);
     window.removeEventListener("pointermove", handleDragMove);
     window.removeEventListener("pointerup", handleDragUp);
-  }, [handleDragMove, patchFeature]);
+  }, [handleDragMove, patchFeature, revealFeature]);
 
   const startDrag = (kind: DragKind, box: Feature, e: React.PointerEvent, xOnly = false) => {
     // Selection must happen for everyone (viewers included) and must stop the
@@ -910,42 +999,6 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(function
     window.addEventListener("pointerup", onEpicResizeUp);
   };
 
-  /**
-   * Scroll a task into view once it has actually been RENDERED.
-   *
-   * The old reveal did the arithmetic itself — `y * viewZoom` against the
-   * scroller — and that is only where the box is when nothing has moved it.
-   * Under "hide + compact" the vertical layout is repacked, and a new task
-   * belongs to no epic, so `compactLayout` puts it after every epic band, at
-   * the very bottom. The reveal therefore scrolled to an empty patch of canvas
-   * near where the reader already was, while the task sat far below the fold —
-   * which is exactly "I added a task and cannot see it".
-   *
-   * Measuring the real node instead of re-deriving the layout is also the
-   * difference between one source of truth and two: the packing rules live in
-   * `compactLayout`, and a second copy here would drift from them.
-   *
-   * It has to wait. The box does not exist on the next frame: the store update
-   * has to land, then `markAdded` grants the filter exemption that lets it
-   * render at all. So this polls a handful of frames and gives up quietly —
-   * failing to scroll is a much smaller problem than the scroll it replaced.
-   */
-  const revealFeature = useCallback((id: string) => {
-    let frames = 0;
-    const tick = () => {
-      const cont = containerRef.current;
-      const node = cont?.querySelector<HTMLElement>(`[${FEATURE_ATTR}="${CSS.escape(id)}"]`);
-      if (!node) {
-        if (frames++ < REVEAL_MAX_FRAMES) requestAnimationFrame(tick);
-        return;
-      }
-      // Only a rescue: `revealScrollDelta` returns 0 for a box already fully on
-      // screen, so this leaves an unmoved reader alone.
-      const delta = revealScrollDelta(node.getBoundingClientRect(), cont!.getBoundingClientRect());
-      if (delta !== 0) cont!.scrollTop += delta;
-    };
-    requestAnimationFrame(tick);
-  }, []);
 
   // ---- imperative handle for the toolbar ----
   const todayMargin = () => todayMarginFor(containerRef.current?.clientWidth ?? 0);

@@ -16,7 +16,8 @@
     "deploy": "npm run build && firebase deploy --only hosting --project pulse-b9d96",
     "test:layout": "node build/layoutProbe/measure.mjs",
     "shots": "node build/layoutProbe/shots.mjs",
-    "test:sticky": "node build/layoutProbe/stickyLabel.check.mjs"
+    "test:sticky": "node build/layoutProbe/stickyLabel.check.mjs",
+    "test:reveal": "node build/layoutProbe/revealOnDrag.check.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

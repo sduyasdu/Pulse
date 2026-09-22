@@ -536,7 +536,82 @@ function KanbanScene() {
   );
 }
 
-const SCENES = { kanban: KanbanScene, kanbanCollapsed: KanbanScene, toolbar: ToolbarScene, toolbarFilter: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
+
+/**
+ * The real canvas in "hide + compact" mode, tall enough that a repack can push
+ * a task off the bottom.
+ *
+ * Compact mode is where this bites: `compactLayout` repacks on every change and
+ * `packLanes` assigns lanes by what overlaps in time, so widening one task can
+ * drop it into a different lane in a different epic band — a long way from
+ * where the gesture ended.
+ */
+function RevealScene() {
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    seeded.current = true;
+    const task = (id: string, x: number, duration: number, epicId: string): Feature =>
+      // Tall boxes on purpose: lane heights drive how far a repack throws a
+      // task, and a 40px hop cannot tell a mid-transition measurement from a
+      // settled one.
+      ({ id, title: id, status: "planned", x, duration, y: 0, work: 5, resources: [], ai: false, epicId }) as unknown as Feature;
+    const epics: Epic[] = [];
+    const features: Feature[] = [];
+    for (let e = 0; e < 5; e++) {
+      epics.push({ id: `e${e}`, name: `Epic ${e}`, color: "#8B5CF6", y0: e * 200, y1: e * 200 + 180 } as Epic);
+      // Staggered so they share lanes until something is widened.
+      for (let i = 0; i < 4; i++) features.push(task(`t${e}-${i}`, i * 12, 8, `e${e}`));
+    }
+    usePulseStore.setState({
+      pulse: { id: "p1", name: "Q3", workspaceId: "w1" } as never,
+      pulseId: "p1",
+      epics, features, resources: [], members: [], rates: [],
+      /**
+       * Persistence, faked — and ONLY persistence.
+       *
+       * The real `patchFeature` writes to Firestore and waits for the snapshot
+       * to come back; it holds nothing optimistically. Firestore is stubbed
+       * here, so a drag would move the box while the pointer was down and snap
+       * it back on release, and this check would measure a task that never
+       * went anywhere. (It did, on the first run, and passed: a task that does
+       * not move never goes off screen.)
+       *
+       * Everything the check is actually about is still the real thing —
+       * `compactLayout`, `.canvas-settle`, and the reveal that follows it.
+       */
+      patchFeature: async (id: string, patch: Record<string, unknown>) => {
+        usePulseStore.setState((cur) => ({
+          features: cur.features.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+        }));
+      },
+    } as never);
+  }
+  const [offsetX, setOffsetX] = useState(40);
+  const [viewZoom, setViewZoom] = useState(1);
+  return (
+    <div style={{ display: "flex", height: "100vh", background: "#F4F2EC" }}>
+      <CanvasView
+        graph={{ stepPx: 24, workPerStep: 1 }}
+        density="week" scale={1}
+        viewZoom={viewZoom} setViewZoom={setViewZoom}
+        offsetX={offsetX} setOffsetX={setOffsetX}
+        epicsShrunk={false} showDelays={false}
+        selectedId={null} onSelect={noop}
+        filterResource={null} featureQuery=""
+        // A filter is ACTIVE and compact is on — together these are what turn
+        // on `compactLayout`, which is the layout this check is about.
+        featureStatusFilter={new Set(["planned"])}
+        epicFilter={new Set()} cycleFilter={new Set()} defaultCycleId="default"
+        compactFilter
+        myResourceIds={null}
+        referenceDay={todayIndex()}
+        canEdit canEditFeature={() => true}
+      />
+    </div>
+  );
+}
+
+const SCENES = { reveal: RevealScene, kanban: KanbanScene, kanbanCollapsed: KanbanScene, toolbar: ToolbarScene, toolbarFilter: ToolbarScene, dashboard: DashboardScene, login: LoginScene, team: TeamScene, bell: BellScene, cycleBoard: CycleBoardScene, stickyLabel: StickyLabelScene };
 export type SceneName = keyof typeof SCENES;
 
 interface Measurement {
