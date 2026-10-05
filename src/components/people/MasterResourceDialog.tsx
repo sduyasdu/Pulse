@@ -10,8 +10,11 @@ import type { MasterResource } from "@/types";
  * be created and then immediately edited. A roster entry is a small record and
  * there is no reason to split it across two steps.
  */
-export function MasterResourceDialog({ resource, roles, onClose, onSave }: {
+export function MasterResourceDialog({ resource, initialName, roles, onClose, onSave }: {
   resource: MasterResource | null;
+  /** Prefill for a new person — the picker passes its search, so a search that
+   * found nobody becomes the name of the person being created. */
+  initialName?: string;
   /** The org's managed role list (RM22). Chosen from, not typed — free text is
    * how "Backend" and "backend" became two roles. */
   roles: string[];
@@ -19,7 +22,7 @@ export function MasterResourceDialog({ resource, roles, onClose, onSave }: {
   onSave: (values: { name: string; initials: string; role: string | null; capacity: number; linkedEmail: string | null }) => Promise<void>;
 }) {
   const t = useT();
-  const [name, setName] = useState(resource?.name ?? "");
+  const [name, setName] = useState(resource?.name ?? initialName ?? "");
   // Empty means "derive from the name" — kept as a placeholder rather than
   // prefilled, so typing a name updates it instead of fighting a stale value.
   const [initials, setInitials] = useState(resource?.initials ?? "");

@@ -732,6 +732,21 @@ Each phase is shippable and leaves the product coherent.
     documents. Wait for evidence of demand, then build a purpose-made aggregate
     rather than fanning out `get_people_load`.
 
+25. **RM25 — A workspace owner can create a roster entry from a Beat's picker,
+    and it lands picked, not copied → DECIDED.** The picker
+    (`src/components/leftPanel/AddFromRosterDialog.tsx`) offers "New person" when
+    the viewer's `workspaceMembers` role in the **Beat's** workspace is `owner`
+    — the same test the roster create rule makes — and reuses
+    `MasterResourceDialog`, prefilled from the search that found nobody. The new
+    entry is selected; adding it to the Beat is still the "Add" button and still
+    the quota-checking callable (RM15). The picker also shows and searches the
+    org `role` rather than the pre-RM24 `type` (via `roleOf()`).
+    *Rejected: create-and-copy in one step* — it merges two decisions (add to the
+    org, add to this Beat) and puts a second, unquota'd write path next to RM15.
+    *Rejected: gating on "is this my personal workspace"*, as the People screen
+    does — a collaborator on someone else's Beat would get a button the rules
+    refuse.
+
 ## Open
 
 - **RM12 — Does the master roster have its own quota?** Per-Beat caps still

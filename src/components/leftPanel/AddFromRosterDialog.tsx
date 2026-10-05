@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { Spinner, InlineSpinner } from "@/components/shared/Spinner";
 import { useT } from "@/i18n";
-import { subscribeRoster, copyRosterToPulse, initialsOf, type CopyRosterResult } from "@/services/firestore/roster";
+import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
+import { subscribeRoster, copyRosterToPulse, createMasterResource, initialsOf, roleOf, type CopyRosterResult } from "@/services/firestore/roster";
 import { subscribeTeams } from "@/services/firestore/teams";
+import { subscribeWorkspace, subscribeWorkspaceMembers } from "@/services/firestore/workspaces";
+import { useAuthStore } from "@/stores/authStore";
 import type { MasterResource, Team } from "@/types";
 
 /**
@@ -14,6 +17,12 @@ import type { MasterResource, Team } from "@/types";
  * readable by collaborators who are not workspace members, which a reference
  * would break. The copy keeps a `masterId` so it can be traced back, and the
  * person's email so it resolves to them if they are ever invited here.
+ *
+ * A workspace **owner** can also create someone new in the roster from here, so
+ * a person missing from the org list does not mean leaving the Beat for the
+ * People screen and coming back. The new entry is picked, not copied — adding
+ * to the org and adding to this Beat stay two decisions, and the copy still
+ * goes through the quota-checking callable like everyone else.
  */
 export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClose }: {
   pulseId: string;
@@ -32,6 +41,15 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CopyRosterResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const uid = useAuthStore((s) => s.firebaseUser?.uid ?? "");
+  // Owner of THIS Beat's workspace — the same test the roster create rule makes
+  // (firestore.rules, workspaces/{ws}/resources). Not "is this my personal
+  // workspace": a collaborator on someone else's Beat is in a workspace they do
+  // not own, and offering them a button the rules will refuse is a broken button.
+  const [isOwner, setIsOwner] = useState(false);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<string | null>(null);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -43,12 +61,31 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
 
   useEffect(() => {
     if (!workspaceId) return;
-    return subscribeTeams(workspaceId, setTeams);
+    // Teams only add the "whole team" shortcut; a refused read drops the
+    // shortcut, and the roster's own handler is what reports the fault.
+    return subscribeTeams(workspaceId, setTeams, () => setTeams([]));
   }, [workspaceId]);
+
+  // Deny → not an owner. Least privilege is the right fallback for a button:
+  // hiding it loses nothing the rules would have allowed.
+  useEffect(() => {
+    if (!workspaceId || !uid) return;
+    return subscribeWorkspaceMembers(
+      workspaceId,
+      (ms) => setIsOwner(ms.some((m) => m.uid === uid && m.role === "owner")),
+      () => setIsOwner(false),
+    );
+  }, [workspaceId, uid]);
+
+  // The org's managed role list (RM22), for the create form's role picker.
+  useEffect(() => {
+    if (!workspaceId || !isOwner) return;
+    return subscribeWorkspace(workspaceId, (ws) => setRoles(ws?.resourceRoles ?? []), () => setRoles([]));
+  }, [workspaceId, isOwner]);
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(
-    () => (rows ?? []).filter((r) => !q || (r.name ?? "").toLowerCase().includes(q) || (r.type ?? "").toLowerCase().includes(q)),
+    () => (rows ?? []).filter((r) => !q || (r.name ?? "").toLowerCase().includes(q) || (roleOf(r) ?? "").toLowerCase().includes(q)),
     [rows, q],
   );
 
@@ -87,6 +124,22 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
     });
   };
 
+  /** Create in the roster, then pick it. The id is known before the snapshot
+   * lands, so picking it immediately shows it checked the moment it appears. */
+  const createPerson = async (values: { name: string; initials: string; role: string | null; capacity: number; linkedEmail: string | null }) => {
+    setError(null);
+    try {
+      const id = await createMasterResource(workspaceId, values);
+      setPicked((cur) => new Set(cur).add(id));
+      setCreated(values.name);
+      setQuery("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const submit = async () => {
     if (picked.size === 0 || busy) return;
     setBusy(true);
@@ -102,10 +155,22 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
       <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl bg-yasdu-card p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-base font-semibold text-yasdu-fg">{t("addRoster.title")}</h2>
         <p className="mt-1 text-xs" style={{ color: "#64748B" }}>{t("addRoster.intro")}</p>
+        {isOwner && !denied && (
+          <button
+            onClick={() => { setCreated(null); setCreating(true); }}
+            className="hoverable mt-3 flex items-center gap-1.5 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+            style={{ color: "#D85A28", border: "1px solid #F3C9B5", background: "#FFF7F1" }}
+          >
+            <Icon name="person_add" size={14} />
+            {t("addRoster.newPerson")}
+          </button>
+        )}
+        {created && <p className="mt-2 text-xs" style={{ color: "#0F5F52" }}>{t("addRoster.createdPicked", { name: created })}</p>}
 
         {denied ? (
           <p className="mt-4 rounded-lg px-3 py-2 text-xs" style={{ background: "#FEF3C7", border: "1px solid #FDE68A", color: "#92400E" }}>
@@ -114,7 +179,7 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
         ) : rows === null ? (
           <Spinner size={20} label={t("common.loading")} className="py-8" />
         ) : rows.length === 0 ? (
-          <p className="mt-4 text-xs" style={{ color: "#94A3B8" }}>{t("addRoster.emptyRoster")}</p>
+          <p className="mt-4 text-xs" style={{ color: "#94A3B8" }}>{t(isOwner ? "addRoster.emptyRosterOwner" : "addRoster.emptyRoster")}</p>
         ) : (
           <>
             {teams.length > 0 && (
@@ -185,7 +250,7 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs" style={{ color: "#1F2330" }}>{r.name}</span>
-                        {r.type && <span className="mono block truncate text-[10px]" style={{ color: "#94A3B8" }}>{r.type}</span>}
+                        {roleOf(r) && <span className="mono block truncate text-[10px]" style={{ color: "#94A3B8" }}>{roleOf(r)}</span>}
                       </span>
                       {here && <span className="mono shrink-0 text-[9px] uppercase" style={{ color: "#94A3B8" }}>{t("addRoster.alreadyHere")}</span>}
                     </button>
@@ -222,5 +287,18 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
         </div>
       </div>
     </div>
+
+    {/* A sibling, not a child: a backdrop click here must close only this
+        form, not bubble into the picker's backdrop and close both. */}
+    {creating && (
+      <MasterResourceDialog
+        resource={null}
+        initialName={query.trim()}
+        roles={roles}
+        onClose={() => setCreating(false)}
+        onSave={createPerson}
+      />
+    )}
+    </>
   );
 }
