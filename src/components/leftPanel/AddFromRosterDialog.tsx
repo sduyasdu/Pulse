@@ -3,10 +3,11 @@ import { Icon } from "@/components/shared/Icon";
 import { Spinner, InlineSpinner } from "@/components/shared/Spinner";
 import { useT } from "@/i18n";
 import { MasterResourceDialog } from "@/components/people/MasterResourceDialog";
-import { subscribeRoster, copyRosterToPulse, createMasterResource, initialsOf, roleOf, type CopyRosterResult } from "@/services/firestore/roster";
+import { subscribeRoster, copyRosterToPulse, createMasterResource, patchMasterResource, deleteMasterResource, initialsOf, roleOf, type CopyRosterResult } from "@/services/firestore/roster";
 import { subscribeTeams } from "@/services/firestore/teams";
 import { subscribeWorkspace, subscribeWorkspaceMembers } from "@/services/firestore/workspaces";
 import { useAuthStore } from "@/stores/authStore";
+import { confirmAt } from "@/stores/confirmStore";
 import type { MasterResource, Team } from "@/types";
 
 /**
@@ -23,6 +24,10 @@ import type { MasterResource, Team } from "@/types";
  * People screen and coming back. The new entry is picked, not copied — adding
  * to the org and adding to this Beat stay two decisions, and the copy still
  * goes through the quota-checking callable like everyone else.
+ *
+ * Owners can edit or remove an entry from here too (RM25). Both act on the
+ * ORG's entry, not on this Beat's copy — removing someone detaches the copies
+ * Beats already hold rather than deleting them (RM13), this one included.
  */
 export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClose }: {
   pulseId: string;
@@ -48,7 +53,8 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
   // not own, and offering them a button the rules will refuse is a broken button.
   const [isOwner, setIsOwner] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
-  const [creating, setCreating] = useState(false);
+  /** The form: `"new"` to create, an entry to edit, `null` closed. */
+  const [form, setForm] = useState<MasterResource | "new" | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,7 +142,37 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setCreating(false);
+      setForm(null);
+    }
+  };
+
+  const editPerson = async (r: MasterResource, values: { name: string; initials: string; role: string | null; capacity: number; linkedEmail: string | null }) => {
+    setError(null);
+    try {
+      await patchMasterResource(workspaceId, r.id, values);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setForm(null);
+    }
+  };
+
+  /** Same confirmation the People screen asks, because it is the same act. */
+  const removePerson = async (r: MasterResource, e: { clientX: number; clientY: number }) => {
+    const ok = await confirmAt(e, {
+      message: t("roster.deleteConfirm", { name: r.name }),
+      detail: t("roster.deleteDetail"),
+      confirmLabel: t("roster.deleteAction"),
+    });
+    if (!ok) return;
+    setError(null);
+    try {
+      await deleteMasterResource(workspaceId, r.id);
+      // A picked id that no longer exists would make the callable skip it as
+      // missing, and "Add 3" would quietly add two.
+      setPicked((cur) => { const next = new Set(cur); next.delete(r.id); return next; });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -162,7 +198,7 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
         <p className="mt-1 text-xs" style={{ color: "#64748B" }}>{t("addRoster.intro")}</p>
         {isOwner && !denied && (
           <button
-            onClick={() => { setCreated(null); setCreating(true); }}
+            onClick={() => { setCreated(null); setForm("new"); }}
             className="hoverable mt-3 flex items-center gap-1.5 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold"
             style={{ color: "#D85A28", border: "1px solid #F3C9B5", background: "#FFF7F1" }}
           >
@@ -230,14 +266,15 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
                   const here = alreadyLinked.has(r.id);
                   const on = picked.has(r.id);
                   return (
+                    // The actions sit beside the row's button, not inside it — a
+                    // button cannot contain buttons.
+                    <div key={r.id} className="flex items-center border-b last:border-b-0" style={{ borderColor: "#F5F3EF", background: on ? "#FFF7F1" : undefined }}>
                     <button
-                      key={r.id}
                       disabled={here}
                       onClick={() => toggle(r.id)}
                       // no-press: the ungated global button scale (index.css) would
                       // grow a full-width row past the list that clips it.
-                      className="no-press hoverable flex w-full items-center gap-2 border-b px-2.5 py-2 text-left last:border-b-0 disabled:opacity-45"
-                      style={{ borderColor: "#F5F3EF", background: on ? "#FFF7F1" : undefined }}
+                      className="no-press hoverable flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left disabled:opacity-45"
                     >
                       <span
                         className="flex shrink-0 items-center justify-center rounded"
@@ -254,6 +291,30 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
                       </span>
                       {here && <span className="mono shrink-0 text-[9px] uppercase" style={{ color: "#94A3B8" }}>{t("addRoster.alreadyHere")}</span>}
                     </button>
+                    {/* Always visible, not on hover: hover does not exist on touch. */}
+                    {isOwner && (
+                      <div className="flex shrink-0 items-center pr-1">
+                        <button
+                          onClick={() => { setCreated(null); setForm(r); }}
+                          className="hoverable flex items-center justify-center rounded"
+                          style={{ width: 28, height: 28, color: "#64748B" }}
+                          title={t("addRoster.editPerson", { name: r.name })}
+                          aria-label={t("addRoster.editPerson", { name: r.name })}
+                        >
+                          <Icon name="edit" size={15} />
+                        </button>
+                        <button
+                          onClick={(e) => void removePerson(r, e)}
+                          className="hoverable flex items-center justify-center rounded"
+                          style={{ width: 28, height: 28, color: "#B4472F" }}
+                          title={t("addRoster.removePerson", { name: r.name })}
+                          aria-label={t("addRoster.removePerson", { name: r.name })}
+                        >
+                          <Icon name="delete" size={15} />
+                        </button>
+                      </div>
+                    )}
+                    </div>
                   );
                 })
               )}
@@ -290,13 +351,13 @@ export function AddFromRosterDialog({ pulseId, workspaceId, alreadyLinked, onClo
 
     {/* A sibling, not a child: a backdrop click here must close only this
         form, not bubble into the picker's backdrop and close both. */}
-    {creating && (
+    {form && (
       <MasterResourceDialog
-        resource={null}
-        initialName={query.trim()}
+        resource={form === "new" ? null : form}
+        initialName={form === "new" ? query.trim() : undefined}
         roles={roles}
-        onClose={() => setCreating(false)}
-        onSave={createPerson}
+        onClose={() => setForm(null)}
+        onSave={(values) => (form === "new" ? createPerson(values) : editPerson(form, values))}
       />
     )}
     </>

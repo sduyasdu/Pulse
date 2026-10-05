@@ -741,6 +741,10 @@ Each phase is shippable and leaves the product coherent.
     entry is selected; adding it to the Beat is still the "Add" button and still
     the quota-checking callable (RM15). The picker also shows and searches the
     org `role` rather than the pre-RM24 `type` (via `roleOf()`).
+    The same owners can **edit or remove** an entry from each row, with the
+    People screen's own form and confirmation. Both act on the org entry, not
+    this Beat's copy; removal detaches copies as RM13 says, this Beat's included,
+    and drops the entry from the current selection.
     *Rejected: create-and-copy in one step* — it merges two decisions (add to the
     org, add to this Beat) and puts a second, unquota'd write path next to RM15.
     *Rejected: gating on "is this my personal workspace"*, as the People screen

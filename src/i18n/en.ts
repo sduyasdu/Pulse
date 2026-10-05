@@ -631,6 +631,8 @@ export const en = {
   "addRoster.newPerson": "New person in the organisation",
   "addRoster.createdPicked": "{name} was added to your organisation and is selected below.",
   "addRoster.emptyRosterOwner": "No people in your organisation yet. Create the first one with “New person” above.",
+  "addRoster.editPerson": "Edit {name} in the organisation",
+  "addRoster.removePerson": "Remove {name} from the organisation",
   "addRoster.addSelected": "Add {n}",
   "addRoster.copied": "Added {n}.",
   "addRoster.skippedPresent": "{n} were already in this Beat.",

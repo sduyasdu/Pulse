@@ -625,6 +625,8 @@ export const fr: Dict = {
   "addRoster.newPerson": "Nouvelle personne dans l'organisation",
   "addRoster.createdPicked": "{name} a été ajouté·e à votre organisation et est sélectionné·e ci-dessous.",
   "addRoster.emptyRosterOwner": "Aucune personne dans votre organisation pour l'instant. Créez la première avec « Nouvelle personne » ci-dessus.",
+  "addRoster.editPerson": "Modifier {name} dans l'organisation",
+  "addRoster.removePerson": "Retirer {name} de l'organisation",
   "addRoster.addSelected": "Ajouter {n}",
   "addRoster.copied": "{n} ajoutée(s).",
   "addRoster.skippedPresent": "{n} étaient déjà dans ce Beat.",
