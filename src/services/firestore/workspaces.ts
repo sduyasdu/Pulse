@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Cycle, Workspace, WorkspaceMember } from "@/types";
+import { cleanCycles } from "./patch";
 import { emailKey } from "./emailKey";
 import { BASELINE_CYCLES, CURRENT_SEED_VERSION, asCycles, cyclesToSeed } from "@/domain/baselineCycles";
 
@@ -217,5 +218,5 @@ export async function seedOrgCycles(workspaceId: string): Promise<void> {
  * relabel a historical task in twenty Beats. That is the whole reason CY1 chose
  * copy over reference. */
 export async function updateWorkspaceCycles(workspaceId: string, cycles: Cycle[]): Promise<void> {
-  await updateDoc(doc(db, "workspaces", workspaceId), { cycles });
+  await updateDoc(doc(db, "workspaces", workspaceId), { cycles: cleanCycles(cycles) });
 }

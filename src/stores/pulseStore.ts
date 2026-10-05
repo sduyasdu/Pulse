@@ -17,6 +17,7 @@ import {
 import { subscribePulse, renamePulse as renamePulseDoc, updateGraphConfig, updateResourceTypes, updatePulseStatuses, updateCycles } from "@/services/firestore/pulses";
 import { subscribePulseMembers } from "@/services/firestore/memberships";
 import { recordSingle, recordMany, patchOp, createOp, deleteOp } from "@/stores/undoStore";
+import { cleanCycles } from "@/services/firestore/patch";
 import { todayIndex, toDateInputValue } from "@/domain/dateUtils";
 import { capsOf } from "@/domain/permissions";
 import { useAuthStore } from "@/stores/authStore";
@@ -373,8 +374,12 @@ export const usePulseStore = create<PulseStoreState>((set, get) => ({
     if (pulse) recordSingle("Edit statuses", pulseId, patchOp("pulse", pulseId, asDoc(pulse), { statuses }));
   },
 
-  setCycles: async (cycles, defaultCycleId) => {
+  setCycles: async (raw, defaultCycleId) => {
     const { pulseId, pulse } = get();
+    // Cleaned here as well as in the service: the undo record below replays
+    // through `patchPulse`, whose strip is shallow, so an uncleaned copy would
+    // make Redo fail exactly the way Save used to.
+    const cycles = cleanCycles(raw);
     if (!pulseId) return;
     if (!(await write(set, () => updateCycles(pulseId, cycles, defaultCycleId)))) return;
     // The compatibility shim that stood here — mirroring the default cycle's

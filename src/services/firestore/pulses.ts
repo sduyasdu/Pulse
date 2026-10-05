@@ -18,7 +18,7 @@ import { db } from "@/lib/firebase";
 import { forgetPulseView } from "@/domain/pulseView";
 import type { Cycle, Feature, MyPulseIndexEntry, Pulse, PulseMember, PulseRole, StatusDef, Subtask } from "@/types";
 import { DEFAULT_GRAPH_CONFIG } from "@/types";
-import { stripUndefined } from "./patch";
+import { cleanCycles, stripUndefined } from "./patch";
 import { fetchResources, newResourceId, createResource } from "./resources";
 import { fetchEpics, newEpicId, createEpic } from "./epics";
 import { fetchFeatures, newFeatureId, createFeature } from "./features";
@@ -295,7 +295,7 @@ export async function updateGraphConfig(pulseId: string, graphConfig: Pulse["gra
  * Written together because a default naming a cycle that is not in the list is
  * the one state `cycleOfTask` cannot resolve. */
 export async function updateCycles(pulseId: string, cycles: Cycle[], defaultCycleId: string): Promise<void> {
-  await updateDoc(doc(db, "pulses", pulseId), { cycles, defaultCycleId, updatedAt: Date.now() });
+  await updateDoc(doc(db, "pulses", pulseId), { cycles: cleanCycles(cycles), defaultCycleId, updatedAt: Date.now() });
 }
 
 export async function updateResourceTypes(pulseId: string, resourceTypes: string[]): Promise<void> {
