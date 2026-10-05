@@ -151,6 +151,7 @@ export const es: Dict = {
   "cycle.stages": "Etapas",
   "cycle.addStage": "Agregar una etapa",
   "cycle.stageName": "Nombre de la etapa",
+  "cycle.stageColor": "Color de la etapa",
   "cycle.qualifies": "Cuenta como",
   "cycle.qualifiesHint": "C\u00f3mo se cuenta esta etapa en reportes que abarcan varios ciclos.",
   "cycle.delete": "Eliminar este ciclo",

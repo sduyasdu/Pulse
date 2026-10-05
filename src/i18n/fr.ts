@@ -151,6 +151,7 @@ export const fr: Dict = {
   "cycle.stages": "\u00c9tapes",
   "cycle.addStage": "Ajouter une \u00e9tape",
   "cycle.stageName": "Nom de l'\u00e9tape",
+  "cycle.stageColor": "Couleur de l'étape",
   "cycle.qualifies": "Compte comme",
   "cycle.qualifiesHint": "Comment cette \u00e9tape est compt\u00e9e dans les rapports couvrant plusieurs cycles.",
   "cycle.delete": "Supprimer ce cycle",

@@ -155,6 +155,7 @@ export const en = {
   "cycle.stages": "Stages",
   "cycle.addStage": "Add a stage",
   "cycle.stageName": "Stage name",
+  "cycle.stageColor": "Stage colour",
   "cycle.qualifies": "Counts as",
   "cycle.qualifiesHint": "How this stage is counted in reports that span cycles.",
   "cycle.delete": "Delete this cycle",

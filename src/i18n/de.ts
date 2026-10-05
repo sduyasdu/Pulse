@@ -151,6 +151,7 @@ export const de: Dict = {
   "cycle.stages": "Stufen",
   "cycle.addStage": "Stufe hinzuf\u00fcgen",
   "cycle.stageName": "Name der Stufe",
+  "cycle.stageColor": "Farbe der Stufe",
   "cycle.qualifies": "Z\u00e4hlt als",
   "cycle.qualifiesHint": "Wie diese Stufe in Auswertungen \u00fcber mehrere Zyklen gez\u00e4hlt wird.",
   "cycle.delete": "Diesen Zyklus l\u00f6schen",

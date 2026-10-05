@@ -151,6 +151,7 @@ export const pt: Dict = {
   "cycle.stages": "Etapas",
   "cycle.addStage": "Adicionar uma etapa",
   "cycle.stageName": "Nome da etapa",
+  "cycle.stageColor": "Cor da etapa",
   "cycle.qualifies": "Conta como",
   "cycle.qualifiesHint": "Como esta etapa \u00e9 contada em relat\u00f3rios que abrangem v\u00e1rios ciclos.",
   "cycle.delete": "Excluir este ciclo",

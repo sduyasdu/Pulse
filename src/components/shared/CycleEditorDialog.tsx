@@ -292,6 +292,8 @@ function CycleRow({
   // not be silently pre-applied to the next.
   const [remapTo, setRemapTo] = useState("");
   useEffect(() => { setRemapTo(""); }, [pendingStage]);
+  /** The stage whose palette is open — one at a time, so the list stays a list. */
+  const [colorFor, setColorFor] = useState<string | null>(null);
   return (
     <div className="rounded-xl border" style={{ borderColor: open ? "#EE7240" : "#E2DFD9", background: open ? "#FFF7F1" : "#FFFFFF" }}>
       <div className="flex items-center gap-2 px-3 py-2">
@@ -319,9 +321,28 @@ function CycleRow({
         <div className="border-t px-3 py-2.5" style={{ borderColor: "#F1F5F9" }}>
           <div className="mono text-[10px] uppercase" style={{ color: "#94A3B8" }}>{t("cycle.stages")}</div>
           <div className="mt-1.5 flex flex-col gap-1.5">
-            {stages.map((s) => (
-              <div key={s.id} className="flex items-center gap-2">
-                <span style={{ width: 9, height: 9, borderRadius: 5, background: statusMetaOf(s.id, cycle.statuses).border, flexShrink: 0 }} />
+            {stages.map((s) => {
+              const color = statusMetaOf(s.id, cycle.statuses).border;
+              const picking = colorFor === s.id;
+              return (
+              <div key={s.id} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                {/* The swatch is the control. The status editor this replaced had
+                    a colour row per stage, and the move to cycles dropped it —
+                    so a stage kept whatever colour it was born with. A palette
+                    that opens on tap, rather than ten swatches inline, because
+                    a row that already holds a name and a qualification has no
+                    room for them on a phone. */}
+                <button
+                  onClick={() => setColorFor(picking ? null : s.id)}
+                  aria-expanded={picking}
+                  title={t("cycle.stageColor")}
+                  aria-label={t("cycle.stageColor")}
+                  className="no-press flex shrink-0 items-center justify-center rounded"
+                  style={{ width: 24, height: 24, border: `1px solid ${picking ? "#EE7240" : "transparent"}` }}
+                >
+                  <span style={{ width: 12, height: 12, borderRadius: 6, background: color }} />
+                </button>
                 <input value={labelOf(s, t)} placeholder={t("cycle.stageName")} onChange={(e) => onStage(s.id, { label: e.target.value })}
                   className="min-w-0 flex-1 rounded border px-1.5 py-1 text-xs"
                   style={{ borderColor: "#E2DFD9", background: "#FFFFFF", outline: "none" }} />
@@ -340,7 +361,26 @@ function CycleRow({
                   <Icon name="close" size={13} style={{ color: "#94A3B8" }} />
                 </button>
               </div>
-            ))}
+              {picking && (
+                <div role="radiogroup" aria-label={t("cycle.stageColor")} className="flex flex-wrap gap-1.5 pl-8">
+                  {STATUS_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      role="radio"
+                      aria-checked={color === c}
+                      aria-label={c}
+                      title={c}
+                      // Picking closes it: one choice is the whole job.
+                      onClick={() => { onStage(s.id, { color: c }); setColorFor(null); }}
+                      className="no-press rounded-full"
+                      style={{ width: 22, height: 22, background: c, border: color === c ? "2px solid #1F2330" : "1px solid rgba(15,23,42,0.15)" }}
+                    />
+                  ))}
+                </div>
+              )}
+              </div>
+              );
+            })}
             {/* CY7: a stage tasks still hold is not deleted on the strength of
                 "are you sure?" — the question is where those tasks go, and it
                 is asked with the count and the options in front of the user.
