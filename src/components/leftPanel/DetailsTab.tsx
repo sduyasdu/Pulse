@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { ResourceBadge } from "@/components/shared/ResourceBadge";
 import type { Feature, Resource, StatusDef, Subtask } from "@/types";
@@ -944,7 +944,17 @@ export function AssignResourcePicker({ resources, assignedIds, onAssign }: { res
   const t = useT();
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [q, setQ] = useState("");
+  // The list opens in flow at the foot of the details, inside the sidebar's own
+  // scroller. With the bottom panel open that scroller is short, so the list
+  // opened below its visible edge — against the bottom panel, which looks like
+  // the panel is covering it — and nothing said to scroll. Bring it into view.
+  // `nearest`: no jump when it is already visible, and the least movement when
+  // it is not.
+  useEffect(() => {
+    if (open) panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [open]);
   const query = q.trim().toLowerCase();
   const available = resources.filter((r) => !assignedIds.includes(r.id));
   const filtered = available.filter((r) => !query || r.name.toLowerCase().includes(query) || (r.type || "").toLowerCase().includes(query));
@@ -976,7 +986,7 @@ export function AssignResourcePicker({ resources, assignedIds, onAssign }: { res
         <Icon name={open ? "keyboard_arrow_up" : "keyboard_arrow_down"} size={15} style={{ marginLeft: "auto" }} />
       </button>
       {open && (
-        <div id={panelId} className="mt-1 rounded border" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+        <div id={panelId} ref={panelRef} className="mt-1 rounded border" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
           {available.length > 3 && (
             <input
               autoFocus
