@@ -952,9 +952,28 @@ export function AssignResourcePicker({ resources, assignedIds, onAssign }: { res
   // the panel is covering it — and nothing said to scroll. Bring it into view.
   // `nearest`: no jump when it is already visible, and the least movement when
   // it is not.
+  //
+  // Closing it puts the scroller back where it was, so the reveal is a detour
+  // rather than a place you are left. On close only, not after each pick: the
+  // list stays open for several picks, and scrolling back mid-run would hide
+  // it again.
+  const returnTo = useRef<{ el: HTMLElement; top: number } | null>(null);
   useEffect(() => {
-    if (open) panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const panel = panelRef.current;
+    if (open && panel) {
+      const el = scrollParentOf(panel);
+      returnTo.current = el ? { el, top: el.scrollTop } : null;
+      panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   }, [open]);
+  const toggle = () => {
+    if (open && returnTo.current) {
+      const { el, top } = returnTo.current;
+      el.scrollTo({ top, behavior: "smooth" });
+      returnTo.current = null;
+    }
+    setOpen((o) => !o);
+  };
   const query = q.trim().toLowerCase();
   const available = resources.filter((r) => !assignedIds.includes(r.id));
   const filtered = available.filter((r) => !query || r.name.toLowerCase().includes(query) || (r.type || "").toLowerCase().includes(query));
@@ -975,7 +994,7 @@ export function AssignResourcePicker({ resources, assignedIds, onAssign }: { res
           discloses a region, it does not toggle a setting — and a screen reader
           had no way to tell either, since the chevron is decorative. */}
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         aria-expanded={open}
         aria-controls={panelId}
         className={PANEL_ACTION}
@@ -1023,3 +1042,13 @@ export function AssignResourcePicker({ resources, assignedIds, onAssign }: { res
   );
 }
 
+
+/** The nearest ancestor that scrolls vertically — the sidebar's scroller here,
+ * found rather than passed in so the picker does not depend on where it sits. */
+function scrollParentOf(node: HTMLElement): HTMLElement | null {
+  for (let el = node.parentElement; el; el = el.parentElement) {
+    const { overflowY } = getComputedStyle(el);
+    if ((overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight) return el;
+  }
+  return null;
+}
