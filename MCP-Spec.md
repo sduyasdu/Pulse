@@ -386,7 +386,10 @@ assistant relays.
     never moved and a client has nothing else to notice a change by.
     *Rejected: also sending `icons` and `websiteUrl`* — they state our identity
     outright instead of leaving a client to sniff `/favicon.ico`, which is the
-    fallback that produced the Yasdu mark, and they were tried. They belong to a
+    fallback that produced the Yasdu mark, and they were tried. **[Corrected by
+    MC33: no `/favicon.ico` sniffing produced the Yasdu mark. claude.ai asks
+    Google's favicon service about `yasdu.com`, the last two labels of the
+    connector's host, and ignores `icons` entirely.]** They belong to a
     later draft than the 2025-06-18 we negotiate, and sending them **broke
     connection setup**: token exchange succeeded, three requests returned 2xx,
     the server logged nothing at all, and the client refused the session. The
@@ -400,6 +403,8 @@ assistant relays.
     nor anything else we serve can invalidate an icon a client has already
     cached — every icon Beat serves was verified correct (the ICO decoded to
     the Beats mark at 16px and 32px) while a stale one was still on screen.
+    **[Corrected by MC33: the icon on screen was not stale. It was never read
+    from anything we serve; it is Google's favicon for `yasdu.com`.]**
 16. **MC16 — Icon-probe paths get real files, not the SPA → DECIDED.** Firebase
     Hosting's catch-all rewrite answered `/apple-touch-icon.png` and
     `/apple-touch-icon-precomposed.png` with `200 text/html`, the same shape as
@@ -408,6 +413,8 @@ assistant relays.
     when no link is found, and a 200 of undecodable HTML is worse than a 404 —
     it reads as "an icon exists here" and fails at decode, which is how a client
     ends up at the parent domain's mark. Real files now sit at both root paths.
+    **[Corrected by MC33: right for browsers and other clients, but not why
+    Claude shows the Yasdu mark — claude.ai never probes these paths.]**
     *Rejected: a rewrite rule excluding image extensions* — Hosting expresses
     that awkwardly, and two copied files have no failure mode.
 17. **MC17 — A stale tool list is announced on a tool call's own response
@@ -489,7 +496,8 @@ assistant relays.
     per response rather than per server. The icon is therefore stated rather than
     sniffed from `/favicon.ico`, without repeating the failure that statement
     caused when it was sent under the wrong revision. Verified live on both paths
-    before shipping.
+    before shipping. **[Reverted by MC25; and per MC33, claude.ai would not have
+    shown a declared icon anyway.]**
 21. **MC21 — An owner's membership doc stored `email: ""`.** `createPulse` and
     `duplicatePulse` wrote the creator's member doc with a blank email, so
     `search_resources` returned no address for a resource linked to the owner —
@@ -579,6 +587,9 @@ assistant relays.
     the refusal happens inside the client, after a response the server considers
     successful. Until such a harness exists, the icon is served at
     `/favicon.ico` (correct, verified by decoding the bytes) and that is enough.
+    **[Corrected by MC33: it is not enough for Claude, which never reads it. The
+    reason not to retry `icons` stands, and is stronger: it broke setup twice and
+    claude.ai ignores it.]**
     Kept from MC20: nothing. Kept from the episode: the logging, and the rule
     that a change to the handshake is a change to the front door — it earns a
     reconnect test of its own, not a ride along with a feature.
@@ -716,3 +727,25 @@ assistant relays.
     capped at `MAX_LIMIT`, which is the exact shape MC29's rate limiting exists
     for. Build a purpose-made aggregate if demand appears; do not fan out
     `get_people_load`.
+33. **MC33 — The connector's icon in Claude comes from the DOMAIN, not from
+    anything Beats serves → FOUND 2026-10-09, while building Foretrue's MCP.**
+    claude.ai draws a custom connector with
+    `https://www.google.com/s2/favicons?domain=<last two labels of the host>&sz=96`.
+    For `https://beats.yasdu.com/mcp` that is `yasdu.com`, whose favicon is the
+    Yasdu mark — fetched and seen; Foretrue's connector at `foretrue.yasdu.com`
+    shows the same mark for the same reason. It ignores `serverInfo.icons` (URLs
+    and data URIs), `/favicon.ico`, `/favicon.png`, `<link rel="icon">` and the
+    connector's own host. The cut is two labels with no public-suffix list, so
+    `*.web.app` connectors show Firebase's logo. Source:
+    `anthropics/claude-ai-mcp` issue 152, open, no Anthropic response.
+    **This corrects MC15, MC16, MC20 and MC25**, which explained the mark as a
+    client sniffing `/favicon.ico` and falling back to the parent domain, and the
+    still-visible mark as a stale cache. Neither was so; every fix to what Beats
+    serves was correct and irrelevant to Claude.
+    **The only lever is the connector's domain**: a URL whose last two labels are
+    Beats' own (e.g. `mcp.<beats domain>`), with that apex serving the Beats
+    favicon for Google to pick up. It changes the connector URL and the OAuth
+    issuer, so every connected customer reconnects. *Rejected: changing
+    yasdu.com's favicon* — it rebrands Yasdu and still gives Beats and Foretrue
+    one shared icon. *Rejected: `icons` again* — ignored by claude.ai, and the
+    cause of two outages (MC25).

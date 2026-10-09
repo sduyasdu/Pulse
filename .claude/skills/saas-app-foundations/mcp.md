@@ -77,6 +77,11 @@ wrong content type — which is worse than a 404, because a 404 is legible and a
   Your `.well-known` documents, and any icon path a client probes, come back as
   HTML. Put the metadata routes *before* the catch-all, and put real files at
   `/favicon.ico` and `/apple-touch-icon.png`.
+  **Those files do not set the connector's icon in Claude.** claude.ai asks
+  Google's favicon service about the last two labels of the connector's host
+  (`app.example.com` → `example.com`) and ignores `serverInfo.icons`. A product
+  under a shared parent domain shows the parent's icon; give the MCP a host on
+  the product's own domain if the icon matters, and decide before the URL ships.
 - **Ignore rules that drop dot-directories** (`**/.*`) silently exclude
   `public/.well-known/` from the deploy. The files exist in the repo, pass
   review, and never ship. Serve discovery from code, not from static files, if
