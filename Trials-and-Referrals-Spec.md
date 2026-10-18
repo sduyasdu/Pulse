@@ -1,7 +1,7 @@
 # Beats — Free Trial, Referrals & Discount Codes Spec
 
-Status: **specified 2026-10-18, NOT built.** Open questions in §6, each with a recommended
-answer; the build waits for the owner's. · Owner: product + eng ·
+Status: **specified 2026-10-18, NOT built.** The owner accepted §6's recommendations the
+same day, all but one: **what a referral month is worth (`TR12`) is still open**. · Owner: product + eng ·
 Related: `Plans-Spec.md` (PL1 tiers, PL4 downgrade, PL6 org = workspace, PL13–PL17
 currencies), `Server-Functions-Spec.md` (SF3 billing sync), `Stripe-Go-Live-Runbook.md`.
 
@@ -269,15 +269,15 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 
 ---
 
-## 6. Open questions — each with the recommended answer
+## 6. The questions, and the owner's answers (2026-10-18)
 
-| Asked | Recommended | Why |
+| Asked | Answer | Why |
 | --- | --- | --- |
 | Card at the start of the trial, or at its end? | **At the start** (`TR3`) | The month converts by itself, and the card is the check against repeat trials. Foretrue decided the same. |
 | How many seats may a trial start with? | **Up to 5** (`TR2`) | Enough to try with a team; a trial is not a free large team. |
 | Seats added during a trial | **End the trial first; a raise through the portal ends it at once** (`TR2`) | In Beats the seats are the price, so a free seat is a free month of revenue. Foretrue disables extra seats in a trial for the same reason. |
 | Grace after a trial that never paid | **3 days** (`TR5`) | 15 is for a customer who has paid. |
-| A referral month's worth | **The referrer's seats × tier price, capped at 10 seats** (`TR12`) | Per-seat pricing makes "a month" scale with the team; the cap keeps one referral from paying a large team's month. |
+| A referral month's worth | **OPEN — asked for more explanation.** Recommended: the referrer's seats × tier price, capped at 10 seats (`TR12`) | Per-seat pricing makes "a month" scale with the team; the cap keeps one referral from paying a large team's month. |
 | A ceiling | **12 months a year per workspace** (`TR13`) | Open-ended rewards are a public coupon. |
 | Does the invited friend get more than the standard free month? | **No** | The free month is the welcome. |
 | A workspace-level notification channel for trial and referral notices | **Not now: `planNotice` and Stripe's email** (`TR4`, `TR14`) | A new channel is its own spec; the notice already reaches the owner. |
@@ -301,7 +301,7 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 | **TR9** | **A friend is counted by a `claimReferral` callable after the personal workspace exists, in one transaction, only within 24 hours of its creation, once, and only for someone who has never paid.** | Workspaces are made by the client; the count must be the server's. | Trusting a `referredBy` the client writes on its own workspace. |
 | **TR10** | **Never counted: yourself (owner or member of the referring workspace), a card that paid for the referrer, another Stripe mode — each recorded `void` with its reason.** | The cheap abuses, closed and explainable. | Silent drops. |
 | **TR11** | **A month is earned on the friend's first PAID invoice; a full refund within 14 days takes back an unused month.** | A reward for a customer, not a sign-up. | Rewarding the sign-up or the trial start. |
-| **TR12** | **A month is the referrer's seats × tier price at list, capped at 10 seats, credited on their Stripe customer; banked on Starter and credited at their first subscription.** | Per-seat pricing; a coupon would give away a large team's month uncapped. | A 100% coupon; free seats. |
+| **TR12** (OPEN) | **Recommended:** a month is the referrer's seats × tier price at list, capped at 10 seats, credited on their Stripe customer; banked on Starter and credited at their first subscription.** | Per-seat pricing; a coupon would give away a large team's month uncapped. | A 100% coupon; free seats. |
 | **TR13** | **At most 12 months per workspace per calendar year; past it, `over-cap`.** | Open-ended rewards are a public coupon. | No ceiling. |
 | **TR14** | **Earned months are told in the Billing dialog's counts and a dismissable `planNotice`.** | No workspace bell; the owner reads Billing. | A new channel. |
 | **TR15** | **Checkout keeps Stripe's promotion-code box; products are kept apart on the coupon — every Beats coupon names Beats' products only and carries `metadata.beats = 'yes'`.** Decided by the owner 2026-10-18. | The box accepts any code in the shared account; `applies_to` is what Stripe enforces. Foretrue's coupons already name only Foretrue's products. | Replacing the box (Foretrue's choice for Foretrue). |
