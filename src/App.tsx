@@ -21,6 +21,7 @@ const PulsePage = lazy(() => import("@/routes/PulsePage").then((m) => ({ default
 const PeoplePage = lazy(() => import("@/routes/PeoplePage").then((m) => ({ default: m.PeoplePage })));
 const JoinPage = lazy(() => import("@/routes/JoinPage").then((m) => ({ default: m.JoinPage })));
 const InviteAcceptPage = lazy(() => import("@/routes/InviteAcceptPage").then((m) => ({ default: m.InviteAcceptPage })));
+const ReferralPage = lazy(() => import("@/routes/ReferralPage").then((m) => ({ default: m.ReferralPage })));
 const AuthorizePage = lazy(() => import("@/routes/AuthorizePage").then((m) => ({ default: m.AuthorizePage })));
 
 function RouteFallback() {
@@ -43,6 +44,8 @@ function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* TR9: a referral link. Open to everyone — it only keeps a code. */}
+          <Route path="/r/:code" element={<ReferralPage />} />
           <Route
             path="/"
             element={

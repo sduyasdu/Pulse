@@ -1,16 +1,26 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/shared/Icon";
 import { InlineSpinner } from "@/components/shared/Spinner";
 import { useBilling } from "@/hooks/useBilling";
 import { usePlanPrices } from "@/hooks/usePlanPrices";
 import { MXN, USD, defaultPresentmentCurrency } from "@/domain/presentmentCurrency";
-import { createCheckoutUrl, createPortalUrl } from "@/services/firestore/billing";
+import {
+  createCheckoutUrl,
+  createPortalUrl,
+  endFreeTrial,
+  getReferrals,
+  getTrialOffer,
+  quoteEndFreeTrial,
+  type ReferralSummary,
+} from "@/services/firestore/billing";
+import { formatMinorUnits } from "@/domain/money";
+import { cardBrand } from "@/domain/planNotice";
 import {
   ALL_TIERS,
   TIER_ENTITLEMENTS,
-  DELINQUENCY_GRACE_DAYS,
   delinquency,
   editorSeatLimit,
+  graceDaysFor,
   tierOf,
 } from "@/domain/entitlements";
 import { useT, type TFn } from "@/i18n";
@@ -45,6 +55,7 @@ function PlanColumn({
   tier,
   current,
   subscribed,
+  trial,
   busy,
   price,
   onChoose,
@@ -53,6 +64,8 @@ function PlanColumn({
   tier: PlanTier;
   current: boolean;
   subscribed: boolean;
+  /** This Upgrade starts the org's free month (TR1) — the button says so. */
+  trial: boolean;
   busy: boolean;
   /** Already formatted, and sourced from Stripe where available (PL14) — the
    * column no longer decides what a tier costs. */
@@ -72,7 +85,9 @@ function PlanColumn({
       ? t("billing.switchPlan")
       : tier === "starter"
         ? t("billing.currentPlan")
-        : t("billing.selectPlan");
+        : trial
+          ? t("billing.startFreeMonth")
+          : t("billing.selectPlan");
 
   return (
     <div
@@ -178,6 +193,57 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
   const seatCap = editorSeatLimit(billing, now);
   const state = delinquency(billing, now);
   const subscribed = Boolean(billing?.stripeCustomerId);
+  const trialing = billing?.status === "trialing";
+  const card = billing?.card ? `${cardBrand(billing.card.brand)} ···· ${billing.card.last4}` : null;
+
+  // TR1: whether Upgrade starts a free month is the SERVER's reading — the person and
+  // card marks are not readable here. Asked only by someone who has never subscribed;
+  // a refusal (a non-owner) leaves the ordinary buttons.
+  const [offer, setOffer] = useState<{ days: number; maxSeats: number } | null>(null);
+  useEffect(() => {
+    if (subscribed) return;
+    let live = true;
+    getTrialOffer()
+      .then((o) => {
+        if (!live || !o.offered) return;
+        setOffer({ days: o.days, maxSeats: o.maxSeats });
+        setSeats((n) => Math.min(n, o.maxSeats)); // TR2: a free month starts with at most 5
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [subscribed]);
+  const maxSeats = offer ? offer.maxSeats : 999;
+
+  // TR2: seats are not added during the free month — End the free trial first, after
+  // seeing the first invoice and the card it goes to.
+  const [quote, setQuote] = useState<{ amount: string; card: string | null } | null>(null);
+  const [ending, setEnding] = useState<"quote" | "end" | null>(null);
+  const askQuote = async () => {
+    setEnding("quote");
+    setError(null);
+    try {
+      const q = await quoteEndFreeTrial();
+      setQuote({ amount: formatMinorUnits(q.amount, q.currency, lang), card: q.card ? `${cardBrand(q.card.brand)} ···· ${q.card.last4}` : card });
+    } catch (err) {
+      setError((err as Error).message || t("billing.error"));
+    } finally {
+      setEnding(null);
+    }
+  };
+  const confirmEnd = async () => {
+    setEnding("end");
+    setError(null);
+    try {
+      await endFreeTrial();
+      setQuote(null); // the webhook moves the plan to active; this dialog follows it live
+    } catch (err) {
+      setError((err as Error).message || t("billing.error"));
+    } finally {
+      setEnding(null);
+    }
+  };
 
   // Full navigation rather than a popup — popups get blocked, and Checkout
   // returns the user here anyway.
@@ -211,6 +277,18 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
 
         <p className="mt-1 text-xs" style={{ color: "#64748B" }}>
           {t("billing.youAreOn", { tier: TIER_LABEL[current] })}
+          {trialing && billing?.trialEnd && (
+            <>
+              {" · "}
+              {billing.nextAmount != null && billing.currency && card
+                ? t("billing.trialLine", {
+                    date: formatDate(billing.trialEnd, lang),
+                    amount: formatMinorUnits(billing.nextAmount, billing.currency, lang),
+                    card,
+                  })
+                : t("billing.trialLineShort", { date: formatDate(billing.trialEnd, lang) })}
+            </>
+          )}
           {billing?.currentPeriodEnd && billing.status === "active" && (
             <> · {t("billing.renews")} {formatDate(billing.currentPeriodEnd, lang)}</>
           )}
@@ -221,7 +299,7 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
         {state.isDelinquent && (
           <div className="mt-3 rounded-lg border px-3 py-2 text-[13px]" style={{ background: "#FDECEA", borderColor: "#F3C7C1", color: "#8C2F22" }}>
             {state.expired
-              ? t("plan.pastDueExpired", { days: DELINQUENCY_GRACE_DAYS })
+              ? t("plan.pastDueExpired", { days: graceDaysFor(billing) })
               : t("billing.pastDueDetail", { days: state.daysRemaining })}
           </div>
         )}
@@ -234,13 +312,52 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
             <input
               type="number"
               min={1}
-              max={999}
+              max={maxSeats}
               value={seats}
-              onChange={(e) => setSeats(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
+              onChange={(e) => setSeats(Math.max(1, Math.min(maxSeats, Number(e.target.value) || 1)))}
               className="w-20 rounded-lg border px-2 py-1.5 text-sm"
               style={{ borderColor: "#E2DFD9", background: "#FFFFFF", color: "#1F2330", outline: "none" }}
             />
           </label>
+        )}
+        {!subscribed && offer && (
+          <p className="mt-2 text-xs" style={{ color: "#64748B" }}>
+            {t("billing.trialNote", { days: offer.days, max: offer.maxSeats })}
+          </p>
+        )}
+
+        {/* TR2: during the free month the seat count is fixed. */}
+        {trialing && (
+          <div className="mt-3 rounded-lg border px-3 py-2.5 text-xs" style={{ borderColor: "#E2DFD9", color: "#334155" }}>
+            <p>{t("billing.trialNoSeats")}</p>
+            {quote ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="flex-1" style={{ minWidth: 200 }}>
+                  {quote.card ? t("billing.endTrialQuote", { amount: quote.amount, card: quote.card }) : t("billing.endTrialQuoteNoCard", { amount: quote.amount })}
+                </span>
+                <button onClick={() => setQuote(null)} className="hoverable rounded-lg border px-3 py-1.5" style={{ borderColor: "#E2DFD9" }}>
+                  {t("common.cancel")}
+                </button>
+                <button
+                  onClick={() => void confirmEnd()}
+                  disabled={ending !== null}
+                  className="hoverable rounded-lg px-3 py-1.5 font-semibold disabled:opacity-60"
+                  style={{ background: "#D85A28", color: "#FFFFFF" }}
+                >
+                  {ending === "end" ? <InlineSpinner /> : t("billing.endTrialConfirm")}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => void askQuote()}
+                disabled={ending !== null}
+                className="hoverable mt-2 rounded-lg border px-3 py-1.5 font-semibold disabled:opacity-60"
+                style={{ borderColor: "#D85A28", color: "#D85A28" }}
+              >
+                {ending === "quote" ? <InlineSpinner /> : t("billing.endTrialToAddSeats")}
+              </button>
+            )}
+          </div>
         )}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -250,6 +367,7 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
               tier={tier}
               current={tier === current}
               subscribed={subscribed}
+              trial={offer !== null}
               busy={busy === tier || (subscribed && busy === "portal")}
               price={prices.priceOf(tier, currency).formatted}
               onChoose={() => void choose(tier)}
@@ -294,6 +412,8 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
         )}
 
         {error && <p className="mt-3 text-xs" style={{ color: "#DC2626" }}>{error}</p>}
+
+        <InviteAndEarn currency={billing?.currency ?? currency} lang={lang} t={t} />
         <p className="mt-3 text-[11px] leading-relaxed" style={{ color: "#94A3B8" }}>{t("billing.hostedNote")}</p>
 
         <div className="mt-4 flex justify-end">
@@ -303,5 +423,112 @@ export function BillingDialog({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Invite and earn (Trials-and-Referrals-Spec TR8, TR12–TR14): the workspace's link,
+ * what a friend is worth, and the counts. Owner-only, like everything here — the
+ * callable refuses anyone else, and then this section is simply absent.
+ */
+function InviteAndEarn({ currency, lang, t }: { currency: string; lang: string; t: TFn }) {
+  const [summary, setSummary] = useState<ReferralSummary | null>(null);
+  const [making, setMaking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    getReferrals(false, currency)
+      .then((s) => live && setSummary(s))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [currency]);
+
+  if (!summary) return null;
+  const link = summary.code ? `${window.location.origin}/r/${summary.code}` : null;
+  const reward = summary.reward != null ? formatMinorUnits(summary.reward, summary.currency, lang) : null;
+
+  const make = async () => {
+    setMaking(true);
+    setFailed(false);
+    try {
+      setSummary(await getReferrals(true, currency));
+    } catch {
+      setFailed(true);
+    } finally {
+      setMaking(false);
+    }
+  };
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+    }
+  };
+
+  const stats: [string, number][] = [
+    [t("billing.referralSignedUp"), summary.signedUp],
+    [t("billing.referralSubscribed"), summary.subscribed],
+    [t("billing.referralEarned", { cap: summary.cap }), summary.earnedThisYear],
+    [t("billing.referralWaiting"), summary.banked],
+  ];
+
+  return (
+    <section className="mt-5 rounded-xl border p-4" style={{ borderColor: "#E2DFD9", background: "#FFFFFF" }}>
+      <div className="flex items-center gap-2">
+        <Icon name="redeem" size={18} style={{ color: "#D85A28" }} />
+        <h3 className="font-display text-sm font-semibold" style={{ color: "#1F2330" }}>{t("billing.inviteAndEarn")}</h3>
+      </div>
+      <p className="mt-1 text-xs" style={{ color: "#64748B" }}>
+        {reward ? t("billing.referralRule", { amount: reward }) : t("billing.referralRuleNoAmount")}
+      </p>
+
+      {link ? (
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            readOnly
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+            className="mono min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs"
+            style={{ borderColor: "#E2DFD9", background: "#FAFAF7", color: "#1F2330", outline: "none" }}
+            aria-label={t("billing.referralLink")}
+          />
+          <button
+            onClick={() => void copy()}
+            className="hoverable flex flex-shrink-0 items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold"
+            style={{ borderColor: "#D85A28", color: "#D85A28" }}
+          >
+            <Icon name={copied ? "check" : "content_copy"} size={14} />
+            {copied ? t("billing.copied") : t("billing.copyLink")}
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => void make()}
+          disabled={making}
+          className="hoverable mt-3 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+          style={{ borderColor: "#D85A28", color: "#D85A28" }}
+        >
+          {making ? <InlineSpinner /> : t("billing.getReferralLink")}
+        </button>
+      )}
+      {failed && <p className="mt-2 text-xs" style={{ color: "#DC2626" }}>{t("billing.error")}</p>}
+
+      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {stats.map(([label, n]) => (
+          <div key={label} className="flex flex-col-reverse rounded-lg px-2.5 py-2" style={{ background: "#F7F6F2" }}>
+            <dt className="text-[11px] leading-tight" style={{ color: "#64748B" }}>{label}</dt>
+            <dd className="font-display text-base font-semibold" style={{ color: "#1F2330" }}>{n}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

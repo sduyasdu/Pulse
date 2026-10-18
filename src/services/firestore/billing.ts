@@ -83,3 +83,63 @@ export async function listPlanPrices(): Promise<PlanPrice[]> {
   const { data } = await call({});
   return data.plans ?? [];
 }
+
+// ---------------------------------------------------------------------------
+// The free month and referrals (Trials-and-Referrals-Spec TR1–TR14). Every one
+// is a callable: the marks and the ledger are server-only, so the client asks
+// rather than reads.
+// ---------------------------------------------------------------------------
+
+/** Whether this owner's Upgrade starts a free month, and its terms (TR1, TR2). */
+export async function getTrialOffer(): Promise<{ offered: boolean; days: number; maxSeats: number }> {
+  const call = httpsCallable<Record<string, never>, { offered: boolean; days: number; maxSeats: number }>(functions, "getTrialOffer");
+  return (await call({})).data;
+}
+
+/** TR2: the first invoice if the free month ended now — quoted, nothing changed. */
+export async function quoteEndFreeTrial(): Promise<{ amount: number; currency: string; card: { brand: string; last4: string } | null }> {
+  const call = httpsCallable<{ confirm?: boolean }, { amount: number; currency: string; card: { brand: string; last4: string } | null }>(functions, "endFreeTrial");
+  return (await call({})).data;
+}
+
+/** TR2: end the free month now; the first invoice is raised at once. */
+export async function endFreeTrial(): Promise<void> {
+  const call = httpsCallable<{ confirm: boolean }, { ended: boolean }>(functions, "endFreeTrial");
+  await call({ confirm: true });
+}
+
+export interface ReferralSummary {
+  code: string | null;
+  signedUp: number;
+  subscribed: number;
+  earnedThisYear: number;
+  banked: number;
+  cap: number;
+  /** One Business seat-month in `currency`, minor units — what each friend earns. */
+  reward: number | null;
+  currency: string;
+}
+
+/** The workspace's link and counts (TR8). `create` mints the code on first ask. */
+export async function getReferrals(create: boolean, currency?: string): Promise<ReferralSummary> {
+  const call = httpsCallable<{ create: boolean; currency?: string }, ReferralSummary>(functions, "getReferrals");
+  return (await call({ create, ...(currency ? { currency } : {}) })).data;
+}
+
+/** The name of the workspace behind a link, for "Invited by" (TR9). No sign-in needed. */
+export async function resolveReferralCode(code: string): Promise<string | null> {
+  const call = httpsCallable<{ code: string }, { name: string | null }>(functions, "resolveReferralCode");
+  return (await call({ code })).data.name;
+}
+
+/** Count this new account's personal workspace as a friend (TR9). */
+export async function claimReferral(code: string): Promise<{ status: string; reason?: string }> {
+  const call = httpsCallable<{ code: string }, { status: string; reason?: string }>(functions, "claimReferral");
+  return (await call({ code })).data;
+}
+
+/** TR14: dismiss the "you earned" notice for good, on every device. */
+export async function dismissBillingNotice(): Promise<void> {
+  const call = httpsCallable<Record<string, never>, { ok: boolean }>(functions, "dismissBillingNotice");
+  await call({});
+}

@@ -203,6 +203,26 @@ export interface BillingDoc {
    * `stripeEventCreated` is the event's unix seconds. Not read by the UI. */
   stripeEventId?: string;
   stripeEventCreated?: number;
+  // ---- the free month and referrals (Trials-and-Referrals-Spec TR1–TR14) ----
+  // All written by SF3 or a TR callable; absent on orgs that never had them.
+  /** When the org's one free month started (TR1). */
+  trialUsedAt?: Timestamp;
+  /** The free month's end — KEPT after it, because a trial that never paid is what
+   * earns the 3-day grace (TR5). */
+  trialEnd?: Timestamp;
+  /** Set by Stripe's `trial_will_end`, three days before the end (TR4). */
+  trialEndingAt?: Timestamp;
+  /** The first invoice above zero (TR5). */
+  paidSince?: Timestamp;
+  /** The subscription's card, for the trial line (TR4). */
+  card?: { brand: string; last4: string };
+  /** What the next invoice will be, minor units, tax included — set while trialing. */
+  nextAmount?: number;
+  /** TR14: the latest referral reward, and when the owner dismissed its notice. */
+  referralEarnedAt?: Timestamp;
+  referralEarnedAmount?: number;
+  referralEarnedCurrency?: string;
+  referralNoticeDismissedAt?: Timestamp;
 }
 
 /**

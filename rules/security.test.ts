@@ -845,6 +845,54 @@ describe("billing / plan doc (Plans-Spec §4)", () => {
   });
 });
 
+describe("free month and referrals (Trials-and-Referrals-Spec TR1, TR8–TR13)", () => {
+  const WS = "ws1";
+  async function seedOwned(extra: Record<string, unknown> = {}) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "workspaces", WS), { id: WS, name: "Acme", isPersonal: true, ownerId: "owner", createdAt: Date.now(), ...extra });
+      await setDoc(doc(db, "workspaces", WS, "workspaceMembers", "owner"), { uid: "owner", role: "owner", joinedAt: Date.now() });
+    });
+  }
+
+  it("the owner still renames their workspace — the allow side", async () => {
+    await seedOwned({ stripeCustomerId: "cus_1", country: "MX" });
+    await assertSucceeds(updateDoc(doc(dbAs("owner"), "workspaces", WS), { name: "Acme 2" }));
+  });
+
+  it("the owner may not write the workspace's Stripe fields — a cleared customer would be a second free month", async () => {
+    await seedOwned({ stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", country: "MX" });
+    const owner = dbAs("owner");
+    await assertFails(updateDoc(doc(owner, "workspaces", WS), { stripeCustomerId: "cus_other" }));
+    await assertFails(updateDoc(doc(owner, "workspaces", WS), { stripeSubscriptionId: "sub_other" }));
+    await assertFails(updateDoc(doc(owner, "workspaces", WS), { country: "US" }));
+    await assertFails(setDoc(doc(owner, "workspaces", WS), { id: WS, name: "Acme", isPersonal: true, ownerId: "owner", createdAt: 1 }));
+  });
+
+  it("nor be born with them", async () => {
+    await assertFails(
+      setDoc(doc(dbAs("alice"), "workspaces", "ws-new"), { name: "A", isPersonal: true, ownerId: "alice", createdAt: Date.now(), stripeCustomerId: "cus_x" }),
+    );
+  });
+
+  it("every trial and referral collection is closed to every client, its owner included", async () => {
+    await seedOwned();
+    await seed(async (db) => {
+      await setDoc(doc(db, "trialPeople", "owner"), { workspaceId: WS, subscriptionId: "sub_1", at: 1 });
+      await setDoc(doc(db, "trialCards", "live_fp"), { workspaceId: WS, subscriptionId: "sub_1", at: 1 });
+      await setDoc(doc(db, "referralCodes", "abcdefgh"), { workspaceId: WS, createdBy: "owner", createdAt: 1 });
+      await setDoc(doc(db, "referrals", WS), { code: "abcdefgh", banked: 1 });
+      await setDoc(doc(db, "referrals", WS, "friends", "ws2"), { status: "signed-up" });
+    });
+    const owner = dbAs("owner");
+    for (const path of [["trialPeople", "owner"], ["trialCards", "live_fp"], ["referralCodes", "abcdefgh"], ["referrals", WS], ["referrals", WS, "friends", "ws2"]]) {
+      const ref = doc(owner, path[0], ...path.slice(1));
+      await assertFails(getDoc(ref));
+      await assertFails(setDoc(ref, { anything: true }));
+      await assertFails(deleteDoc(ref));
+    }
+  });
+});
+
 describe("hide & archive (Hide-and-Archive-Spec)", () => {
   /** Seed a Pulse with alice as owner + bob as editor, optionally archived. */
   async function seedArchivable(archived: boolean) {

@@ -87,3 +87,22 @@ describe("entitlements (quota-only)", () => {
     expect(editorSeatLimit(billing({ tier: "business", seats: 30 }))).toBe(30);
   });
 });
+
+describe("the 3-day grace after a free month that never paid (TR5)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const T = 1_800_000_000_000;
+  const b = (over: Partial<BillingDoc>): BillingDoc => ({ tier: "business", status: "past_due", source: "stripe", updatedAt: T, pastDueSince: T, trialEnd: T - DAY, ...over });
+
+  it("keeps the paid tier for 3 days, then Starter", () => {
+    expect(tierOf(b({}), T + 3 * DAY - 1)).toBe("business");
+    expect(tierOf(b({}), T + 3 * DAY)).toBe("starter");
+  });
+
+  it("an org that has paid keeps the 15 days", () => {
+    expect(tierOf(b({ paidSince: T - 40 * DAY }), T + 3 * DAY)).toBe("business");
+  });
+
+  it("an org that never had a trial keeps the 15 days", () => {
+    expect(tierOf(b({ trialEnd: undefined }), T + 14 * DAY)).toBe("business");
+  });
+});

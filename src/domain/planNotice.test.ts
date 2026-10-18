@@ -84,3 +84,67 @@ describe("planNotice (delinquency banner)", () => {
     expect(planNotice(doc, "wsA", T0)!.dismissKey).not.toBe(planNotice(doc, "wsB", T0)!.dismissKey);
   });
 });
+
+describe("planNotice — the free month's end (TR4)", () => {
+  const END = T0 + 10 * DAY;
+  const trial = (over: Partial<BillingDoc> = {}) =>
+    billing({ status: "trialing", trialEnd: END, nextAmount: 1800, currency: "usd", card: { brand: "visa", last4: "4242" }, ...over });
+
+  it("says nothing until three days before the end", () => {
+    expect(planNotice(trial(), WS, END - 3 * DAY - 1)).toBeNull();
+  });
+
+  it("from three days before: the date, the amount and the card", () => {
+    const n = planNotice(trial(), WS, END - 2 * DAY, "en");
+    expect(n?.messageKey).toBe("plan.trialEnding");
+    expect(n?.params.amount).toBe("$18.00");
+    expect(n?.params.card).toBe("Visa ···· 4242");
+    expect(n?.urgent).toBe(false);
+  });
+
+  it("without an amount or a card, the date alone", () => {
+    expect(planNotice(trial({ card: undefined }), WS, END - DAY)?.messageKey).toBe("plan.trialEndingShort");
+  });
+
+  it("says nothing once the trial is over", () => {
+    expect(planNotice(trial(), WS, END)).toBeNull();
+  });
+
+  it("a failed payment outranks it", () => {
+    expect(planNotice(trial({ status: "past_due", pastDueSince: END - DAY }), WS, END - DAY)?.messageKey).toMatch(/^plan\.pastDue/);
+  });
+});
+
+describe("planNotice — the 3-day grace after a trial that never paid (TR5)", () => {
+  it("drops to Starter after 3 days, not 15, and says 3", () => {
+    const b = pastDue({ trialEnd: T0 - DAY });
+    expect(planNotice(b, WS, T0 + 2 * DAY)?.messageKey).toMatch(/^plan\.pastDue(Today)?$/);
+    const expired = planNotice(b, WS, T0 + 3 * DAY);
+    expect(expired?.messageKey).toBe("plan.pastDueExpired");
+    expect(expired?.params.days).toBe(3);
+  });
+
+  it("an org that has paid keeps the 15 days", () => {
+    const b = pastDue({ trialEnd: T0 - 60 * DAY, paidSince: T0 - 30 * DAY });
+    expect(planNotice(b, WS, T0 + 3 * DAY)?.messageKey).toBe("plan.pastDue");
+    expect(planNotice(b, WS, T0 + DELINQUENCY_GRACE_DAYS * DAY)?.params.days).toBe(DELINQUENCY_GRACE_DAYS);
+  });
+});
+
+describe("planNotice — a referral earned (TR14)", () => {
+  const earned = (over: Partial<BillingDoc> = {}) =>
+    billing({ referralEarnedAt: T0, referralEarnedAmount: 1200, referralEarnedCurrency: "usd", ...over });
+
+  it("shows once, as good news, dismissed on the server", () => {
+    const n = planNotice(earned(), WS, T0 + DAY, "en");
+    expect(n?.messageKey).toBe("plan.referralEarned");
+    expect(n?.params.amount).toBe("$12.00");
+    expect(n?.good).toBe(true);
+    expect(n?.serverDismiss).toBe(true);
+  });
+
+  it("is gone once dismissed, and back for the next reward", () => {
+    expect(planNotice(earned({ referralNoticeDismissedAt: T0 + 1 }), WS, T0 + DAY)).toBeNull();
+    expect(planNotice(earned({ referralEarnedAt: T0 + 2, referralNoticeDismissedAt: T0 + 1 }), WS, T0 + DAY)?.messageKey).toBe("plan.referralEarned");
+  });
+});

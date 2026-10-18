@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { keptReferral } from "@/domain/referral";
+import { resolveReferralCode } from "@/services/firestore/billing";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/i18n";
@@ -21,6 +23,20 @@ export function LoginPage() {
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
+  // TR9: "Invited by {workspace}" when the visitor came through a referral link. The
+  // server returns the workspace's NAME only; a code it does not know shows nothing.
+  const [invitedBy, setInvitedBy] = useState<string | null>(null);
+  useEffect(() => {
+    const code = keptReferral();
+    if (!code) return;
+    let live = true;
+    resolveReferralCode(code)
+      .then((name) => live && setInvitedBy(name || null))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
 
   if (!initializing && firebaseUser) return <Navigate to={from || "/"} replace />;
 
@@ -47,6 +63,15 @@ export function LoginPage() {
               {mode === "signin" ? t("auth.signIn") : t("auth.createAccountTitle")}
             </h1>
             <p className="mb-5 text-sm text-yasdu-muted">{t("auth.tagline")}</p>
+            {invitedBy && (
+              <p
+                className="mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-[13px]"
+                style={{ background: "#FFF7F2", border: "1px solid #FBD3BE", color: "#9A3412" }}
+              >
+                <Icon name="group_add" size={16} style={{ flexShrink: 0 }} />
+                {t("auth.invitedBy", { name: invitedBy })}
+              </p>
+            )}
 
             <GoogleButton onClick={() => void signInWithGoogle()} label={t("auth.continueWithGoogle")} />
 

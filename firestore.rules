@@ -51,6 +51,12 @@ service cloud.firestore {
     // workspace create/update rules and any future counter stay in step.
     function SERVER_COUNTERS() { return ['pulseCount']; }
 
+    // The workspace's Stripe link, written by SF3 only (Trials-and-Referrals-Spec
+    // §1). An owner who could rewrite `stripeCustomerId` could make a workspace
+    // that has subscribed look like one that never has, and be offered a second
+    // free month; `country` and the subscription id are the same kind of fact.
+    function SERVER_STRIPE_FIELDS() { return ['stripeCustomerId', 'stripeSubscriptionId', 'country']; }
+
     // The org's plan, defaulting to Starter when no billing doc exists — the
     // free tier IS the absence of a subscription (Plans-Spec §4). `past_due`
     // deliberately keeps its paid tier here: the client-side grace window
@@ -262,13 +268,15 @@ service cloud.firestore {
       // transaction that also writes their workspaceMembers/{uid} doc below.
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid
         // A workspace can't be born with a forged counter either.
-        && !request.resource.data.keys().hasAny(SERVER_COUNTERS());
+        && !request.resource.data.keys().hasAny(SERVER_COUNTERS())
+        && !request.resource.data.keys().hasAny(SERVER_STRIPE_FIELDS());
       // `pulseCount` is SF11's (functions/src/counters.ts). An owner who could
       // write it could write 0 and the quota gate below would be decoration, so
       // it is excluded here; the Admin SDK bypasses rules, which is how SF11
       // still maintains it.
       allow update: if isWorkspaceMember(workspaceId) && workspaceRole(workspaceId) == 'owner'
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(SERVER_COUNTERS());
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(SERVER_COUNTERS())
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(SERVER_STRIPE_FIELDS());
       allow delete: if false; // not supported in v1
 
       // ---- resource master (Resource-Master-Spec §1, RM1/RM6/RM16) ----
@@ -359,6 +367,20 @@ service cloud.firestore {
     match /billing/{orgId} {
       allow read: if isWorkspaceMember(orgId) && workspaceRole(orgId) == 'owner';
       allow write: if false;
+    }
+
+    // ---- free month and referrals (Trials-and-Referrals-Spec TR1, TR8–TR13) ----
+    // Every one the server's alone. A trial mark a client could delete is a second
+    // free month; a referral ledger it could write is money. The Billing dialog
+    // reads them through `getReferrals`, never directly. Default-deny would refuse
+    // these anyway; they are named so the next rule written nearby cannot open
+    // them by accident with a wildcard.
+    match /trialPeople/{uid} { allow read, write: if false; }
+    match /trialCards/{card} { allow read, write: if false; }
+    match /referralCodes/{code} { allow read, write: if false; }
+    match /referrals/{workspaceId} {
+      allow read, write: if false;
+      match /{rest=**} { allow read, write: if false; }
     }
 
     // ---- invite discovery index (pre-membership, keyed by email) ----

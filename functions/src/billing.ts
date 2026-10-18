@@ -3,6 +3,22 @@ import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { log, logError } from "./lib/conventions";
+import {
+  TRIAL_DAYS,
+  TRIAL_GRACE_DAYS,
+  TRIAL_MAX_SEATS,
+  claimReferral as claimReferralFor,
+  creditBanked,
+  recordPayment,
+  recordTrial,
+  referralCode,
+  referralSummary,
+  resolveReferral,
+  revokeReferral,
+  rewardReferral,
+  trialEligible,
+  type SeatPrice,
+} from "./trials";
 
 // SF3 — Billing / plan sync (Server-Functions-Spec.md §SF3, Plans-Spec.md §4/§9,
 // Billing-and-Backend-Build-Plan.md Phase 3).
@@ -228,12 +244,12 @@ export async function syncSubscription(
   stripe: Stripe,
   subscriptionId: string,
   event: Pick<Stripe.Event, "id" | "created" | "type">,
-): Promise<void> {
+): Promise<string | null> {
   // Refetch rather than trust the (possibly stale, possibly out-of-order) event
   // payload; expanding the product gets us the `tier` metadata and expanding the
   // customer saves a second round-trip for org resolution + country.
   const sub = await stripe.subscriptions.retrieve(subscriptionId, {
-    expand: ["items.data.price.product", "customer"],
+    expand: ["items.data.price.product", "customer", "default_payment_method"],
   });
 
   const rawCustomer = sub.customer;
@@ -253,19 +269,19 @@ export async function syncSubscription(
       customerId,
       eventType: event.type,
     });
-    return;
+    return null;
   }
 
   const ref = db.doc(`billing/${orgId}`);
   const prev = (await ref.get()).data();
   if (prev?.stripeEventId === event.id) {
     log(FN, "duplicate delivery ignored", { orgId, eventId: event.id });
-    return;
+    return orgId;
   }
   const appliedAt = typeof prev?.stripeEventCreated === "number" ? prev.stripeEventCreated : null;
   if (appliedAt !== null && event.created < appliedAt) {
     log(FN, "stale delivery ignored", { orgId, eventId: event.id, eventCreated: event.created, appliedAt });
-    return;
+    return orgId;
   }
 
   const licensed = licensedItem(sub);
@@ -308,12 +324,53 @@ export async function syncSubscription(
   // dunning retry. Cleared the moment the org leaves past_due, so a recovered
   // org that later fails again gets a fresh window. `domain/entitlements`
   // resolves the org to Pro once DELINQUENCY_GRACE_DAYS have elapsed.
-  doc.pastDueSince =
-    status === "past_due"
-      ? (typeof prev?.pastDueSince === "number" ? prev.pastDueSince : now)
-      : FieldValue.delete();
+  const pastDueSince = status === "past_due" ? (typeof prev?.pastDueSince === "number" ? prev.pastDueSince : now) : null;
+  doc.pastDueSince = pastDueSince ?? FieldValue.delete();
   const country = customer?.address?.country;
   if (country) doc.country = country;
+  doc.livemode = sub.livemode;
+
+  // The free month (TR4, TR5). `trialEnd` is KEPT once the trial is over: a trial that
+  // never paid is what earns the short grace, and that has to be known afterwards.
+  const trialEnd = sub.trial_end ? sub.trial_end * 1000 : typeof prev?.trialEnd === "number" ? prev.trialEnd : null;
+  if (trialEnd) doc.trialEnd = trialEnd;
+  if (event.type === "customer.subscription.trial_will_end") doc.trialEndingAt = now;
+  const pm = typeof sub.default_payment_method === "object" ? sub.default_payment_method : null;
+  if (pm?.card) doc.card = { brand: pm.card.brand, last4: pm.card.last4 };
+  // What the trial turns into, for the trial line and its notice: the next invoice as
+  // Stripe would raise it, tax included. Best-effort — the line reads without it.
+  if (status === "trialing") {
+    try {
+      const next = await stripe.invoices.createPreview({ customer: customerId, subscription: sub.id });
+      doc.nextAmount = next.total;
+    } catch (err) {
+      logError(FN, "could not preview the first invoice", err, { orgId });
+    }
+  } else doc.nextAmount = FieldValue.delete();
+
+  // TR2: seats are the price, so a raise through the portal during the trial ends it.
+  // Lowering is free and stays in the trial.
+  const seatsNow = licensed?.item.quantity ?? 1;
+  if (status === "trialing" && prev?.status === "trialing" && typeof prev.seats === "number" && seatsNow > prev.seats) {
+    await stripe.subscriptions.update(sub.id, { trial_end: "now", proration_behavior: "none" });
+    log(FN, "seats raised during the free month: trial ended", { orgId, from: prev.seats, to: seatsNow });
+  }
+
+  // TR5: a trial whose first charge failed gets 3 days, not 15. Stripe is asked to cancel
+  // at the end of them, so the downgrade is the ordinary `subscription.deleted` path —
+  // and a payment inside the 3 days takes the cancellation back.
+  const neverPaid = prev?.paidSince == null;
+  if (status === "past_due" && neverPaid && trialEnd && pastDueSince !== null && !sub.cancel_at) {
+    const cancelAt = Math.max(Math.floor(pastDueSince / 1000) + TRIAL_GRACE_DAYS * 86_400, Math.floor(now / 1000) + 60);
+    await stripe.subscriptions.update(sub.id, { cancel_at: cancelAt });
+    doc.trialGraceCancelAt = cancelAt * 1000;
+    log(FN, "first charge after a free month failed: cancelling after the short grace", { orgId, cancelAt });
+  } else if (status === "active" && typeof prev?.trialGraceCancelAt === "number") {
+    if (sub.cancel_at && sub.cancel_at * 1000 === prev.trialGraceCancelAt) {
+      await stripe.subscriptions.update(sub.id, { cancel_at: null });
+    }
+    doc.trialGraceCancelAt = FieldValue.delete();
+  }
 
   await ref.set(doc, { merge: true });
   log(FN, "synced billing doc", {
@@ -341,6 +398,7 @@ export async function syncSubscription(
   if (heldSeats && !holdsNow) {
     await applyProDowngrade(db, orgId);
   }
+  return orgId;
 }
 
 /**
@@ -429,8 +487,14 @@ export const stripeWebhook = onRequest(
     }
 
     try {
+      const db = getFirestore();
       if (event.type === "checkout.session.completed") {
-        await linkCheckoutSession(getFirestore(), stripe, event.data.object as Stripe.Checkout.Session);
+        await linkCheckoutSession(db, stripe, event.data.object as Stripe.Checkout.Session);
+      }
+      if (event.type === "charge.refunded") {
+        await handleRefund(db, stripe, event.data.object as Stripe.Charge);
+        res.status(200).send("ok");
+        return;
       }
       const subscriptionId = subscriptionIdFor(event);
       if (!subscriptionId) {
@@ -438,7 +502,8 @@ export const stripeWebhook = onRequest(
         res.status(200).send("ignored");
         return;
       }
-      await syncSubscription(getFirestore(), stripe, subscriptionId, event);
+      const orgId = await syncSubscription(db, stripe, subscriptionId, event);
+      if (orgId) await afterSync(db, stripe, event, orgId, subscriptionId);
       res.status(200).send("ok");
     } catch (err) {
       logError(FN, "handler failed", err, { eventType: event.type, eventId: event.id });
@@ -732,6 +797,13 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
   const customerId = existingCustomerId(workspace);
   if (customerId) await expireOpenSessions(stripe, customerId);
 
+  // The free month (TR1–TR3, TR7): offered by the server's own reading, never the
+  // client's, and only with at most 5 seats (TR2). Marked by the webhook, not here.
+  const trial = await trialEligible(db, uid, workspaceId, workspace);
+  if (trial && seats > TRIAL_MAX_SEATS) {
+    throw new HttpsError("failed-precondition", `A free month starts with at most ${TRIAL_MAX_SEATS} seats.`, { reason: "trial-seats", max: TRIAL_MAX_SEATS });
+  }
+
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -754,7 +826,15 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
       client_reference_id: workspaceId,
       metadata: { workspaceId },
       // Read first by SF3 — the most direct org resolution there is.
-      subscription_data: { metadata: { workspaceId } },
+      subscription_data: {
+        metadata: { workspaceId, ...(trial ? { trialStartedBy: uid } : {}) },
+        // TR3: 30 days, the card asked at the start, a card removed mid-trial cancelling
+        // it rather than leaving a subscription with nothing to charge.
+        ...(trial
+          ? { trial_period_days: TRIAL_DAYS, trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } } }
+          : {}),
+      },
+      ...(trial ? { payment_method_collection: "always" as const } : {}),
       // Stripe Tax computes IVA for MX customers, VAT-inclusive (Plans-Spec §9.5,
       // Billing-and-Backend-Build-Plan "Mexico specifics"). It needs a customer
       // address, collected by whichever branch above applies.
@@ -770,7 +850,7 @@ export const createCheckoutSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, as
       cancel_url: `${returnUrl}?billing=cancelled`,
     });
     if (!session.url) throw new HttpsError("internal", "Stripe returned a session without a URL.");
-    log(FN, "created checkout session", { workspaceId, tier, seats, sessionId: session.id, currency: currency ?? "auto", presented: session.currency });
+    log(FN, "created checkout session", { workspaceId, tier, seats, trial, sessionId: session.id, currency: currency ?? "auto", presented: session.currency });
     return { url: session.url };
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -840,4 +920,144 @@ export const createPortalSession = onCall({ secrets: [STRIPE_SECRET_KEY] }, asyn
     const detail = err instanceof Stripe.errors.StripeError ? err.message : null;
     throw new HttpsError("internal", detail ? `Stripe could not open the billing portal: ${detail}` : "Could not open the Stripe billing portal. Check the function logs for the cause.");
   }
+});
+
+// ---------------------------------------------------------------------------
+// The free month and referrals (Trials-and-Referrals-Spec.md, TR1–TR14). The
+// rules and their ledger are in ./trials; what is here is the Stripe wiring and
+// the callables, which reuse this file's owner check and secrets.
+// ---------------------------------------------------------------------------
+
+/** One Business seat-month in each currency the catalog prices it in (TR12). */
+async function seatPrices(stripe: Stripe): Promise<SeatPrice> {
+  const business = await priceForTier(stripe, "business");
+  const amounts: Record<string, number | null> = {};
+  if (business) {
+    amounts[business.currency] = business.unit_amount;
+    for (const [code, option] of Object.entries(business.currency_options ?? {})) amounts[code] = option.unit_amount;
+  }
+  return (currency) => amounts[currency.toLowerCase()] ?? null;
+}
+
+/**
+ * What follows a sync for the free month and referrals. Each step is idempotent on its
+ * own (transactions that check the state they move from, Stripe idempotency keys), so a
+ * redelivered event is harmless here even where the sync above skipped it.
+ */
+async function afterSync(db: Db, stripe: Stripe, event: Stripe.Event, orgId: string, subscriptionId: string): Promise<void> {
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    await recordTrial(db, stripe, orgId, session.metadata?.trialStartedBy?.trim() || null, subscriptionId, event.livemode);
+    const customerId = typeof session.customer === "string" ? session.customer : (session.customer?.id ?? null);
+    if (customerId && session.currency) {
+      await creditBanked(db, stripe, orgId, customerId, session.currency, session.id, await seatPrices(stripe));
+    }
+    return;
+  }
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    if (invoice.amount_paid <= 0) return; // a trial's $0 invoice is not a payment (TR11)
+    const fingerprint = await recordPayment(db, stripe, orgId, subscriptionId, event.livemode);
+    if (invoice.id) await rewardReferral(db, stripe, orgId, invoice.id, fingerprint, event.livemode, await seatPrices(stripe));
+  }
+}
+
+/** TR11: a FULL refund of a friend's first paid invoice takes back the reward. */
+async function handleRefund(db: Db, stripe: Stripe, charge: Stripe.Charge): Promise<void> {
+  if (!charge.refunded || charge.amount_refunded < charge.amount) return;
+  const paymentIntent = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+  if (!paymentIntent) return;
+  const payments = await stripe.invoicePayments.list({ payment: { type: "payment_intent", payment_intent: paymentIntent }, limit: 1 });
+  const invoiceRef = payments.data[0]?.invoice;
+  const invoiceId = typeof invoiceRef === "string" ? invoiceRef : invoiceRef?.id;
+  if (!invoiceId) return;
+  const invoice = await stripe.invoices.retrieve(invoiceId);
+  const details = invoice.parent?.subscription_details?.subscription;
+  const subscriptionId = typeof details === "string" ? details : details?.id;
+  if (!subscriptionId) return;
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["customer"] });
+  const customer = typeof sub.customer === "object" && !("deleted" in sub.customer && sub.customer.deleted) ? (sub.customer as Stripe.Customer) : null;
+  const orgId = await resolveOrgId(db, sub, customer);
+  if (orgId) await revokeReferral(db, stripe, orgId, invoiceId);
+}
+
+function requireUid(request: { auth?: { uid: string } }): string {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to manage billing.");
+  return uid;
+}
+
+/** Whether this owner's Upgrade starts a free month (TR1, TR7), for the button's words. */
+export const getTrialOffer = onCall(async (request) => {
+  const uid = requireUid(request);
+  const db = getFirestore();
+  const { workspaceId, workspace } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
+  return { offered: await trialEligible(db, uid, workspaceId, workspace), days: TRIAL_DAYS, maxSeats: TRIAL_MAX_SEATS };
+});
+
+/**
+ * End the free month now (TR2), to add seats. Without `confirm` it only quotes the first
+ * invoice; with it, `trial_end: 'now'` raises that invoice at once.
+ */
+export const endFreeTrial = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  const uid = requireUid(request);
+  const db = getFirestore();
+  const { workspaceId, workspace } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
+  const billing = (await db.doc(`billing/${workspaceId}`).get()).data() ?? {};
+  const subscriptionId = billing.stripeSubscriptionId;
+  const customerId = existingCustomerId(workspace) ?? billing.stripeCustomerId;
+  if (billing.status !== "trialing" || typeof subscriptionId !== "string" || typeof customerId !== "string") {
+    throw new HttpsError("failed-precondition", "This workspace is not in a free month.", { reason: "not-trialing" });
+  }
+  const stripe = new Stripe(STRIPE_SECRET_KEY.value());
+  if (request.data?.confirm !== true) {
+    const preview = await stripe.invoices.createPreview({
+      customer: customerId,
+      subscription: subscriptionId,
+      subscription_details: { trial_end: "now" },
+    });
+    return { amount: preview.total, currency: preview.currency, card: billing.card ?? null };
+  }
+  await stripe.subscriptions.update(subscriptionId, { trial_end: "now", proration_behavior: "none" });
+  log(FN, "free month ended by its owner", { workspaceId });
+  return { ended: true };
+});
+
+/** The workspace's link and its counts (TR8, TR14). `create` mints the code on first ask. */
+export const getReferrals = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+  const uid = requireUid(request);
+  const db = getFirestore();
+  const { workspaceId } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
+  const billing = (await db.doc(`billing/${workspaceId}`).get()).data() ?? {};
+  const currency = typeof billing.currency === "string" ? billing.currency : request.data?.currency === "mxn" ? "mxn" : "usd";
+  let reward: number | null = null;
+  try {
+    reward = (await seatPrices(new Stripe(STRIPE_SECRET_KEY.value())))(currency);
+  } catch (err) {
+    logError(FN, "could not price the referral reward", err, { workspaceId });
+  }
+  const [code, counts] = await Promise.all([referralCode(db, uid, workspaceId, request.data?.create === true), referralSummary(db, workspaceId)]);
+  return { code, ...counts, reward, currency };
+});
+
+/** The NAME of the workspace behind a referral link — nothing else (TR9). No sign-in needed. */
+export const resolveReferralCode = onCall(async (request) => {
+  return (await resolveReferral(getFirestore(), request.data?.code)) ?? { name: null };
+});
+
+/** A new account's personal workspace counted as a friend (TR9, TR10). */
+export const claimReferral = onCall(async (request) => {
+  const uid = requireUid(request);
+  const outcome = await claimReferralFor(getFirestore(), uid, request.data?.code);
+  log(FN, "referral claim", { uid, ...outcome });
+  return outcome;
+});
+
+/** TR14: the "you earned $12 off" notice, dismissed by its owner. */
+export const dismissBillingNotice = onCall(async (request) => {
+  const uid = requireUid(request);
+  const db = getFirestore();
+  const { workspaceId } = await requireOwnedWorkspace(db, uid, request.data?.workspaceId);
+  await db.doc(`billing/${workspaceId}`).set({ referralNoticeDismissedAt: Date.now() }, { merge: true });
+  return { ok: true };
 });

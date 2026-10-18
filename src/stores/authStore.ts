@@ -18,6 +18,8 @@ import type { UserDoc } from "@/types";
 import { ensureUserDoc, resolvePendingInvites, updateUserProfile } from "@/services/firestore/users";
 import { useI18nStore } from "@/stores/i18nStore";
 import { isLang } from "@/i18n/langs";
+import { claimReferral } from "@/services/firestore/billing";
+import { forgetReferral, keptReferral } from "@/domain/referral";
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
@@ -60,9 +62,29 @@ interface AuthState {
   recheckVerification: () => Promise<boolean>;
 }
 
+/**
+ * TR9: a code kept from `/r/{code}`, claimed once the personal workspace exists — the
+ * server counts the friend, never this client. Forgotten whatever the server answers,
+ * since each of its refusals is final (too late, already claimed, paid before); only a
+ * failure to REACH it keeps the code for the next sign-in. Not awaited: signing in
+ * does not wait on a referral.
+ */
+async function claimKeptReferral(): Promise<void> {
+  const code = keptReferral();
+  if (!code) return;
+  try {
+    await claimReferral(code);
+    forgetReferral();
+  } catch (err) {
+    const transient = ["functions/unavailable", "functions/deadline-exceeded"].includes((err as { code?: string }).code ?? "");
+    if (!transient) forgetReferral();
+  }
+}
+
 async function bootstrap(user: FirebaseUser): Promise<UserDoc | null> {
   const email = user.email ?? "";
   await ensureUserDoc(user.uid, email, user.displayName, user.photoURL);
+  void claimKeptReferral();
   // Confirming happens in whatever tab the mail client opened, so a session
   // that started before the click still carries a token saying otherwise. One
   // reload for the unconfirmed — never for the rest, who are the common case

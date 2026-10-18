@@ -96,7 +96,9 @@ configuration and tax settings are all per-mode and must be recreated.
    the events the code acts on (`subscriptionIdFor`, `billing.ts:336`):
    `customer.subscription.created`, `.updated`, `.deleted`, `.paused`,
    `.resumed`, `.trial_will_end`, `checkout.session.completed`, `invoice.paid`,
-   `invoice.payment_failed`, `invoice.payment_succeeded`.
+   `invoice.payment_failed`, `invoice.payment_succeeded`, **`charge.refunded`**
+   (added for Trials-and-Referrals-Spec TR11 — a refund takes back a referral reward;
+   add it to BOTH endpoints, test and live).
    Anything else is answered `200 ignored`, so over-subscribing is harmless —
    under-subscribing is not.
 7. **Configure dunning retries.** The 15-day `DELINQUENCY_GRACE_DAYS` window
@@ -243,6 +245,25 @@ already taken — refund in the Stripe dashboard — and it does **not** restore
   therefore fails at *Checkout* while looking perfectly correct to anyone reading
   the webhook code. Worth collapsing to one helper the next time this file is
   touched, so the catalog can't satisfy one path and not the other.
+
+## 8a. The free month, referrals and discount codes (Trials-and-Referrals-Spec)
+
+Built 2026-10-18. Four things the code cannot do for itself, in each mode:
+
+1. **`charge.refunded` on both webhook endpoints** (§2 step 6). Without it a refunded
+   friend keeps earning their referrer $12, and nothing errors.
+2. **Stripe's trial-reminder email on** — Dashboard → Settings → Billing →
+   Subscriptions and emails → "Send a reminder email 7 days before a free trial ends"
+   (TR4). The in-app notice covers the last three days; the email is the one an owner
+   who is not opening Beats receives.
+3. **Every Beats coupon restricted to Beats' products and marked `beats = yes`** (TR15).
+   Make them with `functions/scripts/stripe-coupons.mjs`, which does both, rather than
+   in the Dashboard: Checkout's box accepts ANY active code in the Yasdu account, and a
+   coupon with no product restriction works in Foretrue's Checkout too.
+4. **TR17, before the first `once` code:** in test mode, start a free month with a
+   `once` coupon in Checkout's box, end the trial, and read the first PAID invoice. If
+   the discount is on it, `once` is safe and the script's refusal can go; if it was
+   spent on the $0 trial invoice, keep making `repeating` codes.
 
 ## 9. Decisions
 

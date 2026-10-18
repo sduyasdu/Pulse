@@ -30,10 +30,15 @@ const apply = flag === "--apply";
     }
     // source "manual" is the BillingDoc's own non-Stripe shape (src/types/index.ts:194).
     // No `seats`: editorSeatLimit treats a paid tier with no count as unlimited.
-    const next = { tier: "business", status: "active", source: "manual", updatedAt: Date.now() };
+    // The free month's and referrals' marks are history, not plan state: a grant must
+    // not erase that this org had its trial or who invited it (Trials-and-Referrals-Spec
+    // TR1, TR9), or removing the grant later would offer a second free month.
+    const KEEP = ["trialUsedAt", "trialSubscription", "trialEnd", "paidSince", "paidFingerprints", "livemode", "referredBy"];
+    const kept = Object.fromEntries(KEEP.filter((k) => prev && prev[k] !== undefined).map((k) => [k, prev[k]]));
+    const next = { ...kept, tier: "business", status: "active", source: "manual", updatedAt: Date.now() };
     console.log("  →", JSON.stringify(next));
     if (apply) {
-      await ref.set(next); // full replace: drops stale seats/period/pastDueSince
+      await ref.set(next); // full replace: drops stale seats/period/pastDueSince, keeps KEEP
       console.log("  ✓ written");
     }
   }

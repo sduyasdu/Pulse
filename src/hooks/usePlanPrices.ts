@@ -10,14 +10,8 @@ export interface DisplayPrice {
   fromStripe: boolean;
 }
 
-/** Stripe stores minor units (600 = $6.00), except in zero-decimal currencies
- * where 600 means 600. Intl knows which is which per currency, so dividing by
- * 100 unconditionally would be wrong for JPY and friends — ask Intl instead. */
-export function formatMinorUnits(minor: number, currency: string, lang: string): string {
-  const fmt = new Intl.NumberFormat(lang, { style: "currency", currency: currency.toUpperCase() });
-  const digits = fmt.resolvedOptions().maximumFractionDigits ?? 2;
-  return fmt.format(minor / 10 ** digits);
-}
+import { formatMinorUnits } from "@/domain/money";
+export { formatMinorUnits };
 
 /**
  * Live plan prices for the plans form (Plans-Spec PL14/PL17).

@@ -50,7 +50,19 @@ export const TIER_PRICE_USD: Record<PlanTier, number> = { starter: 0, pro: 6, bu
  * decision to stop paying, so the org keeps working while Stripe retries.
  */
 export const DELINQUENCY_GRACE_DAYS = 15;
-const GRACE_MS = DELINQUENCY_GRACE_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * The grace after a free month whose first charge failed (Trials-and-Referrals-Spec
+ * TR5). 15 days is for a customer who has paid; on top of a 30-day trial it would be a
+ * 45-day trial for an expired card. SF3 asks Stripe to cancel at the end of these 3
+ * days, so the server's downgrade agrees with this reading.
+ */
+export const TRIAL_GRACE_DAYS = 3;
+
+/** Which grace applies: the short one for an org whose trial never paid. */
+export function graceDaysFor(billing: BillingDoc | null | undefined): number {
+  return billing?.trialEnd != null && billing.paidSince == null ? TRIAL_GRACE_DAYS : DELINQUENCY_GRACE_DAYS;
+}
 
 /**
  * When the grace window closes for a delinquent org, or `null` if it isn't
@@ -61,7 +73,7 @@ const GRACE_MS = DELINQUENCY_GRACE_DAYS * 24 * 60 * 60 * 1000;
 function graceEndsAt(billing: BillingDoc | null | undefined): number | null {
   if (!billing || billing.status !== "past_due") return null;
   const startedAt = billing.pastDueSince ?? billing.updatedAt;
-  return startedAt + GRACE_MS;
+  return startedAt + graceDaysFor(billing) * 24 * 60 * 60 * 1000;
 }
 
 /**

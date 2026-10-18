@@ -3,6 +3,8 @@ import { Icon } from "@/components/shared/Icon";
 import { useBilling } from "@/hooks/useBilling";
 import { planNotice } from "@/domain/planNotice";
 import { useT } from "@/i18n";
+import { useI18nStore } from "@/stores/i18nStore";
+import { dismissBillingNotice } from "@/services/firestore/billing";
 
 /**
  * Delinquency notice for an org whose payment failed (Plans-Spec §5.1).
@@ -35,20 +37,26 @@ function safeSet(key: string, value: string): void {
 
 export function PlanBanner() {
   const t = useT();
+  const lang = useI18nStore((s) => s.lang);
   const { workspaceId, billing } = useBilling();
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
 
-  const notice = planNotice(billing, workspaceId);
+  const notice = planNotice(billing, workspaceId, Date.now(), lang);
   if (!notice) return null;
   if (dismissedKey === notice.dismissKey || safeGet(notice.dismissKey) === "1") return null;
 
   const palette = notice.urgent
     ? { background: "#FDECEA", borderColor: "#F3C7C1", color: "#8C2F22", icon: "#C0392B" }
-    : { background: "#FDF4E5", borderColor: "#EFDCB4", color: "#7A5A1E", icon: "#C08A16" };
+    : notice.good
+      ? { background: "#EAF5EE", borderColor: "#BFE0CB", color: "#1F5C3A", icon: "#2E8B57" }
+      : { background: "#FDF4E5", borderColor: "#EFDCB4", color: "#7A5A1E", icon: "#C08A16" };
 
   const dismiss = () => {
     safeSet(notice.dismissKey, "1");
     setDismissedKey(notice.dismissKey);
+    // TR14: a one-time notice is dismissed for good, on every device. Hidden here at
+    // once either way; if the call fails it simply comes back on the next visit.
+    if (notice.serverDismiss) void dismissBillingNotice().catch(() => {});
   };
 
   return (
@@ -57,7 +65,7 @@ export function PlanBanner() {
       className="flex items-center gap-2.5 border-b px-6 py-2"
       style={{ background: palette.background, borderColor: palette.borderColor, color: palette.color }}
     >
-      <Icon name="credit_card" size={16} style={{ color: palette.icon, flexShrink: 0 }} />
+      <Icon name={notice.good ? "redeem" : "credit_card"} size={16} style={{ color: palette.icon, flexShrink: 0 }} />
       <span className="text-[13px] leading-snug">{t(notice.messageKey, notice.params)}</span>
       <div className="flex-1" />
       {/* Decorative hover only — the button is always visible and tappable, so

@@ -1,8 +1,8 @@
 # Beats — Free Trial, Referrals & Discount Codes Spec
 
-Status: **specified 2026-10-18, NOT built.** The owner accepted §6's recommendations the
-same day, all but one: a referral earns a **flat $12**, not a month of the referrer's bill
-(`TR12`, decided after a second look at the options). · Owner: product + eng ·
+Status: **specified 2026-10-18; built the same day, NOT deployed** (§8). The owner accepted
+§6's recommendations the same day, all but one: a referral earns a **flat $12**, not a month
+of the referrer's bill (`TR12`, decided after a second look at the options). · Owner: product + eng ·
 Related: `Plans-Spec.md` (PL1 tiers, PL4 downgrade, PL6 org = workspace, PL13–PL17
 currencies), `Server-Functions-Spec.md` (SF3 billing sync), `Stripe-Go-Live-Runbook.md`.
 
@@ -314,3 +314,32 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 | **TR17** | **Whether a `once` code is spent on a trial's $0 invoice is verified in test mode before launch; until then Beats codes are `repeating`.** | A first-month code must not vanish into a free month. | Assuming Stripe's behaviour. |
 | **TR18** | **An org already paying applies a code through the Customer Portal; an in-app field only if the portal does not cover it.** | Beats changes subscriptions in the portal. | An in-app field first. |
 | **TR19** | **One discount per subscription; a new code replaces the old.** | Stacked codes make every price a puzzle. | Stacking. |
+
+---
+
+## 8. As built (2026-10-18)
+
+- **Server:** `functions/src/trials.ts` holds the rules — the trial marks (`recordTrial`), the
+  claim (`claimReferral`), the reward, the bank, the refund and the counts — each taking its
+  Firestore and its Stripe as arguments, so `functions/test/trials.integration.mjs` drives
+  them against the emulator with a fake Stripe (74 assertions). `billing.ts` wires them: the
+  trial terms in `createCheckoutSession`, the sync's `trialEnd`/`card`/`nextAmount`/`livemode`,
+  the seat raise ending a trial, the 3-day grace, and `afterSync`/`handleRefund` in the
+  webhook. Six callables: `getTrialOffer`, `endFreeTrial`, `getReferrals`,
+  `resolveReferralCode`, `claimReferral`, `dismissBillingNotice`.
+- **Whether Upgrade starts a free month is the server's reading** (`getTrialOffer`, and again
+  in `createCheckoutSession`): `trialPeople` and `trialCards` are not readable by the client,
+  so the button's words are asked for, never inferred. A Checkout for more than 5 seats on a
+  trial is refused with `reason: "trial-seats"`.
+- **The 3-day grace (`TR5`) is enforced through Stripe, not a scheduler:** when a trial that
+  never paid goes `past_due`, the sync sets the subscription's `cancel_at` three days on, so
+  the downgrade is the ordinary `subscription.deleted` path; a payment inside the three days
+  clears it. `tierOf` reads the same three days on the client (`graceDaysFor`).
+- **Not asked for, but needed:** `scripts/grant-business.cjs` replaced the billing document
+  whole, which would have erased `trialUsedAt` and `referredBy`; it now keeps the trial and
+  referral marks across a grant.
+- **Still to do by hand:** the runbook's §8a — `charge.refunded` on both endpoints, Stripe's
+  trial-reminder email, coupons only through the script, and `TR17`'s test.
+- **Deploy order** (Beats `CLAUDE.md`): functions first (the callables the new client calls,
+  and the webhook that writes what the rules and notices read), then rules (the workspace's
+  Stripe fields closed — no live client writes them), then hosting.
