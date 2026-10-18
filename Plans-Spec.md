@@ -1,7 +1,7 @@
 # Beats — Plans & Entitlements Spec
 
 Status: **PL1–PL12 resolved; PL13–PL16 decided 2026-08-15; PL17 (currency presentment + Amex switch) built 2026-08-16** · Owner: product + eng ·
-Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync)
+Related: `Permissions-Spec.md` (§ Plan gating), `Server-Functions-Spec.md` (SF3 — billing/plan sync), `Trials-and-Referrals-Spec.md` (TR1–TR19 — free month, referrals, discount codes; specified, not built)
 
 **Decided:** billing entity is an **Organization = Workspace** (PL6); provider **Stripe**
 (PL8); **quota-only** model, no feature gating (PL2); tiers **Starter/Pro/Business** at
