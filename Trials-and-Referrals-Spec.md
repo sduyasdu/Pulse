@@ -161,7 +161,7 @@ dropped:
   stamped on the ledger at the friend's first payment and compared with the referrer's
   subscription.
 
-**When a month is earned** (`TR11`). On the friend's FIRST PAID invoice (`invoice.paid`,
+**When a reward is earned** (`TR11`). On the friend's FIRST PAID invoice (`invoice.paid`,
 `amount_paid > 0`). A converted trial counts; a cancelled trial does not. A full refund of
 that invoice within 14 days (`charge.refunded`, which must be added to the endpoint) takes
 back a reward not yet used.
@@ -305,10 +305,10 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 | **TR8** | **A referral link per WORKSPACE, made by its owner; the reward goes to that workspace.** | The workspace is the org (PL6). | A link per person. |
 | **TR9** | **A friend is counted by a `claimReferral` callable after the personal workspace exists, in one transaction, only within 24 hours of its creation, once, and only for someone who has never paid.** | Workspaces are made by the client; the count must be the server's. | Trusting a `referredBy` the client writes on its own workspace. |
 | **TR10** | **Never counted: yourself (owner or member of the referring workspace), a card that paid for the referrer, another Stripe mode — each recorded `void` with its reason.** | The cheap abuses, closed and explainable. | Silent drops. |
-| **TR11** | **A month is earned on the friend's first PAID invoice; a full refund within 14 days takes back an unused month.** | A reward for a customer, not a sign-up. | Rewarding the sign-up or the trial start. |
+| **TR11** | **A reward is earned on the friend's first PAID invoice; a full refund within 14 days takes back an unused one.** | A reward for a customer, not a sign-up. | Rewarding the sign-up or the trial start. |
 | **TR12** | **A referral earns a flat credit of one Business seat-month — $12, or its MXN price — on the referrer's Stripe customer, whatever either team's size; banked on Starter and given at its first subscription.** Decided by the owner 2026-10-18. | Beats prices per seat, so "a month" ranges from $6 to hundreds and has nothing to do with what the friend pays; a flat amount is one promise, easy to state. | The referrer's month (uncapped or capped at 10 seats); the smaller of the two bills; the friend's first month capped at the referrer's; a 100% coupon. |
-| **TR13** | **At most 12 months per workspace per calendar year; past it, `over-cap`.** | Open-ended rewards are a public coupon. | No ceiling. |
-| **TR14** | **Earned months are told in the Billing dialog's counts and a dismissable `planNotice`.** | No workspace bell; the owner reads Billing. | A new channel. |
+| **TR13** | **At most 12 rewards ($144) per workspace per calendar year; past it, `over-cap`.** | Open-ended rewards are a public coupon. | No ceiling. |
+| **TR14** | **Earned rewards are told in the Billing dialog's counts and a dismissable `planNotice`.** | No workspace bell; the owner reads Billing. | A new channel. |
 | **TR15** | **Checkout keeps Stripe's promotion-code box; products are kept apart on the coupon — every Beats coupon names Beats' products only and carries `metadata.beats = 'yes'`.** Decided by the owner 2026-10-18. | The box accepts any code in the shared account; `applies_to` is what Stripe enforces. Foretrue's coupons already name only Foretrue's products. | Replacing the box (Foretrue's choice for Foretrue). |
 | **TR16** | **Codes are made by `stripe-coupons.mjs`, dry run by default; it refuses a 100% coupon longer than a month and a coupon with neither expiry nor redemption limit.** | A grant is `grant-business.cjs`; an open-ended discount is a price. | Any coupon Stripe allows. |
 | **TR17** | **Whether a `once` code is spent on a trial's $0 invoice is verified in test mode before launch; until then Beats codes are `repeating`.** | A first-month code must not vanish into a free month. | Assuming Stripe's behaviour. |
