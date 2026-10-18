@@ -1,7 +1,8 @@
 # Beats — Free Trial, Referrals & Discount Codes Spec
 
 Status: **specified 2026-10-18, NOT built.** The owner accepted §6's recommendations the
-same day, all but one: **what a referral month is worth (`TR12`) is still open**. · Owner: product + eng ·
+same day, all but one: a referral earns a **flat $12**, not a month of the referrer's bill
+(`TR12`, decided after a second look at the options). · Owner: product + eng ·
 Related: `Plans-Spec.md` (PL1 tiers, PL4 downgrade, PL6 org = workspace, PL13–PL17
 currencies), `Server-Functions-Spec.md` (SF3 billing sync), `Stripe-Go-Live-Runbook.md`.
 
@@ -122,13 +123,13 @@ has ever paid; a member's workspace — only the owner pays (PL6, `requireOwnedW
 
 ---
 
-## 3. A month for every friend who pays (`TR8`–`TR14`)
+## 3. $12 for every friend who pays (`TR8`–`TR14`)
 
-**What the owner sees.** The Billing dialog gains **Invite and earn a month**:
+**What the owner sees.** The Billing dialog gains **Invite and earn**:
 - **The link:** `{origin}/r/{code}`.
-- **The rule:** *"For every workspace that subscribes through your link, you get a month
-  free"*.
-- **The counts:** signed up · subscribed · months earned this year · months waiting.
+- **The rule:** *"For every workspace that subscribes through your link, you get $12 off"*
+  (in pesos, its MXN price).
+- **The counts:** signed up · subscribed · rewards earned this year · rewards waiting.
 
 **Whose link** (`TR8`). A link belongs to a WORKSPACE (PL6: the org pays), made by its owner,
 one per workspace.
@@ -163,26 +164,30 @@ dropped:
 **When a month is earned** (`TR11`). On the friend's FIRST PAID invoice (`invoice.paid`,
 `amount_paid > 0`). A converted trial counts; a cancelled trial does not. A full refund of
 that invoice within 14 days (`charge.refunded`, which must be added to the endpoint) takes
-back a month not yet used.
+back a reward not yet used.
 
-**What a month is worth** (`TR12`, see §6).
-- **The amount:** one month of the referrer's subscription at LIST price — seats × the
-  tier's per-seat price, in its currency — **capped at 10 seats' worth** ($60 on Pro,
-  $120 on Business).
+**What a referral is worth** (`TR12`, decided by the owner 2026-10-18). A **flat credit of
+one Business seat-month — $12, or the Business seat's peso price in MXN (PL13)** — for every
+friend who pays, whatever the size of either team.
 - **How it is given:** a credit on the referrer's Stripe customer
   (`customers.createBalanceTransaction`, negative, with an idempotency key per friend),
   which Stripe takes off the next invoices.
-- **On Starter, with no subscription:** the month is banked, and credited when the
-  workspace subscribes — after any trial, since a balance is only taken from an invoice
-  above zero.
-- **Not a coupon:** a 100%-off coupon is rejected; it would give away a larger team's whole
-  month uncapped.
+- **The currency:** the one the referrer's subscription is billed in.
+- **On Starter, with no subscription:** the credit is banked, and given when the workspace
+  subscribes — after any trial, since a balance is only taken from an invoice above zero.
 
-**A ceiling** (`TR13`). Twelve months earned per workspace per calendar year. Past that, a
+Why flat. Beats prices per seat, so "a month free" is $6 for one team and $600 for another,
+and it is unrelated to what the friend pays. A big workspace would have earned $300 for
+bringing in a $6 customer. A flat amount is the same promise to everyone, and easy to
+state: *"$12 off for every workspace that subscribes through your link."* What it gives up
+is weight for a large team ($12 off $300). The alternatives were weighed (§6) and
+rejected for that simplicity.
+
+**A ceiling** (`TR13`). Twelve rewards earned per workspace per calendar year — $144 at most. Past that, a
 friend is recorded `over-cap`.
 
 **Told how** (`TR14`). With no workspace-level bell, the Billing dialog's counts show it,
-and `planNotice` shows a one-time *"A workspace you invited subscribed: you earned a month"*
+and `planNotice` shows a one-time *"A workspace you invited subscribed: you earned $12 off"*
 until it is dismissed. That is a dismissed-at timestamp on `billing/{orgId}`, set through a
 callable.
 
@@ -262,7 +267,7 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 - **Tests:**
   - `functions/test/billing.integration.mjs`: one trial per org, person and card; a seat
     raise in a trial ending it; the 3-day grace; a referral claimed, voided for each
-    reason, rewarded once, banked, capped, taken back on a refund.
+    reason, rewarded once at $12, banked, capped, taken back on a refund.
   - `rules/security.test.ts`: the new collections closed, and the workspace's Stripe
     fields refused to the owner.
   - `src/services/firestore/subscriptionErrors.test.ts`: the new refusals.
@@ -277,7 +282,7 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 | How many seats may a trial start with? | **Up to 5** (`TR2`) | Enough to try with a team; a trial is not a free large team. |
 | Seats added during a trial | **End the trial first; a raise through the portal ends it at once** (`TR2`) | In Beats the seats are the price, so a free seat is a free month of revenue. Foretrue disables extra seats in a trial for the same reason. |
 | Grace after a trial that never paid | **3 days** (`TR5`) | 15 is for a customer who has paid. |
-| A referral month's worth | **OPEN — asked for more explanation.** Recommended: the referrer's seats × tier price, capped at 10 seats (`TR12`) | Per-seat pricing makes "a month" scale with the team; the cap keeps one referral from paying a large team's month. |
+| A referral's worth | **A flat $12 — one Business seat-month — whatever the team sizes** (`TR12`; the owner chose it over the recommendation) | Simple and easy to explain. Weighed: the referrer's whole month (a $300 reward for a $6 customer), capped at 10 seats, the smaller of the two bills, and the friend's first month capped at the referrer's. |
 | A ceiling | **12 months a year per workspace** (`TR13`) | Open-ended rewards are a public coupon. |
 | Does the invited friend get more than the standard free month? | **No** | The free month is the welcome. |
 | A workspace-level notification channel for trial and referral notices | **Not now: `planNotice` and Stripe's email** (`TR4`, `TR14`) | A new channel is its own spec; the notice already reaches the owner. |
@@ -301,7 +306,7 @@ of the subscription, so a 3-month code made for a trial is given 4 months). §6 
 | **TR9** | **A friend is counted by a `claimReferral` callable after the personal workspace exists, in one transaction, only within 24 hours of its creation, once, and only for someone who has never paid.** | Workspaces are made by the client; the count must be the server's. | Trusting a `referredBy` the client writes on its own workspace. |
 | **TR10** | **Never counted: yourself (owner or member of the referring workspace), a card that paid for the referrer, another Stripe mode — each recorded `void` with its reason.** | The cheap abuses, closed and explainable. | Silent drops. |
 | **TR11** | **A month is earned on the friend's first PAID invoice; a full refund within 14 days takes back an unused month.** | A reward for a customer, not a sign-up. | Rewarding the sign-up or the trial start. |
-| **TR12** (OPEN) | **Recommended:** a month is the referrer's seats × tier price at list, capped at 10 seats, credited on their Stripe customer; banked on Starter and credited at their first subscription.** | Per-seat pricing; a coupon would give away a large team's month uncapped. | A 100% coupon; free seats. |
+| **TR12** | **A referral earns a flat credit of one Business seat-month — $12, or its MXN price — on the referrer's Stripe customer, whatever either team's size; banked on Starter and given at its first subscription.** Decided by the owner 2026-10-18. | Beats prices per seat, so "a month" ranges from $6 to hundreds and has nothing to do with what the friend pays; a flat amount is one promise, easy to state. | The referrer's month (uncapped or capped at 10 seats); the smaller of the two bills; the friend's first month capped at the referrer's; a 100% coupon. |
 | **TR13** | **At most 12 months per workspace per calendar year; past it, `over-cap`.** | Open-ended rewards are a public coupon. | No ceiling. |
 | **TR14** | **Earned months are told in the Billing dialog's counts and a dismissable `planNotice`.** | No workspace bell; the owner reads Billing. | A new channel. |
 | **TR15** | **Checkout keeps Stripe's promotion-code box; products are kept apart on the coupon — every Beats coupon names Beats' products only and carries `metadata.beats = 'yes'`.** Decided by the owner 2026-10-18. | The box accepts any code in the shared account; `applies_to` is what Stripe enforces. Foretrue's coupons already name only Foretrue's products. | Replacing the box (Foretrue's choice for Foretrue). |
